@@ -99,7 +99,14 @@ fn is_custom(adt : &ty::AdtDef) -> bool {
 
 
 pub fn handle_adt_custom(mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
-    panic!("unimpl")
+
+    match &defid_str(&adt.did) as &str {
+         "core/ebcf64d::ops[0]::range[0]::Range[0]" => json!({"kind": "custom", "data": {"kind": "Range", "range_ty": substs[0].as_type().unwrap().to_json(mir)}}),
+         "alloc/39550c7::boxed[0]::Box[0]" => json!({"kind": "custom", "data": {"kind": "Box", "box_ty": substs[0].as_type().unwrap().to_json(mir)}}),
+         "alloc/39550c7::vec[0]::Vec[0]" => json!({"kind": "custom", "data": {"kind": "Vec", "vec_ty": substs[0].as_type().unwrap().to_json(mir)}}),
+         _ => panic!("bad custom adt?")
+     }
+
 }
 
 pub fn handle_adt(mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
