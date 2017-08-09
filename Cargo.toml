@@ -1,9 +1,13 @@
 [package]
-name = "mirvisit"
+name = "mir-json"
 version = "0.1.0"
-authors = ["Joshua Gancher <gancherj@reed.edu>"]
+authors = ["Joshua Gancher <jrg358@cornell.edu>"]
 
 [dependencies]
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
+
+[[bin]]
+name = "mir_json"
+path = "src/main.rs"

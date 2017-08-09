@@ -13,6 +13,7 @@ use serde_json;
 mod adt;
 
 
+
 trait ToJson {
     fn to_json(&self, mir : &Mir) -> serde_json::Value;
 }
@@ -155,10 +156,13 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyRef(ref region, ref tm) => json!({"kind": "ref", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)}),
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => adt::handle_adt(mir, adtdef, substs),
             &ty::TypeVariants::TyFnDef(defid, ref substs) => json!({"kind": "fndef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)}),
+            &ty::TypeVariants::TyParam(ref p) => json!({"kind": "param", "param": p.to_json(mir)}),
             _ => panic!(format!("type unsupported: {:?}", &self.sty))
         }
     }
 }
+
+basic_json_impl!(ty::ParamTy);
 
 
 
@@ -200,7 +204,6 @@ impl<'a> ToJson for mir::AggregateKind<'a> {
 }
 
 
-basic_json_impl!(ty::AdtDef);
 
 
 impl<'a> ToJson for middle::const_val::ConstVal<'a> {
@@ -249,7 +252,7 @@ impl<'a> ToJson for mir::ProjectionElem<'a, mir::Operand<'a>> {
             &mir::ProjectionElem::Index(ref op) => json!({"kind": "index", "op": op.to_json(mir)}),
             &mir::ProjectionElem::ConstantIndex {ref offset, ref min_length, ref from_end} => json!({"kind": "constantindex", "offset": offset, "min_length": min_length, "from_end": from_end}),
             &mir::ProjectionElem::Subslice {ref from, ref to} => json!({"kind": "subslice", "from": from, "to": to}),
-            &mir::ProjectionElem::Downcast (ref adt, ref size) => json!({"kind": "downcast", "adt": adt.to_json(mir), "size": size})
+            &mir::ProjectionElem::Downcast (ref adt, ref variant) => json!({"kind": "downcast", "variant": variant})
         }
     }
 }

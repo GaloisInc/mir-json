@@ -9,19 +9,23 @@ use syntax::{self,ast};
 use rustc_driver::driver::{CompileState };
 use rustc_const_math;
 use std::fmt::Write as FmtWrite;
+use rustc::ty::subst::Subst;
 use serde_json;
 use analyz::ToJson;
-// custom type overrides
-//
-//
 
-pub fn defid_str (d : &hir::def_id::DefId) -> String {
-    ty::tls::with(|tx| {
-        let defpath = tx.def_path(*d);
-        defpath.to_string(tx)
-    })
+trait ToJsonAg {
+    fn tojson<'a, 'tcx> (&self, mir : &'a Mir<'a>, substs : &'tcx ty::subst::Substs<'tcx>) -> serde_json::Value;
 }
-            
+
+impl<T> ToJsonAg for Vec<T> where T : ToJsonAg  {
+    fn tojson(&self, mir : &Mir, substs : &ty::subst::Substs) -> serde_json::Value {
+        let mut j = Vec::new();
+        for v in self {
+            j.push(v.tojson(mir, substs));
+        }
+        json!(j)
+    }
+}
 
 pub fn is_adt_ak (ak : &mir::AggregateKind) -> bool {
     match ak {
@@ -30,55 +34,98 @@ pub fn is_adt_ak (ak : &mir::AggregateKind) -> bool {
     }
 }
 
+pub fn defid_str (d : &hir::def_id::DefId) -> String {
+    ty::tls::with(|tx| {
+        let defpath = tx.def_path(*d);
+        defpath.to_string(tx)
+    })
+}
 
-pub fn handle_adt (mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
-    if let Some(v) = custom_adt_ser(mir, adt, substs) {
-        v
-    }
-    else {
-        regular_adt_ser (adt, substs)
+pub fn defid_ty (d : &hir::def_id::DefId, mir : &Mir) -> serde_json::Value {
+    ty::tls::with(|tx| {
+        tx.type_of(*d).to_json(mir)
+    })
+}
+
+
+impl ToJsonAg for ty::AdtDef {
+    fn tojson(&self, mir : &Mir, substs : &ty::subst::Substs) -> serde_json::Value {
+        json!({"name": defid_str(&self.did), "variants": self.variants.tojson(mir, substs)})
     }
 }
 
-pub fn is_custom_adt (adt : &ty::AdtDef) -> bool {
+impl ToJsonAg for ty::VariantDef {
+    fn tojson(&self, mir : &Mir, substs : &ty::subst::Substs) -> serde_json::Value {
+        json!({"name": defid_str(&self.did), "discr": self.discr.to_json(mir), "fields": self.fields.tojson(mir, substs), "ctor_kind": self.ctor_kind.to_json(mir)})
+    }
+}
+
+impl ToJsonAg for ty::FieldDef {
+    fn tojson<'a, 'tcx> (&self, mir : &Mir<'a>, substs : &'tcx ty::subst::Substs<'tcx>) -> serde_json::Value {
+        json!({"name": defid_str(&self.did), "ty": defid_ty(&self.did, mir), "substs": substs.to_json(mir)  })
+    }
+}
+
+
+
+impl ToJson for hir::def::CtorKind {
+    fn to_json(&self, mir : &Mir) -> serde_json::Value {
+        match self {
+            &hir::def::CtorKind::Fn => json!({"kind": "fn"}),
+            &hir::def::CtorKind::Const => json!({"kind": "const"}),
+            &hir::def::CtorKind::Fictive => json!({"kind": "fictive"}),
+        }
+    }
+}
+
+
+impl ToJson for ty::VariantDiscr {
+    fn to_json(&self, mir : &Mir) -> serde_json::Value {
+        match self {
+            &ty::VariantDiscr::Relative(i) => json!(i),
+            _ => panic!("explicit variant")
+        }
+    }
+}
+            
+fn is_custom(adt : &ty::AdtDef) -> bool {
     match &defid_str(&adt.did) as &str {
-        "core/ebcf64d::ops[0]::range[0]::Range[0]" => true,
+        "alloc/39550c7::vec[0]::IntoIter[0]" => true,
         "alloc/39550c7::boxed[0]::Box[0]" => true,
         "alloc/39550c7::vec[0]::Vec[0]" => true,
         _ => false
     }
 }
 
-pub fn custom_adt_ser (mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> Option<serde_json::Value> {
-    match &defid_str(&adt.did) as &str {
-        "core/ebcf64d::ops[0]::range[0]::Range[0]" => Some(json!({"kind": "custom", "data": {"kind": "Range", "range_ty": substs[0].as_type().unwrap().to_json(mir)}})),
-        "alloc/39550c7::boxed[0]::Box[0]" => Some(json!({"kind": "custom", "data": {"kind": "Box", "box_ty": substs[0].as_type().unwrap().to_json(mir)}})),
-        "alloc/39550c7::vec[0]::Vec[0]" => Some(json!({"kind": "custom", "data": {"kind": "Vec", "vec_ty": substs[0].as_type().unwrap().to_json(mir)}})),
-        _ => None
+
+pub fn handle_adt_custom(mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
+    panic!("unimpl")
+}
+
+pub fn handle_adt(mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
+    if is_custom(adt) {
+        handle_adt_custom(mir, adt, substs)
+    }
+    else {
+        json!({"kind": "adt", "adt": adt.tojson(mir, substs)})
     }
 }
 
-pub fn regular_adt_ser (adt : &ty::AdtDef, substs : &ty::subst::Substs) -> serde_json::Value {
-    panic!(format!("regular: {:?}", adt.variants))
-}
 
-pub fn handle_adt_ag_ (mir : &Mir, adt : &ty::AdtDef, num_variants : usize, substs : &ty::subst::Substs, opv : &Vec<mir::Operand>) -> serde_json::Value {
-    match &defid_str(&adt.did) as &str {
-        "core/ebcf64d::ops[0]::range[0]::Range[0]" => {
-            let range_ty = substs[0].as_type().unwrap();
-            json!({"kind": "custom", "data": {
-                "kind": "range",
-                "range_ty": range_ty.to_json(mir),
-                "f1": opv[0].to_json(mir),
-                "f2": opv[1].to_json(mir)}})
-        },
-        _ => panic!("unimplemented")
-    }
+pub fn handle_adt_ag_custom (mir: &Mir, adt : &ty::AdtDef, substs : &ty::subst::Substs, variant : usize, opv : &Vec<mir::Operand>) -> serde_json::Value {
+    panic!("unimpl")
 }
 
 pub fn handle_adt_ag (mir: &Mir, ak : &mir::AggregateKind, opv : &Vec<mir::Operand>) -> serde_json::Value {
     match ak {
-        &mir::AggregateKind::Adt(a, b, c, _) => handle_adt_ag_(mir, a,b,c, opv),
+        &mir::AggregateKind::Adt(ref adt, variant, substs, _) => {
+            if is_custom(adt) {
+                handle_adt_ag_custom(mir, adt, substs, variant, opv)
+            }
+            else {
+                json!({"kind": "adtag", "adt": adt.tojson(mir, substs), "variant": variant, "ops": opv.to_json(mir)})
+            }
+        },
         _ => unreachable!("bad")
     }
 }
