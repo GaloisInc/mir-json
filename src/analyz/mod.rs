@@ -154,15 +154,27 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": f.to_json(mir)}),
             &ty::TypeVariants::TyArray(ref t, ref size) => json!({"kind": "Array", "ty": t.to_json(mir), "size": size}),
             &ty::TypeVariants::TyRef(ref region, ref tm) => json!({"kind": "ref", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)}),
-            &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => adt::handle_adt(mir, adtdef, substs),
+            &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
+                if adt::is_custom(adtdef) {
+                    json!({"kind": "custom", "data": adt::handle_adt_custom(mir, adtdef, substs)})
+                }
+                else {
+                    json!({"kind": "adt", "adt": adt::handle_adt(mir, adtdef, substs)})
+                }
+            }, 
             &ty::TypeVariants::TyFnDef(defid, ref substs) => json!({"kind": "fndef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)}),
             &ty::TypeVariants::TyParam(ref p) => json!({"kind": "param", "param": p.to_json(mir)}),
+            &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => json!({"kind": "closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)}),
             _ => panic!(format!("type unsupported: {:?}", &self.sty))
         }
     }
 }
 
-basic_json_impl!(ty::ParamTy);
+impl ToJson for ty::ParamTy {
+    fn to_json(&self, mir : &Mir) -> serde_json::Value {
+        json!(self.idx)
+    }
+}
 
 
 
@@ -184,7 +196,7 @@ impl ToJson for hir::def_id::DefId {
     }
 }
 
-basic_json_impl!(ty::subst::Kind<'a>, 'a);
+
 basic_json_impl!(mir::Promoted);
 basic_json_enum_impl!(mir::BinOp);
 
@@ -198,7 +210,7 @@ impl<'a> ToJson for mir::AggregateKind<'a> {
             &mir::AggregateKind::Array(ty) => json!({"kind": "array", "ty": ty.to_json(mir)}),
             &mir::AggregateKind::Tuple => json!({"kind": "tuple"}),
             &mir::AggregateKind::Adt(ref adtdef, _, _, _) => {panic!("adt should be handled upstream") },
-            &mir::AggregateKind::Closure(_, _) => panic!("closure unimpl")
+            &mir::AggregateKind::Closure(ref defid, ref closuresubsts) => json!({"kind": "agclosure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)}),
         }
     }
 }
@@ -232,7 +244,7 @@ impl<'a> ToJson for mir::Rvalue<'a> {
             &mir::Rvalue::NullaryOp(ref no, ref t) => json!({"kind": "nullaryop", "op": no.to_json(mir), "ty": t.to_json(mir)}),
             &mir::Rvalue::UnaryOp(ref uo, ref o) => json!({"kind": "unaryop", "uop": uo.to_json(mir), "op": o.to_json(mir)}),
             &mir::Rvalue::Discriminant(ref lv) => json!({"kind": "discriminant", "val": lv.to_json(mir)}),
-            &mir::Rvalue::Aggregate(ref ak, ref opv) => { if adt::is_adt_ak(ak) { adt::handle_adt_ag (mir, ak, opv) } else { json!({"kind": "aggregate", "akind": ak.to_json(mir), "ops": opv.to_json(mir)}) } }
+            &mir::Rvalue::Aggregate(ref ak, ref opv) => { if adt::is_adt_ak(ak) { json!({"kind": "adtag", "ag": adt::handle_adt_ag (mir, ak, opv)}) } else { json!({"kind": "aggregate", "akind": ak.to_json(mir), "ops": opv.to_json(mir)}) } }
     }
     }
 }
