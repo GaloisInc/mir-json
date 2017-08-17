@@ -256,7 +256,7 @@ impl<'a> ToJson for mir::LvalueProjection<'a> {
     }
 }
 
-impl<'a> ToJson for mir::ProjectionElem<'a, mir::Operand<'a>> {
+impl<'a, T : ToJson> ToJson for mir::ProjectionElem<'a, mir::Operand<'a>, T> {
     fn to_json(&self, mir : &Mir) -> serde_json::Value {
         match self {
             &mir::ProjectionElem::Deref => json!({"kind": "deref"}),
