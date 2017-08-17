@@ -1,5 +1,5 @@
 use rustc::ty::{self, TyCtxt};
-use rustc::mir::{self, Mir}; 
+use rustc::mir::{self, Mir};
 use rustc::mir::transform::{MirSource};
 use rustc::hir::{self, def_id};
 use rustc_data_structures::indexed_vec::Idx;
@@ -22,7 +22,7 @@ impl ToJson for String {
     fn to_json(&self, _ : &Mir) -> serde_json::Value { json!(self) }
 }
 
-impl<T> ToJson for Option<T> where T : ToJson { 
+impl<T> ToJson for Option<T> where T : ToJson {
     fn to_json(&self, mir : &Mir) -> serde_json::Value {
         match self {
             &Some(ref i) => i.to_json(mir),
@@ -46,7 +46,7 @@ macro_rules! basic_json_impl {
         impl<$lt> ToJson for $n {
     fn to_json(&self, _ : &Mir) -> serde_json::Value {
         let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap(); 
+        write!(&mut s, "{:?}", self).unwrap();
         json!(s)
     }
 }
@@ -68,7 +68,7 @@ macro_rules! basic_json_enum_impl {
         impl<$lt> ToJson for $n {
     fn to_json(&self, _ : &Mir) -> serde_json::Value {
         let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap(); 
+        write!(&mut s, "{:?}", self).unwrap();
         json!({"kind": s})
     }
 }
@@ -76,7 +76,7 @@ macro_rules! basic_json_enum_impl {
 };
 }
 
-impl<A,B> ToJson for (A,B) where A : ToJson, B : ToJson { 
+impl<A,B> ToJson for (A,B) where A : ToJson, B : ToJson {
     fn to_json(&self, mir : &Mir) -> serde_json::Value {
         let &(ref a,ref b) = self;
         json!(vec![a.to_json(mir), b.to_json(mir)])
@@ -161,7 +161,7 @@ impl<'a> ToJson for ty::Ty<'a> {
                 else {
                     json!({"kind": "adt", "adt": adt::handle_adt(mir, adtdef, substs)})
                 }
-            }, 
+            },
             &ty::TypeVariants::TyFnDef(defid, ref substs) => json!({"kind": "fndef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)}),
             &ty::TypeVariants::TyParam(ref p) => json!({"kind": "param", "param": p.to_json(mir)}),
             &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => json!({"kind": "closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)}),
@@ -358,7 +358,7 @@ impl<'a> ToJson for mir::TerminatorKind<'a> {
             &mir::TerminatorKind::Call{ref func, ref args, ref destination, ref cleanup} =>
                 json!({"kind": "call", "func": func.to_json(mir), "args": args.to_json(mir), "destination": destination.to_json(mir), "cleanup": cleanup.to_json(mir)}),
             &mir::TerminatorKind::Assert{ref cond, ref expected, ref msg, ref target, ref cleanup} =>
-                json!({"kind": "assert", "cond": cond.to_json(mir), "expected": expected, "msg": msg.to_json(mir), "target": target.to_json(mir), "cleanup": cleanup.to_json(mir)}), 
+                json!({"kind": "assert", "cond": cond.to_json(mir), "expected": expected, "msg": msg.to_json(mir), "target": target.to_json(mir), "cleanup": cleanup.to_json(mir)}),
         }
     }
 }
@@ -381,7 +381,7 @@ pub fn get_def_ids(tcx: TyCtxt) -> Vec<DefId> { tcx.mir_keys(def_id::LOCAL_CRATE
 pub fn get_mir<'a, 'tcx>(tcx: TyCtxt<'a,'tcx,'tcx>, id : DefId) -> Option<&'a Mir<'a>> { tcx.maybe_optimized_mir(id).clone() }
 pub fn analyze(state: &mut CompileState) {
     let tcx = state.tcx.unwrap();
-    
+
     let mut jsons = Vec::new();
     for def_id in get_def_ids(tcx) {
         let src = MirSource::from_node(tcx,tcx.hir.as_local_node_id(def_id).unwrap());
@@ -394,8 +394,6 @@ pub fn analyze(state: &mut CompileState) {
 
 }
 
-
- 
 pub fn local_json<'a, 'tcx>(mir: &Mir<'a>, local : mir::Local) -> serde_json::Value {
         let mut j = mir.local_decls[local].to_json(mir);
         let mut s = String::new();
@@ -428,7 +426,7 @@ fn mir_info<'a,'tcx>(mir : &Mir<'a>, def_id : DefId, src : MirSource, tcx : &TyC
 
 fn mir_body<'a,'tcx>(mir : &Mir<'a>, _def_id : DefId, _src : MirSource, _tcx : &TyCtxt<'a, 'tcx, 'tcx>) -> serde_json::Value {
     let mut vars = Vec::new();
-    
+
     vars.push(local_json(mir, mir::RETURN_POINTER));
 
 
@@ -444,7 +442,6 @@ fn mir_body<'a,'tcx>(mir : &Mir<'a>, _def_id : DefId, _src : MirSource, _tcx : &
     }
     json!({"vars": vars, "blocks": blocks})
 }
-    
 
 // format:
 // top: function name || function args || return ty || body

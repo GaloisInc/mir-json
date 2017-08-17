@@ -1,5 +1,5 @@
 use rustc::ty::{self, TyCtxt};
-use rustc::mir::{self, Mir}; 
+use rustc::mir::{self, Mir};
 use rustc::mir::transform::{MirSource};
 use rustc::hir::{self, def_id};
 use rustc_data_structures::indexed_vec::Idx;
@@ -94,7 +94,7 @@ impl ToJson for ty::VariantDiscr {
         }
     }
 }
-            
+
 pub fn is_custom(adt : &ty::AdtDef) -> bool {
     match &defid_str(&adt.did) as &str {
         "alloc/39550c7::vec[0]::IntoIter[0]" => true,
@@ -110,7 +110,7 @@ pub fn handle_adt_custom(mir : &Mir, adt : &ty::AdtDef, substs : &ty::subst::Sub
 
     match &defid_str(&adt.did) as &str {
          "alloc/39550c7::boxed[0]::Box[0]" => json!({"kind": "Box", "box_ty": substs[0].as_type().unwrap().to_json(mir)}),
-         
+
          "alloc/39550c7::vec[0]::Vec[0]" => json!({"kind": "Vec", "vec_ty": substs[0].as_type().unwrap().to_json(mir)}),
         "alloc/39550c7::vec[0]::IntoIter[0]" => json!({"kind": "Iter", "iter_ty": substs[0].as_type().unwrap().to_json(mir)}),
         "core/ebcf64d::iter[0]::Map[0]" => { // map is the same as its embedded iter
