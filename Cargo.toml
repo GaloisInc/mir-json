@@ -2,12 +2,19 @@
 name = "mir-json"
 version = "0.1.0"
 authors = ["Joshua Gancher <jrg358@cornell.edu>"]
+repository = "https://github.com/GaloisInc/mir-json.git"
+license = "MIT/Apache-2.0"
 
 [dependencies]
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
+cargo_metadata = { version = "0.2" }
 
 [[bin]]
-name = "mir_json"
+name = "mir-json"
 path = "src/main.rs"
+
+[[bin]]
+name = "cargo-mir-json"
+path = "src/cargo-mir-json.rs"
