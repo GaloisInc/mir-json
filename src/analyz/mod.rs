@@ -6,9 +6,12 @@ use rustc_data_structures::indexed_vec::Idx;
 use rustc::middle;
 use rustc::hir::def_id::DefId;
 use syntax::{self, ast};
-use rustc_driver::driver::CompileState;
+use rustc_driver::driver::{CompileState, source_name};
 use rustc_const_math;
 use std::fmt::Write as FmtWrite;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use serde_json;
 mod adt;
 
@@ -526,8 +529,20 @@ pub fn analyze(state: &mut CompileState) {
         }
     }
 
-    println!("{}", json!(jsons));
-
+    let iname = source_name(state.input);
+    let mut mirname = Path::new(&iname).to_path_buf();
+    mirname.set_extension("mir");
+    let fres = File::create(&mirname);
+    match fres {
+        Ok(f) => {
+            // TODO: check whether our serializer can ever fail, and
+            // what it means if it does.
+            serde_json::ser::to_writer(f, &json!(jsons)).unwrap()
+        },
+        Err(_) =>
+            println!("Failed to create output file {:?} for MIR dump.",
+                     mirname)
+    }
 }
 
 pub fn local_json<'a, 'tcx>(mir: &Mir<'a>, local: mir::Local) -> serde_json::Value {
