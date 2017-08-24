@@ -5,17 +5,14 @@ use rustc::hir::{self, def_id};
 use rustc_data_structures::indexed_vec::Idx;
 use rustc::middle;
 use rustc::hir::def_id::DefId;
-use syntax::{self, ast};
+use syntax::ast;
 use rustc_driver::driver::{CompileState, source_name};
 use rustc_const_math;
 use std::fmt::Write as FmtWrite;
 use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 use serde_json;
 mod adt;
-
-
 
 trait ToJson {
     fn to_json(&self, mir: &Mir) -> serde_json::Value;
@@ -38,7 +35,6 @@ where
         }
     }
 }
-
 
 macro_rules! basic_json_impl {
     ($n : path) => {
@@ -108,7 +104,6 @@ where
     }
 }
 
-
 impl<T> ToJson for Vec<T>
 where
     T: ToJson,
@@ -123,7 +118,7 @@ where
 }
 
 impl ToJson for ast::IntTy {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _: &Mir) -> serde_json::Value {
         match self {
             &ast::IntTy::Is => json!("USize"),
             &ast::IntTy::I8 => json!("8"),
@@ -165,7 +160,6 @@ impl ToJson for mir::Mutability {
     }
 }
 
-
 impl<'a> ToJson for ty::Ty<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
 
@@ -179,8 +173,11 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyArray(ref t, ref size) => {
                 json!({"kind": "Array", "ty": t.to_json(mir), "size": size})
             }
-            &ty::TypeVariants::TyRef(ref region, ref tm) => {
+            &ty::TypeVariants::TyRef(ref _region, ref tm) => {
                 json!({"kind": "ref", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
+            }
+            &ty::TypeVariants::TyRawPtr(ref tm) => {
+                json!({"kind": "rawptr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
                 if adt::is_custom(adtdef) {
@@ -202,24 +199,22 @@ impl<'a> ToJson for ty::Ty<'a> {
 }
 
 impl ToJson for ty::ParamTy {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(self.idx)
     }
 }
-
-
 
 basic_json_enum_impl!(mir::CastKind);
 basic_json_enum_impl!(mir::BorrowKind);
 
 impl ToJson for rustc_const_math::ConstUsize {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(self.as_u64(ast::UintTy::U64))
     }
 }
 
 impl ToJson for hir::def_id::DefId {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(ty::tls::with(|tx| {
             let defpath = tx.def_path(*self);
             defpath.to_string_no_crate()
@@ -227,10 +222,8 @@ impl ToJson for hir::def_id::DefId {
     }
 }
 
-
 basic_json_impl!(mir::Promoted);
 basic_json_enum_impl!(mir::BinOp);
-
 
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
@@ -240,7 +233,7 @@ impl<'a> ToJson for mir::AggregateKind<'a> {
         match self {
             &mir::AggregateKind::Array(ty) => json!({"kind": "array", "ty": ty.to_json(mir)}),
             &mir::AggregateKind::Tuple => json!({"kind": "tuple"}),
-            &mir::AggregateKind::Adt(ref adtdef, _, _, _) => {
+            &mir::AggregateKind::Adt(_, _, _, _) => {
                 panic!("adt should be handled upstream")
             }
             &mir::AggregateKind::Closure(ref defid, ref closuresubsts) => {
@@ -249,9 +242,6 @@ impl<'a> ToJson for mir::AggregateKind<'a> {
         }
     }
 }
-
-
-
 
 impl<'a> ToJson for middle::const_val::ConstVal<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -266,11 +256,10 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
             &middle::const_val::ConstVal::Array(ref constvals) => {
                 json!({"kind": "array", "data": constvals.to_json(mir)})
             }
-            _ => panic!("other const types unsupport"),
+            _ => panic!("other const types unsupported"),
         }
     }
 }
-
 
 impl<'a> ToJson for mir::Rvalue<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -312,7 +301,6 @@ impl<'a> ToJson for mir::Rvalue<'a> {
     }
 }
 
-
 impl<'a> ToJson for mir::LvalueProjection<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         json!({"base": self.base.to_json(mir), "data" : self.elem.to_json(mir)})
@@ -337,14 +325,12 @@ impl<'a, T: ToJson> ToJson for mir::ProjectionElem<'a, mir::Operand<'a>, T> {
             &mir::ProjectionElem::Subslice { ref from, ref to } => {
                 json!({"kind": "subslice", "from": from, "to": to})
             }
-            &mir::ProjectionElem::Downcast(ref adt, ref variant) => {
+            &mir::ProjectionElem::Downcast(ref _adt, ref variant) => {
                 json!({"kind": "downcast", "variant": variant})
             }
         }
     }
 }
-
-
 
 impl<'a> ToJson for mir::Lvalue<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -363,7 +349,7 @@ impl<'a> ToJson for mir::Lvalue<'a> {
 basic_json_impl!(mir::BasicBlock);
 
 impl ToJson for mir::Field {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(self.index())
     }
 }
@@ -371,7 +357,6 @@ impl ToJson for mir::Field {
 basic_json_impl!(mir::VisibilityScope);
 
 basic_json_impl!(mir::AssertMessage<'a>, 'a);
-
 
 impl<'a> ToJson for mir::Literal<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -406,7 +391,6 @@ impl<'a> ToJson for mir::Constant<'a> {
         json!({"ty": self.ty.to_json(mir), "literal": self.literal.to_json(mir)})
     }
 }
-
 
 impl<'a> ToJson for mir::LocalDecl<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -495,8 +479,6 @@ impl<'a> ToJson for mir::TerminatorKind<'a> {
     }
 }
 
-
-
 impl<'a> ToJson for mir::BasicBlockData<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         let mut sts = Vec::new();
@@ -506,7 +488,6 @@ impl<'a> ToJson for mir::BasicBlockData<'a> {
         json!({"data": sts, "terminator": self.terminator().kind.to_json(mir)})
     }
 }
-
 
 pub fn get_def_ids(tcx: TyCtxt) -> Vec<DefId> {
     tcx.mir_keys(def_id::LOCAL_CRATE)
@@ -581,7 +562,6 @@ fn mir_info<'a, 'tcx>(
 
 }
 
-
 fn mir_body<'a, 'tcx>(
     mir: &Mir<'a>,
     _def_id: DefId,
@@ -591,7 +571,6 @@ fn mir_body<'a, 'tcx>(
     let mut vars = Vec::new();
 
     vars.push(local_json(mir, mir::RETURN_POINTER));
-
 
     for (_, v) in mir.vars_and_temps_iter().enumerate() {
         vars.push(local_json(mir, v));

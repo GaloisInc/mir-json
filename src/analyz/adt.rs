@@ -1,15 +1,6 @@
-use rustc::ty::{self, TyCtxt};
+use rustc::ty;
 use rustc::mir::{self, Mir};
-use rustc::mir::transform::MirSource;
-use rustc::hir::{self, def_id};
-use rustc_data_structures::indexed_vec::Idx;
-use rustc::middle;
-use rustc::hir::def_id::DefId;
-use syntax::{self, ast};
-use rustc_driver::driver::CompileState;
-use rustc_const_math;
-use std::fmt::Write as FmtWrite;
-use rustc::ty::subst::Subst;
+use rustc::hir;
 use serde_json;
 use analyz::ToJson;
 
@@ -20,7 +11,6 @@ trait ToJsonAg {
         substs: &'tcx ty::subst::Substs<'tcx>,
     ) -> serde_json::Value;
 }
-
 
 impl<'a> ToJson for ty::subst::Kind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
@@ -43,7 +33,7 @@ where
 
 pub fn is_adt_ak(ak: &mir::AggregateKind) -> bool {
     match ak {
-        &mir::AggregateKind::Adt(a, b, c, _) => true,
+        &mir::AggregateKind::Adt(_, _, _, _) => true,
         _ => false,
     }
 }
@@ -58,7 +48,6 @@ pub fn defid_str(d: &hir::def_id::DefId) -> String {
 pub fn defid_ty(d: &hir::def_id::DefId, mir: &Mir) -> serde_json::Value {
     ty::tls::with(|tx| tx.type_of(*d).to_json(mir))
 }
-
 
 impl ToJsonAg for ty::AdtDef {
     fn tojson(&self, mir: &Mir, substs: &ty::subst::Substs) -> serde_json::Value {
@@ -82,10 +71,8 @@ impl ToJsonAg for ty::FieldDef {
     }
 }
 
-
-
 impl ToJson for hir::def::CtorKind {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         match self {
             &hir::def::CtorKind::Fn => json!("fn"),
             &hir::def::CtorKind::Const => json!("const"),
@@ -94,9 +81,8 @@ impl ToJson for hir::def::CtorKind {
     }
 }
 
-
 impl ToJson for ty::VariantDiscr {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         match self {
             &ty::VariantDiscr::Relative(i) => json!(i),
             _ => panic!("explicit variant"),
@@ -113,7 +99,6 @@ pub fn is_custom(adt: &ty::AdtDef) -> bool {
         _ => false,
     }
 }
-
 
 pub fn handle_adt_custom(
     mir: &Mir,
@@ -152,15 +137,14 @@ pub fn handle_adt(mir: &Mir, adt: &ty::AdtDef, substs: &ty::subst::Substs) -> se
     }
 }
 
-
 pub fn handle_adt_ag_custom(
-    mir: &Mir,
-    adt: &ty::AdtDef,
-    substs: &ty::subst::Substs,
-    variant: usize,
-    opv: &Vec<mir::Operand>,
+    _mir: &Mir,
+    _adt: &ty::AdtDef,
+    _substs: &ty::subst::Substs,
+    _variant: usize,
+    _opv: &Vec<mir::Operand>,
 ) -> serde_json::Value {
-    panic!("unimpl")
+    panic!("unimplemented")
 }
 
 pub fn handle_adt_ag(

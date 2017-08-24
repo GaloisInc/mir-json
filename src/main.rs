@@ -12,7 +12,6 @@ extern crate getopts;
 extern crate syntax;
 extern crate rustc_errors;
 
-
 mod analyz;
 use rustc::session::Session;
 use rustc_driver::{Compilation, CompilerCalls, RustcDefaultCalls};
@@ -114,7 +113,6 @@ fn go() {
         args.push(find_sysroot());
     }
 
-
     args.push("-Zalways-encode-mir".to_owned());
 
     rustc_driver::run_compiler(
@@ -126,7 +124,6 @@ fn go() {
     // -> (CompileResult, Option<Session>)
 
 }
-
 
 fn main() {
     go();
