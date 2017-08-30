@@ -118,6 +118,7 @@ fn go() {
     }
 
     args.push("-Zalways-encode-mir".to_owned());
+    args.push("-Zno-trans".to_owned());
 
     rustc_driver::run_compiler(
         &args, // args: &[String]
