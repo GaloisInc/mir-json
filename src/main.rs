@@ -85,6 +85,10 @@ fn after_analysis<'a, 'tcx>(state: &mut CompileState<'a, 'tcx>) {
 }
 
 fn find_sysroot() -> String {
+    if let Ok(sysroot) = std::env::var("MIR_JSON_SYSROOT") {
+        return sysroot;
+    }
+
     if let Ok(sysroot) = std::env::var("MIRI_SYSROOT") {
         return sysroot;
     }
