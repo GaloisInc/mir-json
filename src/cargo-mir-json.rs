@@ -88,22 +88,20 @@ fn main() {
             let kind = target.kind.get(0).expect(
                 "badly formatted cargo metadata: target::kind is an empty array",
             );
+            let mut process_args_opt = None;
+
             if test && kind == "test" {
-                if let Err(code) = process(
-                    vec!["--test".to_string(), target.name].into_iter().chain(
-                        args,
-                    ),
-                )
-                {
-                    std::process::exit(code);
-                }
+                process_args_opt = Some(vec!["--test".to_string(), target.name]);
             } else if !test && kind == "bin" {
-                if let Err(code) = process(
-                    vec!["--bin".to_string(), target.name].into_iter().chain(
-                        args,
-                    ),
-                )
-                {
+                process_args_opt = Some(vec!["--bin".to_string(), target.name]);
+            } else if !test && kind == "lib" {
+                process_args_opt = Some(vec!["--lib".to_string()]);
+            } else {
+                println!("Skipping target {}", &target.name)
+            }
+
+            if let Some(process_args) = process_args_opt {
+                if let Err(code) = process(process_args.into_iter().chain(args)) {
                     std::process::exit(code);
                 }
             }
