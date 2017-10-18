@@ -4,6 +4,52 @@ use rustc::hir;
 use serde_json;
 use analyz::ToJson;
 
+fn json_opt_type_ref(oty: Option<ty::Ty>, mir: &Mir) -> serde_json::Value {
+    match oty {
+        Some(ref ty) => json!({ "option": "Some", "data": json_type_ref(ty, mir) }),
+        None => json!({"option": "None"})
+    }
+}
+
+// TODO: we should refactor this and the ToJson instance for Ty to make sure they always agree
+fn json_type_ref(ty: &ty::Ty, mir: &Mir) -> serde_json::Value {
+    match &ty.sty {
+        &ty::TypeVariants::TyBool => json!({"kind": "Bool"}),
+        &ty::TypeVariants::TyChar => json!({"kind": "Char"}),
+        &ty::TypeVariants::TyInt(ref t) => json!({"kind": "Int", "intkind": t.to_json(mir)}),
+        &ty::TypeVariants::TyUint(ref t) => json!({"kind": "Uint", "uintkind": t.to_json(mir)}),
+        &ty::TypeVariants::TyTuple(sl, _) => {
+            let mut tyvec = Vec::new();
+            for ty in sl {
+                tyvec.push(ty.to_json(mir));
+            }
+            json!({"kind": "Tuple", "tys": tyvec})
+        }
+        &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": json_type_ref(f, mir)}),
+        &ty::TypeVariants::TyStr => json!({"kind": "str"}),
+        &ty::TypeVariants::TyArray(ref t, ref size) => {
+            json!({"kind": "Array", "ty": json_type_ref(t, mir), "size": size})
+        }
+        &ty::TypeVariants::TyRef(ref _region, ref tm) => {
+            json!({"kind": "ref", "ty": json_type_ref(&tm.ty, mir), "mutability": tm.mutbl.to_json(mir)})
+        }
+        &ty::TypeVariants::TyRawPtr(ref tm) => {
+            json!({"kind": "rawptr", "ty": json_type_ref(&tm.ty, mir), "mutability": tm.mutbl.to_json(mir)})
+        }
+        &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
+            json!({"kind": "adt", "name": defid_str(&adtdef.did), "substs": substs.to_json(mir)})
+        }
+        &ty::TypeVariants::TyFnDef(defid, ref substs) => {
+            json!({"kind": "fndef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)})
+        }
+            &ty::TypeVariants::TyParam(ref p) => json!({"kind": "param", "param": p.to_json(mir)}),
+        &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => {
+            json!({"kind": "closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)})
+        }
+        _ => panic!(format!("type unsupported: {:?}", &ty.sty)),
+    }
+}
+
 trait ToJsonAg {
     fn tojson<'a, 'tcx>(
         &self,
@@ -14,7 +60,7 @@ trait ToJsonAg {
 
 impl<'a> ToJson for ty::subst::Kind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
-        self.as_type().to_json(mir)
+        json_opt_type_ref(self.as_type(), mir)
     }
 }
 
