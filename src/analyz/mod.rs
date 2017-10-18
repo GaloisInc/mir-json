@@ -170,6 +170,7 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyUint(ref t) => json!({"kind": "Uint", "uintkind": t.to_json(mir)}),
             &ty::TypeVariants::TyTuple(sl, _) => json!({"kind": "Tuple", "tys": sl.to_json(mir)}),
             &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": f.to_json(mir)}),
+            &ty::TypeVariants::TyStr => json!({"kind": "str"}),
             &ty::TypeVariants::TyArray(ref t, ref size) => {
                 json!({"kind": "Array", "ty": t.to_json(mir), "size": size})
             }
