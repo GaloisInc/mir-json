@@ -169,18 +169,14 @@ pub fn handle_adt_custom(
             let v = v1.get("data").unwrap();
             v.clone()
         }
-
-        _ => panic!("bad custom adt?"),
+        // If it's not custom, handle it uniformly
+        _ => adt.tojson(mir, substs)
     }
 
 }
 
 pub fn handle_adt(mir: &Mir, adt: &ty::AdtDef, substs: &ty::subst::Substs) -> serde_json::Value {
-    if is_custom(adt) {
-        handle_adt_custom(mir, adt, substs)
-    } else {
-        adt.tojson(mir, substs)
-    }
+    handle_adt_custom(mir, adt, substs)
 }
 
 pub fn handle_adt_ag_custom(
