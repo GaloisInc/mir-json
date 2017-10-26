@@ -31,12 +31,6 @@ basic_json_enum_impl!(mir::CastKind);
 basic_json_enum_impl!(mir::BorrowKind);
 basic_json_enum_impl!(ty::VariantDiscr);
 
-impl ToJson for rustc_const_math::ConstUsize {
-    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
-        json!(self.as_u64(ast::UintTy::U64))
-    }
-}
-
 impl ToJson for hir::def_id::DefId {
     fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(ty::tls::with(|tx| {
@@ -84,7 +78,11 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyDynamic(ref data, ..) => {
                 json!({"kind": "dynamic", "data": data.principal().map(|p| p.def_id()).to_json(mir) /*, "region": r.to_json(mir)*/ })
             }
-            &ty::TypeVariants::TyFnPtr(ref sig) => {
+            &ty::TypeVariants::TyProjection(..) => {
+                // TODO
+                json!({"kind": "projection"})
+            }
+            &ty::TypeVariants::TyFnPtr(..) => {
                 // TODO
                 json!({"kind": "fnptr" /* ,
                        "inputs": sig.inputs().to_json(mir)

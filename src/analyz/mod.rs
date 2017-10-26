@@ -7,6 +7,7 @@ use rustc::hir::def_id;
 use rustc_data_structures::indexed_vec::Idx;
 use rustc::middle;
 use rustc::hir::def_id::DefId;
+use rustc_const_math;
 use rustc_driver::driver::{CompileState, source_name};
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
@@ -26,6 +27,9 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
+basic_json_enum_impl!(rustc_const_math::ConstInt);
+basic_json_enum_impl!(rustc_const_math::ConstUsize);
+
 impl<'a> ToJson for mir::AggregateKind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         match self {
@@ -44,8 +48,8 @@ impl<'a> ToJson for mir::AggregateKind<'a> {
 impl<'a> ToJson for middle::const_val::ConstVal<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         match self {
-            &middle::const_val::ConstVal::Integral(i) if !(i.is_negative()) => {
-                json!({"kind": "int", "data": i.to_u64().unwrap()})
+            &middle::const_val::ConstVal::Integral(i) => {
+                json!({"kind": "int", "data": i.to_json(mir)})
             }
             &middle::const_val::ConstVal::Bool(b) => json!({"kind": "bool", "data": b}),
             &middle::const_val::ConstVal::Function(defid, substs) => {
@@ -237,7 +241,7 @@ impl<'a> ToJson for mir::TerminatorKind<'a> {
                 ref values,
                 ref targets,
             } => {
-                let vals: Vec<u64> = values.iter().map(|c| c.to_u64().unwrap()).collect();
+                let vals: Vec<Option<u64>> = values.iter().map(|c| c.to_u64()).collect();
 
                 json!({"kind": "switchint", "discr": discr.to_json(mir), "switch_ty": switch_ty.to_json(mir), "values": vals, "targets": targets.to_json(mir)})
             }
@@ -310,7 +314,7 @@ pub fn emit(state: &mut CompileState, file: &mut File) {
     for def_id in ids {
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
         if !fn_name.contains("fmt") {
-            state.session.note_without_error(format!("Analyzing {} ({}/{})", fn_name, n, size).as_str());
+            state.session.note_without_error(format!("Emitting MIR for {} ({}/{})", fn_name, n, size).as_str());
             let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
             if let Some(mi) = mir_info(get_mir(tcx, def_id).unwrap(), def_id, src, &tcx) {
                 let begin = if n == 1 { "[" } else { "," };
