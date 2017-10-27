@@ -20,6 +20,7 @@ use serde_json;
 mod to_json;
 mod ty_json;
 use analyz::to_json::*;
+use analyz::ty_json::*;
 
 
 basic_json_impl!(mir::Promoted);
@@ -77,7 +78,7 @@ impl ToJson for rustc_const_math::ConstInt {
 impl<'a> ToJson for mir::AggregateKind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         match self {
-            &mir::AggregateKind::Array(ty) => json!({"kind": "Array", "ty": ty.to_json(mir)}),
+            &mir::AggregateKind::Array(ty) => json!({"kind": "Array", "ty": json_type_ref(&ty, mir)}),
             &mir::AggregateKind::Tuple => json!({"kind": "Tuple"}),
             &mir::AggregateKind::Adt(_, _, _, _) => {
                 panic!("adt should be handled upstream")
@@ -144,7 +145,7 @@ impl<'a> ToJson for mir::Rvalue<'a> {
             } // UNUSED
             &mir::Rvalue::Len(ref l) => json!({"kind": "Len", "lv": l.to_json(mir)}),
             &mir::Rvalue::Cast(ref ck, ref op, ref ty) => {
-                json!({"kind": "Cast", "type": ck.to_json(mir), "op": op.to_json(mir), "ty": ty.to_json(mir)})
+                json!({"kind": "Cast", "type": ck.to_json(mir), "op": op.to_json(mir), "ty": json_type_ref(ty, mir)})
             }
             &mir::Rvalue::BinaryOp(ref binop, ref op1, ref op2) => {
                 json!({"kind": "BinaryOp", "op": binop.to_json(mir), "L": op1.to_json(mir), "R": op2.to_json(mir)})
