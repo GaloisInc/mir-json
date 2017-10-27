@@ -50,53 +50,55 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyTuple(sl, _) => json!({"kind": "Tuple", "tys": sl.to_json(mir)}),
             &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": f.to_json(mir)}),
             &ty::TypeVariants::TyStr => json!({"kind": "str"}),
-            &ty::TypeVariants::TyFloat(ref sz) => json!({"kind": "float", "size": sz.to_json(mir)}),
+            &ty::TypeVariants::TyFloat(ref sz) => json!({"kind": "Float", "size": sz.to_json(mir)}),
             &ty::TypeVariants::TyArray(ref t, ref size) => {
                 json!({"kind": "Array", "ty": t.to_json(mir), "size": size})
             }
             &ty::TypeVariants::TyRef(ref _region, ref tm) => {
-                json!({"kind": "ref", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
+                json!({"kind": "Ref", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyRawPtr(ref tm) => {
-                json!({"kind": "rawptr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
+                json!({"kind": "RawPtr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
                 if is_custom(adtdef) {
-                    json!({"kind": "custom", "data": handle_adt_custom(mir, adtdef, substs)})
+                    json!({"kind": "AdtCustom", "data": handle_adt_custom(mir, adtdef, substs)})
                 } else {
-                    json!({"kind": "adt", "adt": handle_adt(mir, adtdef, substs)})
+                    json!({"kind": "Adt", "adt": handle_adt(mir, adtdef, substs)})
                 }
             }
             &ty::TypeVariants::TyFnDef(defid, ref substs) => {
-                json!({"kind": "fndef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)})
+                json!({"kind": "FnDef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)})
             }
-            &ty::TypeVariants::TyParam(ref p) => json!({"kind": "param", "param": p.to_json(mir)}),
+            &ty::TypeVariants::TyParam(ref p) => json!({"kind": "Param", "param": p.to_json(mir)}),
             &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => {
-                json!({"kind": "closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)})
+                json!({"kind": "Closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)})
             }
             &ty::TypeVariants::TyDynamic(ref data, ..) => {
-                json!({"kind": "dynamic", "data": data.principal().map(|p| p.def_id()).to_json(mir) /*, "region": r.to_json(mir)*/ })
+                json!({"kind": "Dynamic", "data": data.principal().map(|p| p.def_id()).to_json(mir) /*, "region": r.to_json(mir)*/ })
             }
             &ty::TypeVariants::TyProjection(..) => {
                 // TODO
-                json!({"kind": "projection"})
+                json!({"kind": "Projection"})
             }
             &ty::TypeVariants::TyFnPtr(..) => {
                 // TODO
-                json!({"kind": "fnptr" /* ,
+                json!({"kind": "FnPtr" /* ,
                        "inputs": sig.inputs().to_json(mir)
                        "output": sig.output().to_json(mir)*/ })
             }
             &ty::TypeVariants::TyNever => {
-                json!({"kind": "never"})
+                json!({"kind": "Never"})
             }
             &ty::TypeVariants::TyError => {
-                json!({"kind": "error"})
+                json!({"kind": "Error"})
             }
             &ty::TypeVariants::TyAnon(_, _) => {
+                // TODO
                 panic!("Type not supported: TyAnon")
             }
             &ty::TypeVariants::TyInfer(_) => {
+                // TODO
                 panic!("Type not supported: TyInfer")
             }
         }
