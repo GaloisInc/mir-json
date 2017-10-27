@@ -28,9 +28,51 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
-basic_json_enum_impl!(rustc_const_math::ConstFloat);
-basic_json_enum_impl!(rustc_const_math::ConstInt);
-basic_json_enum_impl!(rustc_const_math::ConstUsize);
+impl ToJson for rustc_const_math::ConstFloat {
+    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+        json!({"ty": self.ty.to_json(mir), "bits": "TODO" /*json!(self.bits)*/})
+    }
+}
+
+impl ToJson for rustc_const_math::ConstUsize {
+    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+        match self {
+            &rustc_const_math::Us16(n) => json!({"kind": "Us16", "val": json!(n)}),
+            &rustc_const_math::Us32(n) => json!({"kind": "Us32", "val": json!(n)}),
+            &rustc_const_math::Us64(n) => json!({"kind": "Us64", "val": json!(n)}),
+        }
+    }
+}
+
+impl ToJson for rustc_const_math::ConstIsize {
+    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+        match self {
+            &rustc_const_math::Is16(n) => json!({"kind": "Is16", "val": json!(n)}),
+            &rustc_const_math::Is32(n) => json!({"kind": "Is32", "val": json!(n)}),
+            &rustc_const_math::Is64(n) => json!({"kind": "Is64", "val": json!(n)}),
+        }
+    }
+}
+
+impl ToJson for rustc_const_math::ConstInt {
+    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+        match self {
+            &rustc_const_math::I8(n) => json!({"kind": "i8", "val": json!(n)}),
+            &rustc_const_math::I16(n) => json!({"kind": "i16", "val": json!(n)}),
+            &rustc_const_math::I32(n) => json!({"kind": "i32", "val": json!(n)}),
+            &rustc_const_math::I64(n) => json!({"kind": "i64", "val": json!(n)}),
+            //&rustc_const_math::I128(n) => json!({"kind": "i128", "val": json!(n)}),
+            &rustc_const_math::Isize(n) => json!({"kind": "isize", "val": n.to_json(mir)}),
+            &rustc_const_math::U8(n) => json!({"kind": "u8", "val": json!(n)}),
+            &rustc_const_math::U16(n) => json!({"kind": "u16", "val": json!(n)}),
+            &rustc_const_math::U32(n) => json!({"kind": "u32", "val": json!(n)}),
+            &rustc_const_math::U64(n) => json!({"kind": "u64", "val": json!(n)}),
+            //&rustc_const_math::U128(n) => json!({"kind": "u128", "val": json!(n)}),
+            &rustc_const_math::Usize(n) => json!({"kind": "usize", "val": n.to_json(mir)}),
+            _ => panic!("const int not supported")
+        }
+    }
+}
 
 impl<'a> ToJson for mir::AggregateKind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
