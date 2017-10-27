@@ -10,6 +10,7 @@ use rustc::hir::def_id::DefId;
 use rustc_const_math;
 use rustc_driver::driver::{CompileState, source_name};
 use std::fmt::Write as FmtWrite;
+use std::io;
 use std::io::Write;
 use std::fs::File;
 use std::path::Path;
@@ -305,7 +306,7 @@ pub fn get_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, id: DefId) -> Option<&'a M
     tcx.maybe_optimized_mir(id).clone()
 }
 
-pub fn emit(state: &mut CompileState, file: &mut File) {
+pub fn emit(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let ids = get_def_ids(tcx);
     let size = ids.len();
@@ -318,25 +319,20 @@ pub fn emit(state: &mut CompileState, file: &mut File) {
             let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
             if let Some(mi) = mir_info(get_mir(tcx, def_id).unwrap(), def_id, src, &tcx) {
                 let begin = if n == 1 { "[" } else { "," };
-                writeln!(file, "{} {}", begin, mi);
+                writeln!(file, "{} {}", begin, mi)?;
             }
         }
         n = n + 1;
     }
-    writeln!(file, "]");
-
+    writeln!(file, "]")
 }
 
-pub fn analyze(state: &mut CompileState) {
+pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     let iname = source_name(state.input);
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
-    let mut file = File::create(&mirname);
-    match file {
-        Ok(ref mut file) => emit(state, file),
-        Err(_) => println!("Failed to create output file {:?} for MIR dump.",
-                            mirname)
-    }
+    let mut file = File::create(&mirname)?;
+    emit(state, &mut file)
 }
 
 pub fn local_json<'a, 'tcx>(mir: &Mir<'a>, local: mir::Local) -> serde_json::Value {

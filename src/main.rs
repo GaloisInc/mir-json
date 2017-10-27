@@ -18,6 +18,7 @@ use rustc_driver::{Compilation, CompilerCalls, RustcDefaultCalls};
 use rustc_driver::driver::{CompileState, CompileController};
 use rustc::session::config::{self, Input, ErrorOutputType};
 use syntax::ast;
+use std::error::Error;
 use std::path::PathBuf;
 
 struct MyCompilerCalls(RustcDefaultCalls);
@@ -81,7 +82,7 @@ impl<'a> CompilerCalls<'a> for MyCompilerCalls {
 fn after_analysis<'a, 'tcx>(state: &mut CompileState<'a, 'tcx>) {
     state.session.abort_if_errors();
 
-    analyz::analyze(state);
+    analyz::analyze(state).unwrap_or_else(|msg| state.session.err(msg.description()));
 }
 
 fn find_sysroot() -> String {
