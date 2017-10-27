@@ -1,7 +1,6 @@
 use rustc::hir;
 use rustc::mir::{self, Mir};
 use rustc::ty;
-use rustc_const_math;
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -88,7 +87,18 @@ impl<'a> ToJson for ty::Ty<'a> {
                        "inputs": sig.inputs().to_json(mir)
                        "output": sig.output().to_json(mir)*/ })
             }
-            _ => panic!(format!("type unsupported: {:?}", &self.sty)),
+            &ty::TypeVariants::TyNever => {
+                json!({"kind": "never"})
+            }
+            &ty::TypeVariants::TyError => {
+                json!({"kind": "error"})
+            }
+            &ty::TypeVariants::TyAnon(_, _) => {
+                panic!("Type not supported: TyAnon")
+            }
+            &ty::TypeVariants::TyInfer(_) => {
+                panic!("Type not supported: TyInfer")
+            }
         }
     }
 }

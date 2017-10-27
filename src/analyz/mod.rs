@@ -28,6 +28,7 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
+basic_json_enum_impl!(rustc_const_math::ConstFloat);
 basic_json_enum_impl!(rustc_const_math::ConstInt);
 basic_json_enum_impl!(rustc_const_math::ConstUsize);
 
@@ -52,17 +53,39 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
             &middle::const_val::ConstVal::Integral(i) => {
                 json!({"kind": "int", "data": i.to_json(mir)})
             }
-            &middle::const_val::ConstVal::Bool(b) => json!({"kind": "bool", "data": b}),
+            &middle::const_val::ConstVal::Float(i) => {
+                json!({"kind": "float", "data": i.to_json(mir)})
+            }
+            &middle::const_val::ConstVal::Bool(b) => {
+                json!({"kind": "bool", "data": b})
+            }
+            &middle::const_val::ConstVal::Char(c) => {
+                json!({"kind": "char", "data": c})
+            }
+            &middle::const_val::ConstVal::Str(ref s) => {
+                json!({"kind": "str", "data": json!(**s)})
+            }
+            &middle::const_val::ConstVal::ByteStr(..) => {
+                panic!("ByteStr not yet implemented")
+            }
             &middle::const_val::ConstVal::Function(defid, substs) => {
                 json!({"kind": "function", "fname": defid.to_json(mir), "substs": substs.to_json(mir)})
             }
             &middle::const_val::ConstVal::Array(ref constvals) => {
                 json!({"kind": "array", "data": constvals.to_json(mir)})
             }
-            &middle::const_val::ConstVal::Str(ref s) => {
-                json!({"kind": "str", "data": json!(**s)})
+            &middle::const_val::ConstVal::Tuple(..) => {
+                panic!("Tuple not yet implemented")
             }
-            _ => panic!("other const types unsupported: {:?}", self),
+            &middle::const_val::ConstVal::Variant(defid) => {
+                json!({"kind": "variant", "name": defid.to_json(mir)})
+            }
+            &middle::const_val::ConstVal::Struct(..) => {
+                panic!("Struct not yet implemented")
+            }
+            &middle::const_val::ConstVal::Repeat(..) => {
+                panic!("Repeat not yet implemented")
+            }
         }
     }
 }
@@ -223,8 +246,12 @@ impl<'a> ToJson for mir::Statement<'a> {
                 json!({"kind": "StorageDead", "sdvar": l.to_json(mir)})
             }
             &mir::StatementKind::Nop => json!({"kind": "Nop"}),
+            // TODO
             &mir::StatementKind::EndRegion(_) => json!({"kind": "EndRegion"}),
-            _ => json!({"kind": "unrecognized"}),
+            // TODO
+            &mir::StatementKind::Validate(..) => json!({"kind": "Validate"}),
+            // TODO
+            &mir::StatementKind::InlineAsm { .. } => json!({"kind": "InlineAsm"}),
         }
 
     }
