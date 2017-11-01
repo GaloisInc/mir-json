@@ -18,7 +18,7 @@ where
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         match self {
             &Some(ref i) => i.to_json(mir),
-            &None => json!("null"),
+            &None => serde_json::Value::Null,
         }
     }
 }

@@ -28,7 +28,15 @@ basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::Mutability);
 basic_json_enum_impl!(mir::CastKind);
 basic_json_enum_impl!(mir::BorrowKind);
-basic_json_enum_impl!(ty::VariantDiscr);
+
+impl ToJson for ty::VariantDiscr {
+    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+        match self {
+            &ty::VariantDiscr::Relative(i) => json!({"kind": "Relative", "index" : json!(i)}),
+            &ty::VariantDiscr::Explicit(n) => json!({"kind": "Explicit", "name" : n.to_json(mir)}),
+        }
+    }
+}
 
 impl ToJson for hir::def_id::DefId {
     fn to_json(&self, _mir: &Mir) -> serde_json::Value {
@@ -39,9 +47,9 @@ impl ToJson for hir::def_id::DefId {
     }
 }
 
+// For type _references_. To translate ADT defintions, do it explicitly.
 impl<'a> ToJson for ty::Ty<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
-
         match &self.sty {
             &ty::TypeVariants::TyBool => json!({"kind": "Bool"}),
             &ty::TypeVariants::TyChar => json!({"kind": "Char"}),
@@ -49,7 +57,7 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyUint(ref t) => json!({"kind": "Uint", "uintkind": t.to_json(mir)}),
             &ty::TypeVariants::TyTuple(sl, _) => json!({"kind": "Tuple", "tys": sl.to_json(mir)}),
             &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": f.to_json(mir)}),
-            &ty::TypeVariants::TyStr => json!({"kind": "str"}),
+            &ty::TypeVariants::TyStr => json!({"kind": "Str"}),
             &ty::TypeVariants::TyFloat(ref sz) => json!({"kind": "Float", "size": sz.to_json(mir)}),
             &ty::TypeVariants::TyArray(ref t, ref size) => {
                 json!({"kind": "Array", "ty": t.to_json(mir), "size": size})
@@ -61,11 +69,7 @@ impl<'a> ToJson for ty::Ty<'a> {
                 json!({"kind": "RawPtr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
-                if is_custom(adtdef) {
-                    json!({"kind": "AdtCustom", "data": handle_adt_custom(mir, adtdef, substs)})
-                } else {
-                    json!({"kind": "Adt", "adt": handle_adt(mir, adtdef, substs)})
-                }
+                json!({"kind": "Adt", "name": defid_str(&adtdef.did), "substs": substs.to_json(mir)})
             }
             &ty::TypeVariants::TyFnDef(defid, ref substs) => {
                 json!({"kind": "FnDef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)})
@@ -105,33 +109,6 @@ impl<'a> ToJson for ty::Ty<'a> {
     }
 }
 
-pub fn json_opt_type_ref(oty: Option<ty::Ty>, mir: &Mir) -> serde_json::Value {
-    match oty {
-        Some(ref ty) => json!({ "option": "Some", "data": json_type_ref(ty, mir) }),
-        None => json!({"option": "None"})
-    }
-}
-
-pub fn json_type_ref(ty: &ty::Ty, mir: &Mir) -> serde_json::Value {
-    match &ty.sty {
-        &ty::TypeVariants::TySlice(ref f) => json!({"kind": "Slice", "ty": json_type_ref(f, mir)}),
-        &ty::TypeVariants::TyArray(ref t, ref size) => {
-            json!({"kind": "Array", "ty": json_type_ref(t, mir), "size": size})
-        }
-        &ty::TypeVariants::TyRef(ref _region, ref tm) => {
-            json!({"kind": "ref", "ty": json_type_ref(&tm.ty, mir), "mutability": tm.mutbl.to_json(mir)})
-        }
-        &ty::TypeVariants::TyRawPtr(ref tm) => {
-            json!({"kind": "rawptr", "ty": json_type_ref(&tm.ty, mir), "mutability": tm.mutbl.to_json(mir)})
-        }
-        &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
-            json!({"kind": "adt", "name": defid_str(&adtdef.did), "substs": substs.to_json(mir)})
-        }
-        _ => ty.to_json(mir)
-    }
-}
-
-
 impl ToJson for ty::ParamTy {
     fn to_json(&self, _mir: &Mir) -> serde_json::Value {
         json!(self.idx)
@@ -159,7 +136,7 @@ trait ToJsonAg {
 
 impl<'a> ToJson for ty::subst::Kind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
-        json_opt_type_ref(self.as_type(), mir)
+        self.as_type().to_json(mir)
     }
 }
 
@@ -205,59 +182,6 @@ impl ToJsonAg for ty::FieldDef {
     }
 }
 
-pub fn is_custom(adt: &ty::AdtDef) -> bool {
-    match &defid_str(&adt.did) as &str {
-        "alloc/39550c7::vec[0]::IntoIter[0]" => true,
-        "alloc/39550c7::boxed[0]::Box[0]" => true,
-        "alloc/39550c7::vec[0]::Vec[0]" => true,
-        "core/ebcf64d::iter[0]::Map[0]" => true,
-        _ => false,
-    }
-}
-
-pub fn handle_adt_custom(
-    mir: &Mir,
-    adt: &ty::AdtDef,
-    substs: &ty::subst::Substs,
-) -> serde_json::Value {
-
-    match &defid_str(&adt.did) as &str {
-        "alloc/39550c7::boxed[0]::Box[0]" => {
-            json!({"kind": "Box", "box_ty": substs[0].as_type().unwrap().to_json(mir)})
-        }
-
-        "alloc/39550c7::vec[0]::Vec[0]" => {
-            json!({"kind": "Vec", "vec_ty": substs[0].as_type().unwrap().to_json(mir)})
-        }
-        "alloc/39550c7::vec[0]::IntoIter[0]" => {
-            json!({"kind": "Iter", "iter_ty": substs[0].as_type().unwrap().to_json(mir)})
-        }
-        "core/ebcf64d::iter[0]::Map[0]" => {
-            // map is the same as its embedded iter
-            let v1 = substs[0].as_type().unwrap().to_json(mir);
-            let v = v1.get("data").unwrap();
-            v.clone()
-        }
-        // If it's not custom, handle it uniformly
-        _ => adt.tojson(mir, substs)
-    }
-
-}
-
-pub fn handle_adt(mir: &Mir, adt: &ty::AdtDef, substs: &ty::subst::Substs) -> serde_json::Value {
-    handle_adt_custom(mir, adt, substs)
-}
-
-pub fn handle_adt_ag_custom(
-    _mir: &Mir,
-    _adt: &ty::AdtDef,
-    _substs: &ty::subst::Substs,
-    _variant: usize,
-    _opv: &Vec<mir::Operand>,
-) -> serde_json::Value {
-    panic!("unimplemented")
-}
-
 pub fn handle_adt_ag(
     mir: &Mir,
     ak: &mir::AggregateKind,
@@ -265,11 +189,7 @@ pub fn handle_adt_ag(
 ) -> serde_json::Value {
     match ak {
         &mir::AggregateKind::Adt(ref adt, variant, substs, _) => {
-            if is_custom(adt) {
-                handle_adt_ag_custom(mir, adt, substs, variant, opv)
-            } else {
-                json!({"adt": adt.tojson(mir, substs), "variant": variant, "ops": opv.to_json(mir)})
-            }
+            json!({"adt": adt.tojson(mir, substs), "variant": variant, "ops": opv.to_json(mir)})
         }
         _ => unreachable!("bad"),
     }

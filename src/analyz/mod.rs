@@ -20,7 +20,6 @@ use serde_json;
 mod to_json;
 mod ty_json;
 use analyz::to_json::*;
-use analyz::ty_json::*;
 
 
 basic_json_impl!(mir::Promoted);
@@ -36,21 +35,21 @@ impl ToJson for rustc_const_math::ConstFloat {
 }
 
 impl ToJson for rustc_const_math::ConstUsize {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _ : &Mir) -> serde_json::Value {
         match self {
-            &rustc_const_math::Us16(n) => json!({"kind": "Us16", "val": json!(n)}),
-            &rustc_const_math::Us32(n) => json!({"kind": "Us32", "val": json!(n)}),
-            &rustc_const_math::Us64(n) => json!({"kind": "Us64", "val": json!(n)}),
+            &rustc_const_math::Us16(n) => json!(n),
+            &rustc_const_math::Us32(n) => json!(n),
+            &rustc_const_math::Us64(n) => json!(n),
         }
     }
 }
 
 impl ToJson for rustc_const_math::ConstIsize {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _ : &Mir) -> serde_json::Value {
         match self {
-            &rustc_const_math::Is16(n) => json!({"kind": "Is16", "val": json!(n)}),
-            &rustc_const_math::Is32(n) => json!({"kind": "Is32", "val": json!(n)}),
-            &rustc_const_math::Is64(n) => json!({"kind": "Is64", "val": json!(n)}),
+            &rustc_const_math::Is16(n) => json!(n),
+            &rustc_const_math::Is32(n) => json!(n),
+            &rustc_const_math::Is64(n) => json!(n),
         }
     }
 }
@@ -78,7 +77,7 @@ impl ToJson for rustc_const_math::ConstInt {
 impl<'a> ToJson for mir::AggregateKind<'a> {
     fn to_json(&self, mir: &Mir) -> serde_json::Value {
         match self {
-            &mir::AggregateKind::Array(ty) => json!({"kind": "Array", "ty": json_type_ref(&ty, mir)}),
+            &mir::AggregateKind::Array(ty) => json!({"kind": "Array", "ty": ty.to_json(mir)}),
             &mir::AggregateKind::Tuple => json!({"kind": "Tuple"}),
             &mir::AggregateKind::Adt(_, _, _, _) => {
                 panic!("adt should be handled upstream")
@@ -106,10 +105,10 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
                 json!({"kind": "Char", "data": c})
             }
             &middle::const_val::ConstVal::Str(ref s) => {
-                json!({"kind": "Str", "data": json!(**s)})
+                json!({"kind": "Str", "data": serde_json::Value::String(s.to_string())})
             }
             &middle::const_val::ConstVal::ByteStr(..) => {
-                panic!("ByteStr not yet implemented")
+                json!({"kind": "ByteStr"}) // TODO
             }
             &middle::const_val::ConstVal::Function(defid, substs) => {
                 json!({"kind": "Function", "fname": defid.to_json(mir), "substs": substs.to_json(mir)})
@@ -118,16 +117,16 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
                 json!({"kind": "Array", "data": constvals.to_json(mir)})
             }
             &middle::const_val::ConstVal::Tuple(..) => {
-                panic!("Tuple not yet implemented")
+                json!({"kind": "Tuple"}) // TODO
             }
             &middle::const_val::ConstVal::Variant(defid) => {
                 json!({"kind": "Variant", "name": defid.to_json(mir)})
             }
             &middle::const_val::ConstVal::Struct(..) => {
-                panic!("Struct not yet implemented")
+                json!({"kind": "Struct"}) // TODO
             }
             &middle::const_val::ConstVal::Repeat(..) => {
-                panic!("Repeat not yet implemented")
+                json!({"kind": "Repeat"}) // TODO
             }
         }
     }
@@ -145,7 +144,7 @@ impl<'a> ToJson for mir::Rvalue<'a> {
             } // UNUSED
             &mir::Rvalue::Len(ref l) => json!({"kind": "Len", "lv": l.to_json(mir)}),
             &mir::Rvalue::Cast(ref ck, ref op, ref ty) => {
-                json!({"kind": "Cast", "type": ck.to_json(mir), "op": op.to_json(mir), "ty": json_type_ref(ty, mir)})
+                json!({"kind": "Cast", "type": ck.to_json(mir), "op": op.to_json(mir), "ty": ty.to_json(mir)})
             }
             &mir::Rvalue::BinaryOp(ref binop, ref op1, ref op2) => {
                 json!({"kind": "BinaryOp", "op": binop.to_json(mir), "L": op1.to_json(mir), "R": op2.to_json(mir)})
@@ -395,6 +394,7 @@ pub fn emit(state: &mut CompileState, file: &mut File) -> io::Result<()> {
         n = n + 1;
     }
     writeln!(file, "]")
+    // Once bodies are emitted, also emit definitions for all ADTs?
 }
 
 pub fn analyze(state: &mut CompileState) -> io::Result<()> {
