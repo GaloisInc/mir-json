@@ -387,11 +387,11 @@ pub fn emit(state: &mut CompileState, file: &mut File) -> io::Result<()> {
             state.session.note_without_error(format!("Emitting MIR for {} ({}/{})", fn_name, n, size).as_str());
             let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
             if let Some(mi) = mir_info(get_mir(tcx, def_id).unwrap(), def_id, src, &tcx) {
-                let begin = if n == 1 { "[" } else { "," };
-                writeln!(file, "{} {}", begin, mi)?;
+                write!(file, "{}", if n == 1 { "[" } else { "," })?;
+                writeln!(file, "{}", mi)?;
+                n = n + 1;
             }
         }
-        n = n + 1;
     }
     writeln!(file, "]")
     // Once bodies are emitted, also emit definitions for all ADTs?
