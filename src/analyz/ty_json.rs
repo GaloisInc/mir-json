@@ -1,5 +1,5 @@
 use rustc::hir;
-use rustc::mir::{self, Mir};
+use rustc::mir;
 use rustc::ty;
 use syntax::ast;
 use serde_json;
@@ -11,7 +11,7 @@ impl<T> ToJson for ty::Slice<T>
     where
     T: ToJson,
 {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let mut j = Vec::new();
         for v in self {
             j.push(v.to_json(mir));
@@ -30,7 +30,7 @@ basic_json_enum_impl!(mir::CastKind);
 basic_json_enum_impl!(mir::BorrowKind);
 
 impl ToJson for ty::VariantDiscr {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &ty::VariantDiscr::Relative(i) => json!({"kind": "Relative", "index" : json!(i)}),
             &ty::VariantDiscr::Explicit(n) => json!({"kind": "Explicit", "name" : n.to_json(mir)}),
@@ -39,7 +39,7 @@ impl ToJson for ty::VariantDiscr {
 }
 
 impl ToJson for hir::def_id::DefId {
-    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(ty::tls::with(|tx| {
             let defpath = tx.def_path(*self);
             defpath.to_string_no_crate()
@@ -49,7 +49,7 @@ impl ToJson for hir::def_id::DefId {
 
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'a> ToJson for ty::Ty<'a> {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match &self.sty {
             &ty::TypeVariants::TyBool => json!({"kind": "Bool"}),
             &ty::TypeVariants::TyChar => json!({"kind": "Char"}),
@@ -69,6 +69,7 @@ impl<'a> ToJson for ty::Ty<'a> {
                 json!({"kind": "RawPtr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
+                mir.adts.insert(adtdef.did);
                 json!({"kind": "Adt", "name": defid_str(&adtdef.did), "substs": substs.to_json(mir)})
             }
             &ty::TypeVariants::TyFnDef(defid, ref substs) => {
@@ -110,7 +111,7 @@ impl<'a> ToJson for ty::Ty<'a> {
 }
 
 impl ToJson for ty::ParamTy {
-    fn to_json(&self, _mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.idx)
     }
 }
@@ -122,20 +123,20 @@ pub fn defid_str(d: &hir::def_id::DefId) -> String {
     })
 }
 
-pub fn defid_ty(d: &hir::def_id::DefId, mir: &Mir) -> serde_json::Value {
+pub fn defid_ty(d: &hir::def_id::DefId, mir: &mut MirState) -> serde_json::Value {
     ty::tls::with(|tx| tx.type_of(*d).to_json(mir))
 }
 
-trait ToJsonAg {
+pub trait ToJsonAg {
     fn tojson<'a, 'tcx>(
         &self,
-        mir: &'a Mir<'a>,
+        mir: &mut MirState,
         substs: &'tcx ty::subst::Substs<'tcx>,
     ) -> serde_json::Value;
 }
 
 impl<'a> ToJson for ty::subst::Kind<'a> {
-    fn to_json(&self, mir: &Mir) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         self.as_type().to_json(mir)
     }
 }
@@ -144,7 +145,7 @@ impl<T> ToJsonAg for Vec<T>
 where
     T: ToJsonAg,
 {
-    fn tojson(&self, mir: &Mir, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         let mut j = Vec::new();
         for v in self {
             j.push(v.tojson(mir, substs));
@@ -161,13 +162,13 @@ pub fn is_adt_ak(ak: &mir::AggregateKind) -> bool {
 }
 
 impl ToJsonAg for ty::AdtDef {
-    fn tojson(&self, mir: &Mir, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         json!({"name": defid_str(&self.did), "variants": self.variants.tojson(mir, substs)})
     }
 }
 
 impl ToJsonAg for ty::VariantDef {
-    fn tojson(&self, mir: &Mir, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         json!({"name": defid_str(&self.did), "discr": self.discr.to_json(mir), "fields": self.fields.tojson(mir, substs), "ctor_kind": self.ctor_kind.to_json(mir)})
     }
 }
@@ -175,7 +176,7 @@ impl ToJsonAg for ty::VariantDef {
 impl ToJsonAg for ty::FieldDef {
     fn tojson<'a, 'tcx>(
         &self,
-        mir: &Mir<'a>,
+        mir: &mut MirState<'a>,
         substs: &'tcx ty::subst::Substs<'tcx>,
     ) -> serde_json::Value {
         json!({"name": defid_str(&self.did), "ty": defid_ty(&self.did, mir), "substs": substs.to_json(mir)  })
@@ -183,7 +184,7 @@ impl ToJsonAg for ty::FieldDef {
 }
 
 pub fn handle_adt_ag(
-    mir: &Mir,
+    mir: &mut MirState,
     ak: &mir::AggregateKind,
     opv: &Vec<mir::Operand>,
 ) -> serde_json::Value {
