@@ -4,7 +4,7 @@ use serde_json;
 use std::collections::HashSet;
 
 pub struct MirState<'a> {
-    pub mir: &'a Mir<'a>,
+    pub mir: Option<&'a Mir<'a>>,
     pub adts: &'a mut HashSet<DefId>
 }
 

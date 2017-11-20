@@ -1,6 +1,6 @@
 #![macro_use]
 
-use rustc::ty::{TyCtxt};
+use rustc::ty::{TyCtxt, Slice};
 use rustc::mir::{self, Mir};
 use rustc::mir::transform::MirSource;
 use rustc::hir::def_id;
@@ -15,12 +15,14 @@ use std::io;
 use std::io::Write;
 use std::fs::File;
 use std::path::Path;
+use serde::ser::{Serializer, SerializeSeq};
 use serde_json;
 
 #[macro_use]
 mod to_json;
 mod ty_json;
 use analyz::to_json::*;
+use analyz::ty_json::*;
 
 
 basic_json_impl!(mir::Promoted);
@@ -205,14 +207,14 @@ impl<'a, T: ToJson> ToJson for mir::ProjectionElem<'a, mir::Operand<'a>, T> {
 }
 
 impl<'a> ToJson for mir::Lvalue<'a> {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         match self {
             &mir::Lvalue::Local(ref l) => {
-                json!({"kind": "Local", "localvar": local_json(mir, *l) })
+                json!({"kind": "Local", "localvar": local_json(ms, *l) })
             }
             &mir::Lvalue::Static(_) => json!({"kind": "Static"}), // UNUSED
             &mir::Lvalue::Projection(ref p) => {
-                json!({"kind": "Projection", "data" : p.to_json(mir)})
+                json!({"kind": "Projection", "data" : p.to_json(ms)})
             }
         }
     }
@@ -376,43 +378,50 @@ pub fn get_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, id: DefId) -> Option<&'a M
     tcx.maybe_optimized_mir(id).clone()
 }
 
-pub fn emit(state: &mut CompileState, file: &mut File) -> io::Result<()> {
+pub fn emit_fns(state: &mut CompileState, adts: &mut HashSet<DefId>, file: &mut File) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let ids = get_def_ids(tcx);
     let size = ids.len();
     let mut n = 1;
-    let mut adts = HashSet::new();
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(Some(size))?;
 
     for def_id in ids {
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
-        if !fn_name.contains("fmt") {
+        let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
+        let mut ms = MirState { mir: Some(get_mir(tcx, def_id).unwrap()),
+                                adts: adts };
+        if let Some(mi) = mir_info(&mut ms, def_id, src, &tcx) {
             state.session.note_without_error(format!("Emitting MIR for {} ({}/{})", fn_name, n, size).as_str());
-            let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
-            let mut ms = MirState { mir: get_mir(tcx, def_id).unwrap(),
-                                    adts: &mut adts };
-            if let Some(mi) = mir_info(&mut ms, def_id, src, &tcx) {
-                write!(file, "{}", if n == 1 { "[" } else { "," })?;
-                writeln!(file, "{}", mi)?;
-                n = n + 1;
-            }
+            seq.serialize_element(&mi)?;
         }
+        n = n + 1;
     }
-    writeln!(file, "]")?;
+    seq.end()?;
+    Ok(())
+}
 
-    // Once bodies are emitted, also emit definitions for all ADTs.
-    // Probably want to include traits here, eventually, too.
-    for def_id in &adts {
-        let ty = tcx.type_of(*def_id);
+pub fn emit_adts(state: &mut CompileState, adts: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
+    let tcx = state.tcx.unwrap();
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(Some(adts.len()))?;
+    let mut dummy_adts = HashSet::new();
+
+    // Emit definitions for all ADTs. Probably want to include traits
+    // here, eventually, too.
+    for &def_id in adts.iter() {
+        let ty = tcx.type_of(def_id);
         match ty.ty_adt_def() {
             Some(adtdef) => {
-                // TODO: emit it. This is slightly non-trivial because
-                // the pretty-printer requires a Mir object. It won't
-                // need it in this case, but the type of the trait
-                // method requires it.
+                let adt_name = tcx.def_path(def_id).to_string_no_crate();
+                state.session.note_without_error(format!("Emitting definition for {}", adt_name).as_str());
+                let mut ms = MirState { mir: None, adts: &mut dummy_adts };
+                seq.serialize_element(&adtdef.tojson(&mut ms, Slice::empty()))?;
             }
             _ => ()
         }
     }
+    seq.end()?;
     Ok(())
 }
 
@@ -421,11 +430,17 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
     let mut file = File::create(&mirname)?;
-    emit(state, &mut file)
+    let mut adts = HashSet::new();
+    write!(file, "{{ \"fns\": ")?;
+    emit_fns(state, &mut adts, &mut file)?;
+    write!(file, ", \"adts\": ")?;
+    emit_adts(state, &adts, &mut file)?;
+    write!(file, " }}")?;
+    Ok(())
 }
 
 pub fn local_json<'a, 'tcx>(ms: &mut MirState<'a>, local: mir::Local) -> serde_json::Value {
-    let mut j = ms.mir.local_decls[local].to_json(ms);
+    let mut j = ms.mir.unwrap().local_decls[local].to_json(ms); // TODO
     let mut s = String::new();
     write!(&mut s, "{:?}", local).unwrap();
     j["name"] = json!(s);
@@ -445,7 +460,7 @@ fn mir_info<'a, 'tcx>(
     let fn_name = tcx.def_path(def_id).to_string_no_crate();
 
     let mut args = Vec::new();
-    for (_, local) in ms.mir.args_iter().enumerate() {
+    for (_, local) in ms.mir.unwrap().args_iter().enumerate() {
         args.push(local_json(ms, local));
     }
 
@@ -455,7 +470,7 @@ fn mir_info<'a, 'tcx>(
     let body = mir_body(ms, def_id, src, tcx);
 
     Some(
-        json!({"name": fn_name, "args": args, "return_ty": ms.mir.return_ty.to_json(ms), "body": body}),
+        json!({"name": fn_name, "args": args, "return_ty": ms.mir.unwrap().return_ty.to_json(ms), "body": body}),
     )
 
 }
@@ -467,19 +482,20 @@ fn mir_body<'a, 'tcx>(
     _tcx: &TyCtxt<'a, 'tcx, 'tcx>,
 ) -> serde_json::Value {
     let mut vars = Vec::new();
+    let mir = ms.mir.unwrap(); // TODO
 
     vars.push(local_json(ms, mir::RETURN_POINTER));
 
-    for (_, v) in ms.mir.vars_and_temps_iter().enumerate() {
+    for (_, v) in ms.mir.unwrap().vars_and_temps_iter().enumerate() {
         vars.push(local_json(ms, v));
     }
 
     let mut blocks = Vec::new();
-    for bb in ms.mir.basic_blocks().indices() {
+    for bb in mir.basic_blocks().indices() {
         //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
         //theyre not in order
         blocks.push(
-            json!({"blockid": bb.to_json(ms), "block": ms.mir[bb].to_json(ms)}),
+            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
         );
     }
     json!({"vars": vars, "blocks": blocks})
