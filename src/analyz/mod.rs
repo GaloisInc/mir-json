@@ -378,7 +378,12 @@ pub fn get_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, id: DefId) -> Option<&'a M
     tcx.maybe_optimized_mir(id).clone()
 }
 
-pub fn emit_fns(state: &mut CompileState, adts: &mut HashSet<DefId>, file: &mut File) -> io::Result<()> {
+pub fn emit_fns(
+    state: &mut CompileState,
+    used_types: &mut HashSet<DefId>,
+    used_traits: &mut HashSet<DefId>,
+    file: &mut File
+) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let ids = get_def_ids(tcx);
     let size = ids.len();
@@ -390,7 +395,8 @@ pub fn emit_fns(state: &mut CompileState, adts: &mut HashSet<DefId>, file: &mut 
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
         let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
         let mut ms = MirState { mir: Some(get_mir(tcx, def_id).unwrap()),
-                                adts: adts };
+                                used_types: used_types,
+                                used_traits: used_traits };
         if let Some(mi) = mir_info(&mut ms, def_id, src, &tcx) {
             state.session.note_without_error(format!("Emitting MIR for {} ({}/{})", fn_name, n, size).as_str());
             seq.serialize_element(&mi)?;
@@ -401,25 +407,58 @@ pub fn emit_fns(state: &mut CompileState, adts: &mut HashSet<DefId>, file: &mut 
     Ok(())
 }
 
-pub fn emit_adts(state: &mut CompileState, adts: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
+pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let mut ser = serde_json::Serializer::new(file);
-    let mut seq = ser.serialize_seq(Some(adts.len()))?;
-    let mut dummy_adts = HashSet::new();
+    let mut seq = ser.serialize_seq(None)?;
+    let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_traits = HashSet::new();
 
-    // Emit definitions for all ADTs. Probably want to include traits
-    // here, eventually, too.
-    for &def_id in adts.iter() {
-        let ty = tcx.type_of(def_id);
-        match ty.ty_adt_def() {
-            Some(adtdef) => {
-                let adt_name = tcx.def_path(def_id).to_string_no_crate();
-                state.session.note_without_error(format!("Emitting definition for {}", adt_name).as_str());
-                let mut ms = MirState { mir: None, adts: &mut dummy_adts };
-                seq.serialize_element(&adtdef.tojson(&mut ms, Slice::empty()))?;
+    // Emit definitions for all ADTs.
+    for &def_id in used_types.iter() {
+        if def_id.is_local() {
+            let ty = tcx.type_of(def_id);
+            match ty.ty_adt_def() {
+                Some(adtdef) => {
+                    let adt_name = tcx.def_path(def_id).to_string_no_crate();
+                    state.session.note_without_error(format!("Emitting definition for {}", adt_name).as_str());
+                    let mut ms = MirState { mir: None,
+                                            used_types: &mut dummy_used_types,
+                                            used_traits: &mut dummy_used_traits };
+                    seq.serialize_element(&adtdef.tojson(&mut ms, Slice::empty()))?;
+                }
+                _ => ()
             }
-            _ => ()
-        }
+        } // Else look it up somewhere else, but I'm not sure where.
+    }
+    seq.end()?;
+    Ok(())
+}
+
+pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
+    let tcx = state.tcx.unwrap();
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(None)?;
+    let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_traits = HashSet::new();
+
+    // Emit definitions for all traits.
+    for &def_id in used_traits.iter() {
+        if def_id.is_local() {
+            let trait_name = tcx.def_path(def_id).to_string_no_crate();
+            //let trait_def = tcx.trait_def(def_id);
+            let items = tcx.associated_items(def_id);
+            state.session.note_without_error(format!("Emitting trait items for {}", trait_name).as_str());
+            let mut ms = MirState { mir: None,
+                                    used_types: &mut dummy_used_types,
+                                    used_traits: &mut dummy_used_traits };
+            let mut items_json = Vec::new();
+            for item in items {
+                items_json.push(assoc_item_json(&mut ms, &tcx, &item));
+            }
+            seq.serialize_element(&json!({"name": def_id.to_json(&mut ms),
+                                          "items": serde_json::Value::Array(items_json)}))?;
+        } // Else look it up somewhere else, but I'm not sure where.
     }
     seq.end()?;
     Ok(())
@@ -430,11 +469,14 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
     let mut file = File::create(&mirname)?;
-    let mut adts = HashSet::new();
+    let mut used_types = HashSet::new();
+    let mut used_traits = HashSet::new();
     write!(file, "{{ \"fns\": ")?;
-    emit_fns(state, &mut adts, &mut file)?;
+    emit_fns(state, &mut used_types, &mut used_traits, &mut file)?;
     write!(file, ", \"adts\": ")?;
-    emit_adts(state, &adts, &mut file)?;
+    emit_adts(state, &used_types, &mut file)?;
+    write!(file, ", \"traits\": ")?;
+    emit_traits(state, &used_traits, &mut file)?;
     write!(file, " }}")?;
     Ok(())
 }

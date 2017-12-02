@@ -1,11 +1,14 @@
 use rustc::hir::def_id::DefId;
 use rustc::mir::Mir;
+use syntax::symbol::Symbol;
 use serde_json;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 pub struct MirState<'a> {
     pub mir: Option<&'a Mir<'a>>,
-    pub adts: &'a mut HashSet<DefId>
+    pub used_types: &'a mut HashSet<DefId>,
+    pub used_traits: &'a mut HashSet<DefId>
 }
 
 pub trait ToJson {
@@ -18,6 +21,12 @@ impl ToJson for String {
     }
 }
 
+impl ToJson for Symbol {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        json!(*self.as_str())
+    }
+}
+
 impl<T> ToJson for Option<T>
 where
     T: ToJson,
@@ -27,6 +36,20 @@ where
             &Some(ref i) => i.to_json(mir),
             &None => serde_json::Value::Null,
         }
+    }
+}
+
+impl<K, V> ToJson for BTreeMap<K, V>
+    where
+    K: ToJson,
+    V: ToJson,
+{
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        let mut jsons = Vec::new();
+        for (k, v) in self.iter() {
+            jsons.push(json!({"name": k.to_json(mir), "val": v.to_json(mir)}))
+        }
+        serde_json::Value::Array(jsons)
     }
 }
 

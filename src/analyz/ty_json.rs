@@ -69,8 +69,9 @@ impl<'a> ToJson for ty::Ty<'a> {
                 json!({"kind": "RawPtr", "ty": tm.ty.to_json(mir), "mutability": tm.mutbl.to_json(mir)})
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
-                mir.adts.insert(adtdef.did);
-                json!({"kind": "Adt", "name": defid_str(&adtdef.did), "substs": substs.to_json(mir)})
+                let did = adtdef.did;
+                mir.used_types.insert(did);
+                json!({"kind": "Adt", "name": defid_str(&did), "substs": substs.to_json(mir)})
             }
             &ty::TypeVariants::TyFnDef(defid, ref substs) => {
                 json!({"kind": "FnDef", "defid": defid.to_json(mir), "substs": substs.to_json(mir)})
@@ -79,18 +80,17 @@ impl<'a> ToJson for ty::Ty<'a> {
             &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => {
                 json!({"kind": "Closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)})
             }
-            &ty::TypeVariants::TyDynamic(ref data, ..) => {
-                json!({"kind": "Dynamic", "data": data.principal().map(|p| p.def_id()).to_json(mir) /*, "region": r.to_json(mir)*/ })
+            &ty::TypeVariants::TyDynamic(..) => {
+                let did = self.ty_to_def_id().expect("trait use with no name");
+                mir.used_traits.insert(did);
+                json!({"kind": "Dynamic", "data": did.to_json(mir) /*, "region": r.to_json(mir)*/ })
             }
             &ty::TypeVariants::TyProjection(..) => {
                 // TODO
                 json!({"kind": "Projection"})
             }
-            &ty::TypeVariants::TyFnPtr(..) => {
-                // TODO
-                json!({"kind": "FnPtr" /* ,
-                       "inputs": sig.inputs().to_json(mir)
-                       "output": sig.output().to_json(mir)*/ })
+            &ty::TypeVariants::TyFnPtr(ref sig) => {
+                json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
             }
             &ty::TypeVariants::TyNever => {
                 json!({"kind": "Never"})
@@ -100,11 +100,11 @@ impl<'a> ToJson for ty::Ty<'a> {
             }
             &ty::TypeVariants::TyAnon(_, _) => {
                 // TODO
-                panic!("Type not supported: TyAnon")
+                json!({"kind": "Anon"})
             }
             &ty::TypeVariants::TyInfer(_) => {
                 // TODO
-                panic!("Type not supported: TyInfer")
+                json!({"kind": "Infer"})
             }
         }
     }
@@ -113,6 +113,44 @@ impl<'a> ToJson for ty::Ty<'a> {
 impl ToJson for ty::ParamTy {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.idx)
+    }
+}
+
+impl<'a> ToJson for ty::PolyFnSig<'a> {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
+        // Note: I don't think we need binders in MIR, but we can change
+        // this if we do.
+        self.skip_binder().to_json(ms)
+    }
+}
+
+impl<'a> ToJson for ty::FnSig<'a> {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
+        let input_jsons : Vec<serde_json::Value> =
+            self.inputs().iter().map(|i| i.to_json(ms)).collect();
+        json!({ "inputs": input_jsons, "output": self.output().to_json(ms) })
+    }
+}
+
+pub fn assoc_item_json<'a, 'tcx>(
+    ms: &mut MirState<'a>,
+    tcx: &ty::TyCtxt<'a, 'tcx, 'tcx>,
+    item: &ty::AssociatedItem
+) -> serde_json::Value {
+    let did = item.def_id;
+    match item.kind {
+        ty::AssociatedKind::Const => {
+            json!({"kind": "Const", "name": did.to_json(ms), "type": tcx.type_of(did).to_json(ms)})
+        }
+        ty::AssociatedKind::Method => {
+            let sig = tcx.fn_sig(did);
+            json!({"kind": "Method",
+                   "name": did.to_json(ms),
+                   "signature": sig.to_json(ms) })
+        }
+        ty::AssociatedKind::Type => {
+            json!({"kind": "Type", "name": did.to_json(ms)})
+        }
     }
 }
 
