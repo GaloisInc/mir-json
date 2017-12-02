@@ -110,8 +110,8 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
             &middle::const_val::ConstVal::Str(ref s) => {
                 json!({"kind": "Str", "data": serde_json::Value::String(s.to_string())})
             }
-            &middle::const_val::ConstVal::ByteStr(..) => {
-                json!({"kind": "ByteStr"}) // TODO
+            &middle::const_val::ConstVal::ByteStr(ref _bytes) => {
+                json!({"kind": "ByteStr" /*, "data": json!(*bytes) */}) // TODO
             }
             &middle::const_val::ConstVal::Function(defid, substs) => {
                 json!({"kind": "Function", "fname": defid.to_json(mir), "substs": substs.to_json(mir)})
@@ -119,17 +119,17 @@ impl<'a> ToJson for middle::const_val::ConstVal<'a> {
             &middle::const_val::ConstVal::Array(ref constvals) => {
                 json!({"kind": "Array", "data": constvals.to_json(mir)})
             }
-            &middle::const_val::ConstVal::Tuple(..) => {
-                json!({"kind": "Tuple"}) // TODO
+            &middle::const_val::ConstVal::Tuple(ref elems) => {
+                json!({"kind": "Tuple", "elems": elems.to_json(mir)})
             }
             &middle::const_val::ConstVal::Variant(defid) => {
                 json!({"kind": "Variant", "name": defid.to_json(mir)})
             }
-            &middle::const_val::ConstVal::Struct(..) => {
-                json!({"kind": "Struct"}) // TODO
+            &middle::const_val::ConstVal::Struct(ref fields) => {
+                json!({"kind": "Struct", "fields": fields.to_json(mir) })
             }
-            &middle::const_val::ConstVal::Repeat(..) => {
-                json!({"kind": "Repeat"}) // TODO
+            &middle::const_val::ConstVal::Repeat(ref val, n) => {
+                json!({"kind": "Repeat", "val": val.to_json(mir), "count": n})
             }
         }
     }
