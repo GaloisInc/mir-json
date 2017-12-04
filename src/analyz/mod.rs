@@ -268,12 +268,14 @@ impl<'a> ToJson for mir::Constant<'a> {
 
 impl<'a> ToJson for mir::LocalDecl<'a> {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        //let span = self.source_info.span.data();
         json!({"mut": self.mutability.to_json(mir), "ty": self.ty.to_json(mir), "scope": self.source_info.scope.to_json(mir)})
     }
 }
 
 impl<'a> ToJson for mir::Statement<'a> {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        //let span = self.source_info.span.data();
         match &self.kind {
             &mir::StatementKind::Assign(ref l, ref r) => {
                 json!({"kind": "Assign", "lhs": l.to_json(mir), "rhs": r.to_json(mir)})
