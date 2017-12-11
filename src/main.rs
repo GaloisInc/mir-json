@@ -80,7 +80,7 @@ impl<'a> CompilerCalls<'a> for MyCompilerCalls {
     }
 }
 
-fn after_analysis<'a, 'tcx>(state: &mut CompileState<'a, 'tcx>) {
+fn after_analysis(state: &mut CompileState) {
     state.session.abort_if_errors();
 
     analyz::analyze(state).unwrap_or_else(|msg| state.session.err(msg.description()));
