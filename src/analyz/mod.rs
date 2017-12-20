@@ -24,7 +24,6 @@ mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
 
-
 basic_json_impl!(mir::Promoted);
 basic_json_enum_impl!(mir::BinOp);
 
@@ -392,6 +391,32 @@ pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
     j
 }
 
+fn mir_body<'a, 'tcx>(
+    ms: &mut MirState<'a, 'tcx>,
+    _def_id: DefId,
+    _src: MirSource,
+    _tcx: &TyCtxt<'a, 'tcx, 'tcx>,
+) -> serde_json::Value {
+    let mut vars = Vec::new();
+    let mir = ms.mir.unwrap(); // TODO
+
+    vars.push(local_json(ms, mir::RETURN_POINTER));
+
+    for (_, v) in ms.mir.unwrap().vars_and_temps_iter().enumerate() {
+        vars.push(local_json(ms, v));
+    }
+
+    let mut blocks = Vec::new();
+    for bb in mir.basic_blocks().indices() {
+        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
+        //theyre not in order
+        blocks.push(
+            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
+        );
+    }
+    json!({"vars": vars, "blocks": blocks})
+}
+
 fn mir_info<'a, 'tcx>(
     ms: &mut MirState<'a, 'tcx>,
     def_id: DefId,
@@ -418,32 +443,6 @@ fn mir_info<'a, 'tcx>(
         json!({"name": fn_name, "args": args, "return_ty": ms.mir.unwrap().return_ty.to_json(ms), "body": body}),
     )
 
-}
-
-fn mir_body<'a, 'tcx>(
-    ms: &mut MirState<'a, 'tcx>,
-    _def_id: DefId,
-    _src: MirSource,
-    _tcx: &TyCtxt<'a, 'tcx, 'tcx>,
-) -> serde_json::Value {
-    let mut vars = Vec::new();
-    let mir = ms.mir.unwrap(); // TODO
-
-    vars.push(local_json(ms, mir::RETURN_POINTER));
-
-    for (_, v) in ms.mir.unwrap().vars_and_temps_iter().enumerate() {
-        vars.push(local_json(ms, v));
-    }
-
-    let mut blocks = Vec::new();
-    for bb in mir.basic_blocks().indices() {
-        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
-        //theyre not in order
-        blocks.push(
-            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
-        );
-    }
-    json!({"vars": vars, "blocks": blocks})
 }
 
 pub fn emit_fns(
@@ -490,7 +489,7 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
             match ty.ty_adt_def() {
                 Some(adtdef) => {
                     let adt_name = tcx.def_path(def_id).to_string_no_crate();
-                    state.session.note_without_error(format!("Emitting definition for {}", adt_name).as_str());
+                    state.session.note_without_error(format!("Emitting ADT definition for {}", adt_name).as_str());
                     let mut ms = MirState { mir: None,
                                             used_types: &mut dummy_used_types,
                                             used_traits: &mut dummy_used_traits,
@@ -516,7 +515,6 @@ pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file:
     for &def_id in used_traits.iter() {
         if def_id.is_local() {
             let trait_name = tcx.def_path(def_id).to_string_no_crate();
-            //let trait_def = tcx.trait_def(def_id);
             let items = tcx.associated_items(def_id);
             state.session.note_without_error(format!("Emitting trait items for {}", trait_name).as_str());
             let mut ms = MirState { mir: None,
@@ -548,8 +546,7 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     emit_adts(state, &used_types, &mut file)?;
     write!(file, ", \"traits\": ")?;
     emit_traits(state, &used_traits, &mut file)?;
-    write!(file, " }}")?;
-    Ok(())
+    write!(file, " }}")
 }
 
 // format:
