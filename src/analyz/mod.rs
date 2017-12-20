@@ -408,13 +408,15 @@ fn mir_body<'a, 'tcx>(
 
     let mut blocks = Vec::new();
     for bb in mir.basic_blocks().indices() {
-        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
-        //theyre not in order
+        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()}));
+        // if it turns out theyre not in order
         blocks.push(
-            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
+            json!({"blockid": bb.to_json(ms),
+                   "block": mir[bb].to_json(ms)}),
         );
     }
-    json!({"vars": vars, "blocks": blocks})
+    json!({"vars": vars,
+           "blocks": blocks})
 }
 
 fn mir_info<'a, 'tcx>(
@@ -440,7 +442,10 @@ fn mir_info<'a, 'tcx>(
     let body = mir_body(ms, def_id, src, tcx);
 
     Some(
-        json!({"name": fn_name, "args": args, "return_ty": ms.mir.unwrap().return_ty.to_json(ms), "body": body}),
+        json!({"name": fn_name,
+               "args": args,
+               "return_ty": ms.mir.unwrap().return_ty.to_json(ms),
+               "body": body}),
     )
 
 }
@@ -460,13 +465,18 @@ pub fn emit_fns(
 
     for def_id in ids {
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
-        let src = MirSource::from_node(tcx, tcx.hir.as_local_node_id(def_id).unwrap());
+        let nid = tcx.hir.as_local_node_id(def_id).unwrap();
+        let src = MirSource::from_node(tcx, nid);
         let mut ms = MirState { mir: Some(get_mir(tcx, def_id).unwrap()),
                                 used_types: used_types,
                                 used_traits: used_traits,
                                 state: state };
         if let Some(mi) = mir_info(&mut ms, def_id, src, &tcx) {
-            state.session.note_without_error(format!("Emitting MIR for {} ({}/{})", fn_name, n, size).as_str());
+            state.session.note_without_error(
+                format!("Emitting MIR for {} ({}/{})",
+                        fn_name,
+                        n,
+                        size).as_str());
             seq.serialize_element(&mi)?;
         }
         n = n + 1;
@@ -489,12 +499,15 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
             match ty.ty_adt_def() {
                 Some(adtdef) => {
                     let adt_name = tcx.def_path(def_id).to_string_no_crate();
-                    state.session.note_without_error(format!("Emitting ADT definition for {}", adt_name).as_str());
+                    state.session.note_without_error(
+                        format!("Emitting ADT definition for {}",
+                                adt_name).as_str());
                     let mut ms = MirState { mir: None,
                                             used_types: &mut dummy_used_types,
                                             used_traits: &mut dummy_used_traits,
                                             state: state };
-                    seq.serialize_element(&adtdef.tojson(&mut ms, Slice::empty()))?;
+                    seq.serialize_element(&adtdef.tojson(&mut ms,
+                                                         Slice::empty()))?;
                 }
                 _ => ()
             }
@@ -516,7 +529,9 @@ pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file:
         if def_id.is_local() {
             let trait_name = tcx.def_path(def_id).to_string_no_crate();
             let items = tcx.associated_items(def_id);
-            state.session.note_without_error(format!("Emitting trait items for {}", trait_name).as_str());
+            state.session.note_without_error(
+                format!("Emitting trait items for {}",
+                        trait_name).as_str());
             let mut ms = MirState { mir: None,
                                     used_types: &mut dummy_used_types,
                                     used_traits: &mut dummy_used_traits,
@@ -525,8 +540,9 @@ pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file:
             for item in items {
                 items_json.push(assoc_item_json(&mut ms, &tcx, &item));
             }
-            seq.serialize_element(&json!({"name": def_id.to_json(&mut ms),
-                                          "items": serde_json::Value::Array(items_json)}))?;
+            seq.serialize_element(
+                &json!({"name": def_id.to_json(&mut ms),
+                        "items": serde_json::Value::Array(items_json)}))?;
         } // Else look it up somewhere else, but I'm not sure where.
     }
     seq.end()?;

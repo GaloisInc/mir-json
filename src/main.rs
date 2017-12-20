@@ -83,7 +83,8 @@ impl<'a> CompilerCalls<'a> for MyCompilerCalls {
 fn after_analysis(state: &mut CompileState) {
     state.session.abort_if_errors();
 
-    analyz::analyze(state).unwrap_or_else(|msg| state.session.err(msg.description()));
+    analyz::analyze(state).unwrap_or_else(
+        |msg| state.session.err(msg.description()));
 }
 
 fn find_sysroot() -> String {
@@ -97,13 +98,16 @@ fn find_sysroot() -> String {
 
     // Taken from https://github.com/Manishearth/rust-clippy/pull/911.
     let home = option_env!("RUSTUP_HOME").or(option_env!("MULTIRUST_HOME"));
-    let toolchain = option_env!("RUSTUP_TOOLCHAIN").or(option_env!("MULTIRUST_TOOLCHAIN"));
+    let toolchain =
+        option_env!("RUSTUP_TOOLCHAIN").or(option_env!("MULTIRUST_TOOLCHAIN"));
     match (home, toolchain) {
-        (Some(home), Some(toolchain)) => format!("{}/toolchains/{}", home, toolchain),
+        (Some(home), Some(toolchain)) => {
+            format!("{}/toolchains/{}", home, toolchain)
+        }
         _ => {
             option_env!("RUST_SYSROOT")
                 .expect(
-                    "need to specify RUST_SYSROOT env var or use rustup or multirust",
+                    "need to specify RUST_SYSROOT or use rustup or multirust",
                 )
                 .to_owned()
         }
@@ -124,8 +128,8 @@ fn go() {
 
     rustc_driver::run_compiler(
         &args, // args: &[String]
-        &mut MyCompilerCalls(RustcDefaultCalls), // callbacks: &mut CompilerCalls
-        None, // file_loader: Option<stuff>
+        &mut MyCompilerCalls(RustcDefaultCalls),
+        None,
         None,
     ); // emitter_dest: Option<stuff>
     // -> (CompileResult, Option<Session>)
