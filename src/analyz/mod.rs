@@ -384,6 +384,68 @@ pub fn get_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, id: DefId) -> Option<&'a M
     tcx.maybe_optimized_mir(id).clone()
 }
 
+pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
+    let mut j = ms.mir.unwrap().local_decls[local].to_json(ms); // TODO
+    let mut s = String::new();
+    write!(&mut s, "{:?}", local).unwrap();
+    j["name"] = json!(s);
+    j
+}
+
+fn mir_info<'a, 'tcx>(
+    ms: &mut MirState<'a, 'tcx>,
+    def_id: DefId,
+    src: MirSource,
+    tcx: &TyCtxt<'a, 'tcx, 'tcx>,
+) -> Option<serde_json::Value> {
+    match src {
+        MirSource::Fn(_) => (),
+        _ => return None,
+    };
+    let fn_name = tcx.def_path(def_id).to_string_no_crate();
+
+    let mut args = Vec::new();
+    for (_, local) in ms.mir.unwrap().args_iter().enumerate() {
+        args.push(local_json(ms, local));
+    }
+
+    // name
+    // input vars
+    // output
+    let body = mir_body(ms, def_id, src, tcx);
+
+    Some(
+        json!({"name": fn_name, "args": args, "return_ty": ms.mir.unwrap().return_ty.to_json(ms), "body": body}),
+    )
+
+}
+
+fn mir_body<'a, 'tcx>(
+    ms: &mut MirState<'a, 'tcx>,
+    _def_id: DefId,
+    _src: MirSource,
+    _tcx: &TyCtxt<'a, 'tcx, 'tcx>,
+) -> serde_json::Value {
+    let mut vars = Vec::new();
+    let mir = ms.mir.unwrap(); // TODO
+
+    vars.push(local_json(ms, mir::RETURN_POINTER));
+
+    for (_, v) in ms.mir.unwrap().vars_and_temps_iter().enumerate() {
+        vars.push(local_json(ms, v));
+    }
+
+    let mut blocks = Vec::new();
+    for bb in mir.basic_blocks().indices() {
+        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
+        //theyre not in order
+        blocks.push(
+            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
+        );
+    }
+    json!({"vars": vars, "blocks": blocks})
+}
+
 pub fn emit_fns(
     state: &mut CompileState,
     used_types: &mut HashSet<DefId>,
@@ -488,68 +550,6 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     emit_traits(state, &used_traits, &mut file)?;
     write!(file, " }}")?;
     Ok(())
-}
-
-pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
-    let mut j = ms.mir.unwrap().local_decls[local].to_json(ms); // TODO
-    let mut s = String::new();
-    write!(&mut s, "{:?}", local).unwrap();
-    j["name"] = json!(s);
-    j
-}
-
-fn mir_info<'a, 'tcx>(
-    ms: &mut MirState<'a, 'tcx>,
-    def_id: DefId,
-    src: MirSource,
-    tcx: &TyCtxt<'a, 'tcx, 'tcx>,
-) -> Option<serde_json::Value> {
-    match src {
-        MirSource::Fn(_) => (),
-        _ => return None,
-    };
-    let fn_name = tcx.def_path(def_id).to_string_no_crate();
-
-    let mut args = Vec::new();
-    for (_, local) in ms.mir.unwrap().args_iter().enumerate() {
-        args.push(local_json(ms, local));
-    }
-
-    // name
-    // input vars
-    // output
-    let body = mir_body(ms, def_id, src, tcx);
-
-    Some(
-        json!({"name": fn_name, "args": args, "return_ty": ms.mir.unwrap().return_ty.to_json(ms), "body": body}),
-    )
-
-}
-
-fn mir_body<'a, 'tcx>(
-    ms: &mut MirState<'a, 'tcx>,
-    _def_id: DefId,
-    _src: MirSource,
-    _tcx: &TyCtxt<'a, 'tcx, 'tcx>,
-) -> serde_json::Value {
-    let mut vars = Vec::new();
-    let mir = ms.mir.unwrap(); // TODO
-
-    vars.push(local_json(ms, mir::RETURN_POINTER));
-
-    for (_, v) in ms.mir.unwrap().vars_and_temps_iter().enumerate() {
-        vars.push(local_json(ms, v));
-    }
-
-    let mut blocks = Vec::new();
-    for bb in mir.basic_blocks().indices() {
-        //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()})); // if it turns out
-        //theyre not in order
-        blocks.push(
-            json!({"blockid": bb.to_json(ms), "block": mir[bb].to_json(ms)}),
-        );
-    }
-    json!({"vars": vars, "blocks": blocks})
 }
 
 // format:
