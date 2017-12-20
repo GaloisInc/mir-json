@@ -85,9 +85,10 @@ impl<'b> ToJson for ty::Ty<'b> {
                 mir.used_traits.insert(did);
                 json!({"kind": "Dynamic", "data": did.to_json(mir) /*, "region": r.to_json(mir)*/ })
             }
-            &ty::TypeVariants::TyProjection(..) => {
-                // TODO
-                json!({"kind": "Projection"})
+            &ty::TypeVariants::TyProjection(ref pty) => {
+                json!({"kind": "Projection",
+                       "substs": pty.substs.to_json(mir),
+                       "defid": pty.item_def_id.to_json(mir)})
             }
             &ty::TypeVariants::TyFnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
