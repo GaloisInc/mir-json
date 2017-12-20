@@ -130,9 +130,10 @@ impl<'b> ToJson for ty::Ty<'b> {
             &ty::TypeVariants::TyError => {
                 json!({"kind": "Error"})
             }
-            &ty::TypeVariants::TyAnon(_, _) => {
-                // TODO
-                json!({"kind": "Anon"})
+            &ty::TypeVariants::TyAnon(ref defid, ref substs) => {
+                json!({"kind": "Anon",
+                       "defid": defid.to_json(mir),
+                       "substs": substs.to_json(mir)})
             }
             &ty::TypeVariants::TyInfer(_) => {
                 // TODO
