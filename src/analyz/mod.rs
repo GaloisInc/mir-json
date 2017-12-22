@@ -32,7 +32,10 @@ basic_json_enum_impl!(mir::UnOp);
 
 impl ToJson for rustc_const_math::ConstFloat {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
-        json!({"ty": self.ty.to_json(mir), "bits": "TODO" /*json!(self.bits)*/})
+        json!({
+            "ty": self.ty.to_json(mir),
+            "bits": "TODO" /*json!(self.bits)*/
+        })
     }
 }
 
@@ -59,18 +62,46 @@ impl ToJson for rustc_const_math::ConstIsize {
 impl ToJson for rustc_const_math::ConstInt {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &rustc_const_math::I8(n) => json!({"kind": "i8", "val": json!(n)}),
-            &rustc_const_math::I16(n) => json!({"kind": "i16", "val": json!(n)}),
-            &rustc_const_math::I32(n) => json!({"kind": "i32", "val": json!(n)}),
-            &rustc_const_math::I64(n) => json!({"kind": "i64", "val": json!(n)}),
-            //&rustc_const_math::I128(n) => json!({"kind": "i128", "val": json!(n)}),
-            &rustc_const_math::Isize(n) => json!({"kind": "isize", "val": n.to_json(mir)}),
-            &rustc_const_math::U8(n) => json!({"kind": "u8", "val": json!(n)}),
-            &rustc_const_math::U16(n) => json!({"kind": "u16", "val": json!(n)}),
-            &rustc_const_math::U32(n) => json!({"kind": "u32", "val": json!(n)}),
-            &rustc_const_math::U64(n) => json!({"kind": "u64", "val": json!(n)}),
-            //&rustc_const_math::U128(n) => json!({"kind": "u128", "val": json!(n)}),
-            &rustc_const_math::Usize(n) => json!({"kind": "usize", "val": n.to_json(mir)}),
+            &rustc_const_math::I8(n) => {
+                json!({"kind": "i8", "val": json!(n)})
+            }
+            &rustc_const_math::I16(n) => {
+                json!({"kind": "i16", "val": json!(n)})
+            }
+            &rustc_const_math::I32(n) => {
+                json!({"kind": "i32", "val": json!(n)})
+            }
+            &rustc_const_math::I64(n) => {
+                json!({"kind": "i64", "val": json!(n)})
+            }
+            /*
+            &rustc_const_math::I128(n) => {
+                json!({"kind": "i128", "val": json!(n)})
+            }
+            */
+            &rustc_const_math::Isize(n) => {
+                json!({"kind": "isize", "val": n.to_json(mir)})
+            }
+            &rustc_const_math::U8(n) => {
+                json!({"kind": "u8", "val": json!(n)})
+            }
+            &rustc_const_math::U16(n) => {
+                json!({"kind": "u16", "val": json!(n)})
+            }
+            &rustc_const_math::U32(n) => {
+                json!({"kind": "u32", "val": json!(n)})
+            }
+            &rustc_const_math::U64(n) => {
+                json!({"kind": "u64", "val": json!(n)})
+            }
+            /*
+            &rustc_const_math::U128(n) => {
+                json!({"kind": "u128", "val": json!(n)})
+            }
+            */
+            &rustc_const_math::Usize(n) => {
+                json!({"kind": "usize", "val": n.to_json(mir)})
+            }
             _ => panic!("const int not supported")
         }
     }
@@ -79,13 +110,21 @@ impl ToJson for rustc_const_math::ConstInt {
 impl<'b> ToJson for mir::AggregateKind<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &mir::AggregateKind::Array(ty) => json!({"kind": "Array", "ty": ty.to_json(mir)}),
-            &mir::AggregateKind::Tuple => json!({"kind": "Tuple"}),
+            &mir::AggregateKind::Array(ty) => {
+                json!({"kind": "Array", "ty": ty.to_json(mir)})
+            }
+            &mir::AggregateKind::Tuple => {
+                json!({"kind": "Tuple"})
+            }
             &mir::AggregateKind::Adt(_, _, _, _) => {
                 panic!("adt should be handled upstream")
             }
             &mir::AggregateKind::Closure(ref defid, ref closuresubsts) => {
-                json!({"kind": "Closure", "defid": defid.to_json(mir), "closuresubsts": closuresubsts.substs.to_json(mir)})
+                json!({
+                    "kind": "Closure",
+                    "defid": defid.to_json(mir),
+                    "closuresubsts": closuresubsts.substs.to_json(mir)
+                })
             }
         }
     }
@@ -107,13 +146,24 @@ impl<'b> ToJson for middle::const_val::ConstVal<'b> {
                 json!({"kind": "Char", "data": c})
             }
             &middle::const_val::ConstVal::Str(ref s) => {
-                json!({"kind": "Str", "data": serde_json::Value::String(s.to_string())})
+                json!({
+                    "kind": "Str",
+                    "data": serde_json::Value::String(s.to_string())
+                })
             }
             &middle::const_val::ConstVal::ByteStr(ref _bytes) => {
-                json!({"kind": "ByteStr" /*, "data": json!(*bytes) */}) // TODO
+                json!({
+                    "kind": "ByteStr"
+                    // TODO
+                    /*, "data": json!(*bytes) */
+                })
             }
             &middle::const_val::ConstVal::Function(defid, substs) => {
-                json!({"kind": "Function", "fname": defid.to_json(mir), "substs": substs.to_json(mir)})
+                json!({
+                    "kind": "Function",
+                    "fname": defid.to_json(mir),
+                    "substs": substs.to_json(mir)
+                })
             }
             &middle::const_val::ConstVal::Array(ref constvals) => {
                 json!({"kind": "Array", "data": constvals.to_json(mir)})
@@ -137,37 +187,83 @@ impl<'b> ToJson for middle::const_val::ConstVal<'b> {
 impl<'b> ToJson for mir::Rvalue<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &mir::Rvalue::Use(ref op) => json!({"kind": "Use", "usevar": op.to_json(mir)}),
+            &mir::Rvalue::Use(ref op) => {
+                json!({
+                    "kind": "Use",
+                    "usevar": op.to_json(mir)
+                })
+            }
             &mir::Rvalue::Repeat(ref op, ref s) => {
-                json!({"kind": "Repeat", "op": op.to_json(mir), "len": s.to_json(mir)})
+                json!({
+                    "kind": "Repeat",
+                    "op": op.to_json(mir),
+                    "len": s.to_json(mir)
+                })
             }
             &mir::Rvalue::Ref(_, ref bk, ref l) => {
-                json!({"kind": "Ref", "region": "unimplement", "borrowkind": bk.to_json(mir), "refvar": l.to_json(mir)})
+                json!({
+                    "kind": "Ref",
+                    "region": "unimplement",
+                    "borrowkind": bk.to_json(mir),
+                    "refvar": l.to_json(mir)
+                })
             } // UNUSED
-            &mir::Rvalue::Len(ref l) => json!({"kind": "Len", "lv": l.to_json(mir)}),
+            &mir::Rvalue::Len(ref l) => {
+                json!({"kind": "Len", "lv": l.to_json(mir)})
+            }
             &mir::Rvalue::Cast(ref ck, ref op, ref ty) => {
-                json!({"kind": "Cast", "type": ck.to_json(mir), "op": op.to_json(mir), "ty": ty.to_json(mir)})
+                json!({
+                    "kind": "Cast",
+                    "type": ck.to_json(mir),
+                    "op": op.to_json(mir),
+                    "ty": ty.to_json(mir)
+                })
             }
             &mir::Rvalue::BinaryOp(ref binop, ref op1, ref op2) => {
-                json!({"kind": "BinaryOp", "op": binop.to_json(mir), "L": op1.to_json(mir), "R": op2.to_json(mir)})
+                json!({
+                    "kind": "BinaryOp",
+                    "op": binop.to_json(mir),
+                    "L": op1.to_json(mir),
+                    "R": op2.to_json(mir)
+                })
             }
             &mir::Rvalue::CheckedBinaryOp(ref binop, ref op1, ref op2) => {
-                json!({"kind": "CheckedBinaryOp", "op": binop.to_json(mir), "L": op1.to_json(mir), "R": op2.to_json(mir)})
+                json!({
+                    "kind": "CheckedBinaryOp",
+                    "op": binop.to_json(mir),
+                    "L": op1.to_json(mir),
+                    "R": op2.to_json(mir)
+                })
             }
             &mir::Rvalue::NullaryOp(ref no, ref t) => {
-                json!({"kind": "NullaryOp", "op": no.to_json(mir), "ty": t.to_json(mir)})
+                json!({
+                    "kind": "NullaryOp",
+                    "op": no.to_json(mir),
+                    "ty": t.to_json(mir)
+                })
             }
             &mir::Rvalue::UnaryOp(ref uo, ref o) => {
-                json!({"kind": "UnaryOp", "uop": uo.to_json(mir), "op": o.to_json(mir)})
+                json!({
+                    "kind": "UnaryOp",
+                    "uop": uo.to_json(mir),
+                    "op": o.to_json(mir)
+                })
             }
             &mir::Rvalue::Discriminant(ref lv) => {
                 json!({"kind": "Discriminant", "val": lv.to_json(mir)})
             }
             &mir::Rvalue::Aggregate(ref ak, ref opv) => {
                 if ty_json::is_adt_ak(ak) {
-                    json!({"kind": "AdtAg", "ag": ty_json::handle_adt_ag (mir, ak, opv)})
+                    json!({
+                        "kind": "AdtAg",
+                        "ag": ty_json::handle_adt_ag (mir, ak, opv)
+                    })
                 } else {
-                    json!({"kind": "Aggregate", "akind": ak.to_json(mir), "ops": opv.to_json(mir)})
+                    json!({
+                        "kind": "Aggregate",
+                        "akind": ak.to_json(mir),
+                        "ops": opv.to_json(mir)
+                    })
                 }
             }
         }
@@ -176,24 +272,40 @@ impl<'b> ToJson for mir::Rvalue<'b> {
 
 impl<'b> ToJson for mir::LvalueProjection<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
-        json!({"base": self.base.to_json(mir), "data" : self.elem.to_json(mir)})
+        json!({
+            "base": self.base.to_json(mir),
+            "data" : self.elem.to_json(mir)
+        })
     }
 }
 
 impl<'b, T: ToJson> ToJson for mir::ProjectionElem<'b, mir::Operand<'b>, T> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &mir::ProjectionElem::Deref => json!({"kind": "Deref"}),
-            &mir::ProjectionElem::Field(ref f, ref ty) => {
-                json!({"kind": "Field", "field": f.to_json(mir), "ty": ty.to_json(mir)})
+            &mir::ProjectionElem::Deref => {
+                json!({"kind": "Deref"})
             }
-            &mir::ProjectionElem::Index(ref op) => json!({"kind": "Index", "op": op.to_json(mir)}),
+            &mir::ProjectionElem::Field(ref f, ref ty) => {
+                json!({
+                    "kind": "Field",
+                    "field": f.to_json(mir),
+                    "ty": ty.to_json(mir)
+                })
+            }
+            &mir::ProjectionElem::Index(ref op) => {
+                json!({"kind": "Index", "op": op.to_json(mir)})
+            }
             &mir::ProjectionElem::ConstantIndex {
                 ref offset,
                 ref min_length,
                 ref from_end,
             } => {
-                json!({"kind": "ConstantIndex", "offset": offset, "min_length": min_length, "from_end": from_end})
+                json!({
+                    "kind": "ConstantIndex",
+                    "offset": offset,
+                    "min_length": min_length,
+                    "from_end": from_end
+                })
             }
             &mir::ProjectionElem::Subslice { ref from, ref to } => {
                 json!({"kind": "Subslice", "from": from, "to": to})
@@ -211,7 +323,9 @@ impl<'b> ToJson for mir::Lvalue<'b> {
             &mir::Lvalue::Local(ref l) => {
                 json!({"kind": "Local", "localvar": local_json(ms, *l) })
             }
-            &mir::Lvalue::Static(_) => json!({"kind": "Static"}), // UNUSED
+            &mir::Lvalue::Static(_) => {
+                json!({"kind": "Static"}) // UNUSED
+            }
             &mir::Lvalue::Projection(ref p) => {
                 json!({"kind": "Projection", "data" : p.to_json(ms)})
             }
@@ -238,7 +352,11 @@ impl<'b> ToJson for mir::Literal<'b> {
                 ref def_id,
                 ref substs,
             } => {
-                json!({"kind": "Item", "def_id": def_id.to_json(mir), "substs": substs.to_json(mir)})
+                json!({
+                    "kind": "Item",
+                    "def_id": def_id.to_json(mir),
+                    "substs": substs.to_json(mir)
+                })
             }
             &mir::Literal::Value { ref value } => {
                 json!({"kind": "Value", "value": value.to_json(mir)})
@@ -253,25 +371,34 @@ impl<'b> ToJson for mir::Literal<'b> {
 impl<'b> ToJson for mir::Operand<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &mir::Operand::Consume(ref l) => json!({"kind": "Consume", "data": l.to_json(mir)}),
-            &mir::Operand::Constant(ref l) => json!({"kind": "Constant", "data": l.to_json(mir)}),
+            &mir::Operand::Consume(ref l) => {
+                json!({"kind": "Consume", "data": l.to_json(mir)})
+            }
+            &mir::Operand::Constant(ref l) => {
+                json!({"kind": "Constant", "data": l.to_json(mir)})
+            }
         }
     }
 }
 
 impl<'b> ToJson for mir::Constant<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
-        json!({"ty": self.ty.to_json(mir), "literal": self.literal.to_json(mir)})
+        json!({
+            "ty": self.ty.to_json(mir),
+            "literal": self.literal.to_json(mir)
+        })
     }
 }
 
 impl<'b> ToJson for mir::LocalDecl<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         let pos = mir.state.session.codemap().span_to_string(self.source_info.span);
-        json!({"mut": self.mutability.to_json(mir),
-               "ty": self.ty.to_json(mir),
-               "scope": self.source_info.scope.to_json(mir),
-               "pos": pos})
+        json!({
+            "mut": self.mutability.to_json(mir),
+            "ty": self.ty.to_json(mir),
+            "scope": self.source_info.scope.to_json(mir),
+            "pos": pos
+        })
     }
 }
 
@@ -279,13 +406,21 @@ impl<'b> ToJson for mir::Statement<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         let mut j = match &self.kind {
             &mir::StatementKind::Assign(ref l, ref r) => {
-                json!({"kind": "Assign", "lhs": l.to_json(mir), "rhs": r.to_json(mir)})
+                json!({
+                    "kind": "Assign",
+                    "lhs": l.to_json(mir),
+                    "rhs": r.to_json(mir)
+                })
             }
             &mir::StatementKind::SetDiscriminant {
                 ref lvalue,
                 ref variant_index,
             } => {
-                json!({"kind": "SetDiscriminant", "lvalue": lvalue.to_json(mir), "variant_index": variant_index})
+                json!({
+                    "kind": "SetDiscriminant",
+                    "lvalue": lvalue.to_json(mir),
+                    "variant_index": variant_index
+                })
             }
             &mir::StatementKind::StorageLive(ref l) => {
                 json!({"kind": "StorageLive", "slvar": l.to_json(mir)})
@@ -293,15 +428,26 @@ impl<'b> ToJson for mir::Statement<'b> {
             &mir::StatementKind::StorageDead(ref l) => {
                 json!({"kind": "StorageDead", "sdvar": l.to_json(mir)})
             }
-            &mir::StatementKind::Nop => json!({"kind": "Nop"}),
-            // TODO
-            &mir::StatementKind::EndRegion(_) => json!({"kind": "EndRegion"}),
-            // TODO
-            &mir::StatementKind::Validate(..) => json!({"kind": "Validate"}),
-            // TODO
-            &mir::StatementKind::InlineAsm { .. } => json!({"kind": "InlineAsm"}),
+            &mir::StatementKind::Nop => {
+                json!({"kind": "Nop"})
+            }
+            &mir::StatementKind::EndRegion(_) => {
+                // TODO
+                json!({"kind": "EndRegion"})
+            }
+            &mir::StatementKind::Validate(..) => {
+                // TODO
+                json!({"kind": "Validate"})
+            }
+            &mir::StatementKind::InlineAsm { .. } => {
+                // TODO
+                json!({"kind": "InlineAsm"})
+            }
         };
-        let pos = mir.state.session.codemap().span_to_string(self.source_info.span);
+        let pos = mir.state
+                    .session
+                    .codemap()
+                    .span_to_string(self.source_info.span);
         j["pos"] = json!(pos);
         j
     }
@@ -321,17 +467,34 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
             } => {
                 let vals: Vec<Option<u64>> = values.iter().map(|c| c.to_u64()).collect();
 
-                json!({"kind": "SwitchInt", "discr": discr.to_json(mir), "switch_ty": switch_ty.to_json(mir), "values": vals, "targets": targets.to_json(mir)})
+                json!({
+                    "kind": "SwitchInt",
+                    "discr": discr.to_json(mir),
+                    "switch_ty": switch_ty.to_json(mir),
+                    "values": vals,
+                    "targets": targets.to_json(mir)
+                })
             }
-            &mir::TerminatorKind::Resume => json!({"kind": "Resume"}),
-            &mir::TerminatorKind::Return => json!({"kind": "Return"}),
-            &mir::TerminatorKind::Unreachable => json!({"kind": "Unreachable"}),
+            &mir::TerminatorKind::Resume => {
+                json!({"kind": "Resume"})
+            }
+            &mir::TerminatorKind::Return => {
+                json!({"kind": "Return"})
+            }
+            &mir::TerminatorKind::Unreachable => {
+                json!({"kind": "Unreachable"})
+            }
             &mir::TerminatorKind::Drop {
                 ref location,
                 ref target,
                 ref unwind,
             } => {
-                json!({"kind": "Drop", "location": location.to_json(mir), "target" : target.to_json(mir), "unwind": unwind.to_json(mir)})
+                json!({
+                    "kind": "Drop",
+                    "location": location.to_json(mir),
+                    "target" : target.to_json(mir),
+                    "unwind": unwind.to_json(mir)
+                })
             }
             &mir::TerminatorKind::DropAndReplace {
                 ref location,
@@ -339,7 +502,13 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
                 ref target,
                 ref unwind,
             } => {
-                json!({"kind": "DropAndReplace", "location": location.to_json(mir), "value": value.to_json(mir), "target": target.to_json(mir), "unwind": unwind.to_json(mir)})
+                json!({
+                    "kind": "DropAndReplace",
+                    "location": location.to_json(mir),
+                    "value": value.to_json(mir),
+                    "target": target.to_json(mir),
+                    "unwind": unwind.to_json(mir)
+                })
             }
             &mir::TerminatorKind::Call {
                 ref func,
@@ -347,7 +516,13 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
                 ref destination,
                 ref cleanup,
             } => {
-                json!({"kind": "Call", "func": func.to_json(mir), "args": args.to_json(mir), "destination": destination.to_json(mir), "cleanup": cleanup.to_json(mir)})
+                json!({
+                    "kind": "Call",
+                    "func": func.to_json(mir),
+                    "args": args.to_json(mir),
+                    "destination": destination.to_json(mir),
+                    "cleanup": cleanup.to_json(mir)
+                })
             }
             &mir::TerminatorKind::Assert {
                 ref cond,
@@ -356,7 +531,14 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
                 ref target,
                 ref cleanup,
             } => {
-                json!({"kind": "Assert", "cond": cond.to_json(mir), "expected": expected, "msg": msg.to_json(mir), "target": target.to_json(mir), "cleanup": cleanup.to_json(mir)})
+                json!({
+                    "kind": "Assert",
+                    "cond": cond.to_json(mir),
+                    "expected": expected,
+                    "msg": msg.to_json(mir),
+                    "target": target.to_json(mir),
+                    "cleanup": cleanup.to_json(mir)
+                })
             }
         }
     }
@@ -368,7 +550,10 @@ impl<'b> ToJson for mir::BasicBlockData<'b> {
         for statement in &self.statements {
             sts.push(statement.to_json(mir));
         }
-        json!({"data": sts, "terminator": self.terminator().kind.to_json(mir)})
+        json!({
+            "data": sts,
+            "terminator": self.terminator().kind.to_json(mir)
+        })
     }
 }
 
@@ -411,12 +596,16 @@ fn mir_body<'a, 'tcx>(
         //blocks.push(json!({"name": bb.to_json(), "data":mir[bb].to_json()}));
         // if it turns out theyre not in order
         blocks.push(
-            json!({"blockid": bb.to_json(ms),
-                   "block": mir[bb].to_json(ms)}),
+            json!({
+                "blockid": bb.to_json(ms),
+                "block": mir[bb].to_json(ms)
+            }),
         );
     }
-    json!({"vars": vars,
-           "blocks": blocks})
+    json!({
+        "vars": vars,
+        "blocks": blocks
+    })
 }
 
 fn mir_info<'a, 'tcx>(
@@ -442,10 +631,12 @@ fn mir_info<'a, 'tcx>(
     let body = mir_body(ms, def_id, src, tcx);
 
     Some(
-        json!({"name": fn_name,
-               "args": args,
-               "return_ty": ms.mir.unwrap().return_ty.to_json(ms),
-               "body": body}),
+        json!({
+            "name": fn_name,
+            "args": args,
+            "return_ty": ms.mir.unwrap().return_ty.to_json(ms),
+            "body": body
+        })
     )
 
 }
@@ -541,8 +732,11 @@ pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file:
                 items_json.push(assoc_item_json(&mut ms, &tcx, &item));
             }
             seq.serialize_element(
-                &json!({"name": def_id.to_json(&mut ms),
-                        "items": serde_json::Value::Array(items_json)}))?;
+                &json!({
+                    "name": def_id.to_json(&mut ms),
+                    "items": serde_json::Value::Array(items_json)
+                })
+            )?;
         } // Else look it up somewhere else, but I'm not sure where.
     }
     seq.end()?;

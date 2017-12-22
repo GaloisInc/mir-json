@@ -32,10 +32,12 @@ basic_json_enum_impl!(mir::BorrowKind);
 impl ToJson for ty::VariantDiscr {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            &ty::VariantDiscr::Relative(i) =>
-                json!({"kind": "Relative", "index" : json!(i)}),
-            &ty::VariantDiscr::Explicit(n) =>
-                json!({"kind": "Explicit", "name" : n.to_json(mir)}),
+            &ty::VariantDiscr::Relative(i) => {
+                json!({"kind": "Relative", "index" : json!(i)})
+            }
+            &ty::VariantDiscr::Explicit(n) => {
+                json!({"kind": "Explicit", "name" : n.to_json(mir)})
+            }
         }
     }
 }
@@ -81,45 +83,59 @@ impl<'b> ToJson for ty::Ty<'b> {
                 json!({"kind": "Array", "ty": t.to_json(mir), "size": size})
             }
             &ty::TypeVariants::TyRef(ref _region, ref tm) => {
-                json!({"kind": "Ref",
-                       "ty": tm.ty.to_json(mir),
-                       "mutability": tm.mutbl.to_json(mir)})
+                json!({
+                    "kind": "Ref",
+                    "ty": tm.ty.to_json(mir),
+                    "mutability": tm.mutbl.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyRawPtr(ref tm) => {
-                json!({"kind": "RawPtr",
-                       "ty": tm.ty.to_json(mir),
-                       "mutability": tm.mutbl.to_json(mir)})
+                json!({
+                    "kind": "RawPtr",
+                    "ty": tm.ty.to_json(mir),
+                    "mutability": tm.mutbl.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyAdt(ref adtdef, ref substs) => {
                 let did = adtdef.did;
                 mir.used_types.insert(did);
-                json!({"kind": "Adt",
-                       "name": defid_str(&did),
-                       "substs": substs.to_json(mir)})
+                json!({
+                    "kind": "Adt",
+                    "name": defid_str(&did),
+                    "substs": substs.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyFnDef(defid, ref substs) => {
-                json!({"kind": "FnDef",
-                       "defid": defid.to_json(mir),
-                       "substs": substs.to_json(mir)})
+                json!({
+                    "kind": "FnDef",
+                    "defid": defid.to_json(mir),
+                    "substs": substs.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyParam(ref p) =>
                 json!({"kind": "Param", "param": p.to_json(mir)}),
             &ty::TypeVariants::TyClosure(ref defid, ref closuresubsts) => {
-                json!({"kind": "Closure",
-                       "defid": defid.to_json(mir),
-                       "closuresubsts": closuresubsts.substs.to_json(mir)})
+                json!({
+                    "kind": "Closure",
+                    "defid": defid.to_json(mir),
+                    "closuresubsts": closuresubsts.substs.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyDynamic(..) => {
                 let did = self.ty_to_def_id().expect("trait use with no name");
                 mir.used_traits.insert(did);
-                json!({"kind": "Dynamic",
-                       "data": did.to_json(mir)
-                       /*, "region": r.to_json(mir)*/ })
+                json!({
+                    "kind": "Dynamic",
+                    "data": did.to_json(mir)
+                    /*, "region": r.to_json(mir)*/
+                })
             }
             &ty::TypeVariants::TyProjection(ref pty) => {
-                json!({"kind": "Projection",
-                       "substs": pty.substs.to_json(mir),
-                       "defid": pty.item_def_id.to_json(mir)})
+                json!({
+                    "kind": "Projection",
+                    "substs": pty.substs.to_json(mir),
+                    "defid": pty.item_def_id.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyFnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
@@ -131,9 +147,11 @@ impl<'b> ToJson for ty::Ty<'b> {
                 json!({"kind": "Error"})
             }
             &ty::TypeVariants::TyAnon(ref defid, ref substs) => {
-                json!({"kind": "Anon",
-                       "defid": defid.to_json(mir),
-                       "substs": substs.to_json(mir)})
+                json!({
+                    "kind": "Anon",
+                    "defid": defid.to_json(mir),
+                    "substs": substs.to_json(mir)
+                })
             }
             &ty::TypeVariants::TyInfer(_) => {
                 // TODO
@@ -161,7 +179,10 @@ impl<'b> ToJson for ty::FnSig<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
         let input_jsons : Vec<serde_json::Value> =
             self.inputs().iter().map(|i| i.to_json(ms)).collect();
-        json!({ "inputs": input_jsons, "output": self.output().to_json(ms) })
+        json!({
+            "inputs": input_jsons,
+            "output": self.output().to_json(ms)
+        })
     }
 }
 
@@ -173,15 +194,19 @@ pub fn assoc_item_json<'a, 'tcx: 'a>(
     let did = item.def_id;
     match item.kind {
         ty::AssociatedKind::Const => {
-            json!({"kind": "Const",
-                   "name": did.to_json(ms),
-                   "type": tcx.type_of(did).to_json(ms)})
+            json!({
+                "kind": "Const",
+                "name": did.to_json(ms),
+                "type": tcx.type_of(did).to_json(ms)
+            })
         }
         ty::AssociatedKind::Method => {
             let sig = tcx.fn_sig(did);
-            json!({"kind": "Method",
-                   "name": did.to_json(ms),
-                   "signature": sig.to_json(ms) })
+            json!({
+                "kind": "Method",
+                "name": did.to_json(ms),
+                "signature": sig.to_json(ms)
+            })
         }
         ty::AssociatedKind::Type => {
             json!({"kind": "Type", "name": did.to_json(ms)})
@@ -236,17 +261,21 @@ pub fn is_adt_ak(ak: &mir::AggregateKind) -> bool {
 
 impl ToJsonAg for ty::AdtDef {
     fn tojson<'a, 'tcx: 'a>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
-        json!({"name": defid_str(&self.did),
-               "variants": self.variants.tojson(mir, substs)})
+        json!({
+            "name": defid_str(&self.did),
+            "variants": self.variants.tojson(mir, substs)
+        })
     }
 }
 
 impl ToJsonAg for ty::VariantDef {
     fn tojson<'a, 'tcx: 'a>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
-        json!({"name": defid_str(&self.did),
-               "discr": self.discr.to_json(mir),
-               "fields": self.fields.tojson(mir, substs),
-               "ctor_kind": self.ctor_kind.to_json(mir)})
+        json!({
+            "name": defid_str(&self.did),
+            "discr": self.discr.to_json(mir),
+            "fields": self.fields.tojson(mir, substs),
+            "ctor_kind": self.ctor_kind.to_json(mir)
+        })
     }
 }
 
@@ -256,9 +285,11 @@ impl ToJsonAg for ty::FieldDef {
         mir: &mut MirState,
         substs: &ty::subst::Substs,
     ) -> serde_json::Value {
-        json!({"name": defid_str(&self.did),
-               "ty": defid_ty(&self.did, mir),
-               "substs": substs.to_json(mir)  })
+        json!({
+            "name": defid_str(&self.did),
+            "ty": defid_ty(&self.did, mir),
+            "substs": substs.to_json(mir)
+        })
     }
 }
 
@@ -269,9 +300,11 @@ pub fn handle_adt_ag(
 ) -> serde_json::Value {
     match ak {
         &mir::AggregateKind::Adt(ref adt, variant, substs, _) => {
-            json!({"adt": adt.tojson(mir, substs),
-                   "variant": variant,
-                   "ops": opv.to_json(mir)})
+            json!({
+                "adt": adt.tojson(mir, substs),
+                "variant": variant,
+                "ops": opv.to_json(mir)
+            })
         }
         _ => unreachable!("bad"),
     }

@@ -1,7 +1,9 @@
 /* Heavily inspired by cargo-miri */
 extern crate cargo_metadata;
 
+use std::env;
 use std::path::{PathBuf, Path};
+use std::process;
 use std::io::Write;
 use std::process::Command;
 
@@ -27,22 +29,22 @@ fn show_version() {
 
 fn main() {
     // Check for version and help flags even when invoked as 'cargo-mir-json'
-    if std::env::args().any(|a| a == "--help" || a == "-h") {
+    if env::args().any(|a| a == "--help" || a == "-h") {
         show_help();
         return;
     }
-    if std::env::args().any(|a| a == "--version" || a == "-V") {
+    if env::args().any(|a| a == "--version" || a == "-V") {
         show_version();
         return;
     }
 
-    if let Some("mir-json") = std::env::args().nth(1).as_ref().map(AsRef::as_ref) {
+    if let Some("mir-json") = env::args().nth(1).as_ref().map(AsRef::as_ref) {
         // this arm is when `cargo mir-json` is called
 
-        let test = std::env::args().nth(2).map_or(false, |text| text == "test");
+        let test = env::args().nth(2).map_or(false, |text| text == "test");
         let skip = if test { 3 } else { 2 };
 
-        let manifest_path_arg = std::env::args().skip(skip).find(|val| {
+        let manifest_path_arg = env::args().skip(skip).find(|val| {
             val.starts_with("--manifest-path=")
         });
 
@@ -55,7 +57,7 @@ fn main() {
             let _ = std::io::stderr().write_fmt(format_args!(
                 "error: Could not obtain cargo metadata."
             ));
-            std::process::exit(101);
+            process::exit(101);
         };
 
         let manifest_path = manifest_path_arg.map(|arg| {
@@ -75,18 +77,20 @@ fn main() {
                     let current_dir = current_dir.as_ref().expect(
                         "could not read current directory",
                     );
-                    let package_manifest_directory = package_manifest_path.parent().expect(
-                        "could not find parent directory of package manifest",
-                    );
-                    package_manifest_directory == current_dir
+                    let package_manifest_dir = package_manifest_path
+                        .parent()
+                        .expect(
+                            "could not find parent directory of package manifest",
+                        );
+                    package_manifest_dir == current_dir
                 }
             })
             .expect("could not find matching package");
         let package = metadata.packages.remove(package_index);
         for target in package.targets {
-            let args = std::env::args().skip(skip);
+            let args = env::args().skip(skip);
             let kind = target.kind.get(0).expect(
-                "badly formatted cargo metadata: target::kind is an empty array",
+                "bad cargo metadata: target::kind is an empty array",
             );
             let mut process_args_opt = None;
 
@@ -102,7 +106,7 @@ fn main() {
 
             if let Some(process_args) = process_args_opt {
                 if let Err(code) = process(process_args.into_iter().chain(args)) {
-                    std::process::exit(code);
+                    process::exit(code);
                 }
             }
         }
@@ -111,7 +115,8 @@ fn main() {
         // with the `RUSTC` env var set to itself
 
         let home = option_env!("RUSTUP_HOME").or(option_env!("MULTIRUST_HOME"));
-        let toolchain = option_env!("RUSTUP_TOOLCHAIN").or(option_env!("MULTIRUST_TOOLCHAIN"));
+        let toolchain = option_env!("RUSTUP_TOOLCHAIN")
+                        .or(option_env!("MULTIRUST_TOOLCHAIN"));
         let sys_root = if let (Some(home), Some(toolchain)) = (home, toolchain) {
             format!("{}/toolchains/{}", home, toolchain)
         } else {
@@ -132,10 +137,10 @@ fn main() {
         // this conditional check for the --sysroot flag is there so
         // users can call `cargo-mir-json` directly without having to pass
         // --sysroot or anything
-        let mut args: Vec<String> = if std::env::args().any(|s| s == "--sysroot") {
-            std::env::args().skip(1).collect()
+        let mut args: Vec<String> = if env::args().any(|s| s == "--sysroot") {
+            env::args().skip(1).collect()
         } else {
-            std::env::args()
+            env::args()
                 .skip(1)
                 .chain(Some("--sysroot".to_owned()))
                 .chain(Some(sys_root))
@@ -145,26 +150,35 @@ fn main() {
         // this check ensures that dependencies are built but not
         // dumped and the final crate is dumped but not built
         // TODO: how does this impact mir-json?
-        let mir_json_enabled = std::env::args().any(|s| s == "-Zno-trans");
+        let mir_json_enabled = env::args().any(|s| s == "-Zno-trans");
 
         let mut command = if mir_json_enabled {
-            let mut path = std::env::current_exe().expect("current executable path invalid");
+            let mut path = env::current_exe().expect(
+                "current executable path invalid"
+            );
             path.set_file_name("mir-json");
             Command::new(path)
         } else {
             Command::new("rustc")
         };
 
-        args.extend_from_slice(&["-Z".to_owned(), "always-encode-mir".to_owned()]);
+        args.extend_from_slice(&[
+            "-Z".to_owned(),
+            "always-encode-mir".to_owned()
+        ]);
 
         match command.args(&args).status() {
             Ok(exit) => {
                 if !exit.success() {
-                    std::process::exit(exit.code().unwrap_or(42));
+                    process::exit(exit.code().unwrap_or(42));
                 }
             }
-            Err(ref e) if mir_json_enabled => panic!("error during mir-json run: {:?}", e),
-            Err(ref e) => panic!("error during rustc call: {:?}", e),
+            Err(ref e) if mir_json_enabled => {
+                panic!("error during mir-json run: {:?}", e)
+            }
+            Err(ref e) => {
+                panic!("error during rustc call: {:?}", e)
+            }
         }
     }
 }
@@ -185,7 +199,7 @@ where
     }
     args.push("-Zno-trans".to_owned());
 
-    let path = std::env::current_exe().expect("current executable path invalid");
+    let path = env::current_exe().expect("current executable path invalid");
     let exit_status = std::process::Command::new("cargo")
         .args(&args)
         .env("RUSTC", path)
