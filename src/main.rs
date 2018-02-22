@@ -1,19 +1,14 @@
 #![feature(rustc_private)]
-extern crate serde;
-#[macro_use]
-extern crate serde_json;
 
 extern crate rustc;
 extern crate rustc_driver;
-extern crate rustc_mir;
-extern crate rustc_const_math;
-extern crate rustc_serialize;
-extern crate rustc_data_structures;
 extern crate getopts;
 extern crate syntax;
 extern crate rustc_errors;
 
-mod analyz;
+extern crate mir_json;
+
+use mir_json::analyz;
 use rustc::session::Session;
 use rustc_driver::{Compilation, CompilerCalls, RustcDefaultCalls};
 use rustc_driver::driver::{CompileState, CompileController};

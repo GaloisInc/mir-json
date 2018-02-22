@@ -616,6 +616,7 @@ fn mir_info<'a, 'tcx>(
 ) -> Option<serde_json::Value> {
     match src {
         MirSource::Fn(_) => (),
+        MirSource::Const(_) => (),
         _ => return None,
     };
     let fn_name = tcx.def_path(def_id).to_string_no_crate();

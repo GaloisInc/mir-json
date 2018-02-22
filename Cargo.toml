@@ -11,6 +11,9 @@ serde_derive = "*"
 serde_json = "*"
 cargo_metadata = { version = "0.2" }
 
+[lib]
+name = "mir_json"
+
 [[bin]]
 name = "mir-json"
 path = "src/main.rs"
