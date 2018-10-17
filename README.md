@@ -29,4 +29,7 @@ To finish the compiler installation you need to add the tools to your path:
 4. Then install the executable to your path
 
      $ cargo install
-     
+
+5. Finally, add this line to your .bash_profile
+
+     export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
