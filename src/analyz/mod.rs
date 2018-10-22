@@ -617,6 +617,7 @@ fn mir_info<'a, 'tcx>(
     match src {
         MirSource::Fn(_) => (),
         MirSource::Const(_) => (),
+        MirSource::Static(_, _) => (),
         _ => return None,
     };
     let fn_name = tcx.def_path(def_id).to_string_no_crate();
