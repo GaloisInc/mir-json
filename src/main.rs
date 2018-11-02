@@ -1,7 +1,9 @@
 #![feature(rustc_private)]
 
 extern crate rustc;
+extern crate rustc_codegen_utils;
 extern crate rustc_driver;
+extern crate rustc_metadata;
 extern crate getopts;
 extern crate syntax;
 extern crate rustc_errors;
@@ -10,14 +12,17 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use rustc::session::Session;
-use rustc_driver::{Compilation, CompilerCalls, RustcDefaultCalls};
+use rustc_driver::{run, Compilation, CompilerCalls, RustcDefaultCalls};
 use rustc_driver::driver::{CompileState, CompileController};
 use rustc::session::config::{self, Input, ErrorOutputType};
+use rustc_codegen_utils::codegen_backend::CodegenBackend;
+use rustc_metadata::cstore::CStore;
 use syntax::ast;
 use std::error::Error;
 use std::path::PathBuf;
+use std::process;
 
-struct MyCompilerCalls(RustcDefaultCalls);
+struct MyCompilerCalls(Box<RustcDefaultCalls>);
 // below heavily inspired from miri
 impl<'a> CompilerCalls<'a> for MyCompilerCalls {
     fn early_callback(
@@ -56,20 +61,23 @@ impl<'a> CompilerCalls<'a> for MyCompilerCalls {
     }
     fn late_callback(
         &mut self,
+        codegen_backend: &dyn CodegenBackend,
         matches: &getopts::Matches,
         sess: &Session,
+        cstore: &CStore,
         input: &Input,
         odir: &Option<PathBuf>,
         ofile: &Option<PathBuf>,
     ) -> Compilation {
-        self.0.late_callback(matches, sess, input, odir, ofile)
+        self.0.late_callback(codegen_backend, matches, sess, cstore, input, odir, ofile)
     }
     fn build_controller(
-        &mut self,
+        self: Box<Self>,
         sess: &Session,
         matches: &getopts::Matches,
     ) -> CompileController<'a> {
-        let mut control = self.0.build_controller(sess, matches);
+        let this = *self;
+        let mut control = this.0.build_controller(sess, matches);
         control.after_analysis.callback = Box::new(after_analysis);
         control
     }
@@ -119,16 +127,17 @@ fn go() {
     }
 
     args.push("-Zalways-encode-mir".to_owned());
-    args.push("-Zno-trans".to_owned());
+    //args.push("-Zno-trans".to_owned());
 
-    rustc_driver::run_compiler(
-        &args, // args: &[String]
-        &mut MyCompilerCalls(RustcDefaultCalls),
-        None,
-        None,
-    ); // emitter_dest: Option<stuff>
-    // -> (CompileResult, Option<Session>)
-
+    let result = rustc_driver::run(move || {
+        rustc_driver::run_compiler(
+            &args, // args: &[String]
+            Box::new(MyCompilerCalls(Box::new(RustcDefaultCalls))),
+            None,
+            None,
+        ) // emitter_dest: Option<stuff>
+    });    // -> (CompileResult, Option<Session>)
+    std::process::exit(result as i32);
 }
 
 fn main() {
