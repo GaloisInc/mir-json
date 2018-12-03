@@ -158,6 +158,12 @@ impl<'b> ToJson for ty::Ty<'b> {
                 // TODO
                 json!({"kind": "Infer"})
             }
+            /*
+            &ty::TyKind::Bound(_, _) => {
+                // TODO
+                json!({"kind": "Bound"})
+            }
+            */
             &ty::TyKind::Foreign(_) => {
                 // TODO
                 json!({"kind": "Foreign"})
@@ -203,6 +209,59 @@ impl<'b> ToJson for ty::FnSig<'b> {
             "inputs": input_jsons,
             "output": self.output().to_json(ms)
         })
+    }
+}
+
+impl<'b> ToJson for ty::PolyTraitPredicate<'b> {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        let tref = self.skip_binder().trait_ref;
+        json!({
+            "trait":  tref.def_id.to_json(ms),
+            "substs":  tref.substs.to_json(ms)
+        })
+    }
+}
+
+impl<'b> ToJson for ty::Predicate<'b> {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        match self {
+            &ty::Predicate::Trait(ref ptp) => {
+                json!({
+                    "trait_pred": ptp.to_json(ms)
+                })
+            }
+            _ => {
+                json!(
+                    "unknown_pred"
+                )
+            }
+        }
+    }
+}
+
+impl<'b> ToJson for ty::GenericPredicates<'b> {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        let preds : Vec<serde_json::Value> =
+            self.predicates.iter().map(|p| p.0.to_json(ms)).collect();
+        json!({ "predicates": preds })
+    }
+}
+
+impl ToJson for ty::GenericParamDef {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        json!({
+            "param_def": *(self.name.as_str())
+        }) // TODO
+    }
+}
+
+impl ToJson for ty::Generics {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        let params : Vec<serde_json::Value> =
+          self.params.iter().map(|p| p.to_json(ms)).collect();
+        json!({
+            "params": params
+        }) // TODO
     }
 }
 
@@ -340,7 +399,7 @@ pub fn handle_adt_ag(
         &mir::AggregateKind::Adt(ref adt, variant, substs, _, _) => {
             json!({
                 "adt": adt.tojson(mir, substs),
-                "variant": variant,
+                "variant": variant, //.to_json(mir),
                 "ops": opv.to_json(mir)
             })
         }

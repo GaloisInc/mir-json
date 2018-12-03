@@ -1,6 +1,6 @@
 #![macro_use]
 
-use rustc::ty::{TyCtxt, List, TyS};
+use rustc::ty::{TyCtxt, List, TyS, layout};
 use rustc::mir::{self, Mir};
 use rustc::hir::def_id;
 use rustc_data_structures::indexed_vec::Idx;
@@ -27,6 +27,8 @@ basic_json_enum_impl!(mir::BinOp);
 
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
+
+//basic_json_impl!(layout::VariantIdx);
 
 impl<'b> ToJson for mir::AggregateKind<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
@@ -182,7 +184,7 @@ impl<'b, T: ToJson> ToJson for mir::ProjectionElem<'b, mir::Local, T> {
                 json!({"kind": "Subslice", "from": from, "to": to})
             }
             &mir::ProjectionElem::Downcast(ref _adt, ref variant) => {
-                json!({"kind": "Downcast", "variant": variant})
+                json!({"kind": "Downcast", "variant": variant/*.to_json(mir)*/})
             }
         }
     }
@@ -271,7 +273,7 @@ impl<'b> ToJson for mir::Statement<'b> {
                 json!({
                     "kind": "SetDiscriminant",
                     "lvalue": place.to_json(mir),
-                    "variant_index": variant_index
+                    "variant_index": variant_index/*.to_json(mir)*/
                 })
             }
             &mir::StatementKind::StorageLive(l) => {
@@ -303,6 +305,12 @@ impl<'b> ToJson for mir::Statement<'b> {
                 // TODO
                 json!({"kind": "AscribeUserType"})
             }
+            /*
+            &mir::StatementKind::Retag { .. } => {
+                // TODO
+                json!({"kind": "Retag"})
+            }
+            */
         };
         let pos = mir.state
                     .session
@@ -508,12 +516,16 @@ fn mir_info<'a, 'tcx>(
     // input vars
     // output
     let body = mir_body(ms, def_id, tcx);
+    let preds = tcx.predicates_of(def_id);
+    let generics = tcx.generics_of(def_id);
 
     Some(
         json!({
             "name": fn_name,
             "args": args,
             "return_ty": ms.mir.unwrap().return_ty().to_json(ms),
+            "generics": generics.to_json(ms),
+            "predicates": preds.to_json(ms),
             "body": body
         })
     )
