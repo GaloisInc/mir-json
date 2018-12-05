@@ -28,7 +28,17 @@ basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::Mutability);
 basic_json_enum_impl!(mir::CastKind);
-basic_json_enum_impl!(mir::BorrowKind);
+
+impl ToJson for mir::BorrowKind {
+    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+        match self {
+            &mir::BorrowKind::Shared => json!("Shared"),
+            &mir::BorrowKind::Shallow => json!("Shallow"),
+            &mir::BorrowKind::Unique => json!("Unique"),
+            &mir::BorrowKind::Mut{..} => json!("Mut"),
+        }
+    }
+}
 
 impl ToJson for ty::VariantDiscr {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
