@@ -9,7 +9,6 @@ use std::collections::HashSet;
 pub struct MirState<'a, 'tcx: 'a> {
     pub mir: Option<&'a Mir<'a>>,
     pub used_types: &'a mut HashSet<DefId>,
-    pub used_traits: &'a mut HashSet<DefId>,
     pub state: &'a CompileState<'a, 'tcx>
 }
 

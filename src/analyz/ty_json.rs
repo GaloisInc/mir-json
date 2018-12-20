@@ -134,7 +134,6 @@ impl<'b> ToJson for ty::Ty<'b> {
             }
             &ty::TyKind::Dynamic(ref bs, _) => {
                 let did = bs.principal().skip_binder().def_id;
-                mir.used_traits.insert(did);
                 json!({
                     "kind": "Dynamic",
                     "data": did.to_json(mir)

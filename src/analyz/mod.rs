@@ -536,7 +536,6 @@ fn mir_info<'a, 'tcx>(
 pub fn emit_fns(
     state: &mut CompileState,
     used_types: &mut HashSet<DefId>,
-    used_traits: &mut HashSet<DefId>,
     file: &mut File
 ) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
@@ -552,7 +551,6 @@ pub fn emit_fns(
         let nid = tcx.hir.as_local_node_id(def_id).unwrap();
         let mut ms = MirState { mir: Some(mir.unwrap()),
                                 used_types: used_types,
-                                used_traits: used_traits,
                                 state: state };
         if let Some(mi) = mir_info(&mut ms, def_id, &tcx) {
             state.session.note_without_error(
@@ -573,7 +571,6 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
-    let mut dummy_used_traits = HashSet::new();
 
     // Emit definitions for all ADTs.
     for &def_id in used_types.iter() {
@@ -587,7 +584,6 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
                                 adt_name).as_str());
                     let mut ms = MirState { mir: None,
                                             used_types: &mut dummy_used_types,
-                                            used_traits: &mut dummy_used_traits,
                                             state: state };
                     seq.serialize_element(&adtdef.tojson(&mut ms,
                                                          List::empty()))?;
@@ -600,15 +596,15 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
     Ok(())
 }
 
-pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
+pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
-    let mut dummy_used_traits = HashSet::new();
+    let traits = &*tcx.all_traits(def_id::LOCAL_CRATE);
 
     // Emit definitions for all traits.
-    for &def_id in used_traits.iter() {
+    for &def_id in traits.iter() {
         if def_id.is_local() {
             let trait_name = tcx.def_path(def_id).to_string_no_crate();
             let items = tcx.associated_items(def_id);
@@ -617,7 +613,6 @@ pub fn emit_traits(state: &mut CompileState, used_traits: &HashSet<DefId>, file:
                         trait_name).as_str());
             let mut ms = MirState { mir: None,
                                     used_types: &mut dummy_used_types,
-                                    used_traits: &mut dummy_used_traits,
                                     state: state };
             let mut items_json = Vec::new();
             for item in items {
@@ -641,13 +636,12 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     mirname.set_extension("mir");
     let mut file = File::create(&mirname)?;
     let mut used_types = HashSet::new();
-    let mut used_traits = HashSet::new();
     write!(file, "{{ \"fns\": ")?;
-    emit_fns(state, &mut used_types, &mut used_traits, &mut file)?;
+    emit_fns(state, &mut used_types, &mut file)?;
     write!(file, ", \"adts\": ")?;
     emit_adts(state, &used_types, &mut file)?;
     write!(file, ", \"traits\": ")?;
-    emit_traits(state, &used_traits, &mut file)?;
+    emit_traits(state, &mut file)?;
     write!(file, " }}")
 }
 
