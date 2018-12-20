@@ -1,7 +1,7 @@
 Tool to compile rust to MIR, encoded as JSON.
 
 Uses unstable features -- the most recent build which has been
-successfully tested is rustc nightly-2018-10-3
+successfully tested is rustc nightly-2018-10-31
 
 #####
 
