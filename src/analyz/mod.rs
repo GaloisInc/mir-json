@@ -333,7 +333,8 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
                 ref values,
                 ref targets,
             } => {
-                let vals: Vec<u64> = values.iter().map(|&c| c as u64).collect();
+                let vals: Vec<String> =
+                  values.iter().map(|&c| c.to_string()).collect();
                 json!({
                     "kind": "SwitchInt",
                     "discr": discr.to_json(mir),
