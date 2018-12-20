@@ -337,7 +337,25 @@ impl<'b> ToJson for ty::subst::Kind<'b> {
 impl<'b> ToJson for ty::Const<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
-        mir::fmt_const_val(&mut s, &self);
+        match &self.val {
+            &interpret::ConstValue::Unevaluated(def_id, ref substs) => {
+                /*
+                let tcx = mir.state.tcx.unwrap();
+                let param_env = ty::ParamEnv::reveal_all();
+                let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
+                let cid = interpret::GlobalId {
+                    instance,
+                    promoted: None,
+                };
+                tcx.const_eval(param_env.and(cid)).unwrap().clone();
+                */
+                // TODO: the following should use the result of const_eval instead of self.
+                mir::fmt_const_val(&mut s, &self);
+            }
+            _ => {
+                mir::fmt_const_val(&mut s, &self);
+            }
+        }
         json!({
             "kind": "Const",
             "ty": self.ty.to_json(mir),
