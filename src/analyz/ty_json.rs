@@ -30,7 +30,7 @@ basic_json_enum_impl!(mir::Mutability);
 basic_json_enum_impl!(mir::CastKind);
 
 impl ToJson for mir::BorrowKind {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json<'a, 'tcx: 'a>(&self, _mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::BorrowKind::Shared => json!("Shared"),
             &mir::BorrowKind::Shallow => json!("Shallow"),
@@ -185,9 +185,6 @@ impl<'b> ToJson for ty::Ty<'b> {
                 // TODO
                 json!({"kind": "GeneratorWitness"})
             }
-            &ty::TyKind::Never => {
-                json!({"kind": "Never"})
-            }
             &ty::TyKind::Opaque(_, _) => {
                 // TODO
                 json!({"kind": "Opaque"})
@@ -278,7 +275,7 @@ impl<'b> ToJson for ty::GenericPredicates<'b> {
 }
 
 impl ToJson for ty::GenericParamDef {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json<'a, 'tcx: 'a>(&self, _ms: &mut MirState) -> serde_json::Value {
         json!({
             "param_def": *(self.name.as_str())
         }) // TODO

@@ -1,10 +1,8 @@
 #![macro_use]
 
-use rustc::ty::{TyCtxt, List, TyS, layout};
+use rustc::ty::{TyCtxt, List, TyS};
 use rustc::mir::{self, Mir};
 use rustc::hir::def_id;
-use rustc_data_structures::indexed_vec::Idx;
-use rustc::middle;
 use rustc::hir::def_id::DefId;
 use rustc_driver::driver::{CompileState, source_name};
 use std::collections::HashSet;
@@ -548,7 +546,6 @@ pub fn emit_fns(
     for def_id in ids {
         let mir = get_mir(tcx, def_id);
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
-        let nid = tcx.hir.as_local_node_id(def_id).unwrap();
         let mut ms = MirState { mir: Some(mir.unwrap()),
                                 used_types: used_types,
                                 state: state };

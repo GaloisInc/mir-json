@@ -12,7 +12,7 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use rustc::session::Session;
-use rustc_driver::{run, Compilation, CompilerCalls, RustcDefaultCalls};
+use rustc_driver::{Compilation, CompilerCalls, RustcDefaultCalls};
 use rustc_driver::driver::{CompileState, CompileController};
 use rustc::session::config::{self, Input, ErrorOutputType};
 use rustc_codegen_utils::codegen_backend::CodegenBackend;
@@ -20,7 +20,6 @@ use rustc_metadata::cstore::CStore;
 use syntax::ast;
 use std::error::Error;
 use std::path::PathBuf;
-use std::process;
 
 struct MyCompilerCalls(Box<RustcDefaultCalls>);
 // below heavily inspired from miri
