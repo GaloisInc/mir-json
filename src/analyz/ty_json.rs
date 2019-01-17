@@ -231,6 +231,24 @@ impl<'b> ToJson for ty::PolyTraitPredicate<'b> {
     }
 }
 
+impl<'b> ToJson for ty::ProjectionPredicate<'b> {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        json!({
+            "projection_ty": self.projection_ty.to_json(ms),
+            "ty": self.ty.to_json(ms)
+        })
+    }
+}
+
+impl<'b> ToJson for ty::ProjectionTy<'b> {
+    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+        json!({
+            "substs": self.substs.to_json(ms),
+            "item_def_id": self.item_def_id.to_json(ms)
+        })
+    }
+}
+
 impl<'b> ToJson for ty::Predicate<'b> {
     fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
         match self {
@@ -239,10 +257,13 @@ impl<'b> ToJson for ty::Predicate<'b> {
                     "trait_pred": ptp.to_json(ms)
                 })
             }
+            &ty::Predicate::Projection(ref ppp) => {
+                json!({
+                    "trait_proj": ppp.skip_binder().to_json(ms)
+                })
+            }
             _ => {
-                json!(
-                    "unknown_pred"
-                )
+                json!("unknown_pred")
             }
         }
     }
