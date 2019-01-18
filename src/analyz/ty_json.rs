@@ -1,7 +1,9 @@
 use rustc::hir;
+use rustc::hir::def_id::DefId;
 use rustc::mir;
 use rustc::mir::interpret;
 use rustc::ty;
+use rustc::ty::{TyCtxt};
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -351,22 +353,23 @@ impl ToJson for ty::subst::Kind<'_> {
     }
 }
 
+fn do_const_eval<'tcx>(tcx: TyCtxt<'_,'tcx,'tcx>, def_id: DefId, substs: &'tcx ty::subst::Substs<'_>) -> ty::Const<'tcx> {
+    let param_env = ty::ParamEnv::reveal_all();
+    let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
+    let cid = interpret::GlobalId {
+        instance,
+        promoted: None,
+    };
+    tcx.const_eval(param_env.and(cid)).unwrap().clone()
+}
+
 impl<'b> ToJson for ty::Const<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json<'a,'tcx>(&self, mir: &mut MirState<'a,'tcx>) -> serde_json::Value {
         let mut s = String::new();
         match &self.val {
             &interpret::ConstValue::Unevaluated(def_id, ref substs) => {
-                /*
-                let tcx = mir.state.tcx.unwrap();
-                let param_env = ty::ParamEnv::reveal_all();
-                let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
-                let cid = interpret::GlobalId {
-                    instance,
-                    promoted: None,
-                };
-                tcx.const_eval(param_env.and(cid)).unwrap().clone();
-                */
-                // TODO: the following should use the result of const_eval instead of self.
+                //do_const_eval(mir.state.tcx.unwrap(), def_id, substs);
+                // TODO: the following should use the result of do_const_eval instead of self.
                 mir::fmt_const_val(&mut s, &self);
             }
             _ => {
