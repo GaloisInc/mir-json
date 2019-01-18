@@ -29,7 +29,7 @@ basic_json_enum_impl!(mir::UnOp);
 //basic_json_impl!(layout::VariantIdx);
 
 impl<'b> ToJson for mir::AggregateKind<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::AggregateKind::Array(ty) => {
                 json!({"kind": "Array", "ty": ty.to_json(mir)})
@@ -56,7 +56,7 @@ impl<'b> ToJson for mir::AggregateKind<'b> {
 }
 
 impl<'b> ToJson for mir::Rvalue<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::Rvalue::Use(ref op) => {
                 json!({
@@ -142,7 +142,7 @@ impl<'b> ToJson for mir::Rvalue<'b> {
 }
 
 impl<'b> ToJson for mir::Projection<'b, mir::Place<'b>, mir::Local, &TyS<'b>> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!({
             "base": self.base.to_json(mir),
             "data" : self.elem.to_json(mir)
@@ -151,7 +151,7 @@ impl<'b> ToJson for mir::Projection<'b, mir::Place<'b>, mir::Local, &TyS<'b>> {
 }
 
 impl<'b, T: ToJson> ToJson for mir::ProjectionElem<'b, mir::Local, T> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::ProjectionElem::Deref => {
                 json!({"kind": "Deref"})
@@ -189,7 +189,7 @@ impl<'b, T: ToJson> ToJson for mir::ProjectionElem<'b, mir::Local, T> {
 }
 
 impl<'b> ToJson for mir::Place<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         match self {
             &mir::Place::Local(ref l) => {
                 json!({"kind": "Local", "localvar": local_json(ms, *l) })
@@ -210,7 +210,7 @@ impl<'b> ToJson for mir::Place<'b> {
 basic_json_impl!(mir::BasicBlock);
 
 impl ToJson for mir::Field {
-    fn to_json<'a, 'tcx: 'a>(&self, _mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
 }
@@ -218,7 +218,7 @@ impl ToJson for mir::Field {
 basic_json_impl!(mir::AssertMessage<'a>, 'a);
 
 impl<'b> ToJson for mir::Operand<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::Operand::Copy(ref l) => {
                 json!({"kind": "Copy", "data": l.to_json(mir)})
@@ -234,7 +234,7 @@ impl<'b> ToJson for mir::Operand<'b> {
 }
 
 impl<'b> ToJson for mir::Constant<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!({
             "ty": self.ty.to_json(mir),
             "literal": self.literal.to_json(mir)
@@ -243,7 +243,7 @@ impl<'b> ToJson for mir::Constant<'b> {
 }
 
 impl<'b> ToJson for mir::LocalDecl<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let pos = mir.state.session.source_map().span_to_string(self.source_info.span);
         json!({
             "mut": self.mutability.to_json(mir),
@@ -255,7 +255,7 @@ impl<'b> ToJson for mir::LocalDecl<'b> {
 }
 
 impl<'b> ToJson for mir::Statement<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let mut j = match &self.kind {
             &mir::StatementKind::Assign(ref l, ref r) => {
                 json!({
@@ -320,7 +320,7 @@ impl<'b> ToJson for mir::Statement<'b> {
 }
 
 impl<'b> ToJson for mir::TerminatorKind<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::TerminatorKind::Goto { ref target } => {
                 json!({"kind": "Goto", "target": target.to_json(mir)})
@@ -437,7 +437,7 @@ impl<'b> ToJson for mir::TerminatorKind<'b> {
 }
 
 impl<'b> ToJson for mir::BasicBlockData<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let mut sts = Vec::new();
         for statement in &self.statements {
             sts.push(statement.to_json(mir));

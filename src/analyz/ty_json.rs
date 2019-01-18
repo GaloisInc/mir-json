@@ -12,7 +12,7 @@ impl<T> ToJson for ty::List<T>
     where
     T: ToJson,
 {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState<'a, 'tcx>) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let mut j = Vec::new();
         for v in self {
             j.push(v.to_json(mir));
@@ -30,7 +30,7 @@ basic_json_enum_impl!(mir::Mutability);
 basic_json_enum_impl!(mir::CastKind);
 
 impl ToJson for mir::BorrowKind {
-    fn to_json<'a, 'tcx: 'a>(&self, _mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::BorrowKind::Shared => json!("Shared"),
             &mir::BorrowKind::Shallow => json!("Shallow"),
@@ -41,7 +41,7 @@ impl ToJson for mir::BorrowKind {
 }
 
 impl ToJson for ty::VariantDiscr {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             &ty::VariantDiscr::Relative(i) => {
                 json!({"kind": "Relative", "index" : json!(i)})
@@ -54,7 +54,7 @@ impl ToJson for ty::VariantDiscr {
 }
 
 impl ToJson for hir::def_id::DefId {
-    fn to_json<'a, 'tcx: 'a>(&self, _mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(ty::tls::with(|tx| {
             let defpath = tx.def_path(*self);
             defpath.to_string_no_crate()
@@ -64,7 +64,7 @@ impl ToJson for hir::def_id::DefId {
 
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'b> ToJson for ty::Ty<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match &self.sty {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
@@ -194,13 +194,13 @@ impl<'b> ToJson for ty::Ty<'b> {
 }
 
 impl ToJson for ty::ParamTy {
-    fn to_json<'a, 'tcx: 'a>(&self, _mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.idx)
     }
 }
 
 impl<'b> ToJson for ty::PolyFnSig<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         // Note: I don't think we need binders in MIR, but we can change
         // this if we do.
         self.skip_binder().to_json(ms)
@@ -208,7 +208,7 @@ impl<'b> ToJson for ty::PolyFnSig<'b> {
 }
 
 impl<'b> ToJson for ty::FnSig<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         let input_jsons : Vec<serde_json::Value> =
             self.inputs().iter().map(|i| i.to_json(ms)).collect();
         json!({
@@ -219,7 +219,7 @@ impl<'b> ToJson for ty::FnSig<'b> {
 }
 
 impl<'b> ToJson for ty::PolyTraitPredicate<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         let tref = self.skip_binder().trait_ref;
         json!({
             "trait":  tref.def_id.to_json(ms),
@@ -229,7 +229,7 @@ impl<'b> ToJson for ty::PolyTraitPredicate<'b> {
 }
 
 impl<'b> ToJson for ty::ProjectionPredicate<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         json!({
             "projection_ty": self.projection_ty.to_json(ms),
             "ty": self.ty.to_json(ms)
@@ -238,7 +238,7 @@ impl<'b> ToJson for ty::ProjectionPredicate<'b> {
 }
 
 impl<'b> ToJson for ty::ProjectionTy<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         json!({
             "substs": self.substs.to_json(ms),
             "item_def_id": self.item_def_id.to_json(ms)
@@ -247,7 +247,7 @@ impl<'b> ToJson for ty::ProjectionTy<'b> {
 }
 
 impl<'b> ToJson for ty::Predicate<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         match self {
             &ty::Predicate::Trait(ref ptp) => {
                 json!({
@@ -267,7 +267,7 @@ impl<'b> ToJson for ty::Predicate<'b> {
 }
 
 impl<'b> ToJson for ty::GenericPredicates<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         let preds : Vec<serde_json::Value> =
             self.predicates.iter().map(|p| p.0.to_json(ms)).collect();
         json!({ "predicates": preds })
@@ -275,7 +275,7 @@ impl<'b> ToJson for ty::GenericPredicates<'b> {
 }
 
 impl ToJson for ty::GenericParamDef {
-    fn to_json<'a, 'tcx: 'a>(&self, _ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, _ms: &mut MirState) -> serde_json::Value {
         json!({
             "param_def": *(self.name.as_str())
         }) // TODO
@@ -283,7 +283,7 @@ impl ToJson for ty::GenericParamDef {
 }
 
 impl ToJson for ty::Generics {
-    fn to_json<'a, 'tcx: 'a>(&self, ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         let params : Vec<serde_json::Value> =
           self.params.iter().map(|p| p.to_json(ms)).collect();
         json!({
@@ -292,7 +292,7 @@ impl ToJson for ty::Generics {
     }
 }
 
-pub fn assoc_item_json<'a, 'tcx: 'a>(
+pub fn assoc_item_json<'a, 'tcx>(
     ms: &mut MirState<'a, 'tcx>,
     tcx: &ty::TyCtxt<'a, 'tcx, 'tcx>,
     item: &ty::AssociatedItem
@@ -335,15 +335,15 @@ pub fn defid_ty(d: &hir::def_id::DefId, mir: &mut MirState) -> serde_json::Value
 }
 
 pub trait ToJsonAg {
-    fn tojson<'a, 'tcx: 'a>(
+    fn tojson<'a, 'tcx>(
         &self,
         mir: &mut MirState,
         substs: &ty::subst::Substs,
     ) -> serde_json::Value;
 }
 
-impl<'b> ToJson for ty::subst::Kind<'b> {
-    fn to_json<'a, 'tcx: 'a>(&self, mir: &mut MirState) -> serde_json::Value {
+impl ToJson for ty::subst::Kind<'_> {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self.unpack() {
             ty::subst::UnpackedKind::Type(ref ty) => ty.to_json(mir),
             ty::subst::UnpackedKind::Lifetime(_) => json!({"kind": "Lifetime"})
@@ -385,7 +385,7 @@ impl<T> ToJsonAg for Vec<T>
 where
     T: ToJsonAg,
 {
-    fn tojson<'a, 'tcx: 'a>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson<'a, 'tcx>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         let mut j = Vec::new();
         for v in self {
             j.push(v.tojson(mir, substs));
@@ -402,7 +402,7 @@ pub fn is_adt_ak(ak: &mir::AggregateKind) -> bool {
 }
 
 impl ToJsonAg for ty::AdtDef {
-    fn tojson<'a, 'tcx: 'a>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson<'a, 'tcx>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         json!({
             "name": defid_str(&self.did),
             "variants": self.variants.tojson(mir, substs)
@@ -411,7 +411,7 @@ impl ToJsonAg for ty::AdtDef {
 }
 
 impl ToJsonAg for ty::VariantDef {
-    fn tojson<'a, 'tcx: 'a>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
+    fn tojson<'a, 'tcx>(&self, mir: &mut MirState, substs: &ty::subst::Substs) -> serde_json::Value {
         json!({
             "name": defid_str(&self.did),
             "discr": self.discr.to_json(mir),
@@ -422,7 +422,7 @@ impl ToJsonAg for ty::VariantDef {
 }
 
 impl ToJsonAg for ty::FieldDef {
-    fn tojson<'a, 'tcx: 'a>(
+    fn tojson<'a, 'tcx>(
         &self,
         mir: &mut MirState,
         substs: &ty::subst::Substs,
