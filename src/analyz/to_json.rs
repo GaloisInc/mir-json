@@ -6,8 +6,8 @@ use serde_json;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
-pub struct MirState<'a, 'tcx> {
-    pub mir: Option<&'a Mir<'a>>,
+pub struct MirState<'a, 'tcx : 'a> {
+    pub mir: Option<&'tcx Mir<'tcx>>,
     pub used_types: &'a mut HashSet<DefId>,
     pub state: &'a CompileState<'a, 'tcx>
 }
