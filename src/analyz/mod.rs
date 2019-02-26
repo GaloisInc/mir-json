@@ -4,6 +4,7 @@ use rustc::ty::{TyCtxt, List, TyS};
 use rustc::mir::{self, Mir};
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
+use rustc::traits;
 use rustc_driver::driver::{CompileState, source_name};
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
@@ -615,10 +616,16 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
             for item in items {
                 items_json.push(assoc_item_json(&mut ms, &tcx, &item));
             }
+            let supers = traits::supertrait_def_ids(tcx, def_id);
+            let mut supers_json = Vec::new();
+            for item in supers {
+                supers_json.push(item.to_json(&mut ms));
+            }
             seq.serialize_element(
                 &json!({
                     "name": def_id.to_json(&mut ms),
-                    "items": serde_json::Value::Array(items_json)
+                    "items": serde_json::Value::Array(items_json),
+                    "supertraits": serde_json::Value::Array(supers_json)
                 })
             )?;
         } // Else look it up somewhere else, but I'm not sure where.
