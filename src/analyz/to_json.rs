@@ -12,27 +12,32 @@ pub struct MirState<'a, 'tcx : 'a> {
     pub state: &'a CompileState<'a, 'tcx>
 }
 
-pub trait ToJson {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value;
+/// Trait for converting MIR elements to JSON.
+///
+/// The `'tcx` parameter allows writing impls like `ToJson<'tcx> for Ty<'tcx>`, where the lifetime
+/// parameter on `Self` is known to match the lifetime of `mir.state.tcx`.  This enables passing
+/// `self` (or its fields) to some `TyCtxt` methods that would otherwise be unusable.
+pub trait ToJson<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value;
 }
 
-impl ToJson for String {
+impl ToJson<'_> for String {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         json!(self)
     }
 }
 
-impl ToJson for Symbol {
+impl ToJson<'_> for Symbol {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         json!(*self.as_str())
     }
 }
 
-impl<T> ToJson for Option<T>
+impl<'tcx, T> ToJson<'tcx> for Option<T>
 where
-    T: ToJson,
+    T: ToJson<'tcx>,
 {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
             &Some(ref i) => i.to_json(mir),
             &None => serde_json::Value::Null,
@@ -40,12 +45,12 @@ where
     }
 }
 
-impl<K, V> ToJson for BTreeMap<K, V>
+impl<'tcx, K, V> ToJson<'tcx> for BTreeMap<K, V>
     where
-    K: ToJson,
-    V: ToJson,
+    K: ToJson<'tcx>,
+    V: ToJson<'tcx>,
 {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut jsons = Vec::new();
         for (k, v) in self.iter() {
             jsons.push(json!({"name": k.to_json(mir), "val": v.to_json(mir)}))
@@ -57,7 +62,7 @@ impl<K, V> ToJson for BTreeMap<K, V>
 #[macro_export]
 macro_rules! basic_json_impl {
     ($n : path) => {
-        impl ToJson for $n {
+        impl ToJson<'_> for $n {
     fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
@@ -66,7 +71,7 @@ macro_rules! basic_json_impl {
 }
 };
     ($n : path, $lt : tt) => {
-        impl<$lt> ToJson for $n {
+        impl<$lt> ToJson<'_> for $n {
     fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
@@ -80,7 +85,7 @@ macro_rules! basic_json_impl {
 #[macro_export]
 macro_rules! basic_json_enum_impl {
     ($n : path) => {
-        impl ToJson for $n {
+        impl ToJson<'_> for $n {
     fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
@@ -89,7 +94,7 @@ macro_rules! basic_json_enum_impl {
 }
 };
     ($n : path, $lt : tt) => {
-        impl<$lt> ToJson for $n {
+        impl<$lt> ToJson<'_> for $n {
     fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
@@ -100,22 +105,22 @@ macro_rules! basic_json_enum_impl {
 };
 }
 
-impl<A, B> ToJson for (A, B)
+impl<'tcx, A, B> ToJson<'tcx> for (A, B)
 where
-    A: ToJson,
-    B: ToJson,
+    A: ToJson<'tcx>,
+    B: ToJson<'tcx>,
 {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let &(ref a, ref b) = self;
         json!(vec![a.to_json(mir), b.to_json(mir)])
     }
 }
 
-impl<T> ToJson for Vec<T>
+impl<'tcx, T> ToJson<'tcx> for Vec<T>
 where
-    T: ToJson,
+    T: ToJson<'tcx>,
 {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut j = Vec::new();
         for v in self {
             j.push(v.to_json(mir));
