@@ -354,7 +354,11 @@ impl<'tcx> ToJson<'tcx> for ty::subst::Kind<'tcx> {
     }
 }
 
-fn do_const_eval<'tcx>(tcx: TyCtxt<'_,'tcx,'tcx>, def_id: DefId, substs: &'tcx ty::subst::Substs<'tcx>) -> &'tcx ty::Const<'tcx> {
+fn do_const_eval<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    def_id: DefId,
+    substs: &'tcx ty::subst::Substs<'tcx>
+) -> &'tcx ty::Const<'tcx> {
     let param_env = ty::ParamEnv::reveal_all();
     let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
     let cid = interpret::GlobalId {
@@ -369,12 +373,11 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         let mut s = String::new();
         match self.val {
             interpret::ConstValue::Unevaluated(def_id, substs) => {
-                //do_const_eval(mir.state.tcx.unwrap(), def_id, substs);
-                // TODO: the following should use the result of do_const_eval instead of self.
-                mir::fmt_const_val(&mut s, &self);
+                let evaluated = do_const_eval(mir.state.tcx.unwrap(), def_id, substs);
+                mir::fmt_const_val(&mut s, evaluated).unwrap();
             }
             _ => {
-                mir::fmt_const_val(&mut s, &self);
+                mir::fmt_const_val(&mut s, &self).unwrap();
             }
         }
         json!({
