@@ -270,26 +270,51 @@ impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for ty::GenericPredicates<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let preds : Vec<serde_json::Value> =
-            self.predicates.iter().map(|p| p.0.to_json(ms)).collect();
-        json!({ "predicates": preds })
+        fn gather_preds<'tcx>(
+            ms: &mut MirState<'_, 'tcx>,
+            preds: &ty::GenericPredicates<'tcx>,
+            dest: &mut Vec<serde_json::Value>,
+        ) {
+            dest.extend(preds.predicates.iter().map(|p| p.0.to_json(ms)));
+            if let Some(parent_id) = preds.parent {
+                let parent_preds = ms.state.tcx.unwrap().predicates_of(parent_id);
+                gather_preds(ms, &parent_preds, dest);
+            }
+        }
+
+        let mut json_preds: Vec<serde_json::Value> = Vec::new();
+        gather_preds(ms, self, &mut json_preds);
+        json!({ "predicates": json_preds })
     }
 }
 
 impl ToJson<'_> for ty::GenericParamDef {
-    fn to_json(&self, _ms: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
         json!({
-            "param_def": *(self.name.as_str())
+            "param_def": *(self.name.as_str()),
+            "def_id": self.def_id.to_json(ms),
         }) // TODO
     }
 }
 
 impl ToJson<'_> for ty::Generics {
     fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
-        let params : Vec<serde_json::Value> =
-          self.params.iter().map(|p| p.to_json(ms)).collect();
+        fn gather_params(
+            ms: &mut MirState,
+            generics: &ty::Generics,
+            dest: &mut Vec<serde_json::Value>,
+        ) {
+            if let Some(parent_id) = generics.parent {
+                let parent_generics = ms.state.tcx.unwrap().generics_of(parent_id);
+                gather_params(ms, &parent_generics, dest);
+            }
+            dest.extend(generics.params.iter().map(|p| p.to_json(ms)));
+        }
+
+        let mut json_params: Vec<serde_json::Value> = Vec::new();
+        gather_params(ms, self, &mut json_params);
         json!({
-            "params": params
+            "params": json_params
         }) // TODO
     }
 }
