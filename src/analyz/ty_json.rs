@@ -1,4 +1,4 @@
-use rustc::hir;
+use rustc::hir::{self, Defaultness};
 use rustc::hir::def_id::DefId;
 use rustc::mir;
 use rustc::mir::interpret;
@@ -220,13 +220,18 @@ impl<'tcx> ToJson<'tcx> for ty::FnSig<'tcx> {
     }
 }
 
+impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
+    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        json!({
+            "trait":  self.def_id.to_json(ms),
+            "substs":  self.substs.to_json(ms)
+        })
+    }
+}
+
 impl<'tcx> ToJson<'tcx> for ty::PolyTraitPredicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let tref = self.skip_binder().trait_ref;
-        json!({
-            "trait":  tref.def_id.to_json(ms),
-            "substs":  tref.substs.to_json(ms)
-        })
+        self.skip_binder().trait_ref.to_json(ms)
     }
 }
 
@@ -324,30 +329,49 @@ pub fn assoc_item_json<'tcx>(
     tcx: &ty::TyCtxt<'_, 'tcx, 'tcx>,
     item: &ty::AssociatedItem
 ) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+
     let did = item.def_id;
+    map.insert("name".to_owned(), did.to_json(ms));
+    map.insert("generics".to_owned(), tcx.generics_of(did).to_json(ms));
+    map.insert("predicates".to_owned(), tcx.predicates_of(did).to_json(ms));
+
     match item.kind {
         ty::AssociatedKind::Const => {
-            json!({
-                "kind": "Const",
-                "name": did.to_json(ms),
-                "type": tcx.type_of(did).to_json(ms)
-            })
+            map.insert("kind".to_owned(), json!("Const"));
+            map.insert("type".to_owned(), tcx.type_of(did).to_json(ms));
         }
         ty::AssociatedKind::Method => {
-            let sig = tcx.fn_sig(did);
-            json!({
-                "kind": "Method",
-                "name": did.to_json(ms),
-                "signature": sig.to_json(ms)
-            })
+            map.insert("kind".to_owned(), json!("Method"));
+            map.insert("signature".to_owned(), tcx.fn_sig(did).to_json(ms));
         }
         ty::AssociatedKind::Type => {
-            json!({"kind": "Type", "name": did.to_json(ms)})
+            map.insert("kind".to_owned(), json!("Type"));
+            match item.defaultness {
+                Defaultness::Default { has_value: false } => {},
+                Defaultness::Default { has_value: true } |
+                Defaultness::Final => {
+                    map.insert("type".to_owned(), tcx.type_of(did).to_json(ms));
+                },
+            };
         }
         ty::AssociatedKind::Existential => {
-            json!({"kind": "Existential"})
+            map.insert("kind".to_owned(), json!("Existential"));
         }
     }
+
+    if let ty::AssociatedItemContainer::ImplContainer(impl_did) = item.container {
+        if let Some(trait_ref) = tcx.impl_trait_ref(impl_did) {
+            let trait_did = trait_ref.def_id;
+            for trait_item in tcx.associated_items(trait_did) {
+                if trait_item.ident == item.ident {
+                    map.insert("implements".to_owned(), trait_item.def_id.to_json(ms));
+                }
+            }
+        }
+    }
+
+    map.into()
 }
 
 pub fn defid_str(d: &hir::def_id::DefId) -> String {

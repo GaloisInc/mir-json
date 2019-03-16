@@ -2,6 +2,7 @@
 
 use rustc::ty::{TyCtxt, List, TyS};
 use rustc::mir::{self, Mir};
+use rustc::hir;
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
 use rustc::traits;
@@ -594,15 +595,38 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
     Ok(())
 }
 
+fn iter_trait_def_ids<'a, 'tcx>(
+    state: &mut CompileState<'a, 'tcx>
+) -> impl Iterator<Item=DefId> + 'a + 'tcx {
+    let hir_map = &state.tcx.unwrap().hir;
+    hir_map.krate().items.values()
+        .filter(|it| match it.node {
+            hir::ItemKind::Trait(..) => true,
+            _ => false,
+        })
+        .map(|it| it.hir_id.owner_def_id())
+}
+
+fn iter_impl_def_ids<'a, 'tcx>(
+    state: &mut CompileState<'a, 'tcx>
+) -> impl Iterator<Item=DefId> + 'a + 'tcx {
+    let hir_map = &state.tcx.unwrap().hir;
+    hir_map.krate().items.values()
+        .filter(|it| match it.node {
+            hir::ItemKind::Impl(..) => true,
+            _ => false,
+        })
+        .map(|it| it.hir_id.owner_def_id())
+}
+
 pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     let tcx = state.tcx.unwrap();
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
-    let traits = &*tcx.all_traits(def_id::LOCAL_CRATE);
 
     // Emit definitions for all traits.
-    for &def_id in traits.iter() {
+    for def_id in iter_trait_def_ids(state) {
         if def_id.is_local() {
             let trait_name = tcx.def_path(def_id).to_string_no_crate();
             let items = tcx.associated_items(def_id);
@@ -621,14 +645,62 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
             for item in supers {
                 supers_json.push(item.to_json(&mut ms));
             }
+            let preds = tcx.predicates_of(def_id);
+            let generics = tcx.generics_of(def_id);
             seq.serialize_element(
                 &json!({
                     "name": def_id.to_json(&mut ms),
                     "items": serde_json::Value::Array(items_json),
-                    "supertraits": serde_json::Value::Array(supers_json)
+                    "supertraits": serde_json::Value::Array(supers_json),
+                    "generics": generics.to_json(&mut ms),
+                    "predicates": preds.to_json(&mut ms),
                 })
             )?;
         } // Else look it up somewhere else, but I'm not sure where.
+    }
+    seq.end()?;
+    Ok(())
+}
+
+pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
+    let tcx = state.tcx.unwrap();
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(None)?;
+    let mut dummy_used_types = HashSet::new();
+
+    for def_id in iter_impl_def_ids(state) {
+        if !def_id.is_local() {
+            // We only emit impls for the current crate.
+            continue;
+        }
+
+        let mut ms = MirState { mir: None,
+                                used_types: &mut dummy_used_types,
+                                state: state };
+
+        let trait_ref = match tcx.impl_trait_ref(def_id) {
+            Some(x) => x,
+            // Currently we don't bother emitting inherent impls.
+            None => continue,
+        };
+        let preds = tcx.predicates_of(def_id);
+        let generics = tcx.generics_of(def_id);
+
+        let items = tcx.associated_items(def_id);
+        let mut items_json = Vec::new();
+        for item in items {
+            items_json.push(assoc_item_json(&mut ms, &tcx, &item));
+        }
+
+        seq.serialize_element(
+            &json!({
+                "name": def_id.to_json(&mut ms),
+                "trait_ref": trait_ref.to_json(&mut ms),
+                "generics": generics.to_json(&mut ms),
+                "predicates": preds.to_json(&mut ms),
+                "items": serde_json::Value::Array(items_json),
+            })
+        )?;
     }
     seq.end()?;
     Ok(())
@@ -646,6 +718,8 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     emit_adts(state, &used_types, &mut file)?;
     write!(file, ", \"traits\": ")?;
     emit_traits(state, &mut file)?;
+    write!(file, ", \"impls\": ")?;
+    emit_impls(state, &mut file)?;
     write!(file, " }}")
 }
 
