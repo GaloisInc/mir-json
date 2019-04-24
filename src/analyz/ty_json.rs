@@ -419,51 +419,50 @@ fn do_const_eval<'tcx>(
 
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let initializer = match self.val {
+        let mut map = serde_json::Map::new();
+        map.insert("kind".to_owned(), "Const".into());
+        map.insert("ty".to_owned(), self.ty.to_json(mir));
+
+        match self.val {
             interpret::ConstValue::Unevaluated(def_id, substs) => {
-                json!({
+                map.insert("initializer".to_owned(), json!({
                     "def_id": def_id.to_json(mir),
                     "substs": substs.to_json(mir),
-                })
+                }));
             },
-            _ => json!(null),
-        };
+            _ => {},
+        }
+
         let evaluated = match self.val {
             interpret::ConstValue::Unevaluated(def_id, substs) => {
                 do_const_eval(mir.state.tcx.unwrap(), def_id, substs)
             },
             _ => self,
         };
-        let int_val = match evaluated.val {
+        match evaluated.val {
             interpret::ConstValue::Scalar(interpret::Scalar::Bits { size, bits }) => {
-                let s = match evaluated.ty.sty {
+                match evaluated.ty.sty {
                     ty::TyKind::Int(_) => {
                         let mut val = bits as i128;
                         if bits & (1 << (size * 8 - 1)) != 0 && size < 128 / 8 {
                             // Sign-extend to 128 bits
                             val |= -1_i128 << (size * 8);
                         }
-                        Some(val.to_string())
+                        map.insert("int_val".to_owned(), val.to_string().into());
                     },
                     ty::TyKind::Bool |
                     ty::TyKind::Char |
-                    ty::TyKind::Uint(_) => Some(bits.to_string()),
-                    _ => None,
-                };
-                if let Some(s) = s {
-                    json!(s)
-                } else {
-                    json!(null)
+                    ty::TyKind::Uint(_) => {
+                        map.insert("int_val".to_owned(), bits.to_string().into());
+                    },
+                    // TODO: `TyKind::Float` case
+                    _ => {},
                 }
             },
-            _ => json!(null),
-        };
-        json!({
-            "kind": "Const",
-            "ty": self.ty.to_json(mir),
-            "initializer": initializer,
-            "int_val": int_val,
-        })
+            _ => {},
+        }
+
+        map.into()
     }
 }
 
