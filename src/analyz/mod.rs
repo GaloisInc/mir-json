@@ -13,7 +13,7 @@ use std::io;
 use std::io::Write;
 use std::fs::File;
 use std::path::Path;
-use serde::ser::{Serializer, SerializeSeq};
+use serde::ser::{Serialize, Serializer, SerializeSeq};
 use serde_json;
 
 #[macro_use]
@@ -473,7 +473,7 @@ pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
 fn mir_body(
     ms: &mut MirState,
     _def_id: DefId,
-    _tcx: &TyCtxt,
+    _tcx: TyCtxt,
 ) -> serde_json::Value {
     let mir = ms.mir.unwrap(); // TODO
     let mut vars = Vec::new();
@@ -504,8 +504,8 @@ fn mir_body(
 fn mir_info<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     def_id: DefId,
-    tcx: &TyCtxt<'_, 'tcx, 'tcx>,
-) -> Option<serde_json::Value> {
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+) -> serde_json::Value {
     let fn_name = tcx.def_path(def_id).to_string_no_crate();
 
     let mut args = Vec::new();
@@ -520,49 +520,59 @@ fn mir_info<'tcx>(
     let preds = tcx.predicates_of(def_id);
     let generics = tcx.generics_of(def_id);
 
-    Some(
-        json!({
-            "name": fn_name,
-            "args": args,
-            "return_ty": ms.mir.unwrap().return_ty().to_json(ms),
-            "generics": generics.to_json(ms),
-            "predicates": preds.to_json(ms),
-            "body": body
-        })
-    )
-
+    json!({
+        "name": fn_name,
+        "args": args,
+        "return_ty": ms.mir.unwrap().return_ty().to_json(ms),
+        "generics": generics.to_json(ms),
+        "predicates": preds.to_json(ms),
+        "body": body
+    })
 }
 
+fn static_info<'tcx>(
+    ms: &mut MirState<'_, 'tcx>,
+    def_id: DefId,
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+) -> serde_json::Value {
+    json!({
+        "name": tcx.def_path(def_id).to_string_no_crate(),
+        "ty": tcx.type_of(def_id).to_json(ms),
+        "mutable": tcx.is_static(def_id) == Some(hir::Mutability::MutMutable),
+    })
+}
+
+/// Convert all functions to JSON values.  The second output is a list of JSON values describing
+/// `static` items found among the MIR functions.
 pub fn emit_fns(
     state: &mut CompileState,
     used_types: &mut HashSet<DefId>,
-    file: &mut File
-) -> io::Result<()> {
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+    let mut fns = Vec::new();
+    let mut statics = Vec::new();
+
     let tcx = state.tcx.unwrap();
     let ids = get_def_ids(tcx);
     let size = ids.len();
-    let mut n = 1;
-    let mut ser = serde_json::Serializer::new(file);
-    let mut seq = ser.serialize_seq(Some(size))?;
 
-    for def_id in ids {
+    for (n, def_id) in ids.into_iter().enumerate() {
         let mir = get_mir(tcx, def_id);
         let fn_name = tcx.def_path(def_id).to_string_no_crate();
         let mut ms = MirState { mir: Some(mir.unwrap()),
                                 used_types: used_types,
                                 state: state };
-        if let Some(mi) = mir_info(&mut ms, def_id, &tcx) {
-            state.session.note_without_error(
-                format!("Emitting MIR for {} ({}/{})",
-                        fn_name,
-                        n,
-                        size).as_str());
-            seq.serialize_element(&mi)?;
+
+        state.session.note_without_error(
+            &format!("Emitting MIR for {} ({}/{})", fn_name, n + 1, size));
+
+        fns.push(mir_info(&mut ms, def_id, tcx));
+
+        if tcx.is_static(def_id).is_some() {
+            statics.push(static_info(&mut ms, def_id, tcx));
         }
-        n = n + 1;
     }
-    seq.end()?;
-    Ok(())
+
+    (fns, statics)
 }
 
 pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
@@ -711,9 +721,15 @@ pub fn analyze(state: &mut CompileState) -> io::Result<()> {
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
     let mut file = File::create(&mirname)?;
+
     let mut used_types = HashSet::new();
-    write!(file, "{{ \"fns\": ")?;
-    emit_fns(state, &mut used_types, &mut file)?;
+    {
+        let (fns, statics) = emit_fns(state, &mut used_types);
+        write!(file, "{{ \"fns\": ")?;
+        fns.serialize(&mut serde_json::Serializer::new(&mut file))?;
+        write!(file, ", \"statics\": ")?;
+        statics.serialize(&mut serde_json::Serializer::new(&mut file))?;
+    }
     write!(file, ", \"adts\": ")?;
     emit_adts(state, &used_types, &mut file)?;
     write!(file, ", \"traits\": ")?;
