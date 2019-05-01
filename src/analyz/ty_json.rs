@@ -7,6 +7,7 @@ use rustc::ty::{TyCtxt};
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
+use std::usize;
 
 use analyz::to_json::*;
 
@@ -417,6 +418,101 @@ fn do_const_eval<'tcx>(
     tcx.const_eval(param_env.and(cid)).unwrap()
 }
 
+fn eval_array_len<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    c: &'tcx ty::Const<'tcx>,
+) -> usize {
+    let evaluated = match c.val {
+        interpret::ConstValue::Unevaluated(def_id, substs) => {
+            do_const_eval(tcx, def_id, substs)
+        },
+        _ => c,
+    };
+    match evaluated.val {
+        interpret::ConstValue::Scalar(interpret::Scalar::Bits { size, bits }) => {
+            assert!(bits <= usize::MAX as u128);
+            bits as usize
+        },
+        _ => panic!("impossible: array size is not a scalar?"),
+    }
+}
+
+fn read_static_memory<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    ptr: mir::interpret::Pointer,
+    len: usize,
+) -> &'tcx [u8] {
+    let alloc = tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
+    let start = ptr.offset.bytes() as usize;
+    let end = start + len;
+    assert!(alloc.relocations.len() == 0);
+    &alloc.bytes[start .. end]
+}
+
+fn render_constant<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    ty: ty::Ty<'tcx>,
+    scalar: Option<(u8, u128)>,
+    ptr: Option<mir::interpret::Pointer>,
+) -> Option<(&'static str, serde_json::Value)> {
+    Some(match ty.sty {
+        ty::TyKind::Int(_) => {
+            let (size, bits) = scalar.expect("int const had non-scalar value?");
+            let mut val = bits as i128;
+            if bits & (1 << (size * 8 - 1)) != 0 && size < 128 / 8 {
+                // Sign-extend to 128 bits
+                val |= -1_i128 << (size * 8);
+            }
+            ("int_val", val.to_string().into())
+        },
+        ty::TyKind::Bool |
+        ty::TyKind::Char |
+        ty::TyKind::Uint(_) => {
+            let (size, bits) = scalar.expect("uint const had non-scalar value?");
+            ("int_val", bits.to_string().into())
+        },
+        ty::TyKind::Float(ty::layout::FloatTy::F32) => {
+            let (size, bits) = scalar.expect("f32 const had non-scalar value?");
+            let val = f32::from_bits(bits as u32);
+            ("float_val", val.to_string().into())
+        },
+        ty::TyKind::Float(ty::layout::FloatTy::F64) => {
+            let (size, bits) = scalar.expect("f64 const had non-scalar value?");
+            let val = f64::from_bits(bits as u64);
+            ("float_val", val.to_string().into())
+        },
+
+        // &str - for string literals
+        ty::TyKind::Ref(_, &ty::TyS {
+            sty: ty::TyKind::Str,
+            ..
+        }, hir::Mutability::MutImmutable) => {
+            let ptr = ptr.expect("string const had non-fatpointer value (no ptr)?");
+            let (_, len_bits) = scalar.expect("string const had non-fatpointer value (no len)?");
+            assert!(len_bits <= usize::MAX as u128);
+            let len = len_bits as usize;
+            let mem = read_static_memory(tcx, ptr, len);
+            ("str_val", mem.into())
+        },
+
+        // &[u8; _] - for bytestring literals
+        ty::TyKind::Ref(_, &ty::TyS {
+            sty: ty::TyKind::Array(&ty::TyS {
+                sty: ty::TyKind::Uint(ast::UintTy::U8),
+                ..
+            }, len_const),
+            ..
+        }, hir::Mutability::MutImmutable) => {
+            let len = eval_array_len(tcx, len_const);
+            let ptr = ptr.expect("bytestring const had non-pointer value?");
+            let mem = read_static_memory(tcx, ptr, len);
+            ("bstr_val", mem.into())
+        },
+
+        _ => return None,
+    })
+}
+
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
@@ -439,27 +535,23 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             },
             _ => self,
         };
-        match evaluated.val {
+        let rendered = match evaluated.val {
             interpret::ConstValue::Scalar(interpret::Scalar::Bits { size, bits }) => {
-                match evaluated.ty.sty {
-                    ty::TyKind::Int(_) => {
-                        let mut val = bits as i128;
-                        if bits & (1 << (size * 8 - 1)) != 0 && size < 128 / 8 {
-                            // Sign-extend to 128 bits
-                            val |= -1_i128 << (size * 8);
-                        }
-                        map.insert("int_val".to_owned(), val.to_string().into());
-                    },
-                    ty::TyKind::Bool |
-                    ty::TyKind::Char |
-                    ty::TyKind::Uint(_) => {
-                        map.insert("int_val".to_owned(), bits.to_string().into());
-                    },
-                    // TODO: `TyKind::Float` case
-                    _ => {},
-                }
+                render_constant(mir.state.tcx.unwrap(), self.ty, Some((size, bits)), None)
             },
-            _ => {},
+            interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
+                render_constant(mir.state.tcx.unwrap(), self.ty, None, Some(ptr))
+            },
+            interpret::ConstValue::ScalarPair(
+                interpret::Scalar::Ptr(ptr),
+                interpret::Scalar::Bits { size, bits }
+            ) => {
+                render_constant(mir.state.tcx.unwrap(), self.ty, Some((size, bits)), Some(ptr))
+            },
+            _ => None,
+        };
+        if let Some((key, val)) = rendered {
+            map.insert(key.to_owned(), val);
         }
 
         map.into()
