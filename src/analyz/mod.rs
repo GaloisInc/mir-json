@@ -1,13 +1,13 @@
 #![macro_use]
 
-use rustc::ty::{TyCtxt, List, TyS};
+use rustc::ty::{self, TyCtxt, List, TyS};
 use rustc::mir::{self, Mir};
 use rustc::hir;
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
 use rustc::traits;
 use rustc_driver::driver::{CompileState, source_name};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::io::Write;
@@ -22,13 +22,18 @@ mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
 
-basic_json_impl!(mir::Promoted);
 basic_json_enum_impl!(mir::BinOp);
 
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
 //basic_json_impl!(layout::VariantIdx);
+
+impl<'tcx> ToJson<'tcx> for mir::Promoted {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        self.as_usize().into()
+    }
+}
 
 impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
@@ -196,14 +201,23 @@ impl<'tcx> ToJson<'tcx> for mir::Place<'tcx> {
             &mir::Place::Local(ref l) => {
                 json!({"kind": "Local", "localvar": local_json(ms, *l) })
             }
-            &mir::Place::Static(_) => {
-                json!({"kind": "Static"}) // UNUSED
+            &mir::Place::Static(ref s) => {
+                json!({
+                    "kind": "Static",
+                    "def_id": s.def_id.to_json(ms),
+                    "ty": s.ty.to_json(ms),
+                })
             }
             &mir::Place::Projection(ref p) => {
                 json!({"kind": "Projection", "data" : p.to_json(ms)})
             }
             &mir::Place::Promoted(ref p) => {
-                json!({"kind": "Promoted", "data" : p.to_json(ms)})
+                let (ref idx, ref ty) = **p;
+                json!({
+                    "kind": "Promoted",
+                    "index": idx.to_json(ms),
+                    "ty": ty.to_json(ms),
+                })
             }
         }
     }
@@ -472,8 +486,6 @@ pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
 
 fn mir_body(
     ms: &mut MirState,
-    _def_id: DefId,
-    _tcx: TyCtxt,
 ) -> serde_json::Value {
     let mir = ms.mir.unwrap(); // TODO
     let mut vars = Vec::new();
@@ -501,45 +513,118 @@ fn mir_body(
     })
 }
 
-fn mir_info<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
+/// Generate a JSON object for the `fn` at `def_id`.  If the fn contains promoted statics, this
+/// will add them to the `fns` and `statics` vectors as a side effect.  (It will not add the
+/// newly-constructed `fn` to `fns` - that is left to the caller.)
+fn build_fn(
+    state: &mut CompileState,
+    used_types: &mut HashSet<DefId>,
+    fns: &mut Vec<serde_json::Value>,
+    statics: &mut Vec<serde_json::Value>,
     def_id: DefId,
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
 ) -> serde_json::Value {
-    let fn_name = tcx.def_path(def_id).to_string_no_crate();
+    let tcx = state.tcx.unwrap();
 
-    let mut args = Vec::new();
-    for (_, local) in ms.mir.unwrap().args_iter().enumerate() {
-        args.push(local_json(ms, local));
+    let name = tcx.def_path(def_id).to_string_no_crate();
+    let mir = tcx.optimized_mir(def_id);
+    let generics = tcx.generics_of(def_id);
+    let predicates = tcx.predicates_of(def_id);
+
+    state.session.note_without_error(&format!("Emitting MIR for {}", name));
+
+    let mut ms = MirState {
+        mir: Some(mir),
+        used_types: used_types,
+        state: state,
+    };
+    build_mir(&mut ms, fns, statics, &name, mir, generics, predicates)
+}
+
+fn build_mir<'tcx>(
+    ms: &mut MirState<'_, 'tcx>,
+    fns: &mut Vec<serde_json::Value>,
+    statics: &mut Vec<serde_json::Value>,
+    name: &str,
+    mir: &'tcx Mir<'tcx>,
+    generics: &'tcx ty::Generics,
+    predicates: ty::GenericPredicates<'tcx>,
+) -> serde_json::Value {
+    let mut promoted = Vec::with_capacity(mir.promoted.len());
+    for (idx, prom_mir) in mir.promoted.iter_enumerated() {
+        let prom_name = format!("{}::{{{{promoted}}}}[{}]", name, idx.as_usize());
+
+        let mut prom_ms = MirState {
+            mir: Some(prom_mir),
+            used_types: ms.used_types,
+            state: ms.state,
+        };
+
+        let no_generics = ms.state.tcx.unwrap().alloc_generics(ty::Generics {
+            parent: None,
+            parent_count: 0,
+            params: Vec::new(),
+            param_def_id_to_index: HashMap::default(),
+            has_self: false,
+            has_late_bound_regions: None,
+        });
+        let no_predicates = ty::GenericPredicates::default();
+
+        let f = build_mir(&mut prom_ms, fns, statics, &prom_name, prom_mir,
+                          no_generics, no_predicates);
+        let s = build_static_inner(&mut prom_ms, &prom_name, prom_mir.return_ty(), false,
+                                   Some((name, idx.as_usize())));
+        fns.push(f);
+        statics.push(s);
+        promoted.push(prom_name);
     }
 
-    // name
-    // input vars
-    // output
-    let body = mir_body(ms, def_id, tcx);
-    let preds = tcx.predicates_of(def_id);
-    let generics = tcx.generics_of(def_id);
-
     json!({
-        "name": fn_name,
-        "args": args,
-        "return_ty": ms.mir.unwrap().return_ty().to_json(ms),
+        "name": &name,
+        "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
+        "return_ty": mir.return_ty().to_json(ms),
         "generics": generics.to_json(ms),
-        "predicates": preds.to_json(ms),
-        "body": body
+        "predicates": predicates.to_json(ms),
+        "body": mir_body(ms),
+        "promoted": promoted,
     })
 }
 
-fn static_info<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
+fn build_static(
+    state: &mut CompileState,
+    used_types: &mut HashSet<DefId>,
     def_id: DefId,
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
 ) -> serde_json::Value {
-    json!({
-        "name": tcx.def_path(def_id).to_string_no_crate(),
-        "ty": tcx.type_of(def_id).to_json(ms),
-        "mutable": tcx.is_static(def_id) == Some(hir::Mutability::MutMutable),
-    })
+    let tcx = state.tcx.unwrap();
+
+    let name = tcx.def_path(def_id).to_string_no_crate();
+    let ty = tcx.type_of(def_id);
+    let mutable = tcx.is_static(def_id) == Some(hir::Mutability::MutMutable);
+
+    let mut ms = MirState {
+        mir: None,
+        used_types: used_types,
+        state: state,
+    };
+    build_static_inner(&mut ms, &name, ty, mutable, None)
+}
+
+fn build_static_inner<'tcx>(
+    ms: &mut MirState<'_, 'tcx>,
+    name: &str,
+    ty: ty::Ty<'tcx>,
+    mutable: bool,
+    promoted_info: Option<(&str, usize)>,
+) -> serde_json::Value {
+    let mut j = json!({
+        "name": name,
+        "ty": ty.to_json(ms),
+        "mutable": mutable,
+    });
+    if let Some((parent, idx)) = promoted_info {
+        j.as_object_mut().unwrap().insert("promoted_from".to_owned(), parent.into());
+        j.as_object_mut().unwrap().insert("promoted_index".to_owned(), idx.into());
+    }
+    j
 }
 
 /// Convert all functions to JSON values.  The second output is a list of JSON values describing
@@ -553,22 +638,13 @@ pub fn emit_fns(
 
     let tcx = state.tcx.unwrap();
     let ids = get_def_ids(tcx);
-    let size = ids.len();
 
-    for (n, def_id) in ids.into_iter().enumerate() {
-        let mir = get_mir(tcx, def_id);
-        let fn_name = tcx.def_path(def_id).to_string_no_crate();
-        let mut ms = MirState { mir: Some(mir.unwrap()),
-                                used_types: used_types,
-                                state: state };
-
-        state.session.note_without_error(
-            &format!("Emitting MIR for {} ({}/{})", fn_name, n + 1, size));
-
-        fns.push(mir_info(&mut ms, def_id, tcx));
-
+    for def_id in ids.into_iter() {
+        let f = build_fn(state, used_types, &mut fns, &mut statics, def_id);
+        fns.push(f);
         if tcx.is_static(def_id).is_some() {
-            statics.push(static_info(&mut ms, def_id, tcx));
+            let s = build_static(state, used_types, def_id);
+            statics.push(s);
         }
     }
 
