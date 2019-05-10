@@ -135,12 +135,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "closuresubsts": closuresubsts.substs.to_json(mir)
                 })
             }
-            &ty::TyKind::Dynamic(ref bs, _) => {
-                let did = bs.principal().skip_binder().def_id;
+            &ty::TyKind::Dynamic(ref preds, _region) => {
                 json!({
                     "kind": "Dynamic",
-                    "data": did.to_json(mir)
-                    /*, "region": r.to_json(mir)*/
+                    "predicates": preds.skip_binder().to_json(mir),
                 })
             }
             &ty::TyKind::Projection(ref pty) => {
@@ -230,21 +228,6 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for ty::PolyTraitPredicate<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        self.skip_binder().trait_ref.to_json(ms)
-    }
-}
-
-impl<'tcx> ToJson<'tcx> for ty::ProjectionPredicate<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        json!({
-            "projection_ty": self.projection_ty.to_json(ms),
-            "ty": self.ty.to_json(ms)
-        })
-    }
-}
-
 impl<'tcx> ToJson<'tcx> for ty::ProjectionTy<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
@@ -253,6 +236,8 @@ impl<'tcx> ToJson<'tcx> for ty::ProjectionTy<'tcx> {
         })
     }
 }
+
+// Predicate (static / `where` clause)
 
 impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
@@ -273,6 +258,52 @@ impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
         }
     }
 }
+
+impl<'tcx> ToJson<'tcx> for ty::PolyTraitPredicate<'tcx> {
+    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        self.skip_binder().trait_ref.to_json(ms)
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for ty::ProjectionPredicate<'tcx> {
+    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        json!({
+            "projection_ty": self.projection_ty.to_json(ms),
+            "ty": self.ty.to_json(ms)
+        })
+    }
+}
+
+// Existential predicate (dynamic / trait object version of `ty::Predicate`)
+
+impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
+    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match self {
+            &ty::ExistentialPredicate::Trait(ref trait_ref) => {
+                json!({
+                    "kind": "Trait",
+                    "trait": trait_ref.def_id.to_json(ms),
+                    "substs": trait_ref.substs.to_json(ms),
+                })
+            },
+            &ty::ExistentialPredicate::Projection(ref proj) => {
+                json!({
+                    "kind": "Projection",
+                    "proj": proj.item_def_id.to_json(ms),
+                    "substs": proj.substs.to_json(ms),
+                    "rhs_ty": proj.ty.to_json(ms),
+                })
+            },
+            &ty::ExistentialPredicate::AutoTrait(ref did) => {
+                json!({
+                    "kind": "AutoTrait",
+                    "trait": did.to_json(ms),
+                })
+            },
+        }
+    }
+}
+
 
 impl<'tcx> ToJson<'tcx> for ty::GenericPredicates<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
