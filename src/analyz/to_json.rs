@@ -1,15 +1,22 @@
 use rustc::hir::def_id::DefId;
-use rustc::mir::Mir;
-use rustc_driver::driver::CompileState;
+use rustc::mir::Body;
+use rustc::session::Session;
+use rustc::ty::TyCtxt;
+use rustc_interface::interface::Compiler;
 use syntax::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
+pub struct CompileState<'a, 'tcx> {
+    pub session: &'a Session,
+    pub tcx: TyCtxt<'tcx>,
+}
+
 pub struct MirState<'a, 'tcx : 'a> {
-    pub mir: Option<&'tcx Mir<'tcx>>,
+    pub mir: Option<&'tcx Body<'tcx>>,
     pub used_types: &'a mut HashSet<DefId>,
-    pub state: &'a CompileState<'a, 'tcx>
+    pub state: &'a CompileState<'a, 'tcx>,
 }
 
 /// Trait for converting MIR elements to JSON.
@@ -42,6 +49,15 @@ where
             &Some(ref i) => i.to_json(mir),
             &None => serde_json::Value::Null,
         }
+    }
+}
+
+impl<'tcx, T> ToJson<'tcx> for Box<T>
+where
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        <T as ToJson>::to_json(self, mir)
     }
 }
 

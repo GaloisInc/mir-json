@@ -4,6 +4,7 @@ use rustc::mir;
 use rustc::mir::interpret;
 use rustc::ty;
 use rustc::ty::{TyCtxt};
+use rustc_data_structures::indexed_vec::{self, IndexVec};
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -168,12 +169,14 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Infer"})
             }
-            /*
             &ty::TyKind::Bound(_, _) => {
                 // TODO
                 json!({"kind": "Bound"})
             }
-            */
+            &ty::TyKind::Placeholder(_) => {
+                // TODO
+                json!({"kind": "Placeholder"})
+            }
             &ty::TyKind::Foreign(_) => {
                 // TODO
                 json!({"kind": "Foreign"})
@@ -196,7 +199,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
 
 impl ToJson<'_> for ty::ParamTy {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
-        json!(self.idx)
+        json!(self.index)
     }
 }
 
@@ -314,7 +317,7 @@ impl<'tcx> ToJson<'tcx> for ty::GenericPredicates<'tcx> {
         ) {
             dest.extend(preds.predicates.iter().map(|p| p.0.to_json(ms)));
             if let Some(parent_id) = preds.parent {
-                let parent_preds = ms.state.tcx.unwrap().predicates_of(parent_id);
+                let parent_preds = ms.state.tcx.predicates_of(parent_id);
                 gather_preds(ms, &parent_preds, dest);
             }
         }
@@ -342,7 +345,7 @@ impl ToJson<'_> for ty::Generics {
             dest: &mut Vec<serde_json::Value>,
         ) {
             if let Some(parent_id) = generics.parent {
-                let parent_generics = ms.state.tcx.unwrap().generics_of(parent_id);
+                let parent_generics = ms.state.tcx.generics_of(parent_id);
                 gather_params(ms, &parent_generics, dest);
             }
             dest.extend(generics.params.iter().map(|p| p.to_json(ms)));
@@ -358,8 +361,8 @@ impl ToJson<'_> for ty::Generics {
 
 pub fn assoc_item_json<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    tcx: &ty::TyCtxt<'_, 'tcx, 'tcx>,
-    item: &ty::AssociatedItem
+    tcx: &ty::TyCtxt<'tcx>,
+    item: &ty::AssocItem
 ) -> serde_json::Value {
     let mut map = serde_json::Map::new();
 
@@ -369,15 +372,15 @@ pub fn assoc_item_json<'tcx>(
     map.insert("predicates".to_owned(), tcx.predicates_of(did).to_json(ms));
 
     match item.kind {
-        ty::AssociatedKind::Const => {
+        ty::AssocKind::Const => {
             map.insert("kind".to_owned(), json!("Const"));
             map.insert("type".to_owned(), tcx.type_of(did).to_json(ms));
         }
-        ty::AssociatedKind::Method => {
+        ty::AssocKind::Method => {
             map.insert("kind".to_owned(), json!("Method"));
             map.insert("signature".to_owned(), tcx.fn_sig(did).to_json(ms));
         }
-        ty::AssociatedKind::Type => {
+        ty::AssocKind::Type => {
             map.insert("kind".to_owned(), json!("Type"));
             match item.defaultness {
                 Defaultness::Default { has_value: false } => {},
@@ -387,12 +390,12 @@ pub fn assoc_item_json<'tcx>(
                 },
             };
         }
-        ty::AssociatedKind::Existential => {
+        ty::AssocKind::OpaqueTy => {
             map.insert("kind".to_owned(), json!("Existential"));
         }
     }
 
-    if let ty::AssociatedItemContainer::ImplContainer(impl_did) = item.container {
+    if let ty::AssocItemContainer::ImplContainer(impl_did) = item.container {
         if let Some(trait_ref) = tcx.impl_trait_ref(impl_did) {
             let trait_did = trait_ref.def_id;
             for trait_item in tcx.associated_items(trait_did) {
@@ -414,7 +417,7 @@ pub fn defid_str(d: &hir::def_id::DefId) -> String {
 }
 
 pub fn defid_ty(d: &hir::def_id::DefId, mir: &mut MirState) -> serde_json::Value {
-    let tcx = mir.state.tcx.unwrap();
+    let tcx = mir.state.tcx;
     tcx.type_of(*d).to_json(mir)
 }
 
@@ -422,7 +425,7 @@ pub trait ToJsonAg {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: &ty::subst::Substs<'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value;
 }
 
@@ -430,15 +433,16 @@ impl<'tcx> ToJson<'tcx> for ty::subst::Kind<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::subst::UnpackedKind::Type(ref ty) => ty.to_json(mir),
-            ty::subst::UnpackedKind::Lifetime(_) => json!({"kind": "Lifetime"})
+            ty::subst::UnpackedKind::Lifetime(_) => json!({"kind": "Lifetime"}),
+            ty::subst::UnpackedKind::Const(_) => json!({"kind": "Const"}),
         }
     }
 }
 
 fn do_const_eval<'tcx>(
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    tcx: TyCtxt<'tcx>,
     def_id: DefId,
-    substs: &'tcx ty::subst::Substs<'tcx>
+    substs: ty::subst::SubstsRef<'tcx>
 ) -> &'tcx ty::Const<'tcx> {
     let param_env = ty::ParamEnv::reveal_all();
     let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
@@ -450,7 +454,7 @@ fn do_const_eval<'tcx>(
 }
 
 fn eval_array_len<'tcx>(
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    tcx: TyCtxt<'tcx>,
     c: &'tcx ty::Const<'tcx>,
 ) -> usize {
     let evaluated = match c.val {
@@ -460,31 +464,28 @@ fn eval_array_len<'tcx>(
         _ => c,
     };
     match evaluated.val {
-        interpret::ConstValue::Scalar(interpret::Scalar::Bits { size, bits }) => {
-            assert!(bits <= usize::MAX as u128);
-            bits as usize
+        interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
+            assert!(data <= usize::MAX as u128);
+            data as usize
         },
         _ => panic!("impossible: array size is not a scalar?"),
     }
 }
 
 fn read_static_memory<'tcx>(
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
-    ptr: mir::interpret::Pointer,
-    len: usize,
+    alloc: &'tcx mir::interpret::Allocation,
+    start: usize,
+    end: usize,
 ) -> &'tcx [u8] {
-    let alloc = tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
-    let start = ptr.offset.bytes() as usize;
-    let end = start + len;
     assert!(alloc.relocations.len() == 0);
     &alloc.bytes[start .. end]
 }
 
 fn render_constant<'tcx>(
-    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    tcx: TyCtxt<'tcx>,
     ty: ty::Ty<'tcx>,
     scalar: Option<(u8, u128)>,
-    ptr: Option<mir::interpret::Pointer>,
+    slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
 ) -> Option<(&'static str, serde_json::Value)> {
     Some(match ty.sty {
         ty::TyKind::Int(_) => {
@@ -518,11 +519,8 @@ fn render_constant<'tcx>(
             sty: ty::TyKind::Str,
             ..
         }, hir::Mutability::MutImmutable) => {
-            let ptr = ptr.expect("string const had non-fatpointer value (no ptr)?");
-            let (_, len_bits) = scalar.expect("string const had non-fatpointer value (no len)?");
-            assert!(len_bits <= usize::MAX as u128);
-            let len = len_bits as usize;
-            let mem = read_static_memory(tcx, ptr, len);
+            let (alloc, start, end) = slice.expect("string const had non-slice value");
+            let mem = read_static_memory(alloc, start, end);
             ("str_val", mem.into())
         },
 
@@ -535,8 +533,9 @@ fn render_constant<'tcx>(
             ..
         }, hir::Mutability::MutImmutable) => {
             let len = eval_array_len(tcx, len_const);
-            let ptr = ptr.expect("bytestring const had non-pointer value?");
-            let mem = read_static_memory(tcx, ptr, len);
+            let (alloc, start, end) = slice.expect("string const had non-slice value");
+            assert!(len == end - start);
+            let mem = read_static_memory(alloc, start, end);
             ("bstr_val", mem.into())
         },
 
@@ -562,22 +561,21 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 
         let evaluated = match self.val {
             interpret::ConstValue::Unevaluated(def_id, substs) => {
-                do_const_eval(mir.state.tcx.unwrap(), def_id, substs)
+                do_const_eval(mir.state.tcx, def_id, substs)
             },
             _ => self,
         };
         let rendered = match evaluated.val {
-            interpret::ConstValue::Scalar(interpret::Scalar::Bits { size, bits }) => {
-                render_constant(mir.state.tcx.unwrap(), self.ty, Some((size, bits)), None)
+            interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
+                render_constant(mir.state.tcx, self.ty, Some((size, data)), None)
             },
             interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
-                render_constant(mir.state.tcx.unwrap(), self.ty, None, Some(ptr))
+                // Not handled.  This only appears when statics/constants contain references to
+                // other statics.
+                None
             },
-            interpret::ConstValue::ScalarPair(
-                interpret::Scalar::Ptr(ptr),
-                interpret::Scalar::Bits { size, bits }
-            ) => {
-                render_constant(mir.state.tcx.unwrap(), self.ty, Some((size, bits)), Some(ptr))
+            interpret::ConstValue::Slice { data, start, end } => {
+                render_constant(mir.state.tcx, self.ty, None, Some((data, start, end)))
             },
             _ => None,
         };
@@ -589,6 +587,32 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     }
 }
 
+fn iter_tojson<'a, 'tcx, I, V: 'a>(
+    it: I,
+    mir: &mut MirState<'_, 'tcx>,
+    substs: ty::subst::SubstsRef<'tcx>,
+) -> serde_json::Value
+where I: Iterator<Item = &'a V>, V: ToJsonAg {
+    let mut j = Vec::with_capacity(it.size_hint().0);
+    for v in it {
+        j.push(v.tojson(mir, substs));
+    }
+    json!(j)
+}
+
+impl<T> ToJsonAg for [T]
+where
+    T: ToJsonAg,
+{
+    fn tojson<'tcx>(
+        &self,
+        mir: &mut MirState<'_, 'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
+    ) -> serde_json::Value {
+        iter_tojson(self.iter(), mir, substs)
+    }
+}
+
 impl<T> ToJsonAg for Vec<T>
 where
     T: ToJsonAg,
@@ -596,13 +620,23 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: &ty::subst::Substs<'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
-        let mut j = Vec::new();
-        for v in self {
-            j.push(v.tojson(mir, substs));
-        }
-        json!(j)
+        <[T] as ToJsonAg>::tojson(self, mir, substs)
+    }
+}
+
+impl<I, T> ToJsonAg for IndexVec<I, T>
+where
+    I: indexed_vec::Idx,
+    T: ToJsonAg,
+{
+    fn tojson<'tcx>(
+        &self,
+        mir: &mut MirState<'_, 'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
+    ) -> serde_json::Value {
+        iter_tojson(self.iter(), mir, substs)
     }
 }
 
@@ -617,7 +651,7 @@ impl ToJsonAg for ty::AdtDef {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: &ty::subst::Substs<'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
             "name": defid_str(&self.did),
@@ -630,10 +664,10 @@ impl ToJsonAg for ty::VariantDef {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: &ty::subst::Substs<'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
-            "name": defid_str(&self.did),
+            "name": defid_str(&self.def_id),
             "discr": self.discr.to_json(mir),
             "fields": self.fields.tojson(mir, substs),
             "ctor_kind": self.ctor_kind.to_json(mir)
@@ -645,7 +679,7 @@ impl ToJsonAg for ty::FieldDef {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: &ty::subst::Substs<'tcx>,
+        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
             "name": defid_str(&self.did),
@@ -664,7 +698,7 @@ pub fn handle_adt_ag<'tcx>(
         &mir::AggregateKind::Adt(ref adt, variant, substs, _, _) => {
             json!({
                 "adt": adt.tojson(mir, substs),
-                "variant": variant, //.to_json(mir),
+                "variant": variant.to_json(mir),
                 "ops": opv.to_json(mir)
             })
         }

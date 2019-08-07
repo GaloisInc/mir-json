@@ -1,12 +1,13 @@
 #![macro_use]
 
 use rustc::ty::{self, TyCtxt, List, TyS};
-use rustc::mir::{self, Mir};
+use rustc::mir::{self, Body};
 use rustc::hir;
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
 use rustc::traits;
-use rustc_driver::driver::{CompileState, source_name};
+use rustc_driver::source_name;
+use rustc_interface::interface::Compiler;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
@@ -27,7 +28,7 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
-//basic_json_impl!(layout::VariantIdx);
+basic_json_impl!(ty::layout::VariantIdx);
 
 impl<'tcx> ToJson<'tcx> for mir::Promoted {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
@@ -148,7 +149,42 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for mir::Projection<'tcx, mir::Place<'tcx>, mir::Local, &'tcx TyS<'tcx>> {
+impl<'tcx> ToJson<'tcx> for mir::Place<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        json!({
+            "base": self.base.to_json(mir),
+            "data" : self.projection.to_json(mir)
+        })
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for mir::PlaceBase<'tcx> {
+    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match self {
+            &mir::PlaceBase::Local(ref l) => {
+                json!({"kind": "Local", "localvar": local_json(ms, *l) })
+            }
+            &mir::PlaceBase::Static(ref s) => match s.kind {
+                mir::StaticKind::Promoted(idx) => {
+                    json!({
+                        "kind": "Promoted",
+                        "index": idx.to_json(ms),
+                        "ty": s.ty.to_json(ms),
+                    })
+                },
+                mir::StaticKind::Static(def_id) => {
+                    json!({
+                        "kind": "Static",
+                        "def_id": def_id.to_json(ms),
+                        "ty": s.ty.to_json(ms),
+                    })
+                },
+            }
+        }
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for mir::Projection<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "base": self.base.to_json(mir),
@@ -157,7 +193,7 @@ impl<'tcx> ToJson<'tcx> for mir::Projection<'tcx, mir::Place<'tcx>, mir::Local, 
     }
 }
 
-impl<'tcx, T: ToJson<'tcx>> ToJson<'tcx> for mir::ProjectionElem<'tcx, mir::Local, T> {
+impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
             &mir::ProjectionElem::Deref => {
@@ -189,35 +225,7 @@ impl<'tcx, T: ToJson<'tcx>> ToJson<'tcx> for mir::ProjectionElem<'tcx, mir::Loca
                 json!({"kind": "Subslice", "from": from, "to": to})
             }
             &mir::ProjectionElem::Downcast(ref _adt, ref variant) => {
-                json!({"kind": "Downcast", "variant": variant/*.to_json(mir)*/})
-            }
-        }
-    }
-}
-
-impl<'tcx> ToJson<'tcx> for mir::Place<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match self {
-            &mir::Place::Local(ref l) => {
-                json!({"kind": "Local", "localvar": local_json(ms, *l) })
-            }
-            &mir::Place::Static(ref s) => {
-                json!({
-                    "kind": "Static",
-                    "def_id": s.def_id.to_json(ms),
-                    "ty": s.ty.to_json(ms),
-                })
-            }
-            &mir::Place::Projection(ref p) => {
-                json!({"kind": "Projection", "data" : p.to_json(ms)})
-            }
-            &mir::Place::Promoted(ref p) => {
-                let (ref idx, ref ty) = **p;
-                json!({
-                    "kind": "Promoted",
-                    "index": idx.to_json(ms),
-                    "ty": ty.to_json(ms),
-                })
+                json!({"kind": "Downcast", "variant": variant.to_json(mir)})
             }
         }
     }
@@ -280,6 +288,10 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                     "rhs": r.to_json(mir)
                 })
             }
+            &mir::StatementKind::FakeRead { .. } => {
+                // TODO
+                json!({"kind": "FakeRead"})
+            }
             &mir::StatementKind::SetDiscriminant {
                 ref place,
                 ref variant_index,
@@ -287,7 +299,7 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 json!({
                     "kind": "SetDiscriminant",
                     "lvalue": place.to_json(mir),
-                    "variant_index": variant_index/*.to_json(mir)*/
+                    "variant_index": variant_index.to_json(mir)
                 })
             }
             &mir::StatementKind::StorageLive(l) => {
@@ -296,35 +308,21 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::StorageDead(l) => {
                 json!({"kind": "StorageDead", "sdvar": local_json(mir, l)})
             }
-            &mir::StatementKind::Nop => {
-                json!({"kind": "Nop"})
-            }
-            &mir::StatementKind::EndRegion(_) => {
-                // TODO
-                json!({"kind": "EndRegion"})
-            }
-            &mir::StatementKind::Validate(..) => {
-                // TODO
-                json!({"kind": "Validate"})
-            }
             &mir::StatementKind::InlineAsm { .. } => {
                 // TODO
                 json!({"kind": "InlineAsm"})
             }
-            &mir::StatementKind::FakeRead { .. } => {
+            &mir::StatementKind::Retag { .. } => {
                 // TODO
-                json!({"kind": "FakeRead "})
+                json!({"kind": "Retag"})
             }
             &mir::StatementKind::AscribeUserType { .. } => {
                 // TODO
                 json!({"kind": "AscribeUserType"})
             }
-            /*
-            &mir::StatementKind::Retag { .. } => {
-                // TODO
-                json!({"kind": "Retag"})
+            &mir::StatementKind::Nop => {
+                json!({"kind": "Nop"})
             }
-            */
         };
         let pos = mir.state
                     .session
@@ -472,10 +470,6 @@ pub fn get_def_ids(tcx: TyCtxt) -> Vec<DefId> {
         .collect::<Vec<_>>()
 }
 
-pub fn get_mir<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, id: DefId) -> Option<&'tcx Mir<'tcx>> {
-    tcx.maybe_optimized_mir(id)
-}
-
 pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
     let mut j = ms.mir.unwrap().local_decls[local].to_json(ms); // TODO
     let mut s = String::new();
@@ -523,7 +517,7 @@ fn build_fn(
     statics: &mut Vec<serde_json::Value>,
     def_id: DefId,
 ) -> serde_json::Value {
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
 
     let name = tcx.def_path(def_id).to_string_no_crate();
     let mir = tcx.optimized_mir(def_id);
@@ -545,9 +539,9 @@ fn build_mir<'tcx>(
     fns: &mut Vec<serde_json::Value>,
     statics: &mut Vec<serde_json::Value>,
     name: &str,
-    mir: &'tcx Mir<'tcx>,
+    mir: &'tcx Body<'tcx>,
     generics: &'tcx ty::Generics,
-    predicates: ty::GenericPredicates<'tcx>,
+    predicates: &'tcx ty::GenericPredicates<'tcx>,
 ) -> serde_json::Value {
     let mut promoted = Vec::with_capacity(mir.promoted.len());
     for (idx, prom_mir) in mir.promoted.iter_enumerated() {
@@ -559,7 +553,7 @@ fn build_mir<'tcx>(
             state: ms.state,
         };
 
-        let no_generics = ms.state.tcx.unwrap().alloc_generics(ty::Generics {
+        let no_generics = ms.state.tcx.arena.alloc(ty::Generics {
             parent: None,
             parent_count: 0,
             params: Vec::new(),
@@ -567,7 +561,10 @@ fn build_mir<'tcx>(
             has_self: false,
             has_late_bound_regions: None,
         });
-        let no_predicates = ty::GenericPredicates::default();
+        let no_predicates = ms.state.tcx.arena.alloc(ty::GenericPredicates {
+            parent: None,
+            predicates: Vec::new(),
+        });
 
         let f = build_mir(&mut prom_ms, fns, statics, &prom_name, prom_mir,
                           no_generics, no_predicates);
@@ -594,11 +591,11 @@ fn build_static(
     used_types: &mut HashSet<DefId>,
     def_id: DefId,
 ) -> serde_json::Value {
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
 
     let name = tcx.def_path(def_id).to_string_no_crate();
     let ty = tcx.type_of(def_id);
-    let mutable = tcx.is_static(def_id) == Some(hir::Mutability::MutMutable);
+    let mutable = tcx.is_mutable_static(def_id);
 
     let mut ms = MirState {
         mir: None,
@@ -636,13 +633,13 @@ pub fn emit_fns(
     let mut fns = Vec::new();
     let mut statics = Vec::new();
 
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
     let ids = get_def_ids(tcx);
 
     for def_id in ids.into_iter() {
         let f = build_fn(state, used_types, &mut fns, &mut statics, def_id);
         fns.push(f);
-        if tcx.is_static(def_id).is_some() {
+        if tcx.is_static(def_id) {
             let s = build_static(state, used_types, def_id);
             statics.push(s);
         }
@@ -652,7 +649,7 @@ pub fn emit_fns(
 }
 
 pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &mut File) -> io::Result<()> {
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
@@ -681,10 +678,10 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
     Ok(())
 }
 
-fn iter_trait_def_ids<'a, 'tcx>(
-    state: &mut CompileState<'a, 'tcx>
-) -> impl Iterator<Item=DefId> + 'a + 'tcx {
-    let hir_map = &state.tcx.unwrap().hir;
+fn iter_trait_def_ids<'tcx>(
+    state: &mut CompileState<'_, 'tcx>
+) -> impl Iterator<Item=DefId> + 'tcx {
+    let hir_map = state.tcx.hir();
     hir_map.krate().items.values()
         .filter(|it| match it.node {
             hir::ItemKind::Trait(..) => true,
@@ -693,10 +690,10 @@ fn iter_trait_def_ids<'a, 'tcx>(
         .map(|it| it.hir_id.owner_def_id())
 }
 
-fn iter_impl_def_ids<'a, 'tcx>(
-    state: &mut CompileState<'a, 'tcx>
-) -> impl Iterator<Item=DefId> + 'a + 'tcx {
-    let hir_map = &state.tcx.unwrap().hir;
+fn iter_impl_def_ids<'tcx>(
+    state: &mut CompileState<'_, 'tcx>
+) -> impl Iterator<Item=DefId> + 'tcx {
+    let hir_map = state.tcx.hir();
     hir_map.krate().items.values()
         .filter(|it| match it.node {
             hir::ItemKind::Impl(..) => true,
@@ -706,7 +703,7 @@ fn iter_impl_def_ids<'a, 'tcx>(
 }
 
 pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> {
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
@@ -749,7 +746,7 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
 }
 
 pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
-    let tcx = state.tcx.unwrap();
+    let tcx = state.tcx;
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
@@ -792,27 +789,35 @@ pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     Ok(())
 }
 
-pub fn analyze(state: &mut CompileState) -> io::Result<()> {
-    let iname = source_name(state.input).to_string();
+pub fn analyze(comp: &Compiler) -> io::Result<()> {
+    let iname = source_name(comp.input()).to_string();
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
     let mut file = File::create(&mirname)?;
 
     let mut used_types = HashSet::new();
-    {
-        let (fns, statics) = emit_fns(state, &mut used_types);
-        write!(file, "{{ \"fns\": ")?;
-        fns.serialize(&mut serde_json::Serializer::new(&mut file))?;
-        write!(file, ", \"statics\": ")?;
-        statics.serialize(&mut serde_json::Serializer::new(&mut file))?;
-    }
-    write!(file, ", \"adts\": ")?;
-    emit_adts(state, &used_types, &mut file)?;
-    write!(file, ", \"traits\": ")?;
-    emit_traits(state, &mut file)?;
-    write!(file, ", \"impls\": ")?;
-    emit_impls(state, &mut file)?;
-    write!(file, " }}")
+
+    let mut gcx = comp.global_ctxt().unwrap().peek_mut();
+    gcx.enter(|tcx| {
+        let mut state = CompileState {
+            session: comp.session(),
+            tcx,
+        };
+        {
+            let (fns, statics) = emit_fns(&mut state, &mut used_types);
+            write!(file, "{{ \"fns\": ")?;
+            fns.serialize(&mut serde_json::Serializer::new(&mut file))?;
+            write!(file, ", \"statics\": ")?;
+            statics.serialize(&mut serde_json::Serializer::new(&mut file))?;
+        }
+        write!(file, ", \"adts\": ")?;
+        emit_adts(&mut state, &used_types, &mut file)?;
+        write!(file, ", \"traits\": ")?;
+        emit_traits(&mut state, &mut file)?;
+        write!(file, ", \"impls\": ")?;
+        emit_impls(&mut state, &mut file)?;
+        write!(file, " }}")
+    })
 }
 
 // format:
