@@ -523,7 +523,7 @@ fn build_fn(
 ) -> serde_json::Value {
     let tcx = state.tcx;
 
-    let name = tcx.def_path(def_id).to_string_no_crate();
+    let name = def_id_str(tcx, def_id);
     let mir = tcx.optimized_mir(def_id);
     let generics = tcx.generics_of(def_id);
     let predicates = tcx.predicates_of(def_id);
@@ -597,7 +597,7 @@ fn build_static(
 ) -> serde_json::Value {
     let tcx = state.tcx;
 
-    let name = tcx.def_path(def_id).to_string_no_crate();
+    let name = def_id_str(tcx, def_id);
     let ty = tcx.type_of(def_id);
     let mutable = tcx.is_mutable_static(def_id);
 
@@ -664,7 +664,7 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
             let ty = tcx.type_of(def_id);
             match ty.ty_adt_def() {
                 Some(adtdef) => {
-                    let adt_name = tcx.def_path(def_id).to_string_no_crate();
+                    let adt_name = def_id_str(tcx, def_id);
                     state.session.note_without_error(
                         format!("Emitting ADT definition for {}",
                                 adt_name).as_str());
@@ -715,7 +715,7 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
     // Emit definitions for all traits.
     for def_id in iter_trait_def_ids(state) {
         if def_id.is_local() {
-            let trait_name = tcx.def_path(def_id).to_string_no_crate();
+            let trait_name = def_id_str(tcx, def_id);
             let items = tcx.associated_items(def_id);
             state.session.note_without_error(
                 format!("Emitting trait items for {}",

@@ -57,11 +57,20 @@ impl ToJson<'_> for ty::VariantDiscr {
     }
 }
 
+pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
+    // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
+    let crate_name = if def_id.is_local() {
+        tcx.crate_name.clone()
+    } else {
+        tcx.crate_name(def_id.krate)
+    };
+    let defpath = tcx.def_path(def_id);
+    format!("{}[0]{}", crate_name, defpath.to_string_no_crate())
+}
+
 impl ToJson<'_> for hir::def_id::DefId {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
-        let tcx = mir.state.tcx;
-        let defpath = tcx.def_path(*self);
-        json!(defpath.to_string_no_crate())
+        json!(def_id_str(mir.state.tcx, *self))
     }
 }
 
