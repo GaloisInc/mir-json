@@ -1,7 +1,7 @@
 Tool to compile rust to MIR, encoded as JSON.
 
 Uses unstable features -- the most recent build which has been
-successfully tested is rustc nightly-2017-08-16.
+successfully tested is rustc nightly-2019-08-05
 
 #####
 
@@ -19,9 +19,9 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
 2. Next, switch your version of `rustc` to the one that works with mir-json.
 
-       $ rustup toolchain install nightly-2017-08-16
+       $ rustup toolchain install nightly-2019-08-05
 
-       $ rustup default nightly-2017-08-16
+       $ rustup default nightly-2019-08-05
 
 3. Now compile `mir-json`
 
