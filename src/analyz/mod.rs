@@ -28,7 +28,11 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
-basic_json_impl!(ty::layout::VariantIdx);
+impl<'tcx> ToJson<'tcx> for ty::layout::VariantIdx {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        self.as_usize().into()
+    }
+}
 
 impl<'tcx> ToJson<'tcx> for mir::Promoted {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
