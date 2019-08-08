@@ -58,11 +58,10 @@ impl ToJson<'_> for ty::VariantDiscr {
 }
 
 impl ToJson<'_> for hir::def_id::DefId {
-    fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
-        json!(ty::tls::with(|tx| {
-            let defpath = tx.def_path(*self);
-            defpath.to_string_no_crate()
-        }))
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        let tcx = mir.state.tcx;
+        let defpath = tcx.def_path(*self);
+        json!(defpath.to_string_no_crate())
     }
 }
 
@@ -116,7 +115,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 mir.used_types.insert(did);
                 json!({
                     "kind": "Adt",
-                    "name": defid_str(&did),
+                    "name": did.to_json(mir),
                     "substs": substs.to_json(mir)
                 })
             }
@@ -409,13 +408,6 @@ pub fn assoc_item_json<'tcx>(
     map.into()
 }
 
-pub fn defid_str(d: &hir::def_id::DefId) -> String {
-    ty::tls::with(|tx| {
-        let defpath = tx.def_path(*d);
-        defpath.to_string_no_crate()
-    })
-}
-
 pub fn defid_ty(d: &hir::def_id::DefId, mir: &mut MirState) -> serde_json::Value {
     let tcx = mir.state.tcx;
     tcx.type_of(*d).to_json(mir)
@@ -655,7 +647,7 @@ impl ToJsonAg for ty::AdtDef {
         substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
-            "name": defid_str(&self.did),
+            "name": self.did.to_json(mir),
             "variants": self.variants.tojson(mir, substs)
         })
     }
@@ -668,7 +660,7 @@ impl ToJsonAg for ty::VariantDef {
         substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
-            "name": defid_str(&self.def_id),
+            "name": self.def_id.to_json(mir),
             "discr": self.discr.to_json(mir),
             "fields": self.fields.tojson(mir, substs),
             "ctor_kind": self.ctor_kind.to_json(mir)
@@ -683,7 +675,7 @@ impl ToJsonAg for ty::FieldDef {
         substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
-            "name": defid_str(&self.did),
+            "name": self.did.to_json(mir),
             "ty": defid_ty(&self.did, mir),
             "substs": substs.to_json(mir)
         })
