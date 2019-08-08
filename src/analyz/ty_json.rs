@@ -500,16 +500,16 @@ fn render_constant<'tcx>(
         ty::TyKind::Bool |
         ty::TyKind::Char |
         ty::TyKind::Uint(_) => {
-            let (size, bits) = scalar.expect("uint const had non-scalar value?");
+            let (_size, bits) = scalar.expect("uint const had non-scalar value?");
             ("int_val", bits.to_string().into())
         },
         ty::TyKind::Float(ty::layout::FloatTy::F32) => {
-            let (size, bits) = scalar.expect("f32 const had non-scalar value?");
+            let (_size, bits) = scalar.expect("f32 const had non-scalar value?");
             let val = f32::from_bits(bits as u32);
             ("float_val", val.to_string().into())
         },
         ty::TyKind::Float(ty::layout::FloatTy::F64) => {
-            let (size, bits) = scalar.expect("f64 const had non-scalar value?");
+            let (_size, bits) = scalar.expect("f64 const had non-scalar value?");
             let val = f64::from_bits(bits as u64);
             ("float_val", val.to_string().into())
         },
@@ -533,8 +533,8 @@ fn render_constant<'tcx>(
             ..
         }, hir::Mutability::MutImmutable) => {
             let len = eval_array_len(tcx, len_const);
-            let (alloc, start, end) = slice.expect("string const had non-slice value");
-            assert!(len == end - start);
+            let (alloc, start, _) = slice.expect("string const had non-slice value");
+            let end = start + len;
             let mem = read_static_memory(alloc, start, end);
             ("bstr_val", mem.into())
         },
@@ -570,9 +570,10 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
                 render_constant(mir.state.tcx, self.ty, Some((size, data)), None)
             },
             interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
-                // Not handled.  This only appears when statics/constants contain references to
-                // other statics.
-                None
+                let alloc = mir.state.tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
+                let start = ptr.offset.bytes() as usize;
+                let end = start;
+                render_constant(mir.state.tcx, self.ty, None, Some((alloc, start, end)))
             },
             interpret::ConstValue::Slice { data, start, end } => {
                 render_constant(mir.state.tcx, self.ty, None, Some((data, start, end)))
