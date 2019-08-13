@@ -5,9 +5,11 @@ use rustc::mir::{self, Body};
 use rustc::hir;
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
+use rustc::mir::mono::MonoItem;
 use rustc::traits;
 use rustc_driver::source_name;
 use rustc_interface::interface::Compiler;
+use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
@@ -511,41 +513,13 @@ fn mir_body(
     })
 }
 
-/// Generate a JSON object for the `fn` at `def_id`.  If the fn contains promoted statics, this
-/// will add them to the `fns` and `statics` vectors as a side effect.  (It will not add the
-/// newly-constructed `fn` to `fns` - that is left to the caller.)
-fn build_fn(
-    state: &mut CompileState,
-    used_types: &mut HashSet<DefId>,
-    fns: &mut Vec<serde_json::Value>,
-    statics: &mut Vec<serde_json::Value>,
-    def_id: DefId,
-) -> serde_json::Value {
-    let tcx = state.tcx;
-
-    let name = def_id_str(tcx, def_id);
-    let mir = tcx.optimized_mir(def_id);
-    let generics = tcx.generics_of(def_id);
-    let predicates = tcx.predicates_of(def_id);
-
-    state.session.note_without_error(&format!("Emitting MIR for {}", name));
-
-    let mut ms = MirState {
-        mir: Some(mir),
-        used_types: used_types,
-        state: state,
-    };
-    build_mir(&mut ms, fns, statics, &name, mir, generics, predicates)
-}
-
 fn build_mir<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     fns: &mut Vec<serde_json::Value>,
     statics: &mut Vec<serde_json::Value>,
     name: &str,
+    inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
-    generics: &'tcx ty::Generics,
-    predicates: &'tcx ty::GenericPredicates<'tcx>,
 ) -> serde_json::Value {
     let mut promoted = Vec::with_capacity(mir.promoted.len());
     for (idx, prom_mir) in mir.promoted.iter_enumerated() {
@@ -557,21 +531,7 @@ fn build_mir<'tcx>(
             state: ms.state,
         };
 
-        let no_generics = ms.state.tcx.arena.alloc(ty::Generics {
-            parent: None,
-            parent_count: 0,
-            params: Vec::new(),
-            param_def_id_to_index: HashMap::default(),
-            has_self: false,
-            has_late_bound_regions: None,
-        });
-        let no_predicates = ms.state.tcx.arena.alloc(ty::GenericPredicates {
-            parent: None,
-            predicates: Vec::new(),
-        });
-
-        let f = build_mir(&mut prom_ms, fns, statics, &prom_name, prom_mir,
-                          no_generics, no_predicates);
+        let f = build_mir(&mut prom_ms, fns, statics, &prom_name, None, prom_mir);
         let s = build_static_inner(&mut prom_ms, &prom_name, prom_mir.return_ty(), false,
                                    Some((name, idx.as_usize())));
         fns.push(f);
@@ -581,10 +541,11 @@ fn build_mir<'tcx>(
 
     json!({
         "name": &name,
+        "inst": inst.to_json(ms),
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
-        "generics": generics.to_json(ms),
-        "predicates": predicates.to_json(ms),
+        "generics": [],
+        "predicates": [],
         "body": mir_body(ms),
         "promoted": promoted,
     })
@@ -640,13 +601,35 @@ pub fn emit_fns(
     let tcx = state.tcx;
     let ids = get_def_ids(tcx);
 
-    for def_id in ids.into_iter() {
-        let f = build_fn(state, used_types, &mut fns, &mut statics, def_id);
-        fns.push(f);
-        if tcx.is_static(def_id) {
-            let s = build_static(state, used_types, def_id);
-            statics.push(s);
-        }
+    let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
+
+    for mono_item in mono_items {
+        let inst = match mono_item {
+            MonoItem::Fn(inst) => inst,
+            MonoItem::Static(_) => continue,
+            MonoItem::GlobalAsm(_) => continue,
+        };
+        let def_id = match inst.def {
+            ty::InstanceDef::Item(def_id) => def_id,
+            _ => continue,
+        };
+        let substs = inst.substs;
+
+        let name = def_id_str(tcx, def_id);
+        let mir = tcx.optimized_mir(def_id);
+        let mir = tcx.subst_and_normalize_erasing_regions(
+            substs, ty::ParamEnv::reveal_all(), mir);
+        let mir = tcx.arena.alloc(mir);
+
+        state.session.note_without_error(&format!("Emitting MIR for {}", name));
+
+        let mut ms = MirState {
+            mir: Some(mir),
+            used_types: used_types,
+            state: state,
+        };
+        let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, Some(inst), mir);
+        fns.push(fn_json);
     }
 
     (fns, statics)

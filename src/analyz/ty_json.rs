@@ -74,6 +74,62 @@ impl ToJson<'_> for hir::def_id::DefId {
     }
 }
 
+impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        let substs = mir.state.tcx.normalize_erasing_regions(
+            ty::ParamEnv::reveal_all(),
+            self.substs,
+        );
+
+        match self.def {
+            ty::InstanceDef::Item(did) => json!({
+                "kind": "Item",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+            }),
+            ty::InstanceDef::Intrinsic(did) => json!({
+                "kind": "Intrinsic",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+            }),
+            ty::InstanceDef::VtableShim(did) => json!({
+                "kind": "VtableShim",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+            }),
+            ty::InstanceDef::FnPtrShim(did, ty) => json!({
+                "kind": "FnPtrShim",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+                "ty": ty.to_json(mir),
+            }),
+            ty::InstanceDef::Virtual(did, idx) => json!({
+                "kind": "Virtual",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+                "index": idx,
+            }),
+            ty::InstanceDef::ClosureOnceShim { call_once } => json!({
+                "kind": "ClosureOnceShim",
+                "call_once": call_once.to_json(mir),
+                "substs": substs.to_json(mir),
+            }),
+            ty::InstanceDef::DropGlue(did, ty) => json!({
+                "kind": "DropGlue",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+                "ty": ty.to_json(mir),
+            }),
+            ty::InstanceDef::CloneShim(did, ty) => json!({
+                "kind": "CloneShim",
+                "def_id": did.to_json(mir),
+                "substs": substs.to_json(mir),
+                "ty": ty.to_json(mir),
+            }),
+        }
+    }
+}
+
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
@@ -129,10 +185,17 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::FnDef(defid, ref substs) => {
+                let inst = ty::Instance::resolve(
+                    mir.state.tcx,
+                    ty::ParamEnv::reveal_all(),
+                    defid,
+                    substs,
+                );
                 json!({
                     "kind": "FnDef",
                     "defid": defid.to_json(mir),
-                    "substs": substs.to_json(mir)
+                    "substs": substs.to_json(mir),
+                    "inst": inst.to_json(mir),
                 })
             }
             &ty::TyKind::Param(ref p) =>
