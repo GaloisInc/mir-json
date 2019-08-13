@@ -3,8 +3,9 @@ use rustc::hir::def_id::DefId;
 use rustc::mir;
 use rustc::mir::interpret;
 use rustc::ty;
-use rustc::ty::{TyCtxt};
+use rustc::ty::{TyCtxt, TypeFoldable};
 use rustc_data_structures::indexed_vec::{self, IndexVec};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -66,6 +67,32 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
     };
     let defpath = tcx.def_path(def_id);
     format!("{}[0]{}", crate_name, defpath.to_string_no_crate())
+}
+
+pub fn inst_id_str<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: hir::def_id::DefId,
+    substs: ty::subst::SubstsRef<'tcx>,
+) -> String {
+    let base = def_id_str(tcx, def_id);
+    if substs.len() == 0 {
+        return base;
+    }
+
+    let substs = tcx.normalize_erasing_regions(
+        ty::ParamEnv::reveal_all(),
+        substs,
+    );
+
+    // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
+    let mut hasher = StableHasher::<u64>::new();
+    let mut hcx = tcx.create_stable_hashing_context();
+    assert!(!substs.has_erasable_regions());
+    assert!(!substs.needs_subst());
+    substs.hash_stable(&mut hcx, &mut hasher);
+    let hash: u64 = hasher.finish();
+
+    format!("{}::_inst{:016x}[0]", base, hash)
 }
 
 impl ToJson<'_> for hir::def_id::DefId {
@@ -191,10 +218,35 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     defid,
                     substs,
                 );
+
+                // Compute the mangled name of the monomorphized instance being called.
+                let (inst_def_id, inst_substs) = if let Some(inst) = inst {
+                    let inst_def_id = match inst.def {
+                        ty::InstanceDef::Item(def_id) => def_id,
+                        _ => {
+                            eprintln!(
+                                "error: FnDef Instance resolved to non-Item: {:?}, {:?}",
+                                defid, substs,
+                            );
+                            // Reuse unresolved defid for convenience.  It might even by correct in
+                            // some cases.
+                            defid
+                        },
+                    };
+                    (inst_def_id, inst.substs)
+                } else {
+                    eprintln!(
+                        "error: failed to resolve FnDef Instance: {:?}, {:?}",
+                        defid, substs,
+                    );
+                    (defid, ty::List::empty())
+                };
+                let name = inst_id_str(mir.state.tcx, inst_def_id, inst_substs);
+
                 json!({
                     "kind": "FnDef",
-                    "defid": defid.to_json(mir),
-                    "substs": substs.to_json(mir),
+                    "defid": name,
+                    "substs": [],
                     "inst": inst.to_json(mir),
                 })
             }

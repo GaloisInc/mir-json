@@ -544,8 +544,8 @@ fn build_mir<'tcx>(
         "inst": inst.to_json(ms),
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
-        "generics": [],
-        "predicates": [],
+        "generics": { "params": [] },
+        "predicates": { "predicates": [] },
         "body": mir_body(ms),
         "promoted": promoted,
     })
@@ -591,7 +591,7 @@ fn build_static_inner<'tcx>(
 
 /// Convert all functions to JSON values.  The second output is a list of JSON values describing
 /// `static` items found among the MIR functions.
-pub fn emit_fns(
+pub fn emit_mono_items(
     state: &mut CompileState,
     used_types: &mut HashSet<DefId>,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
@@ -604,18 +604,21 @@ pub fn emit_fns(
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
 
     for mono_item in mono_items {
-        let inst = match mono_item {
-            MonoItem::Fn(inst) => inst,
-            MonoItem::Static(_) => continue,
+        let (inst, def_id, substs) = match mono_item {
+            MonoItem::Fn(inst) => {
+                let def_id = match inst.def {
+                    ty::InstanceDef::Item(def_id) => def_id,
+                    _ => continue,
+                };
+                (Some(inst), def_id, inst.substs)
+            },
+            MonoItem::Static(def_id) => {
+                (None, def_id, ty::List::empty())
+            },
             MonoItem::GlobalAsm(_) => continue,
         };
-        let def_id = match inst.def {
-            ty::InstanceDef::Item(def_id) => def_id,
-            _ => continue,
-        };
-        let substs = inst.substs;
 
-        let name = def_id_str(tcx, def_id);
+        let name = inst_id_str(tcx, def_id, substs);
         let mir = tcx.optimized_mir(def_id);
         let mir = tcx.subst_and_normalize_erasing_regions(
             substs, ty::ParamEnv::reveal_all(), mir);
@@ -628,7 +631,7 @@ pub fn emit_fns(
             used_types: used_types,
             state: state,
         };
-        let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, Some(inst), mir);
+        let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, inst, mir);
         fns.push(fn_json);
     }
 
@@ -791,7 +794,7 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
             tcx,
         };
         {
-            let (fns, statics) = emit_fns(&mut state, &mut used_types);
+            let (fns, statics) = emit_mono_items(&mut state, &mut used_types);
             write!(file, "{{ \"fns\": ")?;
             fns.serialize(&mut serde_json::Serializer::new(&mut file))?;
             write!(file, ", \"statics\": ")?;
