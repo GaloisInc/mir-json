@@ -7,6 +7,7 @@ use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
 use rustc::mir::mono::MonoItem;
 use rustc::traits;
+use rustc::ty::subst::Subst;
 use rustc_driver::source_name;
 use rustc_interface::interface::Compiler;
 use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
@@ -476,6 +477,67 @@ pub fn get_def_ids(tcx: TyCtxt) -> Vec<DefId> {
         .collect::<Vec<_>>()
 }
 
+
+/// Workaround for a rustc bug.  MIR bodies are usually stored in normalized form, but for
+/// associated constants whose types involve parameters, one occurrence of the constant type is not
+/// substituted or normalized properly:
+///
+///     trait TheTrait {
+///         const THE_CONST: Self;
+///     }
+///
+///     impl TheTrait for u32 {
+///         const THE_CONST: u32 = 123;
+///     }
+///
+///
+///     mir::Constant {
+///         ty: u32,        // Substituted + normalized type of <u32 as TheTrait>::THE_CONST
+///         literal: Const {
+///             ty: Self,   // Unsubstituted declared type of THE_CONST.  This is the bug.
+///             val: Unevaluated(
+///                 the_crate::TheTrait::THE_CONST,
+///                 [u32],  // Substs for TheTrait::THE_CONST
+///             ),
+///         },
+///     }
+///
+/// This pass looks for Unevaluated constants, and copies the outer ty (which is computed
+/// correctly) over top of the inner one.  Afterward, the MIR is well-formed and running `subst` on
+/// it no longer panics.
+fn subst_const_tys<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    substs: ty::subst::SubstsRef<'tcx>,
+    body: &mut Body<'tcx>,
+) {
+    mir::visit::MutVisitor::visit_body(
+        &mut SubstConstTys { tcx, substs },
+        body,
+    );
+}
+
+struct SubstConstTys<'tcx> {
+    tcx: TyCtxt<'tcx>,
+    substs: ty::subst::SubstsRef<'tcx>,
+}
+
+impl<'tcx> mir::visit::MutVisitor<'tcx> for SubstConstTys<'tcx> {
+    fn visit_constant(
+        &mut self,
+        constant: &mut mir::Constant<'tcx>,
+        location: mir::Location,
+    ) {
+        if let mir::interpret::ConstValue::Unevaluated(..) = constant.literal.val {
+            constant.literal = self.tcx.mk_const(ty::Const {
+                ty: constant.ty,
+                val: constant.literal.val,
+            });
+        }
+        self.super_constant(constant, location);
+    }
+}
+
+
 pub fn local_json(ms: &mut MirState, local: mir::Local) -> serde_json::Value {
     let mut j = ms.mir.unwrap().local_decls[local].to_json(ms); // TODO
     let mut s = String::new();
@@ -619,9 +681,10 @@ pub fn emit_mono_items(
         };
 
         let name = inst_id_str(tcx, def_id, substs);
-        let mir = tcx.optimized_mir(def_id);
+        let mut mir = tcx.optimized_mir(def_id).clone();
+        subst_const_tys(tcx, substs, &mut mir);
         let mir = tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), mir);
+            substs, ty::ParamEnv::reveal_all(), &mir);
         let mir = tcx.arena.alloc(mir);
 
         state.session.note_without_error(&format!("Emitting MIR for {}", name));
