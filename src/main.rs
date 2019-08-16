@@ -20,7 +20,9 @@ use rustc_codegen_utils::codegen_backend::CodegenBackend;
 use rustc_metadata::cstore::CStore;
 use syntax::ast;
 use std::error::Error;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 struct MirJsonCallbacks;
 
@@ -33,44 +35,44 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
     }
 }
 
-fn find_sysroot() -> String {
-    if let Ok(sysroot) = std::env::var("MIR_JSON_SYSROOT") {
-        return sysroot;
-    }
+const TARGET_FILE: &'static str = "crucible-unknown-none.json";
 
-    if let Ok(sysroot) = std::env::var("MIRI_SYSROOT") {
-        return sysroot;
+const TARGET_JSON: &'static str = r#"
+    {
+      "llvm-target": "x86_64-unknown-linux-gnu",
+      "target-endian": "little",
+      "target-pointer-width": "64",
+      "target-c-int-width": "32",
+      "os": "none",
+      "env": "none",
+      "vendor": "unknown",
+      "arch": "crucible",
+      "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+      "linker-flavor": "gcc"
     }
-
-    // Taken from https://github.com/Manishearth/rust-clippy/pull/911.
-    let home = option_env!("RUSTUP_HOME").or(option_env!("MULTIRUST_HOME"));
-    let toolchain =
-        option_env!("RUSTUP_TOOLCHAIN").or(option_env!("MULTIRUST_TOOLCHAIN"));
-    match (home, toolchain) {
-        (Some(home), Some(toolchain)) => {
-            format!("{}/toolchains/{}", home, toolchain)
-        }
-        _ => {
-            option_env!("RUST_SYSROOT")
-                .expect(
-                    "need to specify RUST_SYSROOT or use rustup or multirust",
-                )
-                .to_owned()
-        }
-    }
-}
+"#;
 
 fn go() {
     let mut args: Vec<String> = std::env::args().collect();
 
-    let sysroot_flag = String::from("--sysroot");
-    if !args.contains(&sysroot_flag) {
-        args.push(sysroot_flag);
-        args.push(find_sysroot());
+    let target_flag = String::from("--target");
+    if !args.contains(&target_flag) {
+        if !Path::new(TARGET_FILE).exists() {
+            let mut f = File::create(&TARGET_FILE).unwrap();
+            f.write_all(TARGET_JSON.as_bytes()).unwrap();
+        }
+
+        args.push(target_flag);
+        args.push(TARGET_FILE.into());
+    }
+
+    let emit_flag = String::from("--emit");
+    if !args.contains(&emit_flag) {
+        args.push(emit_flag);
+        args.push("metadata".into());
     }
 
     args.push("-Zalways-encode-mir".to_owned());
-    //args.push("-Zno-trans".to_owned());
 
     rustc_driver::run_compiler(
         &args, // args: &[String]
