@@ -663,7 +663,7 @@ pub fn emit_mono_items(
     let tcx = state.tcx;
     let ids = get_def_ids(tcx);
 
-    let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Eager);
+    let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
 
     for mono_item in mono_items {
         let (inst, def_id, substs) = match mono_item {

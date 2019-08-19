@@ -66,14 +66,6 @@ fn go() {
         args.push(TARGET_FILE.into());
     }
 
-    let emit_flag = String::from("--emit");
-    if !args.contains(&emit_flag) {
-        args.push(emit_flag);
-        args.push("metadata".into());
-    }
-
-    args.push("-Zalways-encode-mir".to_owned());
-
     rustc_driver::run_compiler(
         &args, // args: &[String]
         &mut MirJsonCallbacks,
