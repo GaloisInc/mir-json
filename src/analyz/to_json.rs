@@ -1,7 +1,7 @@
 use rustc::hir::def_id::DefId;
 use rustc::mir::Body;
 use rustc::session::Session;
-use rustc::ty::TyCtxt;
+use rustc::ty::{self, TyCtxt};
 use rustc_interface::interface::Compiler;
 use syntax::symbol::Symbol;
 use serde_json;
@@ -16,6 +16,7 @@ pub struct CompileState<'a, 'tcx> {
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used_types: &'a mut HashSet<DefId>,
+    pub used_vtables: &'a mut HashSet<ty::PolyTraitRef<'tcx>>,
     pub state: &'a CompileState<'a, 'tcx>,
 }
 

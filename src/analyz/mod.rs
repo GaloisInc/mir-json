@@ -70,12 +70,15 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
     }
 }
 
-fn build_vtable<'tcx>(
+/// Compute the "vtable descriptor" for a given cast, if applicable.  We identify vtables by their
+/// `PolyTraitRef`s, which uniquely determine the trait and self type, and which can be used by
+/// downstream code such as `build_vtable`.
+fn vtable_descriptor_for_cast<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     kind: mir::CastKind,
     old_ty: ty::Ty<'tcx>,
     new_ty: ty::Ty<'tcx>,
-) -> Option<serde_json::Value> {
+) -> Option<ty::PolyTraitRef<'tcx>> {
     let tcx = mir.state.tcx;
 
     if kind != mir::CastKind::Pointer(ty::adjustment::PointerCast::Unsize) {
@@ -109,9 +112,24 @@ fn build_vtable<'tcx>(
         Some(x) => x,
         // If there's no trait ref, it means the `Dynamic` predicates contain only auto traits.
         // The vtable for this trait object is empty.
-        None => return Some(json!([])),
+        // TODO: handle this better (currently the output omits the "vtable" field)
+        None => return None,
     };
+    Some(trait_ref)
+}
 
+fn vtable_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    trait_ref: ty::PolyTraitRef<'tcx>,
+) -> String {
+    ext_def_id_str(mir.state.tcx, trait_ref.def_id(), "_vtbl", trait_ref)
+}
+
+fn build_vtable_items<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    trait_ref: ty::PolyTraitRef<'tcx>,
+) -> serde_json::Value {
+    let tcx = mir.state.tcx;
     let methods = tcx.vtable_methods(trait_ref);
 
     let mut parts = Vec::with_capacity(methods.len());
@@ -129,7 +147,7 @@ fn build_vtable<'tcx>(
             parts.push(json!(null));
         }
     }
-    Some(parts.into())
+    parts.into()
 }
 
 impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
@@ -167,11 +185,13 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "ty": ty.to_json(mir)
                 });
                 let op_ty = op.ty(mir.mir.unwrap(), mir.state.tcx);
-                if let Some(vtable_json) = build_vtable(mir, *ck, op_ty, ty) {
-                    j.as_object_mut().unwrap().insert(
-                        "vtable".to_owned(),
-                        vtable_json,
-                    );
+                if let Some(vtable_desc) = vtable_descriptor_for_cast(mir, *ck, op_ty, ty) {
+                    // On the Haskell side, the vtable is attached to the cast kind.
+                    j["type"] = json!({
+                        "kind": "UnsizeVtable",
+                        "vtable": vtable_name(mir, vtable_desc),
+                    });
+                    mir.used_vtables.insert(vtable_desc);
                 }
                 j
             }
@@ -660,6 +680,7 @@ fn build_mir<'tcx>(
         let mut prom_ms = MirState {
             mir: Some(prom_mir),
             used_types: ms.used_types,
+            used_vtables: ms.used_vtables,
             state: ms.state,
         };
 
@@ -683,9 +704,10 @@ fn build_mir<'tcx>(
     })
 }
 
-fn build_static(
-    state: &mut CompileState,
+fn build_static<'tcx>(
+    state: &mut CompileState<'_, 'tcx>,
     used_types: &mut HashSet<DefId>,
+    used_vtables: &mut HashSet<ty::PolyTraitRef<'tcx>>,
     def_id: DefId,
 ) -> serde_json::Value {
     let tcx = state.tcx;
@@ -697,6 +719,7 @@ fn build_static(
     let mut ms = MirState {
         mir: None,
         used_types: used_types,
+        used_vtables: used_vtables,
         state: state,
     };
     build_static_inner(&mut ms, &name, ty, mutable, None)
@@ -723,9 +746,10 @@ fn build_static_inner<'tcx>(
 
 /// Convert all functions to JSON values.  The second output is a list of JSON values describing
 /// `static` items found among the MIR functions.
-pub fn emit_mono_items(
-    state: &mut CompileState,
+pub fn emit_mono_items<'tcx>(
+    state: &mut CompileState<'_, 'tcx>,
     used_types: &mut HashSet<DefId>,
+    used_vtables: &mut HashSet<ty::PolyTraitRef<'tcx>>,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
     let mut fns = Vec::new();
     let mut statics = Vec::new();
@@ -762,6 +786,7 @@ pub fn emit_mono_items(
         let mut ms = MirState {
             mir: Some(mir),
             used_types: used_types,
+            used_vtables: used_vtables,
             state: state,
         };
         let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, inst, mir);
@@ -776,6 +801,7 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_vtables = HashSet::new();
 
     // Emit definitions for all ADTs.
     for &def_id in used_types.iter() {
@@ -787,15 +813,48 @@ pub fn emit_adts(state: &mut CompileState, used_types: &HashSet<DefId>, file: &m
                     state.session.note_without_error(
                         format!("Emitting ADT definition for {}",
                                 adt_name).as_str());
-                    let mut ms = MirState { mir: None,
-                                            used_types: &mut dummy_used_types,
-                                            state: state };
+                    let mut ms = MirState {
+                        mir: None,
+                        used_types: &mut dummy_used_types,
+                        used_vtables: &mut dummy_used_vtables,
+                        state: state,
+                    };
                     seq.serialize_element(&adtdef.tojson(&mut ms,
                                                          List::empty()))?;
                 }
                 _ => ()
             }
         } // Else look it up somewhere else, but I'm not sure where.
+    }
+    seq.end()?;
+    Ok(())
+}
+
+pub fn emit_vtables<'tcx>(
+    state: &mut CompileState<'_, 'tcx>,
+    used_vtables: &HashSet<ty::PolyTraitRef<'tcx>>,
+    file: &mut File,
+) -> io::Result<()> {
+    let tcx = state.tcx;
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(None)?;
+    let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_vtables = HashSet::new();
+
+    let mut ms = MirState {
+        mir: None,
+        used_types: &mut dummy_used_types,
+        used_vtables: &mut dummy_used_vtables,
+        state: state,
+    };
+
+    // Emit definitions for all ADTs.
+    for &trait_ref in used_vtables.iter() {
+        seq.serialize_element(&json!({
+            "name": vtable_name(&mut ms, trait_ref),
+            "desc": trait_ref.skip_binder().to_json(&mut ms),
+            "items": build_vtable_items(&mut ms, trait_ref),
+        }))?;
     }
     seq.end()?;
     Ok(())
@@ -830,6 +889,7 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_vtables = HashSet::new();
 
     // Emit definitions for all traits.
     for def_id in iter_trait_def_ids(state) {
@@ -845,9 +905,12 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
         state.session.note_without_error(
             format!("Emitting trait items for {}",
                     trait_name).as_str());
-        let mut ms = MirState { mir: None,
-                                used_types: &mut dummy_used_types,
-                                state: state };
+        let mut ms = MirState {
+            mir: None,
+            used_types: &mut dummy_used_types,
+            used_vtables: &mut dummy_used_vtables,
+            state: state,
+        };
         let mut items_json = Vec::new();
         for item in items {
             if !tcx.is_vtable_safe_method(def_id, &item) {
@@ -881,6 +944,7 @@ pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     let mut ser = serde_json::Serializer::new(file);
     let mut seq = ser.serialize_seq(None)?;
     let mut dummy_used_types = HashSet::new();
+    let mut dummy_used_vtables = HashSet::new();
 
     for def_id in iter_impl_def_ids(state) {
         if !def_id.is_local() {
@@ -900,9 +964,12 @@ pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
         let preds = tcx.predicates_of(def_id);
         let generics = tcx.generics_of(def_id);
 
-        let mut ms = MirState { mir: None,
-                                used_types: &mut dummy_used_types,
-                                state: state };
+        let mut ms = MirState {
+            mir: None,
+            used_types: &mut dummy_used_types,
+            used_vtables: &mut dummy_used_vtables,
+            state: state,
+        };
 
         let items = tcx.associated_items(def_id);
         let mut items_json = Vec::new();
@@ -939,12 +1006,13 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
 
     let mut gcx = comp.global_ctxt().unwrap().peek_mut();
     gcx.enter(|tcx| {
+        let mut used_vtables = HashSet::new();
         let mut state = CompileState {
             session: comp.session(),
             tcx,
         };
         {
-            let (fns, statics) = emit_mono_items(&mut state, &mut used_types);
+            let (fns, statics) = emit_mono_items(&mut state, &mut used_types, &mut used_vtables);
             write!(file, "{{ \"fns\": ")?;
             fns.serialize(&mut serde_json::Serializer::new(&mut file))?;
             write!(file, ", \"statics\": ")?;
@@ -952,6 +1020,8 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         }
         write!(file, ", \"adts\": ")?;
         emit_adts(&mut state, &used_types, &mut file)?;
+        write!(file, ", \"vtables\": ")?;
+        emit_vtables(&mut state, &used_vtables, &mut file)?;
         write!(file, ", \"traits\": ")?;
         emit_traits(&mut state, &mut file)?;
         write!(file, ", \"impls\": [] ")?;

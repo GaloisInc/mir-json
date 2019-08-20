@@ -4,6 +4,7 @@ use rustc::mir;
 use rustc::mir::interpret;
 use rustc::ty;
 use rustc::ty::{TyCtxt, TypeFoldable};
+use rustc::ich::StableHashingContext;
 use rustc_data_structures::indexed_vec::{self, IndexVec};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use syntax::ast;
@@ -69,30 +70,41 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
     format!("{}[0]{}", crate_name, defpath.to_string_no_crate())
 }
 
+pub fn ext_def_id_str<'tcx, T>(
+    tcx: TyCtxt<'tcx>,
+    def_id: hir::def_id::DefId,
+    prefix: &str,
+    extra: T,
+) -> String
+where T: HashStable<StableHashingContext<'tcx>> {
+    let base = def_id_str(tcx, def_id);
+
+    // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
+    let mut hasher = StableHasher::<u64>::new();
+    let mut hcx = tcx.create_stable_hashing_context();
+    extra.hash_stable(&mut hcx, &mut hasher);
+    let hash: u64 = hasher.finish();
+
+    format!("{}::{}{:016x}[0]", base, prefix, hash)
+}
+
 pub fn inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: hir::def_id::DefId,
     substs: ty::subst::SubstsRef<'tcx>,
 ) -> String {
-    let base = def_id_str(tcx, def_id);
     if substs.len() == 0 {
-        return base;
+        return def_id_str(tcx, def_id);
     }
 
     let substs = tcx.normalize_erasing_regions(
         ty::ParamEnv::reveal_all(),
         substs,
     );
-
-    // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
-    let mut hasher = StableHasher::<u64>::new();
-    let mut hcx = tcx.create_stable_hashing_context();
     assert!(!substs.has_erasable_regions());
     assert!(!substs.needs_subst());
-    substs.hash_stable(&mut hcx, &mut hasher);
-    let hash: u64 = hasher.finish();
 
-    format!("{}::_inst{:016x}[0]", base, hash)
+    ext_def_id_str(tcx, def_id, "_inst", substs)
 }
 
 impl ToJson<'_> for hir::def_id::DefId {
