@@ -70,6 +70,68 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
     }
 }
 
+fn build_vtable<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    kind: mir::CastKind,
+    old_ty: ty::Ty<'tcx>,
+    new_ty: ty::Ty<'tcx>,
+) -> Option<serde_json::Value> {
+    let tcx = mir.state.tcx;
+
+    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCast::Unsize) {
+        return None;
+    }
+
+    // Relevant code: rustc_codegen_ssa::base::unsized_info, and other functions in that file.
+    let old_pointee = match old_ty.sty {
+        ty::TyKind::Ref(_, ty, _) => ty,
+        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        _ => return None,
+    };
+    let new_pointee = match new_ty.sty {
+        ty::TyKind::Ref(_, ty, _) => ty,
+        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        _ => return None,
+    };
+
+    if !tcx.is_sized_raw(ty::ParamEnv::reveal_all().and(old_pointee)) {
+        // We produce a vtable only for sized -> TyDynamic casts.
+        return None;
+    }
+
+    // Relevant code: rustc_codegen_ssa::meth::get_vtable
+    let trait_ref = match new_pointee.sty {
+        ty::TyKind::Dynamic(ref preds, _) =>
+            preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
+        _ => return None,
+    };
+    let trait_ref: ty::PolyTraitRef = match trait_ref {
+        Some(x) => x,
+        // If there's no trait ref, it means the `Dynamic` predicates contain only auto traits.
+        // The vtable for this trait object is empty.
+        None => return Some(json!([])),
+    };
+
+    let methods = tcx.vtable_methods(trait_ref);
+
+    let mut parts = Vec::with_capacity(methods.len());
+    for &m in methods {
+        if let Some((def_id, substs)) = m {
+            let instance =
+                ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
+                .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
+                                          def_id, substs));
+            parts.push(json!({
+                "def_id": def_id.to_json(mir),
+                "instance": instance.to_json(mir),
+            }));
+        } else {
+            parts.push(json!(null));
+        }
+    }
+    Some(parts.into())
+}
+
 impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
@@ -98,12 +160,20 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({"kind": "Len", "lv": l.to_json(mir)})
             }
             &mir::Rvalue::Cast(ref ck, ref op, ref ty) => {
-                json!({
+                let mut j = json!({
                     "kind": "Cast",
                     "type": ck.to_json(mir),
                     "op": op.to_json(mir),
                     "ty": ty.to_json(mir)
-                })
+                });
+                let op_ty = op.ty(mir.mir.unwrap(), mir.state.tcx);
+                if let Some(vtable_json) = build_vtable(mir, *ck, op_ty, ty) {
+                    j.as_object_mut().unwrap().insert(
+                        "vtable".to_owned(),
+                        vtable_json,
+                    );
+                }
+                j
             }
             &mir::Rvalue::BinaryOp(ref binop, ref op1, ref op2) => {
                 json!({
@@ -763,36 +833,44 @@ pub fn emit_traits(state: &mut CompileState, file: &mut File) -> io::Result<()> 
 
     // Emit definitions for all traits.
     for def_id in iter_trait_def_ids(state) {
-        if def_id.is_local() {
-            let trait_name = def_id_str(tcx, def_id);
-            let items = tcx.associated_items(def_id);
-            state.session.note_without_error(
-                format!("Emitting trait items for {}",
-                        trait_name).as_str());
-            let mut ms = MirState { mir: None,
-                                    used_types: &mut dummy_used_types,
-                                    state: state };
-            let mut items_json = Vec::new();
-            for item in items {
-                items_json.push(assoc_item_json(&mut ms, &tcx, &item));
+        if !def_id.is_local() {
+            continue;
+        }
+        if !tcx.is_object_safe(def_id) {
+            continue;
+        }
+
+        let trait_name = def_id_str(tcx, def_id);
+        let items = tcx.associated_items(def_id);
+        state.session.note_without_error(
+            format!("Emitting trait items for {}",
+                    trait_name).as_str());
+        let mut ms = MirState { mir: None,
+                                used_types: &mut dummy_used_types,
+                                state: state };
+        let mut items_json = Vec::new();
+        for item in items {
+            if !tcx.is_vtable_safe_method(def_id, &item) {
+                continue;
             }
-            let supers = traits::supertrait_def_ids(tcx, def_id);
-            let mut supers_json = Vec::new();
-            for item in supers {
-                supers_json.push(item.to_json(&mut ms));
-            }
-            let preds = tcx.predicates_of(def_id);
-            let generics = tcx.generics_of(def_id);
-            seq.serialize_element(
-                &json!({
-                    "name": def_id.to_json(&mut ms),
-                    "items": serde_json::Value::Array(items_json),
-                    "supertraits": serde_json::Value::Array(supers_json),
-                    "generics": generics.to_json(&mut ms),
-                    "predicates": preds.to_json(&mut ms),
-                })
-            )?;
-        } // Else look it up somewhere else, but I'm not sure where.
+            items_json.push(assoc_item_json(&mut ms, tcx, &item));
+        }
+        let supers = traits::supertrait_def_ids(tcx, def_id);
+        let mut supers_json = Vec::new();
+        for item in supers {
+            supers_json.push(item.to_json(&mut ms));
+        }
+        let preds = tcx.predicates_of(def_id);
+        let generics = tcx.generics_of(def_id);
+        seq.serialize_element(
+            &json!({
+                "name": def_id.to_json(&mut ms),
+                "items": serde_json::Value::Array(items_json),
+                "supertraits": serde_json::Value::Array(supers_json),
+                "generics": generics.to_json(&mut ms),
+                "predicates": preds.to_json(&mut ms),
+            })
+        )?;
     }
     seq.end()?;
     Ok(())
@@ -810,22 +888,31 @@ pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
             continue;
         }
 
-        let mut ms = MirState { mir: None,
-                                used_types: &mut dummy_used_types,
-                                state: state };
-
         let trait_ref = match tcx.impl_trait_ref(def_id) {
             Some(x) => x,
             // Currently we don't bother emitting inherent impls.
             None => continue,
         };
+        if !tcx.is_object_safe(trait_ref.def_id) {
+            continue;
+        }
+
         let preds = tcx.predicates_of(def_id);
         let generics = tcx.generics_of(def_id);
+
+        let mut ms = MirState { mir: None,
+                                used_types: &mut dummy_used_types,
+                                state: state };
 
         let items = tcx.associated_items(def_id);
         let mut items_json = Vec::new();
         for item in items {
-            items_json.push(assoc_item_json(&mut ms, &tcx, &item));
+            let trait_assoc_item = trait_item_for_impl_item(tcx, &item)
+                .unwrap_or_else(|| panic!("can't find trait item for {:?}", item));
+            if !tcx.is_vtable_safe_method(trait_ref.def_id, &trait_assoc_item) {
+                continue;
+            }
+            items_json.push(assoc_item_json(&mut ms, tcx, &item));
         }
 
         seq.serialize_element(
@@ -867,8 +954,8 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         emit_adts(&mut state, &used_types, &mut file)?;
         write!(file, ", \"traits\": ")?;
         emit_traits(&mut state, &mut file)?;
-        write!(file, ", \"impls\": ")?;
-        emit_impls(&mut state, &mut file)?;
+        write!(file, ", \"impls\": [] ")?;
+        //emit_impls(&mut state, &mut file)?;
         write!(file, " }}")
     })
 }

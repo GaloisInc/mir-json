@@ -482,9 +482,26 @@ impl ToJson<'_> for ty::Generics {
     }
 }
 
+pub fn trait_item_for_impl_item<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    item: &ty::AssocItem,
+) -> Option<ty::AssocItem> {
+    if let ty::AssocItemContainer::ImplContainer(impl_did) = item.container {
+        if let Some(trait_ref) = tcx.impl_trait_ref(impl_did) {
+            let trait_did = trait_ref.def_id;
+            for trait_item in tcx.associated_items(trait_did) {
+                if trait_item.ident.name == item.ident.name {
+                    return Some(trait_item);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn assoc_item_json<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    tcx: &ty::TyCtxt<'tcx>,
+    tcx: ty::TyCtxt<'tcx>,
     item: &ty::AssocItem
 ) -> serde_json::Value {
     let mut map = serde_json::Map::new();
@@ -518,15 +535,8 @@ pub fn assoc_item_json<'tcx>(
         }
     }
 
-    if let ty::AssocItemContainer::ImplContainer(impl_did) = item.container {
-        if let Some(trait_ref) = tcx.impl_trait_ref(impl_did) {
-            let trait_did = trait_ref.def_id;
-            for trait_item in tcx.associated_items(trait_did) {
-                if trait_item.ident.name == item.ident.name {
-                    map.insert("implements".to_owned(), trait_item.def_id.to_json(ms));
-                }
-            }
-        }
+    if let Some(trait_item) = trait_item_for_impl_item(tcx, item) {
+        map.insert("implements".to_owned(), trait_item.def_id.to_json(ms));
     }
 
     map.into()
