@@ -135,13 +135,18 @@ fn build_vtable_items<'tcx>(
     let mut parts = Vec::with_capacity(methods.len());
     for &m in methods {
         if let Some((def_id, substs)) = m {
-            let instance =
+            let inst =
                 ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
                 .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
                                           def_id, substs));
+            let inst_def_id = match inst.def {
+                ty::InstanceDef::Item(def_id) => def_id,
+                _ => panic!("instance {:?} ({:?}, {:?}) resolved to non-Item",
+                            inst, def_id, substs),
+            };
             parts.push(json!({
-                "def_id": def_id.to_json(mir),
-                "instance": instance.to_json(mir),
+                "def_id": inst_id_str(mir.state.tcx, inst_def_id, inst.substs),
+                "instance": inst.to_json(mir),
             }));
         } else {
             parts.push(json!(null));
