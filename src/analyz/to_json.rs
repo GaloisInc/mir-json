@@ -17,6 +17,7 @@ pub struct CompileState<'a, 'tcx> {
 pub struct Used<'tcx> {
     pub types: HashSet<DefId>,
     pub vtables: HashSet<ty::PolyTraitRef<'tcx>>,
+    pub instances: HashSet<ty::Instance<'tcx>>,
 }
 
 pub struct MirState<'a, 'tcx : 'a> {

@@ -90,21 +90,51 @@ where T: HashStable<StableHashingContext<'tcx>> {
 
 pub fn inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
-    def_id: hir::def_id::DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
+    inst: ty::Instance<'tcx>,
 ) -> String {
-    if substs.len() == 0 {
-        return def_id_str(tcx, def_id);
-    }
-
     let substs = tcx.normalize_erasing_regions(
         ty::ParamEnv::reveal_all(),
-        substs,
+        inst.substs,
     );
     assert!(!substs.has_erasable_regions());
     assert!(!substs.needs_subst());
 
-    ext_def_id_str(tcx, def_id, "_inst", substs)
+    match inst.def {
+        ty::InstanceDef::Item(def_id) |
+        ty::InstanceDef::Intrinsic(def_id) => {
+            if substs.len() == 0 {
+                def_id_str(tcx, def_id)
+            } else {
+                ext_def_id_str(tcx, def_id, "_inst", substs)
+            }
+        },
+        ty::InstanceDef::VtableShim(def_id) =>
+            ext_def_id_str(tcx, def_id, "_vtshim", substs),
+        ty::InstanceDef::Virtual(def_id, idx) =>
+            ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), substs),
+        ty::InstanceDef::DropGlue(def_id, _) =>
+            ext_def_id_str(tcx, def_id, "_drop", substs),
+        ty::InstanceDef::FnPtrShim(def_id, _) |
+        ty::InstanceDef::ClosureOnceShim { call_once: def_id } |
+        ty::InstanceDef::CloneShim(def_id, _) =>
+            ext_def_id_str(tcx, def_id, "_UNKNOWN", substs),
+    }
+}
+
+pub fn inst_def_id<'tcx>(
+    inst: ty::Instance<'tcx>,
+) -> DefId {
+    match inst.def {
+        ty::InstanceDef::Item(def_id) |
+        ty::InstanceDef::Intrinsic(def_id) |
+        ty::InstanceDef::VtableShim(def_id) |
+        ty::InstanceDef::Virtual(def_id, _) |
+        ty::InstanceDef::FnPtrShim(def_id, _) |
+        ty::InstanceDef::ClosureOnceShim { call_once: def_id } |
+        ty::InstanceDef::DropGlue(def_id, _) |
+        ty::InstanceDef::CloneShim(def_id, _) =>
+            def_id,
+    }
 }
 
 impl ToJson<'_> for hir::def_id::DefId {
@@ -115,6 +145,8 @@ impl ToJson<'_> for hir::def_id::DefId {
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        mir.used.instances.insert(self.clone());
+
         let substs = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
             self.substs,
@@ -232,28 +264,15 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 );
 
                 // Compute the mangled name of the monomorphized instance being called.
-                let (inst_def_id, inst_substs) = if let Some(inst) = inst {
-                    let inst_def_id = match inst.def {
-                        ty::InstanceDef::Item(def_id) => def_id,
-                        _ => {
-                            eprintln!(
-                                "error: FnDef Instance resolved to non-Item: {:?}, {:?}",
-                                defid, substs,
-                            );
-                            // Reuse unresolved defid for convenience.  It might even by correct in
-                            // some cases.
-                            defid
-                        },
-                    };
-                    (inst_def_id, inst.substs)
+                let name = if let Some(inst) = inst {
+                    inst_id_str(mir.state.tcx, inst)
                 } else {
                     eprintln!(
                         "error: failed to resolve FnDef Instance: {:?}, {:?}",
                         defid, substs,
                     );
-                    (defid, ty::List::empty())
+                    def_id_str(mir.state.tcx, defid)
                 };
-                let name = inst_id_str(mir.state.tcx, inst_def_id, inst_substs);
 
                 json!({
                     "kind": "FnDef",

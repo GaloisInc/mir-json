@@ -139,13 +139,9 @@ fn build_vtable_items<'tcx>(
                 ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
                 .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
                                           def_id, substs));
-            let inst_def_id = match inst.def {
-                ty::InstanceDef::Item(def_id) => def_id,
-                _ => panic!("instance {:?} ({:?}, {:?}) resolved to non-Item",
-                            inst, def_id, substs),
-            };
+            mir.used.instances.insert(inst);
             parts.push(json!({
-                "def_id": inst_id_str(mir.state.tcx, inst_def_id, inst.substs),
+                "def_id": inst_id_str(mir.state.tcx, inst),
                 "instance": inst.to_json(mir),
             }));
         } else {
@@ -761,25 +757,22 @@ pub fn emit_mono_items<'tcx>(
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
 
     for mono_item in mono_items {
-        let (inst, def_id, substs) = match mono_item {
-            MonoItem::Fn(inst) => {
-                let def_id = match inst.def {
-                    ty::InstanceDef::Item(def_id) => def_id,
-                    _ => continue,
-                };
-                (Some(inst), def_id, inst.substs)
-            },
-            MonoItem::Static(def_id) => {
-                (None, def_id, ty::List::empty())
-            },
+        let (inst, def_id) = match mono_item {
+            MonoItem::Fn(inst) => (Some(inst), inst_def_id(inst)),
+            MonoItem::Static(def_id) => (None, def_id),
             MonoItem::GlobalAsm(_) => continue,
         };
 
-        let name = inst_id_str(tcx, def_id, substs);
+        let name = match inst {
+            Some(inst) => inst_id_str(tcx, inst),
+            None => def_id_str(tcx, def_id),
+        };
         let mut mir = tcx.optimized_mir(def_id).clone();
-        subst_const_tys(tcx, substs, &mut mir);
-        let mir = tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), &mir);
+        if let Some(inst) = inst {
+            subst_const_tys(tcx, inst.substs, &mut mir);
+            mir = tcx.subst_and_normalize_erasing_regions(
+                inst.substs, ty::ParamEnv::reveal_all(), &mir);
+        }
         let mir = tcx.arena.alloc(mir);
 
         state.session.note_without_error(&format!("Emitting MIR for {}", name));
@@ -988,6 +981,38 @@ pub fn emit_impls(state: &mut CompileState, file: &mut File) -> io::Result<()> {
     Ok(())
 }
 
+pub fn emit_intrinsics<'tcx>(
+    state: &mut CompileState<'_, 'tcx>,
+    used_instances: &HashSet<ty::Instance<'tcx>>,
+    file: &mut File,
+) -> io::Result<()> {
+    let mut ser = serde_json::Serializer::new(file);
+    let mut seq = ser.serialize_seq(None)?;
+
+    let mut dummy_used = Used::default();
+    let mut ms = MirState {
+        mir: None,
+        used: &mut dummy_used,
+        state: state,
+    };
+
+    for inst in used_instances {
+        match inst.def {
+            // Some cases show up as mono items, and get handled by emit_fns instead.
+            ty::InstanceDef::Item(_) |
+            ty::InstanceDef::DropGlue(_, _) => continue,
+            _ => {},
+        }
+
+        seq.serialize_element(&json!({
+            "name": inst_id_str(state.tcx, inst.clone()),
+            "inst": inst.to_json(&mut ms),
+        }));
+    }
+    seq.end()?;
+    Ok(())
+}
+
 pub fn analyze(comp: &Compiler) -> io::Result<()> {
     let iname = source_name(comp.input()).to_string();
     let mut mirname = Path::new(&iname).to_path_buf();
@@ -1016,6 +1041,8 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         emit_traits(&mut state, &mut file)?;
         write!(file, ", \"impls\": [] ")?;
         //emit_impls(&mut state, &mut file)?;
+        write!(file, ", \"intrinsics\": ")?;
+        emit_intrinsics(&mut state, &used.instances, &mut file)?;
         write!(file, " }}")
     })
 }
