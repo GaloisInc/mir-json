@@ -13,10 +13,15 @@ pub struct CompileState<'a, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
 }
 
+#[derive(Default)]
+pub struct Used<'tcx> {
+    pub types: HashSet<DefId>,
+    pub vtables: HashSet<ty::PolyTraitRef<'tcx>>,
+}
+
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
-    pub used_types: &'a mut HashSet<DefId>,
-    pub used_vtables: &'a mut HashSet<ty::PolyTraitRef<'tcx>>,
+    pub used: &'a mut Used<'tcx>,
     pub state: &'a CompileState<'a, 'tcx>,
 }
 

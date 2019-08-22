@@ -216,7 +216,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             }
             &ty::TyKind::Adt(ref adtdef, ref substs) => {
                 let did = adtdef.did;
-                mir.used_types.insert(did);
+                mir.used.types.insert(did);
                 json!({
                     "kind": "Adt",
                     "name": did.to_json(mir),
