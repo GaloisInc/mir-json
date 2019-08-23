@@ -7,6 +7,8 @@ use syntax::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::hash::Hash;
+use std::ops::Deref;
 use std::mem;
 
 pub struct CompileState<'a, 'tcx> {
@@ -14,20 +16,51 @@ pub struct CompileState<'a, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
 }
 
+#[derive(Clone, Debug)]
+pub struct UsedSet<T: Hash+Eq> {
+    cur: HashSet<T>,
+    new: HashSet<T>,
+}
+
+impl<T: Hash+Eq> Default for UsedSet<T> {
+    fn default() -> Self {
+        UsedSet {
+            cur: HashSet::new(),
+            new: HashSet::new(),
+        }
+    }
+}
+
+impl<T: Hash+Eq+Clone> UsedSet<T> {
+    pub fn insert(&mut self, x: T) {
+        if self.cur.insert(x.clone()) {
+            // `x` was not in `cur`
+            self.new.insert(x);
+        }
+    }
+
+    pub fn take_new(&mut self) -> HashSet<T> {
+        mem::replace(&mut self.new, HashSet::new())
+    }
+}
+
+impl<T: Hash+Eq> Deref for UsedSet<T> {
+    type Target = HashSet<T>;
+    fn deref(&self) -> &HashSet<T> {
+        &self.cur
+    }
+}
+
 #[derive(Default)]
 pub struct Used<'tcx> {
-    pub types: HashSet<DefId>,
-    pub vtables: HashSet<ty::PolyTraitRef<'tcx>>,
-    instances: HashSet<ty::Instance<'tcx>>,
-    new_instances: HashSet<ty::Instance<'tcx>>,
+    pub types: UsedSet<DefId>,
+    pub vtables: UsedSet<ty::PolyTraitRef<'tcx>>,
+    pub instances: UsedSet<ty::Instance<'tcx>>,
 }
 
 impl<'tcx> Used<'tcx> {
     pub fn add_instance(&mut self, inst: ty::Instance<'tcx>) {
-        if self.instances.insert(inst) {
-            // `inst` was not previously contained in `instances`
-            self.new_instances.insert(inst);
-        }
+        self.instances.insert(inst);
     }
 
     pub fn instances(&self) -> &HashSet<ty::Instance<'tcx>> {
@@ -35,7 +68,7 @@ impl<'tcx> Used<'tcx> {
     }
 
     pub fn take_new_instances(&mut self) -> HashSet<ty::Instance<'tcx>> {
-        mem::replace(&mut self.new_instances, HashSet::new())
+        self.instances.take_new()
     }
 }
 
