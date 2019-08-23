@@ -42,6 +42,10 @@ impl<T: Hash+Eq+Clone> UsedSet<T> {
     pub fn take_new(&mut self) -> HashSet<T> {
         mem::replace(&mut self.new, HashSet::new())
     }
+
+    pub fn has_new(&self) -> bool {
+        self.new.len() > 0
+    }
 }
 
 impl<T: Hash+Eq> Deref for UsedSet<T> {
@@ -59,6 +63,12 @@ pub struct Used<'tcx> {
 }
 
 impl<'tcx> Used<'tcx> {
+    pub fn has_new(&self) -> bool {
+        let Used { ref types, ref vtables, ref instances } = *self;
+        types.has_new() ||
+        vtables.has_new() ||
+        instances.has_new()
+    }
 }
 
 pub struct MirState<'a, 'tcx : 'a> {
