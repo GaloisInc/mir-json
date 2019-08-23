@@ -139,7 +139,7 @@ fn build_vtable_items<'tcx>(
                 ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
                 .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
                                           def_id, substs));
-            mir.used.instances.insert(inst);
+            mir.used.add_instance(inst);
             parts.push(json!({
                 "def_id": inst_id_str(mir.state.tcx, inst),
                 "instance": inst.to_json(mir),
@@ -761,33 +761,77 @@ pub fn emit_mono_items<'tcx>(
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
 
     for mono_item in mono_items {
-        let (inst, def_id) = match mono_item {
-            MonoItem::Fn(inst) => (Some(inst), inst_def_id(inst)),
-            MonoItem::Static(def_id) => (None, def_id),
-            MonoItem::GlobalAsm(_) => continue,
-        };
+        match mono_item {
+            MonoItem::Fn(inst) => {
+                // Record the instance as a root for later processing.
+                used.add_instance(inst);
+            },
+            MonoItem::Static(def_id) => {
+                let name = def_id_str(tcx, def_id);
+                let mir = tcx.optimized_mir(def_id);
+                state.session.note_without_error(&format!("Emitting MIR for {}", name));
 
-        let name = match inst {
-            Some(inst) => inst_id_str(tcx, inst),
-            None => def_id_str(tcx, def_id),
-        };
-        let mut mir = tcx.optimized_mir(def_id).clone();
-        if let Some(inst) = inst {
-            subst_const_tys(tcx, inst.substs, &mut mir);
-            mir = tcx.subst_and_normalize_erasing_regions(
-                inst.substs, ty::ParamEnv::reveal_all(), &mir);
+                let mut ms = MirState {
+                    mir: Some(mir),
+                    used: used,
+                    state: state,
+                };
+                let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, None, mir);
+                fns.push(fn_json);
+            },
+            MonoItem::GlobalAsm(_) => {},
         }
-        let mir = tcx.arena.alloc(mir);
+    }
 
-        state.session.note_without_error(&format!("Emitting MIR for {}", name));
+    // Treat `used.new_instances` as a worklist for instances to emit.  We need this because
+    // `mono_items` omits definitions that appear only in constants (since they don't appear in the
+    // object code).  Processing a function may discover new constants to emit.  Constants, like
+    // monomorphizations, are emitted only in crates that use them, not in their defining crates.
+    loop {
+        let insts = used.take_new_instances();
+        if insts.len() == 0 {
+            break;
+        }
 
-        let mut ms = MirState {
-            mir: Some(mir),
-            used: used,
-            state: state,
-        };
-        let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, inst, mir);
-        fns.push(fn_json);
+        for inst in insts {
+            let def_id = match inst.def {
+                ty::InstanceDef::Item(def_id) => def_id,
+                _ => continue,
+            };
+
+            // Foreign items and non-generics have no MIR available.
+            if state.tcx.is_foreign_item(def_id) {
+                continue;
+            }
+            if !def_id.is_local() {
+                if state.tcx.is_reachable_non_generic(def_id) {
+                    continue;
+                }
+                // Items with upstream monomorphizations have already been translated into an upstream
+                // crate, so we can skip them.
+                if state.tcx.upstream_monomorphizations_for(def_id)
+                        .map_or(false, |monos| monos.contains_key(&inst.substs)) {
+                    continue;
+                }
+            }
+
+            let name = inst_id_str(tcx, inst);
+            let mut mir = tcx.optimized_mir(inst_def_id(inst)).clone();
+            subst_const_tys(tcx, inst.substs, &mut mir);
+            let mir = tcx.subst_and_normalize_erasing_regions(
+                inst.substs, ty::ParamEnv::reveal_all(), &mir);
+            let mir = tcx.arena.alloc(mir);
+
+            state.session.note_without_error(&format!("Emitting MIR for {}", name));
+
+            let mut ms = MirState {
+                mir: Some(mir),
+                used: used,
+                state: state,
+            };
+            let fn_json = build_mir(&mut ms, &mut fns, &mut statics, &name, Some(inst), mir);
+            fns.push(fn_json);
+        }
     }
 
     (fns, statics)
@@ -1046,7 +1090,7 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         write!(file, ", \"impls\": [] ")?;
         //emit_impls(&mut state, &mut file)?;
         write!(file, ", \"intrinsics\": ")?;
-        emit_intrinsics(&mut state, &used.instances, &mut file)?;
+        emit_intrinsics(&mut state, used.instances(), &mut file)?;
         write!(file, " }}")
     })
 }

@@ -7,6 +7,7 @@ use syntax::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::mem;
 
 pub struct CompileState<'a, 'tcx> {
     pub session: &'a Session,
@@ -17,7 +18,25 @@ pub struct CompileState<'a, 'tcx> {
 pub struct Used<'tcx> {
     pub types: HashSet<DefId>,
     pub vtables: HashSet<ty::PolyTraitRef<'tcx>>,
-    pub instances: HashSet<ty::Instance<'tcx>>,
+    instances: HashSet<ty::Instance<'tcx>>,
+    new_instances: HashSet<ty::Instance<'tcx>>,
+}
+
+impl<'tcx> Used<'tcx> {
+    pub fn add_instance(&mut self, inst: ty::Instance<'tcx>) {
+        if self.instances.insert(inst) {
+            // `inst` was not previously contained in `instances`
+            self.new_instances.insert(inst);
+        }
+    }
+
+    pub fn instances(&self) -> &HashSet<ty::Instance<'tcx>> {
+        &self.instances
+    }
+
+    pub fn take_new_instances(&mut self) -> HashSet<ty::Instance<'tcx>> {
+        mem::replace(&mut self.new_instances, HashSet::new())
+    }
 }
 
 pub struct MirState<'a, 'tcx : 'a> {

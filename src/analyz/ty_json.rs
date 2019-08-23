@@ -52,8 +52,14 @@ impl ToJson<'_> for ty::VariantDiscr {
             &ty::VariantDiscr::Relative(i) => {
                 json!({"kind": "Relative", "index" : json!(i)})
             }
-            &ty::VariantDiscr::Explicit(n) => {
-                json!({"kind": "Explicit", "name" : n.to_json(mir)})
+            &ty::VariantDiscr::Explicit(def_id) => {
+                if let Some(inst) = ty::Instance::resolve(
+                        mir.state.tcx, ty::ParamEnv::reveal_all(), def_id, ty::List::empty()) {
+                    mir.used.add_instance(inst)
+                } else {
+                    eprintln!("error: failed to resolve enum discriminant {:?}", def_id);
+                }
+                json!({"kind": "Explicit", "name" : def_id.to_json(mir)})
             }
         }
     }
@@ -145,7 +151,7 @@ impl ToJson<'_> for hir::def_id::DefId {
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        mir.used.instances.insert(self.clone());
+        mir.used.add_instance(self.clone());
 
         let substs = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
@@ -708,6 +714,12 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 
         match self.val {
             interpret::ConstValue::Unevaluated(def_id, substs) => {
+                if let Some(inst) = ty::Instance::resolve(
+                        mir.state.tcx, ty::ParamEnv::reveal_all(), def_id, substs) {
+                    mir.used.add_instance(inst)
+                } else {
+                    eprintln!("error: failed to resolve constant {:?}, {:?}", def_id, substs);
+                }
                 map.insert("initializer".to_owned(), json!({
                     "def_id": def_id.to_json(mir),
                     "substs": substs.to_json(mir),
