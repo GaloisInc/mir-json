@@ -139,7 +139,7 @@ fn build_vtable_items<'tcx>(
                 ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
                 .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
                                           def_id, substs));
-            mir.used.add_instance(inst);
+            mir.used.instances.insert(inst);
             parts.push(json!({
                 "def_id": inst_id_str(mir.state.tcx, inst),
                 "instance": inst.to_json(mir),

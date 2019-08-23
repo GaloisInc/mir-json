@@ -59,17 +59,6 @@ pub struct Used<'tcx> {
 }
 
 impl<'tcx> Used<'tcx> {
-    pub fn add_instance(&mut self, inst: ty::Instance<'tcx>) {
-        self.instances.insert(inst);
-    }
-
-    pub fn instances(&self) -> &HashSet<ty::Instance<'tcx>> {
-        &self.instances
-    }
-
-    pub fn take_new_instances(&mut self) -> HashSet<ty::Instance<'tcx>> {
-        self.instances.take_new()
-    }
 }
 
 pub struct MirState<'a, 'tcx : 'a> {
