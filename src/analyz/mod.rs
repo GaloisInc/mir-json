@@ -370,6 +370,10 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
         json!({
             "mut": self.mutability.to_json(mir),
             "ty": self.ty.to_json(mir),
+            // We specifically record whether the variable's type is zero-sized, because rustc
+            // allows reading and taking refs of uninitialized zero-sized locals.
+            "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(self.ty))
+                .expect("failed to get layout").is_zst(),
             "scope": format!("{:?}", self.source_info.scope),
             "pos": pos
         })
