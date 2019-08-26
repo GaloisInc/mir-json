@@ -11,6 +11,7 @@ use rustc::ty::subst::Subst;
 use rustc_driver::source_name;
 use rustc_interface::interface::Compiler;
 use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
+use rustc_target::spec::abi;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
@@ -881,6 +882,8 @@ fn emit_fn<'tcx>(
         promoted.push(prom_name);
     }
 
+    let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(abi::Abi::Rust);
+
     out.fns.push(json!({
         "name": &name,
         "inst": inst.to_json(ms),
@@ -890,7 +893,28 @@ fn emit_fn<'tcx>(
         "predicates": { "predicates": [] },
         "body": mir_body(ms),
         "promoted": promoted,
+        "abi": format!("{:?}", abi),
     }))
+}
+
+fn inst_abi<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    inst: ty::Instance<'tcx>,
+) -> abi::Abi {
+    match inst.def {
+        ty::InstanceDef::Item(def_id) => {
+            let ty = tcx.type_of(def_id);
+            match ty.sty {
+                ty::TyKind::FnDef(_, _) =>
+                    ty.fn_sig(tcx).skip_binder().abi,
+                ty::TyKind::Closure(_, _) => abi::Abi::RustCall,
+                _ => abi::Abi::Rust,
+            }
+        },
+        ty::InstanceDef::Intrinsic(_) => abi::Abi::RustIntrinsic,
+        ty::InstanceDef::ClosureOnceShim { .. } => abi::Abi::RustCall,
+        _ => abi::Abi::Rust,
+    }
 }
 
 

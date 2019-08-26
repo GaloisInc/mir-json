@@ -7,6 +7,7 @@ use rustc::ty::{TyCtxt, TypeFoldable};
 use rustc::ich::StableHashingContext;
 use rustc_data_structures::indexed_vec::{self, IndexVec};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_target::spec::abi;
 use syntax::ast;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -34,6 +35,7 @@ basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::Mutability);
 basic_json_enum_impl!(mir::CastKind);
+basic_json_enum_impl!(abi::Abi);
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
