@@ -893,7 +893,7 @@ fn emit_fn<'tcx>(
         "predicates": { "predicates": [] },
         "body": mir_body(ms),
         "promoted": promoted,
-        "abi": format!("{:?}", abi),
+        "abi": abi.to_json(ms),
     }))
 }
 
