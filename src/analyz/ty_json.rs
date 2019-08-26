@@ -289,11 +289,13 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             }
             &ty::TyKind::Param(ref p) =>
                 json!({"kind": "Param", "param": p.to_json(mir)}),
-            &ty::TyKind::Closure(ref defid, ref closuresubsts) => {
+            &ty::TyKind::Closure(defid, ref closuresubsts) => {
                 json!({
                     "kind": "Closure",
                     "defid": defid.to_json(mir),
-                    "closuresubsts": closuresubsts.substs.to_json(mir)
+                    "closuresubsts": closuresubsts.substs.to_json(mir),
+                    "upvar_tys": closuresubsts.upvar_tys(defid, mir.state.tcx)
+                        .collect::<Vec<_>>().to_json(mir),
                 })
             }
             &ty::TyKind::Dynamic(ref preds, _region) => {
