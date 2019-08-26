@@ -381,7 +381,8 @@ impl<'tcx> ToJson<'tcx> for ty::FnSig<'tcx> {
             self.inputs().iter().map(|i| i.to_json(ms)).collect();
         json!({
             "inputs": input_jsons,
-            "output": self.output().to_json(ms)
+            "output": self.output().to_json(ms),
+            "abi": self.abi.to_json(ms),
         })
     }
 }
