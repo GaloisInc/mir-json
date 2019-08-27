@@ -123,7 +123,8 @@ pub fn inst_id_str<'tcx>(
         ty::InstanceDef::DropGlue(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_drop", substs),
         ty::InstanceDef::FnPtrShim(def_id, _) |
-        ty::InstanceDef::ClosureOnceShim { call_once: def_id } |
+        ty::InstanceDef::ClosureOnceShim { call_once: def_id } =>
+            ext_def_id_str(tcx, def_id, "_callonce", substs),
         ty::InstanceDef::CloneShim(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_UNKNOWN", substs),
     }
