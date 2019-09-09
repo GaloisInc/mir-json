@@ -3,6 +3,7 @@
 use rustc::ty::{self, TyCtxt, List, TyS};
 use rustc::mir::{self, Body};
 use rustc::hir;
+use rustc::hir::def::DefKind;
 use rustc::hir::def_id;
 use rustc::hir::def_id::DefId;
 use rustc::mir::mono::MonoItem;
@@ -12,6 +13,7 @@ use rustc_driver::source_name;
 use rustc_interface::interface::Compiler;
 use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
 use rustc_target::spec::abi;
+use syntax::symbol::Symbol;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
@@ -729,8 +731,24 @@ fn emit_static_decl<'tcx>(
 }
 
 
+fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
+    def_id.is_local() && tcx.has_attr(def_id, Symbol::intern("crux_test"))
+}
+
+fn init_instances(ms: &mut MirState) -> Vec<String> {
+    let is_top_level = ms.state.session.parse_sess.config.iter()
+        .any(|&(key, _)| key.as_str() == "crux_top_level");
+
+    if is_top_level {
+        init_instances_from_tests(ms)
+    } else {
+        init_instances_from_mono_items(ms);
+        Vec::new()
+    }
+}
+
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
-fn init_instances(ms: &mut MirState) {
+fn init_instances_from_mono_items(ms: &mut MirState) {
     let tcx = ms.state.tcx;
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
     for mono_item in mono_items {
@@ -740,6 +758,41 @@ fn init_instances(ms: &mut MirState) {
             MonoItem::GlobalAsm(_) => {},
         }
     }
+}
+
+/// Initialize the set of needed instances.  Returns a list of root instances.
+fn init_instances_from_tests(ms: &mut MirState) -> Vec<String> {
+    let tcx = ms.state.tcx;
+    let mut roots = Vec::new();
+    for &def_id in tcx.mir_keys(def_id::LOCAL_CRATE) {
+        if !has_test_attr(tcx, def_id) {
+            continue;
+        }
+
+        if tcx.def_kind(def_id) != Some(DefKind::Fn) {
+            tcx.sess.span_err(
+                tcx.def_span(def_id),
+                "#[test] can only be applied to functions",
+            );
+            continue;
+        }
+        if tcx.generics_of(def_id).count() > 0 {
+            tcx.sess.span_err(
+                tcx.def_span(def_id),
+                "#[test] cannot be applied to generic functions",
+            );
+            continue;
+        }
+
+        let inst = ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, List::empty())
+            .unwrap_or_else(|| {
+                panic!("Instance::resolve failed to find test function {:?}?", def_id);
+            });
+
+        ms.used.instances.insert(inst);
+        roots.push(inst_id_str(tcx, inst));
+    }
+    roots
 }
 
 
@@ -948,6 +1001,7 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
     let mut out = Output::default();
 
     let mut gcx = comp.global_ctxt().unwrap().peek_mut();
+    let mut roots = Vec::new();
     gcx.enter(|tcx| {
         let mut used = Used::default();
         let state = CompileState {
@@ -964,9 +1018,9 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         emit_traits(&mut ms, &mut out);
         emit_statics(&mut ms, &mut out);
 
-        // Everything else is demand-driven, to handle monomorphization.  We start with the visible
-        // monomorphized functions, then keep looping until there are no more nodes to process.
-        init_instances(&mut ms);
+        // Everything else is demand-driven, to handle monomorphization.  We start with all #[test]
+        // functions, then keep looping until there are no more nodes to process.
+        roots = init_instances(&mut ms);
 
         while ms.used.has_new() {
             for inst in ms.used.instances.take_new() {
@@ -990,6 +1044,7 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         "traits": out.traits,
         "intrinsics": out.intrinsics,
         "impls": [],
+        "roots": roots,
     }).serialize(&mut ser)?;
     Ok(())
 }
