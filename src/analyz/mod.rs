@@ -874,19 +874,21 @@ fn build_vtable_items<'tcx>(
 
     let mut parts = Vec::with_capacity(methods.len());
     for &m in methods {
-        if let Some((def_id, substs)) = m {
-            let inst =
-                ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
-                .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
-                                          def_id, substs));
-            mir.used.instances.insert(inst);
-            parts.push(json!({
-                "def_id": inst_id_str(mir.state.tcx, inst),
-                "instance": inst.to_json(mir),
-            }));
-        } else {
-            parts.push(json!(null));
-        }
+        // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
+        // adjust `InstanceDef::Virtual` indices accordingly.
+        let (def_id, substs) = match m {
+            Some(x) => x,
+            None => continue,
+        };
+        let inst =
+            ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
+            .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
+                                      def_id, substs));
+        mir.used.instances.insert(inst);
+        parts.push(json!({
+            "def_id": inst_id_str(mir.state.tcx, inst),
+            "instance": inst.to_json(mir),
+        }));
     }
     parts.into()
 }

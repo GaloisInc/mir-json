@@ -152,6 +152,24 @@ impl ToJson<'_> for hir::def_id::DefId {
     }
 }
 
+/// rustc's vtables have null entries for non-object-safe methods (those with `Where Self: Sized`).
+/// We omit such methods from our vtables.  This function adjusts vtable indices from rustc's way
+/// of counting to ours.  `self_ty` should be `dyn Trait`.
+fn adjust_method_index<'tcx>(tcx: TyCtxt<'tcx>, self_ty: ty::Ty<'tcx>, raw_idx: usize) -> usize {
+    let preds = match self_ty.sty {
+        ty::TyKind::Dynamic(ref preds, _region) => preds,
+        _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
+    };
+    let ex_tref = match preds.principal() {
+        Some(x) => x,
+        None => panic!("no principal trait for {:?}?", self_ty),
+    };
+    let tref = ex_tref.with_self_ty(tcx, self_ty);
+    let methods = tcx.vtable_methods(tref);
+
+    methods.iter().take(raw_idx).filter(|m| m.is_some()).count()
+}
+
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         mir.used.instances.insert(self.clone());
@@ -183,12 +201,16 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "substs": substs.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
-            ty::InstanceDef::Virtual(did, idx) => json!({
-                "kind": "Virtual",
-                "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
-                "index": idx,
-            }),
+            ty::InstanceDef::Virtual(did, idx) => {
+                let self_ty = substs.types().next()
+                    .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
+                json!({
+                    "kind": "Virtual",
+                    "def_id": did.to_json(mir),
+                    "substs": substs.to_json(mir),
+                    "index": adjust_method_index(mir.state.tcx, self_ty, idx),
+                })
+            },
             ty::InstanceDef::ClosureOnceShim { call_once } => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
