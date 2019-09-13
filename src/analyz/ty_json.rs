@@ -853,6 +853,7 @@ impl ToJsonAg for ty::AdtDef {
     ) -> serde_json::Value {
         json!({
             "name": self.did.to_json(mir),
+            "kind": format!("{:?}", self.adt_kind()),
             "variants": self.variants.tojson(mir, substs)
         })
     }
