@@ -949,6 +949,7 @@ fn emit_fn<'tcx>(
         "body": mir_body(ms),
         "promoted": promoted,
         "abi": abi.to_json(ms),
+        "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
     }))
 }
 
