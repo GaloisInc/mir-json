@@ -126,7 +126,7 @@ pub fn inst_id_str<'tcx>(
         ty::InstanceDef::ClosureOnceShim { call_once: def_id } =>
             ext_def_id_str(tcx, def_id, "_callonce", substs),
         ty::InstanceDef::CloneShim(def_id, _) =>
-            ext_def_id_str(tcx, def_id, "_UNKNOWN", substs),
+            ext_def_id_str(tcx, def_id, "_shim", substs),
     }
 }
 
@@ -222,12 +222,35 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "substs": substs.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
-            ty::InstanceDef::CloneShim(did, ty) => json!({
-                "kind": "CloneShim",
-                "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
-                "ty": ty.to_json(mir),
-            }),
+            ty::InstanceDef::CloneShim(did, ty) => {
+                let sub_tys = match ty.sty {
+                    ty::TyKind::Array(t, _) => vec![t],
+                    ty::TyKind::Tuple(substs) => substs.types().collect(),
+                    ty::TyKind::Closure(closure_did, substs) =>
+                        substs.upvar_tys(closure_did, mir.state.tcx).collect(),
+                    _ => {
+                        eprintln!("warning: don't know how to build clone shim for {:?}", ty);
+                        vec![]
+                    },
+                };
+                let callees = sub_tys.into_iter()
+                    .map(|ty| {
+                        let inst = ty::Instance::resolve(
+                            mir.state.tcx,
+                            ty::ParamEnv::reveal_all(),
+                            did,
+                            mir.state.tcx.intern_substs(&[ty.into()]),
+                        );
+                        inst.map(|i| inst_id_str(mir.state.tcx, i))
+                    }).collect::<Vec<_>>();
+                json!({
+                    "kind": "CloneShim",
+                    "def_id": did.to_json(mir),
+                    "substs": substs.to_json(mir),
+                    "ty": ty.to_json(mir),
+                    "callees": callees.to_json(mir),
+                })
+            },
         }
     }
 }
