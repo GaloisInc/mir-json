@@ -3,9 +3,7 @@ Tool to compile rust to MIR, encoded as JSON.
 Uses unstable features -- the most recent build which has been
 successfully tested is rustc nightly-2019-08-05
 
-#####
-
-(Installation instructions if you are new to Rust)
+## Installation instructions
 
 1. If you are starting from scratch, you need to first install the rust
 compiler via the `rustup` tool. (Instructions are from the [rust
@@ -36,7 +34,13 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
        export LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$LD_LIBRARY_PATH
 
-6. If you want to use `cargo` instead, go to the directory of a Cargo
-package and do
+   For macOS, add this line instead
 
-      $ cargo mir-json
+       export DYLD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$DYLD_LIBRARY_PATH
+
+6. Check that `mir-json` was installed correctly
+
+       mir-json --version
+
+   It should print a version string.  If it prints a shared library error
+   instead, then most likely your `$LD_LIBRARY_PATH` is not set correctly.
