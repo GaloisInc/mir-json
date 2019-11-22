@@ -21,3 +21,7 @@ path = "src/main.rs"
 [[bin]]
 name = "cargo-mir-json"
 path = "src/cargo-mir-json.rs"
+
+[[bin]]
+name = "mir-json-dce"
+path = "src/mir-json-dce.rs"
