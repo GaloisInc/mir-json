@@ -22,12 +22,14 @@ use std::fs::File;
 use std::path::Path;
 use serde::ser::{Serialize, Serializer, SerializeSeq};
 use serde_json;
+use serde_cbor;
 
 #[macro_use]
 mod to_json;
 mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
+use lib_util;
 
 basic_json_enum_impl!(mir::BinOp);
 
@@ -995,7 +997,7 @@ struct Output {
     intrinsics: Vec<serde_json::Value>,
 }
 
-pub fn analyze(comp: &Compiler) -> io::Result<()> {
+pub fn analyze(comp: &Compiler) -> Result<(), serde_cbor::Error> {
     let iname = source_name(comp.input()).to_string();
     let mut mirname = Path::new(&iname).to_path_buf();
     mirname.set_extension("mir");
@@ -1038,8 +1040,9 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         }
     });
 
-    let mut ser = serde_json::Serializer::new(file);
-    json!({
+    let total_items = out.fns.len() + out.adts.len() + out.statics.len() + out.vtables.len() +
+        out.traits.len() + out.intrinsics.len();
+    let j = json!({
         "fns": out.fns,
         "adts": out.adts,
         "statics": out.statics,
@@ -1048,7 +1051,12 @@ pub fn analyze(comp: &Compiler) -> io::Result<()> {
         "intrinsics": out.intrinsics,
         "impls": [],
         "roots": roots,
-    }).serialize(&mut ser)?;
+    });
+    comp.session().note_without_error(
+        &format!("Indexing MIR ({} items)...", total_items));
+    let oc = lib_util::optimize_crate(j)?;
+    let mut ser = serde_cbor::Serializer::new(serde_cbor::ser::IoWrite::new(file));
+    oc.serialize(&mut ser)?;
     Ok(())
 }
 
