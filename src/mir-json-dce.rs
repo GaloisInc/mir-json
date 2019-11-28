@@ -11,6 +11,7 @@ extern crate serde;
 extern crate serde_cbor;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde_json;
+extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate mir_json;
 
@@ -23,19 +24,13 @@ use std::sync::atomic::{self, AtomicUsize};
 use std::time::Instant;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value as JsonValue;
-use mir_json::lib_util::OptimizedCrate;
 use mir_json::link;
 
 
 
-fn read_inputs() -> Result<Vec<OptimizedCrate>, serde_cbor::Error> {
-    env::args().skip(1).map(|arg| -> Result<_, serde_cbor::Error> {
-        let f = io::BufReader::new(File::open(&arg)?);
-        Ok(serde_cbor::de::from_reader::<OptimizedCrate, _>(f)?)
-    }).collect()
-}
-
 fn main() {
+    env_logger::init();
+
     let mut last_time = Instant::now();
     let mut measure = || {
         let now = Instant::now();
@@ -44,12 +39,9 @@ fn main() {
         dur
     };
 
-    let crates = read_inputs().unwrap();
-    eprintln!("{:?}: read inputs", measure());
-
-    let j = link::link_crates(&crates).unwrap();
-    eprintln!("{:?}: link crates", measure());
-
-    serde_json::to_writer(io::stdout(), &j).unwrap();
-    eprintln!("{:?}: write outputs", measure());
+    let mut inputs = env::args().skip(1).map(|arg| File::open(&arg))
+        .collect::<io::Result<Vec<_>>>().unwrap();
+    let mut output = io::BufWriter::new(io::stdout());
+    let j = link::link_crates(&mut inputs, output).unwrap();
+    debug!("{:?}: link crates", measure());
 }

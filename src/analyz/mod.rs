@@ -1054,9 +1054,7 @@ pub fn analyze(comp: &Compiler) -> Result<(), serde_cbor::Error> {
     });
     comp.session().note_without_error(
         &format!("Indexing MIR ({} items)...", total_items));
-    let oc = lib_util::optimize_crate(j)?;
-    let mut ser = serde_cbor::Serializer::new(serde_cbor::ser::IoWrite::new(file));
-    oc.serialize(&mut ser)?;
+    lib_util::write_indexed_crate(file, &j)?;
     Ok(())
 }
 

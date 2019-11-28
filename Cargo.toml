@@ -10,7 +10,7 @@ serde = "*"
 serde_derive = "*"
 serde_json = "*"
 serde_cbor = "*"
-serde_bytes = "*"
+tar = "*"
 cargo_metadata = { version = "0.2" }
 
 [lib]

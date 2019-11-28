@@ -1,81 +1,90 @@
 //! Utilities for manipulating libraries.
 //!
-//! Some libraries are quite large (core, std) and contain mostly dead code.  We'd like to prune
-//! away all the dead code before handing off the MIR to mir-verifier.  This speeds up
-//! mir-verifier's processing, and also keeps it from crashing if some of the dead library code
-//! contains unsupported constructs.
+//! The canonical representation of a crate is the JSON format produced by `analyz`.  However, for
+//! some large libraries (mainly `core` and `std`), the JSON representation can get quite large and
+//! expensive to parse, with most of its contents being unused.  This module defines an alternate
+//! representation that supports cheap dead code elimination, to minimize the amount of library
+//! code that needs to be parsed.
 //!
-//! Due to the size of the libraries in question, and because the "linking"/DCE process has to run
-//! on each test case in the mir-verifier test suite, we apply some optimizations to make it fast.
+//! The "indexed library format" is a TAR archive containing two files:
 //!
-//! * Libraries are stored in CBOR format.  The final output is still JSON, to keep compatibility
-//!   with existing mir-verifier code, but all intermediate steps use CBOR for faster parsing.
-//! * Item paths are interned during linking, to avoid costly string comparisons.
-//! * Library CBORs are "pre-interned", using a name table stored alongside the main data.  This
-//!   further reduces the size of the inputs.  Interned names get expanded back to strings only in
-//!   the final step, once all dead code has been eliminated.
-//! * The dependencies of each item are precomputed by mir-json and stored in the CBOR file.  This
-//!   lets the linker/DCE tool identify dead code without examining the body of each live item.
-//! * Serialization is done in two phases.  Each item is serialized to a bytestring, then the
-//!   bytestrings and metadata are serialized into the output file.  This lets the DCE tool avoid
-//!   deserializing dead items, which can be fairly large.
+//!  * `crate.json` contains the JSON representation of the crate.
+//!  * `index.cbor` contains metadata about the items in the crate.  Specifically, it lists the
+//!    name and dependencies of each item, along with the position in `crate.json` where the JSON
+//!    representation of the item can be found.
+//!
+//! The `link` module can use the index data of all crates in the program to perform whole-program
+//! dead code elimination, without needing to read or parse any items up front.  Once the set of
+//! live items is known, those items can be copied directly into the output JSON without parsing.
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, BTreeMap};
+use std::io::{self, Read, Write, Seek, SeekFrom, Cursor};
 use std::mem;
+use std::path::Path;
+use std::sync::mpsc::{self, SyncSender, Receiver};
+use std::thread;
 
 use serde_cbor::Value as CborValue;
 use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
-use serde_bytes::ByteBuf;
+use tar;
 
-/// The optimized data format used in library CBOR files.
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct OptimizedCrate {
-    /// Gives the dependencies of each item.  Items are identified by their path/DefId.  If two
-    /// items of different kinds have the same name (e.g., an entry in "statics" and its matching
-    /// entry in "fns"), the dependencies of both are merged when constructing this map.
-    pub deps: HashMap<StringId, Vec<StringId>>,
-
-    /// Name table.  `StringId`s in this `OptimizedCrate` are references into this table.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CrateIndex {
+    /// Name table.  Contains every string in the crate that looks like it might be an item name.
+    /// `StringId`s are indexes into this table.
     pub names: Vec<String>,
 
-    /// The actual crate data.  This is the JSON object produced by `analyz`, with a few
-    /// transformations applied:
-    ///
-    /// * The JSON object is converted to equivalent CBOR.
-    /// * Item paths are interned.  Each string containing `::` is replaced with a single-item map
-    ///   `{0: string_id}`, where `string_id` is an index into the `names` table.  Since maps with
-    ///   integer keys cannot appear in JSON, this encoding is unambiguous.
-    /// * Each of the top-level data arrays (`fns`, `statics`, etc) is converted to a map.  For
-    ///   each entry `{ "name": {0: string_id}, ... }` in the original table, the map contains an
-    ///   entry whose key is `string_id` and whose value is a bytestring containing the CBOR
-    ///   serialization of the entire entry.
-    pub data: OptimizedCrateData,
-}
+    pub items: HashMap<StringId, ItemData>,
 
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct OptimizedCrateData {
-    /// Map from function names to serialized CBOR data.
-    pub fns: HashMap<StringId, ByteBuf>,
-    pub adts: HashMap<StringId, ByteBuf>,
-    pub statics: HashMap<StringId, ByteBuf>,
-    pub vtables: HashMap<StringId, ByteBuf>,
-    pub traits: HashMap<StringId, ByteBuf>,
-    pub intrinsics: HashMap<StringId, ByteBuf>,
     pub roots: Vec<StringId>,
 }
 
+/// Metadata about a single item.
+///
+/// An item may have entries in multiple tables.  For example, a `static` item will have entries in
+/// both the `statics` and `fns` tables (with the `fns` entry being the static's initializer).  All
+/// entries with the same name will be aggregated into a single item.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ItemData {
+    /// All names mentioned in the bodies of this item.
+    pub deps: Vec<StringId>,
 
-// JSON <-> CBOR conversions
-
-pub fn json_to_cbor(j: JsonValue) -> CborValue {
-    serde_cbor::value::to_value(j).unwrap()
+    /// The location of each entry for this item.  The first `u64` is the offset of the entry's
+    /// JSON representation within `crates.json`, and the second `u64` is the length.
+    pub locations: HashMap<EntryKind, (u64, u64)>,
 }
 
-pub fn cbor_to_json(c: CborValue) -> JsonValue {
-    serde_cbor::value::from_value(c).unwrap()
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum EntryKind {
+    Fn,
+    Adt,
+    Static,
+    Vtable,
+    Trait,
+    Intrinsic,
+}
+
+impl EntryKind {
+    pub fn table_name(self) -> &'static str {
+        use self::EntryKind::*;
+        match self {
+            Fn => "fns",
+            Adt => "adts",
+            Static => "statics",
+            Vtable => "vtables",
+            Trait => "traits",
+            Intrinsic => "intrinsics",
+        }
+    }
+
+    pub fn each() -> impl Iterator<Item = EntryKind> {
+        use self::EntryKind::*;
+        [Fn, Adt, Static, Vtable, Trait, Intrinsic].iter().cloned()
+    }
 }
 
 
@@ -108,319 +117,219 @@ impl InternTable {
     pub fn into_names(self) -> Vec<String> {
         self.names
     }
+}
 
-    pub fn intern_strings_filtered(&mut self, c: &mut CborValue, f: &mut impl FnMut(&str) -> bool) {
-        if let CborValue::Text(ref s) = *c {
-            if f(s) {
-                *c = make_interned_string(self.intern(s.into()));
-            }
-            return;
+
+// IO adapter
+
+/// Writer that keeps a count of the number of bytes written so far.
+struct CountWrite<W> {
+    w: W,
+    count: usize,
+}
+
+impl<W: Write> Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let amt = self.w.write(buf)?;
+        self.count += amt;
+        Ok(amt)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+
+// JSON serialization and indexing
+
+struct Emitter<W> {
+    dep_map: HashMap<StringId, HashSet<StringId>>,
+    entry_loc: HashMap<(StringId, EntryKind), (u64, u64)>,
+    roots: HashSet<StringId>,
+    intern: InternTable,
+    writer: CountWrite<W>,
+}
+
+impl<W: Write> Emitter<W> {
+    pub fn new(w: W) -> Emitter<W> {
+        Emitter {
+            dep_map: Default::default(),
+            entry_loc: Default::default(),
+            roots: Default::default(),
+            intern: Default::default(),
+            writer: CountWrite { w, count: 0 },
         }
+    }
 
-        match *c {
-            CborValue::Array(ref mut a) => {
+    fn gather_deps(&mut self, id: StringId, j: &JsonValue) {
+        match *j {
+            JsonValue::Array(ref a) => {
                 for x in a {
-                    self.intern_strings_filtered(x, f);
+                    self.gather_deps(id, x);
                 }
             },
 
-            CborValue::Map(ref mut m) => {
-                for x in m.values_mut() {
-                    self.intern_strings_filtered(x, f);
+            JsonValue::Object(ref m) => {
+                for x in m.values() {
+                    self.gather_deps(id, x);
+                }
+            },
+
+            JsonValue::String(ref s) => {
+                if s.contains("::") {
+                    let id2 = self.intern.intern(s.into());
+                    self.dep_map.entry(id).or_insert_with(HashSet::new).insert(id2);
                 }
             },
 
             _ => {},
         }
     }
-}
 
-/// Try to extract the StringId from an interned string representation.  The input is expected to
-/// be a map such as `{0: id}` - if it isn't, this function returns `None`.
-pub fn parse_interned_string(c: &CborValue) -> Option<StringId> {
-    let m = match *c {
-        CborValue::Map(ref m) => m,
-        _ => return None,
-    };
+    fn emit_entry(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
+        // Collect dependencies
+        let name_id = self.intern.intern(j["name"].as_str().unwrap().into());
+        self.gather_deps(name_id, j);
 
-    if m.len() != 1 {
-        return None;
+        // Serialize the entry, and record its position.
+        let start = self.writer.count as u64;
+        serde_json::to_writer(&mut self.writer, j)?;
+        let end = self.writer.count as u64;
+        let len = end - start;
+        let old = self.entry_loc.insert((name_id, kind), (start, len));
+        assert!(old.is_none(), "duplicate {:?} named {:?}", kind, self.intern.name(name_id));
+
+        Ok(())
     }
 
-    match m.get(&CborValue::Integer(0)) {
-        Some(&CborValue::Integer(id)) => Some(id as usize),
-        _ => None,
-    }
-}
-
-pub fn make_interned_string(id: StringId) -> CborValue {
-    let mut m = BTreeMap::new();
-    m.insert(CborValue::Integer(0), CborValue::Integer(id as i128));
-    m.into()
-}
-
-pub fn unintern_strings(names: &[String], c: &mut CborValue) {
-    if let Some(id) = parse_interned_string(c) {
-        *c = CborValue::Text(names[id as usize].clone());
-        return;
-    }
-
-    match *c {
-        CborValue::Array(ref mut a) => {
-            for x in a {
-                unintern_strings(names, x);
+    fn emit_table(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
+        write!(self.writer, "\"{}\":[", kind.table_name())?;
+        let a = j.as_array()
+            .unwrap_or_else(|| panic!("expected {:?} table to be an array", kind));
+        for (i, x) in a.iter().enumerate() {
+            if i > 0 {
+                write!(self.writer, ",")?;
             }
-        },
-
-        CborValue::Map(ref mut m) => {
-            for x in m.values_mut() {
-                unintern_strings(names, x);
-            }
-        },
-
-        _ => {},
-    }
-}
-
-pub fn for_each_interned_string(c: &CborValue, f: &mut impl FnMut(StringId)) {
-    if let Some(id) = parse_interned_string(c) {
-        f(id);
-        return;
-    }
-
-    match *c {
-        CborValue::Array(ref a) => {
-            for x in a {
-                for_each_interned_string(x, f);
-            }
-        },
-
-        CborValue::Map(ref m) => {
-            for x in m.values() {
-                for_each_interned_string(x, f);
-            }
-        },
-
-        _ => {},
-    }
-}
-
-
-// Dependency collection
-
-fn iter_data_tables<'a>(
-    c: &'a CborValue,
-) -> impl Iterator<Item = (&'a str, &'a CborValue)> {
-    let m = match *c {
-        CborValue::Map(ref m) => m,
-        _ => panic!("expected map at top level"),
-    };
-
-    m.iter().map(|(k, v)| {
-        let name = match *k {
-            CborValue::Text(ref s) => s,
-            _ => panic!("expected map keys to be strings"),
-        };
-        (name as &str, v)
-    })
-}
-
-fn iter_data_tables_mut<'a>(
-    c: &'a mut CborValue,
-) -> impl Iterator<Item = (&'a str, &'a mut CborValue)> {
-    let m = match *c {
-        CborValue::Map(ref mut m) => m,
-        _ => panic!("expected map at top level"),
-    };
-
-    m.iter_mut().map(|(k, v)| {
-        let name = match *k {
-            CborValue::Text(ref s) => s,
-            _ => panic!("expected map keys to be strings"),
-        };
-        (name as &str, v)
-    })
-}
-
-/// Collect dependencies in `c`, which should be a crate data object with names already interned.
-/// For each entry `{"name": {0: id}, ...}` in the top-level arrays of `c`, the output will contain
-/// an entry for `id` containing the IDs of all interned strings that appear in the entry.  If
-/// multiple arrays contain entries with the same name, their dependency sets will be merged.
-pub fn gather_deps(c: &CborValue) -> HashMap<StringId, HashSet<StringId>> {
-    let mut deps = HashMap::new();
-
-    let name_str = CborValue::Text("name".to_owned());
-
-    for (k, v) in iter_data_tables(c) {
-        let a = match *v {
-            CborValue::Array(ref a) => a,
-            _ => continue,
-        };
-
-        for entry in a {
-            let m = match *entry {
-                CborValue::Map(ref m) => m,
-                _ => continue,
-            };
-
-            let name_id = match m.get(&name_str).and_then(parse_interned_string) {
-                Some(x) => x,
-                _ => continue,
-            };
-
-            let mut v_deps = deps.entry(name_id).or_insert_with(HashSet::new);
-            for_each_interned_string(entry, &mut |id| { v_deps.insert(id); });
+            self.emit_entry(kind, x)?;
         }
+        write!(self.writer, "]")?;
+        Ok(())
     }
 
-    deps
-}
+    fn emit_table_from(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
+        self.emit_table(kind, &j[kind.table_name()])
+    }
 
-pub fn convert_deps(
-    m: HashMap<StringId, HashSet<StringId>>,
-) -> HashMap<StringId, Vec<StringId>> {
-    m.into_iter()
-        .map(|(k, v)| (k, v.into_iter().collect::<Vec<_>>()))
-        .collect::<HashMap<_, _>>()
-}
+    pub fn emit_crate(&mut self, j: &JsonValue) -> io::Result<()> {
+        write!(self.writer, "{{")?;
+        self.emit_table_from(EntryKind::Fn, j);
+        write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::Adt, j);
+        write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::Static, j);
+        write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::Vtable, j);
+        write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::Trait, j);
+        write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::Intrinsic, j);
+        write!(self.writer, ",")?;
+        write!(self.writer, "\"impls\":[]")?;
+        write!(self.writer, ",")?;
+        write!(self.writer, "\"roots\":")?;
+        serde_json::to_writer(&mut self.writer, &j["roots"])?;
+        write!(self.writer, "}}")?;
+        self.writer.flush()?;
 
-
-// Serialization of data items
-
-/// Serialize all items in `c` to bytestrings.  `c` should be a crate data object with strings
-/// already interned.  This function replaces each top-level array with a map from names to
-/// serialized bytestrings.
-pub fn serialize_items(c: &mut CborValue) -> serde_cbor::Result<()> {
-    let name_str = CborValue::Text("name".to_owned());
-
-    for (k, v) in iter_data_tables_mut(c) {
-        let a = match *v {
-            CborValue::Array(ref mut a) => a,
-            _ => panic!("expected an array for key `{}`", k),
-        };
-
-        if k == "roots" {
-            // Convert `[{0: id1}, {0: id2}, ...]` to `[id1, id2, ...]`.
-            for (i, x) in a.iter_mut().enumerate() {
-                let name_id = parse_interned_string(x)
-                    .unwrap_or_else(|| panic!("failed to get name of {} item {}", k, i));
-                *x = CborValue::Integer(name_id as i128);
-            }
-            continue;
+        let j_roots = j["roots"].as_array()
+            .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
+        for x in j_roots {
+            let name_id = self.intern.intern(x.as_str().unwrap().into());
+            self.roots.insert(name_id);
         }
 
-        // Convert `[{"name": {0: id1}, ...}, {"name": {0: id2}, ...}, ...]` to `{id1: bytes1, id2:
-        // bytes2, ...}`.
-        let mut map = BTreeMap::new();
-        for (i, x) in a.iter_mut().enumerate() {
-            let serialized = serde_cbor::to_vec(x)?;
-
-            let m = match *x {
-                CborValue::Map(ref mut m) => m,
-                _ => panic!("expected {} item {} to be a map", k, i),
-            };
-
-            let name_id = m.get(&name_str)
-                .and_then(parse_interned_string)
-                .unwrap_or_else(|| panic!("failed to get name of {} item {}", k, i));
-
-            let key = CborValue::Integer(name_id as i128);
-            assert!(!map.contains_key(&key), "duplicate entry for name_id {} in {}", name_id, k);
-            map.insert(key, CborValue::Bytes(serialized));
-        }
-        *v = map.into();
+        Ok(())
     }
+
+    pub fn finish(mut self) -> CrateIndex {
+        let names = self.intern.into_names();
+
+        let mut items = HashMap::with_capacity(self.dep_map.len());
+        for (name, v) in self.dep_map {
+            let mut data = items.entry(name).or_insert_with(ItemData::default);
+
+            data.deps = v.into_iter().collect::<Vec<_>>();
+            data.deps.sort();
+
+            for kind in EntryKind::each() {
+                if let Some(&loc) = self.entry_loc.get(&(name, kind)) {
+                    data.locations.insert(kind, loc);
+                }
+            }
+        }
+
+        let mut roots = self.roots.into_iter().collect::<Vec<_>>();
+        roots.sort();
+
+        CrateIndex { names, items, roots }
+    }
+}
+
+pub fn write_indexed_crate<W>(out: W, j: &JsonValue) -> serde_cbor::Result<()>
+where W: Write + Send + 'static {
+    // Serialize the two files to byte arrays.  This is needed so their lengths will be known when
+    // creating the archive.
+    let mut json_buf = Vec::new();
+    let mut emitter = Emitter::new(&mut json_buf);
+    emitter.emit_crate(j)?;
+
+    let index = emitter.finish();
+    let index_buf = serde_cbor::to_vec(&index)?;
+
+    let mut tar = tar::Builder::new(out);
+    tar.mode(tar::HeaderMode::Deterministic);
+
+    let mut json_hdr = tar::Header::new_ustar();
+    json_hdr.set_size(json_buf.len() as u64);
+    json_hdr.set_mode(0o644);
+    tar.append_data(&mut json_hdr, "crate.json", Cursor::new(json_buf))?;
+
+    let mut index_hdr = tar::Header::new_ustar();
+    index_hdr.set_size(index_buf.len() as u64);
+    index_hdr.set_mode(0o644);
+    tar.append_data(&mut index_hdr, "index.cbor", Cursor::new(index_buf))?;
+
+    tar.finish()?;
 
     Ok(())
 }
 
-pub fn deserialize_items(c: &mut CborValue) -> serde_cbor::Result<()> {
-    for (k, v) in iter_data_tables_mut(c) {
-        if k == "roots" {
-            let a = match *v {
-                CborValue::Array(ref mut a) => a,
-                _ => panic!("expected an array for key `{}`", k),
-            };
-            for (i, x) in a.iter_mut().enumerate() {
-                let id = match *x {
-                    CborValue::Integer(id) => id as usize,
-                    _ => panic!("expected {}[{}] to be an integer", k, i),
-                };
-                *x = make_interned_string(id);
-            }
-            continue;
+/// Read the crate index.  Also returns the byte offset of the start of `crate.json`, to avoid a
+/// second scan over the archive.
+pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(CrateIndex, u64)> {
+    input.seek(SeekFrom::Start(0))?;
+    let mut tar = tar::Archive::new(input);
+
+    let mut index = None;
+    let mut json_offset = None;
+
+    for entry in tar.entries()? {
+        let entry = entry?;
+        let path = entry.path()?;
+        if path == Path::new("index.cbor") {
+            assert!(index.is_none(), "duplicate crate.json in archive?");
+            index = Some(serde_cbor::from_reader(entry)?);
+        } else if path == Path::new("crate.json") {
+            assert!(json_offset.is_none(), "duplicate crate.json in archive?");
+            assert!(entry.header().size()? == entry.header().entry_size()?,
+                "crate.json is a sparse file (unsupported)");
+            json_offset = Some(entry.raw_file_position());
         }
-
-        let m = match *v {
-            CborValue::Map(ref mut m) => m,
-            _ => panic!("expected a map for key `{}`", k),
-        };
-
-        let mut arr = Vec::with_capacity(m.len());
-
-        for (kk, vv) in m {
-            let b = match *vv {
-                CborValue::Bytes(ref b) => b,
-                _ => panic!("expected {}[{:?}] to be byte string", k, kk),
-            };
-
-            let deserialized: CborValue = serde_cbor::from_slice(b)?;
-            arr.push(deserialized);
-        }
-
-        *v = arr.into();
     }
 
-    Ok(())
-}
+    let index = index.unwrap_or_else(|| panic!("index.cbor not found in archive"));
+    let json_offset = json_offset.unwrap_or_else(|| panic!("crate.json not found in archive"));
 
-
-// Conversion to and from the optimized format
-
-pub fn optimize_crate(j: JsonValue) -> serde_cbor::Result<OptimizedCrate> {
-    let mut c = json_to_cbor(j);
-    let mut it = InternTable::default();
-    it.intern_strings_filtered(&mut c, &mut |s| s.contains("::"));
-    let deps = convert_deps(gather_deps(&c));
-    serialize_items(&mut c)?;
-
-    Ok(OptimizedCrate {
-        deps,
-        names: it.into_names(),
-        data: serde_cbor::value::from_value(c)?,
-    })
-}
-
-pub fn deoptimize_crate(oc: OptimizedCrate) -> serde_cbor::Result<JsonValue> {
-    let mut c = serde_cbor::value::to_value(oc.data)?;
-    deserialize_items(&mut c)?;
-    unintern_strings(&oc.names, &mut c);
-    Ok(cbor_to_json(c))
-}
-
-
-// Helpers for use in linking
-
-impl OptimizedCrate {
-    pub fn decode_item(&self, b: &[u8]) -> serde_cbor::Result<JsonValue> {
-        let mut c: CborValue = serde_cbor::from_slice(b)?;
-        unintern_strings(&self.names, &mut c);
-        Ok(cbor_to_json(c))
-    }
-}
-
-impl OptimizedCrateData {
-    pub fn all_tables<'a>(
-        &'a self,
-    ) -> Vec<&'a HashMap<StringId, ByteBuf>> {
-        // Note: the order and number of items here must match `JsonCrate::iter_tables`.
-        vec![
-            &self.fns,
-            &self.adts,
-            &self.statics,
-            &self.vtables,
-            &self.traits,
-            &self.intrinsics,
-        ]
-    }
+    Ok((index, json_offset))
 }

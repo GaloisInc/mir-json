@@ -3,8 +3,8 @@
 extern crate serde;
 #[macro_use] extern crate serde_json;
 extern crate serde_cbor;
-extern crate serde_bytes;
 #[macro_use] extern crate serde_derive;
+extern crate tar;
 
 extern crate rustc;
 extern crate rustc_driver;

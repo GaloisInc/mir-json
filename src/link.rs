@@ -1,151 +1,132 @@
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Read, Write, Seek, SeekFrom};
 
 use serde_cbor::Value as CborValue;
 use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
 
-use crate::lib_util::{OptimizedCrate, InternTable, StringId};
-
-
-#[derive(Serialize, Default)]
-pub struct JsonCrate {
-    fns: Vec<JsonValue>,
-    adts: Vec<JsonValue>,
-    statics: Vec<JsonValue>,
-    vtables: Vec<JsonValue>,
-    traits: Vec<JsonValue>,
-    intrinsics: Vec<JsonValue>,
-    impls: Vec<JsonValue>,
-    roots: Vec<String>,
-}
-
-impl JsonCrate {
-    pub fn iter_tables<'a>(
-        &'a mut self,
-    ) -> impl Iterator<Item = &'a mut Vec<JsonValue>> {
-        vec![
-            &mut self.fns,
-            &mut self.adts,
-            &mut self.statics,
-            &mut self.vtables,
-            &mut self.traits,
-            &mut self.intrinsics,
-        ].into_iter()
-    }
-}
+use crate::lib_util::{self, InternTable, EntryKind, StringId};
 
 
 /// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
-pub fn link_crates(ocs: &[OptimizedCrate]) -> serde_cbor::Result<JsonCrate> {
+pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
+where R: Read + Seek, W: Write {
+    let mut indexes = Vec::with_capacity(inputs.len());
+    let mut json_offsets = Vec::with_capacity(inputs.len());
+    for r in inputs.iter_mut() {
+        let (i, j) = lib_util::read_crate_index(r)?;
+        indexes.push(i);
+        json_offsets.push(j);
+    }
+
+
+    // Assign global IDs to all items.
     let mut it = InternTable::default();
-    // For each name in the global intern table, give the crate index and crate-local StringId of
-    // each place where the name was found.
-    let mut all_origins: HashMap<StringId, Vec<(usize, StringId)>> = HashMap::new();
-    // Give a single origin to use for each global name.  We can choose arbitrarily from
-    // `all_origins[id]` because we check at the end to ensure that all versions of an item are
-    // equivalent.  And since they're equivalent, all their `deps` entries are equivalent too.
-    let mut origin = Vec::new();
+    // Gives the crate indexes and local IDs where each global name has been defined.
+    let mut defs: HashMap<StringId, Vec<(usize, StringId)>> = HashMap::new();
     // Map from crate-local interned StringIds to global ones.
     let mut translate: HashMap<(usize, StringId), StringId> = HashMap::new();
 
-    for (k, oc) in ocs.iter().enumerate() {
-        for (i, name) in oc.names.iter().enumerate() {
-            let j = it.intern((name as &str).into());
-            all_origins.entry(j).or_insert_with(|| Vec::with_capacity(1)).push((k, i));
-            translate.insert((k, i), j);
+    for (crate_num, index) in indexes.iter().enumerate() {
+        for (local_id, name) in index.names.iter().enumerate() {
+            let id = it.intern(name.into());
+            translate.insert((crate_num, local_id), id);
 
-            if j >= origin.len() {
-                assert!(j == origin.len());
-                // This is the first time we've seen this name in any crate.
-                origin.push((k, i));
-            }
+            let item = match index.items.get(&local_id) {
+                Some(x) => x,
+                None => continue,
+            };
+            defs.entry(id).or_insert_with(Vec::new).push((crate_num, local_id));
         }
     }
 
 
+    // Collect live items.
     let mut roots = Vec::new();
-    for (crate_idx, oc) in ocs.iter().enumerate() {
-        roots.extend(oc.data.roots.iter().cloned()
-            .map(|local_id| translate[&(crate_idx, local_id)]));
+    for (crate_num, index) in indexes.iter().enumerate() {
+        for &local_id in &index.roots {
+            roots.push(translate[&(crate_num, local_id)]);
+        }
     }
 
     let mut seen_names = HashSet::new();
     let mut worklist = roots.clone();
     while let Some(id) = worklist.pop() {
-        // Look for deps in all crates.  A name can appear in a crate's interning table when the
-        // name is only referenced, in which case there will be no deps for it in that crate.
-        for &(crate_idx, local_id) in &all_origins[&id] {
-            // If this item has dependencies, add all deps that haven't been seen yet to the
-            // worklist.
-            if let Some(deps) = ocs[crate_idx].deps.get(&local_id) {
-                for &local_id2 in deps {
-                    let id2 = translate[&(crate_idx, local_id2)];
-                    if seen_names.insert(id2) {
-                        worklist.push(id2);
-                    }
+        // Look for deps in all crates.  It seems like different sets of entries for an item can
+        // appear in different crates, though I'm not sure why.
+        let def_list = match defs.get(&id) {
+            Some(x) => x,
+            None => continue,
+        };
+        for &(crate_num, local_id) in def_list {
+            for &local_id2 in &indexes[crate_num].items[&local_id].deps {
+                let id2 = translate[&(crate_num, local_id2)];
+                if seen_names.insert(id2) {
+                    worklist.push(id2);
                 }
             }
         }
     }
 
 
-    let names = it.into_names();
-    let mut jc = JsonCrate::default();
-    jc.roots = roots.into_iter().map(|id| names[id].clone()).collect();
-
-    let oc_tables = ocs.iter().map(|oc| oc.data.all_tables()).collect::<Vec<_>>();
-
+    // Set up the tables that will be written to the output.
+    let mut output_tables = vec![Vec::new(); 6];
     for &id in &seen_names {
-        for (tbl_idx, jtbl) in jc.iter_tables().enumerate() {
-            let (crate_idx0, local_id0) = origin[id];
-
-
-            if all_origins[&id].len() == 1 {
-                // Item `id` is mentioned somewhere in `crate_idx0`, but doesn't necessarily exist
-                // in table `tbl_idx`.
-                if let Some(b) = oc_tables[crate_idx0][tbl_idx].get(&local_id0) {
-                    let entry = ocs[crate_idx0].decode_item(b)?;
-                    jtbl.push(entry);
+        let mut saw_entry = [false; 6];
+        // Check each input crate that defines the item, in case it has additional entries not
+        // present in other crates.
+        let def_list = match defs.get(&id) {
+            Some(x) => x,
+            None => continue,
+        };
+        for &(crate_num, local_id) in def_list {
+            for (&kind, &(offset, len)) in &indexes[crate_num].items[&local_id].locations {
+                if saw_entry[kind as usize] {
+                    continue;
                 }
-                continue;
-            }
+                saw_entry[kind as usize] = true;
 
-            /*
-            // The entry must either be present in all `ocs` tables, or absent in all of them.
-            if !oc_tables[crate_idx0][tbl_idx].contains_key(&local_id0) {
-                for &(crate_idx, local_id) in &all_origins[&id] {
-                    if oc_tables[crate_idx][tbl_idx].contains_key(&local_id) {
-                        panic!("item {} is present in table {} of crate {}",
-                            names[id], tbl_idx, crate_idx);
-                    }
-                }
-                continue;
-            }
-
-            let mut entries = all_origins[&id].iter().map(|&(crate_idx, local_id)| {
-                let octbl = oc_tables[crate_idx][tbl_idx];
-                if let Some(b) = octbl.get(&local_id) {
-                    ocs[crate_idx].decode_item(b)
-                } else {
-                    panic!("item {} is absent in table {} of crate {}",
-                        names[id], tbl_idx, crate_idx);
-                }
-            }).collect::<Result<Vec<_>, _>>()?;
-            */
-
-            let mut entries = all_origins[&id].iter().filter_map(|&(crate_idx, local_id)| {
-                let octbl = oc_tables[crate_idx][tbl_idx];
-                octbl.get(&local_id).map(|b| ocs[crate_idx].decode_item(b))
-            }).collect::<Result<Vec<_>, _>>()?;
-
-            // TODO: check that all entries are identical (ignoring spans/filenames)
-            if let Some(entry) = entries.pop() {
-                jtbl.push(entry);
+                let abs_offset = json_offsets[crate_num] + offset;
+                output_tables[kind as usize].push((crate_num, abs_offset, len));
             }
         }
     }
 
 
-    Ok(jc)
+    // Write tables to the output, copying the serialized content of each entry.
+    write!(output, "{{")?;
+    for (i, kind) in EntryKind::each().enumerate() {
+        if i > 0 {
+            write!(output, ",")?;
+        }
+        write!(output, "\"{}\":[", kind.table_name())?;
+        output_tables[kind as usize].sort();
+        for (j, &(crate_num, offset, len)) in output_tables[kind as usize].iter().enumerate() {
+            if j > 0 {
+                write!(output, ",")?;
+            }
+
+            let input = &mut inputs[crate_num];
+            input.seek(SeekFrom::Start(offset))?;
+            io::copy(&mut input.take(len), &mut output)?;
+        }
+        write!(output, "]")?;
+    }
+    write!(output, ",")?;
+    write!(output, "\"impls\":[]")?;
+    write!(output, ",")?;
+    write!(output, "\"roots\":[")?;
+    for (i, &id) in roots.iter().enumerate() {
+        if i > 0 {
+            write!(output, ",")?;
+        }
+        let name = it.name(id);
+        serde_json::to_writer(&mut output, name)
+            .map_err(|e| -> io::Error { e.into() })?;
+    }
+    write!(output, "]")?;
+    write!(output, "}}")?;
+
+    Ok(())
 }
