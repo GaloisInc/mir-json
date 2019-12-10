@@ -8,16 +8,18 @@ extern crate rustc_metadata;
 extern crate getopts;
 extern crate syntax;
 extern crate rustc_errors;
+extern crate rustc_target;
 
 extern crate mir_json;
 
 use mir_json::analyz;
 use rustc::session::Session;
 use rustc_driver::{Callbacks, Compilation};
-use rustc_interface::interface::Compiler;
+use rustc_interface::interface::{Compiler, Config};
 use rustc::session::config::{self, Input, ErrorOutputType};
 use rustc_codegen_utils::codegen_backend::CodegenBackend;
 use rustc_metadata::cstore::CStore;
+use rustc_target::spec::PanicStrategy;
 use syntax::ast;
 use std::error::Error;
 use std::fs::File;
@@ -27,6 +29,11 @@ use std::path::Path;
 struct MirJsonCallbacks;
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
+    fn config(&mut self, config: &mut Config) {
+        // Force `-C panic=abort` - the mir-verifier backend doesn't support unwinding.
+        config.opts.cg.panic = Some(PanicStrategy::Abort);
+    }
+
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis(&mut self, compiler: &Compiler) -> Compilation {
@@ -55,6 +62,7 @@ const TARGET_JSON: &'static str = r#"
 fn go() {
     let mut args: Vec<String> = std::env::args().collect();
 
+    /*
     let target_flag = String::from("--target");
     if !args.contains(&target_flag) {
         if !Path::new(TARGET_FILE).exists() {
@@ -65,6 +73,7 @@ fn go() {
         args.push(target_flag);
         args.push(TARGET_FILE.into());
     }
+    */
 
     rustc_driver::run_compiler(
         &args, // args: &[String]

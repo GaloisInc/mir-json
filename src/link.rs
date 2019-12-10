@@ -6,12 +6,12 @@ use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
 
-use crate::lib_util::{self, InternTable, EntryKind, StringId};
+use crate::lib_util::{self, CrateIndex, InternTable, EntryKind, StringId};
 
 
-/// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
-pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
-where R: Read + Seek, W: Write {
+fn read_crates<R: Read + Seek>(
+    inputs: &mut [R],
+) -> serde_cbor::Result<(Vec<CrateIndex>, Vec<u64>)> {
     let mut indexes = Vec::with_capacity(inputs.len());
     let mut json_offsets = Vec::with_capacity(inputs.len());
     for r in inputs.iter_mut() {
@@ -19,8 +19,16 @@ where R: Read + Seek, W: Write {
         indexes.push(i);
         json_offsets.push(j);
     }
+    Ok((indexes, json_offsets))
+}
 
-
+fn assign_global_ids(
+    indexes: &[CrateIndex],
+) -> (
+    InternTable,
+    HashMap<StringId, Vec<(usize, StringId)>>,
+    HashMap<(usize, StringId), StringId>,
+) {
     // Assign global IDs to all items.
     let mut it = InternTable::default();
     // Gives the crate indexes and local IDs where each global name has been defined.
@@ -41,14 +49,30 @@ where R: Read + Seek, W: Write {
         }
     }
 
+    (it, defs, translate)
+}
 
-    // Collect live items.
+fn collect_roots(
+    indexes: &[CrateIndex],
+    translate: &HashMap<(usize, StringId), StringId>,
+) -> Vec<StringId> {
     let mut roots = Vec::new();
     for (crate_num, index) in indexes.iter().enumerate() {
         for &local_id in &index.roots {
             roots.push(translate[&(crate_num, local_id)]);
         }
     }
+    roots
+}
+
+
+/// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
+pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
+where R: Read + Seek, W: Write {
+    let (indexes, json_offsets) = read_crates(inputs)?;
+    let (it, defs, translate) = assign_global_ids(&indexes);
+    let roots = collect_roots(&indexes, &translate);
+
 
     let mut seen_names = HashSet::new();
     let mut worklist = roots.clone();
@@ -129,4 +153,36 @@ where R: Read + Seek, W: Write {
     write!(output, "}}")?;
 
     Ok(())
+}
+
+pub fn gather_calls<R: Read + Seek>(
+    inputs: &mut [R],
+) -> serde_cbor::Result<(InternTable, Vec<(StringId, StringId)>)> {
+    let (indexes, json_offsets) = read_crates(inputs)?;
+    let (it, defs, translate) = assign_global_ids(&indexes);
+    let roots = collect_roots(&indexes, &translate);
+
+    let mut calls: Vec<(StringId, StringId)> = Vec::new();
+
+    let mut seen_names = HashSet::new();
+    let mut worklist = roots.clone();
+    while let Some(id) = worklist.pop() {
+        // Look for deps in all crates.  It seems like different sets of entries for an item can
+        // appear in different crates, though I'm not sure why.
+        let def_list = match defs.get(&id) {
+            Some(x) => x,
+            None => continue,
+        };
+        for &(crate_num, local_id) in def_list {
+            for &local_id2 in &indexes[crate_num].items[&local_id].deps {
+                let id2 = translate[&(crate_num, local_id2)];
+                calls.push((id, id2));
+                if seen_names.insert(id2) {
+                    worklist.push(id2);
+                }
+            }
+        }
+    }
+
+    Ok((it, calls))
 }

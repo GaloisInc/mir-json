@@ -4,11 +4,12 @@ use rustc::ty::{self, TyCtxt, List, TyS};
 use rustc::mir::{self, Body};
 use rustc::hir;
 use rustc::hir::def::DefKind;
-use rustc::hir::def_id;
-use rustc::hir::def_id::DefId;
+use rustc::hir::def_id::{self, DefId, LOCAL_CRATE};
 use rustc::mir::mono::MonoItem;
+use rustc::session::config::OutputType;
 use rustc::traits;
 use rustc::ty::subst::Subst;
+use rustc_codegen_utils;
 use rustc_driver::source_name;
 use rustc_interface::interface::Compiler;
 use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
@@ -19,7 +20,7 @@ use std::fmt::Write as FmtWrite;
 use std::io;
 use std::io::Write;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use serde::ser::{Serialize, Serializer, SerializeSeq};
 use serde_json;
 use serde_cbor;
@@ -997,17 +998,52 @@ struct Output {
     intrinsics: Vec<serde_json::Value>,
 }
 
-pub fn analyze(comp: &Compiler) -> Result<(), serde_cbor::Error> {
-    let iname = source_name(comp.input()).to_string();
-    let mut mirname = Path::new(&iname).to_path_buf();
-    mirname.set_extension("mir");
-    let mut file = File::create(&mirname)?;
+#[derive(Debug)]
+pub struct AnalysisData {
+    pub mir_path: PathBuf,
+    pub extern_mir_paths: Vec<PathBuf>,
+}
 
+/// Analyze the crate currently being compiled by `comp`.  Returns `Ok(Some(data))` upon
+/// successfully writing the crate MIR, returns `Ok(None)` when there is no need to write out MIR
+/// (namely, when `comp` is not producing an `Exe` output), and returns `Err(e)` on I/O or
+/// serialization errors.
+pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData>, serde_cbor::Error> {
     let mut out = Output::default();
 
+    let mut mir_path = None;
+    let mut extern_mir_paths = Vec::new();
     let mut gcx = comp.global_ctxt().unwrap().peek_mut();
     let mut roots = Vec::new();
     gcx.enter(|tcx| {
+        let outputs = tcx.output_filenames(LOCAL_CRATE);
+        if !outputs.outputs.contains_key(&OutputType::Exe) {
+            return;
+        }
+        mir_path = Some(rustc_codegen_utils::link::out_filename(
+            tcx.sess,
+            tcx.sess.crate_types.get().first().unwrap().clone(),
+            &outputs,
+            &tcx.crate_name.to_string(),
+        ).with_extension("mir"));
+
+        for &cnum in tcx.all_crate_nums(LOCAL_CRATE) {
+            let src = tcx.used_crate_source(cnum);
+            let it = src.dylib.iter()
+                .chain(src.rlib.iter())
+                .chain(src.rmeta.iter());
+            for &(ref path, _) in it {
+                let mir_path = path.with_extension("mir");
+                if mir_path.exists() {
+                    extern_mir_paths.push(mir_path);
+                    // Add only one copy of the MIR for a crate, even when we have multiple
+                    // versions of the crate (such as `.so` and `.rlib`).
+                    break;
+                }
+            }
+        }
+
+
         let mut used = Used::default();
         let state = CompileState {
             session: comp.session(),
@@ -1040,6 +1076,11 @@ pub fn analyze(comp: &Compiler) -> Result<(), serde_cbor::Error> {
         }
     });
 
+    let mir_path = match mir_path {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+
     let total_items = out.fns.len() + out.adts.len() + out.statics.len() + out.vtables.len() +
         out.traits.len() + out.intrinsics.len();
     let j = json!({
@@ -1054,8 +1095,10 @@ pub fn analyze(comp: &Compiler) -> Result<(), serde_cbor::Error> {
     });
     comp.session().note_without_error(
         &format!("Indexing MIR ({} items)...", total_items));
+    let file = File::create(&mir_path)?;
     lib_util::write_indexed_crate(file, &j)?;
-    Ok(())
+
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths }))
 }
 
 // format:

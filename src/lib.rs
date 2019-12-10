@@ -7,6 +7,7 @@ extern crate serde_cbor;
 extern crate tar;
 
 extern crate rustc;
+extern crate rustc_codegen_utils;
 extern crate rustc_driver;
 extern crate rustc_data_structures;
 extern crate rustc_interface;
