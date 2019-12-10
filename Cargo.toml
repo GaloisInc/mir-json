@@ -27,3 +27,7 @@ path = "src/cargo-mir-json.rs"
 [[bin]]
 name = "mir-json-dce"
 path = "src/mir-json-dce.rs"
+
+[[bin]]
+name = "mir-json-callgraph"
+path = "src/mir-json-callgraph.rs"
