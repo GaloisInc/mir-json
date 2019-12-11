@@ -13,30 +13,3 @@ serde_cbor = "*"
 tar = "*"
 cargo_metadata = { version = "0.2" }
 tempfile = "3.1.0"
-
-[lib]
-name = "mir_json"
-
-[[bin]]
-name = "mir-json"
-path = "src/main.rs"
-
-[[bin]]
-name = "cargo-mir-json"
-path = "src/cargo-mir-json.rs"
-
-[[bin]]
-name = "mir-json-dce"
-path = "src/mir-json-dce.rs"
-
-[[bin]]
-name = "mir-json-callgraph"
-path = "src/mir-json-callgraph.rs"
-
-[[bin]]
-name = "mir-json-rustc-wrapper"
-path = "src/mir-json-rustc-wrapper.rs"
-
-[[bin]]
-name = "cargo-crux-test"
-path = "src/cargo-crux-test.rs"
