@@ -127,7 +127,6 @@ fn go() {
             .arg(temp_file.path())
             .status()
             .unwrap_or_else(|e| panic!("failed to start crux-mir: {}", e));
-        eprintln!("status = {:?}, success = {:?}", status, status.success());
         assert!(status.success(), "crux-mir failed: exit status {}", status);
     }
 }

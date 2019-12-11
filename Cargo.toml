@@ -36,3 +36,7 @@ path = "src/mir-json-callgraph.rs"
 [[bin]]
 name = "mir-json-rustc-wrapper"
 path = "src/mir-json-rustc-wrapper.rs"
+
+[[bin]]
+name = "cargo-crux-test"
+path = "src/cargo-crux-test.rs"
