@@ -10,16 +10,13 @@ fn main() {
     let orig_args = env::args().skip(2).collect::<Vec<_>>();
 
     let mut args = Vec::new();
-    args.push("rustc".into());
+    args.push("test".into());
     // XXX big hack.  See `mir-json-rustc-wrapper.rs` for an explanation of why we set `--target`
     // explicitly to its default value.
     args.push("--target".into());
     // TODO: autodetect the default target.
     args.push("x86_64-unknown-linux-gnu".into());
     args.extend(orig_args.into_iter());
-    args.push("--".into());
-    // Magic compiler flag lets mir-json-rustc-wrapper know when it's on the top-level build.
-    args.push("+mir-json-top-level".into());
 
     let my_path = PathBuf::from(env::args_os().nth(0).unwrap());
     let wrapper_path = if let Some(dir) = my_path.parent() {

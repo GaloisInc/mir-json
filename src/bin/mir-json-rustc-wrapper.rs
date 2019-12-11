@@ -12,7 +12,6 @@ extern crate getopts;
 extern crate syntax;
 extern crate rustc_errors;
 extern crate rustc_target;
-extern crate tempfile;
 
 extern crate mir_json;
 
@@ -28,13 +27,51 @@ use rustc_target::spec::PanicStrategy;
 use syntax::ast;
 use std::env;
 use std::error::Error;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::iter;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::NamedTempFile;
+
+
+/// Driver callbacks that get the output filename and then stop compilation.  This is used to get
+/// the path of the test executable when compiling in `--test` mode.
+#[derive(Default)]
+struct GetOutputPathCallbacks {
+    output_path: Option<PathBuf>,
+}
+
+impl rustc_driver::Callbacks for GetOutputPathCallbacks {
+    fn after_analysis<'tcx>(
+        &mut self,
+        compiler: &Compiler,
+    ) -> Compilation {
+        let sess = compiler.session();
+        let crate_name = compiler.crate_name().unwrap().peek();
+        let outputs = compiler.prepare_outputs().unwrap().peek();
+        self.output_path = Some(rustc_codegen_utils::link::out_filename(
+            sess,
+            sess.crate_types.get().first().unwrap().clone(),
+            &outputs,
+            &crate_name,
+        ));
+        Compilation::Stop
+    }
+}
+
+fn get_output_path(args: &[String]) -> PathBuf {
+    let mut callbacks = GetOutputPathCallbacks::default();
+    rustc_driver::run_compiler(
+        &args,
+        &mut callbacks,
+        None,
+        None,
+    ).unwrap();
+    callbacks.output_path.unwrap()
+}
+
 
 #[derive(Debug, Default)]
 struct MirJsonCallbacks {
@@ -55,18 +92,21 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
     }
 }
 
-fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf]) -> NamedTempFile {
-    let mut temp_file = tempfile::Builder::new().suffix(".mir.json").tempfile().unwrap();
-
+fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
     let mut inputs = iter::once(&main_path).chain(extern_paths.iter())
         .map(File::open)
         .collect::<io::Result<Vec<_>>>().unwrap();
-    let mut output = io::BufWriter::new(temp_file.as_file_mut());
+    let mut output = io::BufWriter::new(File::create(out_path).unwrap());
     link::link_crates(&mut inputs, output).unwrap();
+}
 
-    ::std::fs::copy(temp_file.path(), "out.json").unwrap();
-
-    temp_file
+fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
+    let json_name = json_path.file_name().unwrap().to_str().unwrap();
+    let mut f = OpenOptions::new().write(true).create(true).truncate(true)
+        .mode(0o755).open(script_path)?;
+    writeln!(f, "#!/bin/sh")?;
+    writeln!(f, r#"exec crux-mir -f "$(dirname "$0")"/'{}'"#, json_name)?;
+    Ok(())
 }
 
 fn go() {
@@ -99,17 +139,46 @@ fn go() {
         args.push(s);
     }
 
-    // The final build step is identified by a special `+mir-json-top-level` argument.  For that
-    // build step, we add `--cfg crux_top_level`, which causes all `#[crux_test]` functions to be
-    // treated as entry points.  We also do extra work after running the compiler - see below.
-    let top_level_marker_idx = args.iter().position(|s| s == "+mir-json-top-level");
-    let is_top_level = top_level_marker_idx.is_some();
-    if let Some(idx) = top_level_marker_idx {
-        args.remove(idx);
-        args.push("--cfg".into());
-        args.push("crux_top_level".into());
-    }
 
+    let test_idx = match args.iter().position(|s| s == "--test") {
+        None => {
+            eprintln!("normal build - {:?}", args);
+            // This is a normal, non-test build.  Just run the build, generating a `.mir` file
+            // alongside the normal output.
+            rustc_driver::run_compiler(
+                &args,
+                &mut MirJsonCallbacks::default(),
+                None,
+                None,
+            ).unwrap();
+            return;
+        },
+        Some(x) => x,
+    };
+
+    // This is a `--test` build.  We need to build the `.mir`s for this crate, link with `.mir`s
+    // for all its dependencies, and produce a test script (in place of the test binary expected by
+    // cargo) that will run `crux-mir` on the linked JSON file.
+
+    // We're still using the original args (with only a few modifications), so the output path
+    // should be the path of the test binary.
+    eprintln!("test build - extract output path - {:?}", args);
+    let test_path = get_output_path(&args);
+
+    args.remove(test_idx);
+
+    args.push("--cfg".into());
+    args.push("crux_top_level".into());
+
+    // Cargo doesn't pass a crate type for `--test` builds.  We fill in a reasonable default.
+    args.push("--crate-type".into());
+    args.push("rlib".into());
+
+    eprintln!("test build - {:?}", args);
+
+    // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
+    // strings to prevent collisions between this build's `.mir` output and other builds of the
+    // same crate.
     let mut callbacks = MirJsonCallbacks::default();
     rustc_driver::run_compiler(
         &args,
@@ -117,18 +186,15 @@ fn go() {
         None,
         None,
     ).unwrap();
+    let data = callbacks.analysis_data
+        .expect("failed to find main MIR path");
 
-    if is_top_level {
-        let data = callbacks.analysis_data
-            .expect("failed to find main MIR path");
-        let temp_file = link_mirs(data.mir_path, &data.extern_mir_paths);
-        let status = Command::new("crux-mir")
-            .arg("-f")
-            .arg(temp_file.path())
-            .status()
-            .unwrap_or_else(|e| panic!("failed to start crux-mir: {}", e));
-        assert!(status.success(), "crux-mir failed: exit status {}", status);
-    }
+    let json_path = test_path.with_extension(".linked-mir.json");
+    eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
+    link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
+
+    write_test_script(&test_path, &json_path).unwrap();
+    eprintln!("generated test script {}", test_path.display());
 }
 
 fn main() {
