@@ -28,7 +28,10 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
        mir-json --version
 
    It should print a version string.  If it prints a shared library error
-   instead, then most likely your `$LD_LIBRARY_PATH` is not set correctly.
+   instead, then most likely something went wrong with the `rustc-rpath.sh`
+   wrapper.  Try running `cargo clean` and repeating step 3, or try setting
+   `$LD_LIBRARY_PATH`/`$DYLD_LIBRARY_PATH` to include `$(rustc --print
+   sysroot)/lib`.
 
 
 ## Usage
