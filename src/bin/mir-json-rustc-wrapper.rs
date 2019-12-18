@@ -79,11 +79,6 @@ struct MirJsonCallbacks {
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    fn config(&mut self, config: &mut Config) {
-        // Force `-C panic=abort` - the mir-verifier backend doesn't support unwinding.
-        config.opts.cg.panic = Some(PanicStrategy::Abort);
-    }
-
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis(&mut self, compiler: &Compiler) -> Compilation {
