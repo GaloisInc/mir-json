@@ -75,7 +75,7 @@ fn get_output_path(args: &[String]) -> PathBuf {
 
 #[derive(Debug, Default)]
 struct MirJsonCallbacks {
-    analysis_data: Option<analyz::AnalysisData>,
+    analysis_data: Option<analyz::AnalysisData<()>>,
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {

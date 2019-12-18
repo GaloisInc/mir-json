@@ -18,3 +18,5 @@ extern crate syntax;
 pub mod analyz;
 pub mod lib_util;
 pub mod link;
+
+mod tar_stream;
