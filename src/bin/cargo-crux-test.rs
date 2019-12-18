@@ -1,6 +1,10 @@
+#![feature(rustc_private)]
+extern crate rustc;
+
 use std::env;
 use std::path::PathBuf;
 use std::process::{self, Command};
+use rustc::session::config::host_triple;
 
 fn main() {
     let cargo = env::var("CARGO").unwrap();
@@ -15,7 +19,7 @@ fn main() {
     // explicitly to its default value.
     args.push("--target".into());
     // TODO: autodetect the default target.
-    args.push("x86_64-unknown-linux-gnu".into());
+    args.push(host_triple().into());
     args.extend(orig_args.into_iter());
 
     let my_path = PathBuf::from(env::args_os().nth(0).unwrap());
