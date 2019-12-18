@@ -19,6 +19,7 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, BTreeMap};
+use std::fs::File;
 use std::io::{self, Read, Write, Seek, SeekFrom, Cursor};
 use std::mem;
 use std::path::Path;
@@ -30,6 +31,8 @@ use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
 use tar;
+
+use crate::tar_stream::{TarStream, TarEntryStream};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateIndex {
@@ -69,6 +72,18 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
+    pub fn name(self) -> &'static str {
+        use self::EntryKind::*;
+        match self {
+            Fn => "fn",
+            Adt => "adt",
+            Static => "static",
+            Vtable => "vtable",
+            Trait => "trait",
+            Intrinsic => "intrinsic",
+        }
+    }
+
     pub fn table_name(self) -> &'static str {
         use self::EntryKind::*;
         match self {
@@ -196,6 +211,11 @@ impl EmitterState {
         Ok(())
     }
 
+    fn add_root(&mut self, s: Cow<str>) {
+        let name_id = self.intern.intern(s);
+        self.roots.insert(name_id);
+    }
+
     pub fn finish(mut self) -> CrateIndex {
         let names = self.intern.into_names();
 
@@ -243,6 +263,10 @@ impl<W: Write> Emitter<W> {
         })
     }
 
+    fn add_root(&mut self, name: Cow<str>) {
+        self.state.add_root(name);
+    }
+
     fn emit_table(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
         write!(self.writer, "\"{}\":[", kind.table_name())?;
         let a = j.as_array()
@@ -285,8 +309,7 @@ impl<W: Write> Emitter<W> {
         let j_roots = j["roots"].as_array()
             .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
         for x in j_roots {
-            let name_id = self.state.intern.intern(x.as_str().unwrap().into());
-            self.state.roots.insert(name_id);
+            self.add_root(x.as_str().unwrap().into());
         }
 
         Ok(())
@@ -356,7 +379,7 @@ pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(Cra
 }
 
 
-// Streaming and non-streaming outputs
+// JSON output modes
 
 pub trait JsonOutput {
     fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()>;
@@ -406,7 +429,6 @@ impl JsonOutput for Output {
 }
 
 
-/*
 /// Streaming output of MIR entries.  This uses a different output format: instead of an object
 /// containing a named tables for each `EntryKind`, the output is a single giant array where each
 /// entry is tagged with its `EntryKind`.  This lets us emit it in a streaming fashion, without
@@ -421,27 +443,84 @@ pub struct StreamingEmitter<W> {
 
 impl<W: Write> StreamingEmitter<W> {
     pub fn new(mut w: W) -> io::Result<StreamingEmitter<W>> {
-        write!(w, "[")?;
-        Ok(StreamingEmitter {
+        let mut se = StreamingEmitter {
             inner: Emitter::new(w),
             len: 0,
-        })
+        };
+        // Write the opening `[` through the inner `CountWrite` so that the index will contain
+        // accurate offsets.
+        write!(se.inner.writer, "[")?;
+        Ok(se)
     }
 
-    pub fn finish(self) -> io::Result<CrateIndex> {
-        let index = self.inner.finish();
+    pub fn finish(mut self) -> io::Result<(W, CrateIndex)> {
+        // TODO: expose this through a method on Emitter rather than reaching into its internal
+        // state.
+        let index = self.inner.state.finish();
         write!(self.inner.writer, "]")?;
-        Ok(index)
+        Ok((self.inner.writer.w, index))
     }
 }
 
-impl<W: Write> JsonEmitter for StreamingEmitter<W> {
+impl<W: Write> JsonOutput for StreamingEmitter<W> {
     fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()> {
         if self.len > 0 {
             write!(self.inner.writer, ",")?;
         }
-        self.inner.emit_entry(kind, j)?;
+        write!(self.inner.writer, r#"{{"kind":"{}","data":"#, kind.name())?;
+        self.inner.emit_entry(kind, &j)?;
+        write!(self.inner.writer, r#"}}"#)?;
+        self.len += 1;
+        Ok(())
+    }
+
+    fn add_root(&mut self, name: String) -> io::Result<()> {
+        self.inner.add_root(name.into());
         Ok(())
     }
 }
-*/
+
+
+// Streaming tar-file output.
+
+pub struct MirStream {
+    emitter: StreamingEmitter<TarEntryStream<File>>,
+}
+
+impl JsonOutput for MirStream {
+    fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()> {
+        self.emitter.emit(kind, j)
+    }
+
+    fn add_root(&mut self, name: String) -> io::Result<()> {
+        self.emitter.add_root(name)
+    }
+}
+
+fn make_tar_entry(path: &str) -> tar::Header {
+    let mut h = tar::Header::new_gnu();
+    h.set_path(path);
+    h.set_mode(0o644);
+    h.set_uid(0);
+    h.set_gid(0);
+    h.set_mtime(0);
+    h.set_entry_type(tar::EntryType::Regular);
+    h
+}
+
+pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
+    let tar = TarStream::new(File::create(path)?);
+    let entry = tar.start_entry(make_tar_entry("crate.json"))?;
+    let emitter = StreamingEmitter::new(entry)?;
+    Ok(MirStream { emitter })
+}
+
+pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
+    let (json_entry, index) = ms.emitter.finish()?;
+    let tar = json_entry.finish_entry()?;
+    let mut index_entry = tar.start_entry(make_tar_entry("index.cbor"))?;
+    serde_cbor::to_writer(&mut index_entry, &index)?;
+    let tar = index_entry.finish_entry()?;
+    tar.finish()?;
+    Ok(())
+}

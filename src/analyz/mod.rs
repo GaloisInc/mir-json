@@ -1076,7 +1076,7 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     Ok(Some(AnalysisData { mir_path, extern_mir_paths, output }))
 }
 
-pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
+pub fn analyze_nonstreaming(comp: &Compiler) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(comp, |_| { Ok(lib_util::Output::default()) })?;
     let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
         Some(x) => x,
@@ -1102,6 +1102,18 @@ pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData<()>>, serde_cbor::
 
     Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
 }
+
+pub fn analyze_streaming(comp: &Compiler) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
+    let opt_ad = analyze_inner(comp, lib_util::start_streaming)?;
+    let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+    lib_util::finish_streaming(output)?;
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
+}
+
+pub use self::analyze_streaming as analyze;
 
 // format:
 // top: function name || function args || return ty || body
