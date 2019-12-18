@@ -30,7 +30,7 @@ mod to_json;
 mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
-use lib_util;
+use lib_util::{self, JsonOutput, EntryKind};
 
 basic_json_enum_impl!(mir::BinOp);
 
@@ -636,7 +636,7 @@ impl<'tcx> mir::visit::MutVisitor<'tcx> for SubstConstTys<'tcx> {
 
 
 /// Emit all traits defined in the current crate.
-fn emit_traits(ms: &mut MirState, out: &mut Output) {
+fn emit_traits(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
     // Emit definitions for all traits.
@@ -667,14 +667,16 @@ fn emit_traits(ms: &mut MirState, out: &mut Output) {
         }
         let preds = tcx.predicates_of(def_id);
         let generics = tcx.generics_of(def_id);
-        out.traits.push(json!({
+        out.emit(EntryKind::Trait, json!({
             "name": def_id.to_json(ms),
             "items": serde_json::Value::Array(items_json),
             "supertraits": serde_json::Value::Array(supers_json),
             "generics": generics.to_json(ms),
             "predicates": preds.to_json(ms),
-        }));
+        }))?;
     }
+
+    Ok(())
 }
 
 fn iter_trait_def_ids<'tcx>(
@@ -691,36 +693,38 @@ fn iter_trait_def_ids<'tcx>(
 
 
 /// Emit all statics defined in the current crate.
-fn emit_statics(ms: &mut MirState, out: &mut Output) {
+fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let tcx = ms.state.tcx;
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
     for mono_item in mono_items {
         match mono_item {
-            MonoItem::Static(def_id) => emit_static(ms, out, def_id),
+            MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
             MonoItem::Fn(_) |
             MonoItem::GlobalAsm(_) => {},
         }
     }
+    Ok(())
 }
 
-fn emit_static(ms: &mut MirState, out: &mut Output, def_id: DefId) {
+fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
     let tcx = ms.state.tcx;
     let name = def_id_str(tcx, def_id);
     let mir = tcx.optimized_mir(def_id);
 
-    emit_fn(ms, out, &name, None, mir);
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id), None);
+    emit_fn(ms, out, &name, None, mir)?;
+    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id), None)?;
+    Ok(())
 }
 
 /// Add a new static declaration to `out.statics`.
 fn emit_static_decl<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    out: &mut Output,
+    out: &mut impl JsonOutput,
     name: &str,
     ty: ty::Ty<'tcx>,
     mutable: bool,
     promoted_info: Option<(&str, usize)>,
-) {
+) -> io::Result<()> {
     let mut j = json!({
         "name": name,
         "ty": ty.to_json(ms),
@@ -730,7 +734,7 @@ fn emit_static_decl<'tcx>(
         j.as_object_mut().unwrap().insert("promoted_from".to_owned(), parent.into());
         j.as_object_mut().unwrap().insert("promoted_index".to_owned(), idx.into());
     }
-    out.statics.push(j);
+    out.emit(EntryKind::Static, j)
 }
 
 
@@ -738,20 +742,21 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
     def_id.is_local() && tcx.has_attr(def_id, Symbol::intern("crux_test"))
 }
 
-fn init_instances(ms: &mut MirState) -> Vec<String> {
+/// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
+/// may also call `out.add_root` if this is a top-level crate.
+fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let is_top_level = ms.state.session.parse_sess.config.iter()
         .any(|&(key, _)| key.as_str() == "crux_top_level");
 
     if is_top_level {
-        init_instances_from_tests(ms)
+        init_instances_from_tests(ms, out)
     } else {
-        init_instances_from_mono_items(ms);
-        Vec::new()
+        init_instances_from_mono_items(ms)
     }
 }
 
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
-fn init_instances_from_mono_items(ms: &mut MirState) {
+fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
     let tcx = ms.state.tcx;
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
     for mono_item in mono_items {
@@ -761,12 +766,12 @@ fn init_instances_from_mono_items(ms: &mut MirState) {
             MonoItem::GlobalAsm(_) => {},
         }
     }
+    Ok(())
 }
 
 /// Initialize the set of needed instances.  Returns a list of root instances.
-fn init_instances_from_tests(ms: &mut MirState) -> Vec<String> {
+fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let tcx = ms.state.tcx;
-    let mut roots = Vec::new();
     for &def_id in tcx.mir_keys(def_id::LOCAL_CRATE) {
         if !has_test_attr(tcx, def_id) {
             continue;
@@ -793,18 +798,18 @@ fn init_instances_from_tests(ms: &mut MirState) -> Vec<String> {
             });
 
         ms.used.instances.insert(inst);
-        roots.push(inst_id_str(tcx, inst));
+        out.add_root(inst_id_str(tcx, inst))?;
     }
-    roots
+    Ok(())
 }
 
 
 /// Add a single `Instance` to `out.fns` and/or `out.intrinsics`, depending on its kind.
 fn emit_instance<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    out: &mut Output,
+    out: &mut impl JsonOutput,
     inst: ty::Instance<'tcx>,
-) {
+) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
     let name = inst_id_str(tcx, inst);
@@ -812,29 +817,29 @@ fn emit_instance<'tcx>(
     // We actually record every instance in `intrinsics`, not just `InstanceDef::Intrinsic` and
     // other special functions, because the intrinsics table is used to look up CustomOps.
     // (CustomOps are keyed on the pre-monomorphization name of the function.)
-    out.intrinsics.push(json!({
+    out.emit(EntryKind::Intrinsic, json!({
         "name": &name,
         "inst": inst.to_json(ms),
-    }));
+    }))?;
 
     let def_id = match inst.def {
         ty::InstanceDef::Item(def_id) => def_id,
-        _ => return,
+        _ => return Ok(()),
     };
 
     // Foreign items and non-generics have no MIR available.
     if tcx.is_foreign_item(def_id) {
-        return;
+        return Ok(());
     }
     if !def_id.is_local() {
         if tcx.is_reachable_non_generic(def_id) {
-            return;
+            return Ok(());
         }
         // Items with upstream monomorphizations have already been translated into an upstream
         // crate, so we can skip them.
         if tcx.upstream_monomorphizations_for(def_id)
                 .map_or(false, |monos| monos.contains_key(&inst.substs)) {
-            return;
+            return Ok(());
         }
     }
 
@@ -845,20 +850,20 @@ fn emit_instance<'tcx>(
         inst.substs, ty::ParamEnv::reveal_all(), &mir);
     let mir = tcx.arena.alloc(mir);
 
-    emit_fn(ms, out, &name, Some(inst), mir);
+    emit_fn(ms, out, &name, Some(inst), mir)
 }
 
 
 fn emit_vtable<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    out: &mut Output,
+    out: &mut impl JsonOutput,
     trait_ref: ty::PolyTraitRef<'tcx>,
-) {
-    out.vtables.push(json!({
+) -> io::Result<()> {
+    out.emit(EntryKind::Vtable, json!({
         "name": vtable_name(ms, trait_ref),
         "desc": trait_ref.skip_binder().to_json(ms),
         "items": build_vtable_items(ms, trait_ref),
-    }));
+    }))
 }
 
 fn vtable_name<'tcx>(
@@ -899,9 +904,9 @@ fn build_vtable_items<'tcx>(
 
 fn emit_adt<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    out: &mut Output,
+    out: &mut impl JsonOutput,
     def_id: DefId,
-) {
+) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
     let ty = tcx.type_of(def_id);
@@ -909,19 +914,20 @@ fn emit_adt<'tcx>(
         let adt_name = def_id_str(tcx, def_id);
         tcx.sess.note_without_error(
             format!("Emitting ADT definition for {}", adt_name).as_str());
-        out.adts.push(adt_def.tojson(ms, List::empty()));
+        out.emit(EntryKind::Adt, adt_def.tojson(ms, List::empty()))?;
     }
+    Ok(())
 }
 
 
 /// Output a MIR body to `out.fns`.  Recursively emits all promoted statics from the body.
 fn emit_fn<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
-    out: &mut Output,
+    out: &mut impl JsonOutput,
     name: &str,
     inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
-) {
+) -> io::Result<()> {
     ms.state.session.note_without_error(&format!("Emitting MIR for {}", name));
 
     let mut ms = MirState {
@@ -934,15 +940,15 @@ fn emit_fn<'tcx>(
     let mut promoted = Vec::with_capacity(mir.promoted.len());
     for (idx, prom_mir) in mir.promoted.iter_enumerated() {
         let prom_name = format!("{}::{{{{promoted}}}}[{}]", name, idx.as_usize());
-        emit_fn(ms, out, &prom_name, None, prom_mir);
+        emit_fn(ms, out, &prom_name, None, prom_mir)?;
         emit_static_decl(ms, out, &prom_name, prom_mir.return_ty(), false,
-            Some((name, idx.as_usize())));
+            Some((name, idx.as_usize())))?;
         promoted.push(prom_name);
     }
 
     let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(abi::Abi::Rust);
 
-    out.fns.push(json!({
+    out.emit(EntryKind::Fn, json!({
         "name": &name,
         "inst": inst.to_json(ms),
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
@@ -977,55 +983,37 @@ fn inst_abi<'tcx>(
 }
 
 
-#[derive(Default)]
-struct Output {
-    /// MIR bodies.  These can come from monomorphized fns, monomorphized constants, and static
-    /// initializers.
-    fns: Vec<serde_json::Value>,
-    /// Definitions of all ADTs used in the crate.
-    adts: Vec<serde_json::Value>,
-    /// Declarations of statics, giving their names and types.  The code that initializes the
-    /// static appears as a MIR body in `fns` with matching name.
-    statics: Vec<serde_json::Value>,
-    /// Definitions of all trait-object vtables used in the crate.  A vtable is "used" when an
-    /// unsizing cast converts a normal pointer into a trait object fat pointer.
-    vtables: Vec<serde_json::Value>,
-    /// All traits defined in the crate.  This gives the name and signature of each trait item,
-    /// which is useful for constructing vtable types.
-    traits: Vec<serde_json::Value>,
-    /// Provides the `instance` for each monomorphized function used in the crate that doesn't have
-    /// a MIR body.
-    intrinsics: Vec<serde_json::Value>,
-}
-
 #[derive(Debug)]
-pub struct AnalysisData {
+pub struct AnalysisData<O> {
     pub mir_path: PathBuf,
     pub extern_mir_paths: Vec<PathBuf>,
+    pub output: O,
 }
 
 /// Analyze the crate currently being compiled by `comp`.  Returns `Ok(Some(data))` upon
 /// successfully writing the crate MIR, returns `Ok(None)` when there is no need to write out MIR
 /// (namely, when `comp` is not producing an `Exe` output), and returns `Err(e)` on I/O or
 /// serialization errors.
-pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData>, serde_cbor::Error> {
-    let mut out = Output::default();
-
+fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
+    comp: &Compiler,
+    mk_output: F,
+) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
     let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
     let mut gcx = comp.global_ctxt().unwrap().peek_mut();
-    let mut roots = Vec::new();
-    gcx.enter(|tcx| {
+    let output = gcx.enter(|tcx| -> io::Result<_> {
         let outputs = tcx.output_filenames(LOCAL_CRATE);
         if !outputs.outputs.contains_key(&OutputType::Exe) {
-            return;
+            return Ok(None);
         }
-        mir_path = Some(rustc_codegen_utils::link::out_filename(
+        let mir_path_ = rustc_codegen_utils::link::out_filename(
             tcx.sess,
             tcx.sess.crate_types.get().first().unwrap().clone(),
             &outputs,
             &tcx.crate_name.to_string(),
-        ).with_extension("mir"));
+        ).with_extension("mir");
+        let mut out = mk_output(&mir_path_)?;
+        mir_path = Some(mir_path_);
 
         for &cnum in tcx.all_crate_nums(LOCAL_CRATE) {
             let src = tcx.used_crate_source(cnum);
@@ -1056,27 +1044,41 @@ pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData>, serde_cbor::Erro
         };
 
         // Traits and top-level statics can be enumerated directly.
-        emit_traits(&mut ms, &mut out);
-        emit_statics(&mut ms, &mut out);
+        emit_traits(&mut ms, &mut out)?;
+        emit_statics(&mut ms, &mut out)?;
 
         // Everything else is demand-driven, to handle monomorphization.  We start with all #[test]
         // functions, then keep looping until there are no more nodes to process.
-        roots = init_instances(&mut ms);
+        init_instances(&mut ms, &mut out)?;
 
         while ms.used.has_new() {
             for inst in ms.used.instances.take_new() {
-                emit_instance(&mut ms, &mut out, inst);
+                emit_instance(&mut ms, &mut out, inst)?;
             }
             for vtable in ms.used.vtables.take_new() {
-                emit_vtable(&mut ms, &mut out, vtable);
+                emit_vtable(&mut ms, &mut out, vtable)?;
             }
             for adt in ms.used.types.take_new() {
-                emit_adt(&mut ms, &mut out, adt);
+                emit_adt(&mut ms, &mut out, adt)?;
             }
         }
-    });
+
+        Ok(Some(out))
+    })?;
 
     let mir_path = match mir_path {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+    // `output` should be `Some` if `mir_path` was `Some`.
+    let output = output.unwrap();
+
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output }))
+}
+
+pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
+    let opt_ad = analyze_inner(comp, |_| { Ok(lib_util::Output::default()) })?;
+    let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
@@ -1091,14 +1093,14 @@ pub fn analyze(comp: &Compiler) -> Result<Option<AnalysisData>, serde_cbor::Erro
         "traits": out.traits,
         "intrinsics": out.intrinsics,
         "impls": [],
-        "roots": roots,
+        "roots": out.roots,
     });
     comp.session().note_without_error(
         &format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
     lib_util::write_indexed_crate(file, &j)?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
 }
 
 // format:

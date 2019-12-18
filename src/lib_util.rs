@@ -143,25 +143,15 @@ impl<W: Write> Write for CountWrite<W> {
 
 // JSON serialization and indexing
 
-struct Emitter<W> {
+#[derive(Default)]
+struct EmitterState {
     dep_map: HashMap<StringId, HashSet<StringId>>,
     entry_loc: HashMap<(StringId, EntryKind), (u64, u64)>,
     roots: HashSet<StringId>,
     intern: InternTable,
-    writer: CountWrite<W>,
 }
 
-impl<W: Write> Emitter<W> {
-    pub fn new(w: W) -> Emitter<W> {
-        Emitter {
-            dep_map: Default::default(),
-            entry_loc: Default::default(),
-            roots: Default::default(),
-            intern: Default::default(),
-            writer: CountWrite { w, count: 0 },
-        }
-    }
-
+impl EmitterState {
     fn gather_deps(&mut self, id: StringId, j: &JsonValue) {
         match *j {
             JsonValue::Array(ref a) => {
@@ -187,20 +177,70 @@ impl<W: Write> Emitter<W> {
         }
     }
 
-    fn emit_entry(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
+    fn emit_entry<E, F: FnOnce(EntryKind, &JsonValue) -> Result<(u64, u64), E>>(
+        &mut self,
+        kind: EntryKind,
+        j: &JsonValue,
+        write_entry: F,
+    ) -> Result<(), E> {
         // Collect dependencies
         let name_id = self.intern.intern(j["name"].as_str().unwrap().into());
         self.gather_deps(name_id, j);
 
         // Serialize the entry, and record its position.
-        let start = self.writer.count as u64;
-        serde_json::to_writer(&mut self.writer, j)?;
-        let end = self.writer.count as u64;
+        let (start, end) = write_entry(kind, j)?;
         let len = end - start;
         let old = self.entry_loc.insert((name_id, kind), (start, len));
         assert!(old.is_none(), "duplicate {:?} named {:?}", kind, self.intern.name(name_id));
 
         Ok(())
+    }
+
+    pub fn finish(mut self) -> CrateIndex {
+        let names = self.intern.into_names();
+
+        let mut items = HashMap::with_capacity(self.dep_map.len());
+        for (name, v) in self.dep_map {
+            let mut data = items.entry(name).or_insert_with(ItemData::default);
+
+            data.deps = v.into_iter().collect::<Vec<_>>();
+            data.deps.sort();
+
+            for kind in EntryKind::each() {
+                if let Some(&loc) = self.entry_loc.get(&(name, kind)) {
+                    data.locations.insert(kind, loc);
+                }
+            }
+        }
+
+        let mut roots = self.roots.into_iter().collect::<Vec<_>>();
+        roots.sort();
+
+        CrateIndex { names, items, roots }
+    }
+}
+
+struct Emitter<W> {
+    state: EmitterState,
+    writer: CountWrite<W>,
+}
+
+impl<W: Write> Emitter<W> {
+    pub fn new(w: W) -> Emitter<W> {
+        Emitter {
+            state: EmitterState::default(),
+            writer: CountWrite { w, count: 0 },
+        }
+    }
+
+    fn emit_entry(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
+        let writer = &mut self.writer;
+        self.state.emit_entry(kind, j, |_, j| {
+            let start = writer.count as u64;
+            serde_json::to_writer(&mut *writer, j)?;
+            let end = writer.count as u64;
+            Ok((start, end))
+        })
     }
 
     fn emit_table(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
@@ -245,34 +285,15 @@ impl<W: Write> Emitter<W> {
         let j_roots = j["roots"].as_array()
             .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
         for x in j_roots {
-            let name_id = self.intern.intern(x.as_str().unwrap().into());
-            self.roots.insert(name_id);
+            let name_id = self.state.intern.intern(x.as_str().unwrap().into());
+            self.state.roots.insert(name_id);
         }
 
         Ok(())
     }
 
-    pub fn finish(mut self) -> CrateIndex {
-        let names = self.intern.into_names();
-
-        let mut items = HashMap::with_capacity(self.dep_map.len());
-        for (name, v) in self.dep_map {
-            let mut data = items.entry(name).or_insert_with(ItemData::default);
-
-            data.deps = v.into_iter().collect::<Vec<_>>();
-            data.deps.sort();
-
-            for kind in EntryKind::each() {
-                if let Some(&loc) = self.entry_loc.get(&(name, kind)) {
-                    data.locations.insert(kind, loc);
-                }
-            }
-        }
-
-        let mut roots = self.roots.into_iter().collect::<Vec<_>>();
-        roots.sort();
-
-        CrateIndex { names, items, roots }
+    pub fn finish(self) -> CrateIndex {
+        self.state.finish()
     }
 }
 
@@ -333,3 +354,94 @@ pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(Cra
 
     Ok((index, json_offset))
 }
+
+
+// Streaming and non-streaming outputs
+
+pub trait JsonOutput {
+    fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()>;
+    fn add_root(&mut self, name: String) -> io::Result<()>;
+}
+
+#[derive(Default)]
+pub struct Output {
+    /// MIR bodies.  These can come from monomorphized fns, monomorphized constants, and static
+    /// initializers.
+    pub fns: Vec<serde_json::Value>,
+    /// Definitions of all ADTs used in the crate.
+    pub adts: Vec<serde_json::Value>,
+    /// Declarations of statics, giving their names and types.  The code that initializes the
+    /// static appears as a MIR body in `fns` with matching name.
+    pub statics: Vec<serde_json::Value>,
+    /// Definitions of all trait-object vtables used in the crate.  A vtable is "used" when an
+    /// unsizing cast converts a normal pointer into a trait object fat pointer.
+    pub vtables: Vec<serde_json::Value>,
+    /// All traits defined in the crate.  This gives the name and signature of each trait item,
+    /// which is useful for constructing vtable types.
+    pub traits: Vec<serde_json::Value>,
+    /// Provides the `instance` for each monomorphized function used in the crate that doesn't have
+    /// a MIR body.
+    pub intrinsics: Vec<serde_json::Value>,
+    /// Entry points for this crate.
+    pub roots: Vec<String>,
+}
+
+impl JsonOutput for Output {
+    fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()> {
+        match kind {
+            EntryKind::Fn => self.fns.push(j),
+            EntryKind::Adt => self.adts.push(j),
+            EntryKind::Static => self.statics.push(j),
+            EntryKind::Vtable => self.vtables.push(j),
+            EntryKind::Trait => self.traits.push(j),
+            EntryKind::Intrinsic => self.intrinsics.push(j),
+        }
+        Ok(())
+    }
+
+    fn add_root(&mut self, name: String) -> io::Result<()> {
+        self.roots.push(name);
+        Ok(())
+    }
+}
+
+
+/*
+/// Streaming output of MIR entries.  This uses a different output format: instead of an object
+/// containing a named tables for each `EntryKind`, the output is a single giant array where each
+/// entry is tagged with its `EntryKind`.  This lets us emit it in a streaming fashion, without
+/// ever buffering all JSON objects in memory.
+pub struct StreamingEmitter<W> {
+    /// Internally, `StreamingEmitter` writes the JSON and constructs the `CrateIndex` using an
+    /// `Emitter`.  But we use private functions to emit a single entry at a time, rather than
+    /// producing an entire crate via `emit_crate`.
+    inner: Emitter<W>,
+    len: usize,
+}
+
+impl<W: Write> StreamingEmitter<W> {
+    pub fn new(mut w: W) -> io::Result<StreamingEmitter<W>> {
+        write!(w, "[")?;
+        Ok(StreamingEmitter {
+            inner: Emitter::new(w),
+            len: 0,
+        })
+    }
+
+    pub fn finish(self) -> io::Result<CrateIndex> {
+        let index = self.inner.finish();
+        write!(self.inner.writer, "]")?;
+        Ok(index)
+    }
+}
+
+impl<W: Write> JsonEmitter for StreamingEmitter<W> {
+    fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()> {
+        if self.len > 0 {
+            write!(self.inner.writer, ",")?;
+        }
+        self.inner.emit_entry(kind, j)?;
+        Ok(())
+    }
+}
+*/

@@ -46,6 +46,10 @@ impl<T: Hash+Eq+Clone> UsedSet<T> {
     pub fn has_new(&self) -> bool {
         self.new.len() > 0
     }
+
+    pub fn count_new(&self) -> usize {
+        self.new.len()
+    }
 }
 
 impl<T: Hash+Eq> Deref for UsedSet<T> {
@@ -68,6 +72,13 @@ impl<'tcx> Used<'tcx> {
         types.has_new() ||
         vtables.has_new() ||
         instances.has_new()
+    }
+
+    pub fn count_new(&self) -> usize {
+        let Used { ref types, ref vtables, ref instances } = *self;
+        types.count_new() +
+        vtables.count_new() +
+        instances.count_new()
     }
 }
 
