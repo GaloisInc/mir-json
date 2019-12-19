@@ -32,9 +32,9 @@ impl<W: Write + Seek> TarStream<W> {
         })
     }
 
-    pub fn finish(mut self) -> io::Result<()> {
+    pub fn finish(mut self) -> io::Result<W> {
         self.w.write_all(&[0; 1024])?;
-        Ok(())
+        Ok(self.w)
     }
 }
 
