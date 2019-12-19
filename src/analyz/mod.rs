@@ -1015,6 +1015,13 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         let mut out = mk_output(&mir_path_)?;
         mir_path = Some(mir_path_);
 
+        // FIXME - temporary crate blacklist.  These crates get normal rlibs but empty .mirs.
+        // The `clap` crate includes some long iterator chains, which cause exponential blowup in
+        // the size of the output.
+        if tcx.crate_name.to_string() == "clap" {
+            return Ok(Some(out));
+        }
+
         for &cnum in tcx.all_crate_nums(LOCAL_CRATE) {
             let src = tcx.used_crate_source(cnum);
             let it = src.dylib.iter()
