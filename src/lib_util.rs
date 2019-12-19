@@ -20,7 +20,7 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, BTreeMap};
 use std::fs::File;
-use std::io::{self, Read, Write, Seek, SeekFrom, Cursor};
+use std::io::{self, Read, Write, Seek, SeekFrom, Cursor, BufWriter};
 use std::mem;
 use std::path::Path;
 use std::sync::mpsc::{self, SyncSender, Receiver};
@@ -487,7 +487,7 @@ impl<W: Write> JsonOutput for StreamingEmitter<W> {
 // Streaming tar-file output.
 
 pub struct MirStream {
-    emitter: StreamingEmitter<TarEntryStream<File>>,
+    emitter: StreamingEmitter<TarEntryStream<BufWriter<File>>>,
 }
 
 impl JsonOutput for MirStream {
@@ -512,7 +512,7 @@ fn make_tar_entry(path: &str) -> tar::Header {
 }
 
 pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
-    let tar = TarStream::new(File::create(path)?);
+    let tar = TarStream::new(BufWriter::new(File::create(path)?));
     let entry = tar.start_entry(make_tar_entry("crate.json"))?;
     let emitter = StreamingEmitter::new(entry)?;
     Ok(MirStream { emitter })
@@ -524,6 +524,7 @@ pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
     let mut index_entry = tar.start_entry(make_tar_entry("index.cbor"))?;
     serde_cbor::to_writer(&mut index_entry, &index)?;
     let tar = index_entry.finish_entry()?;
-    tar.finish()?;
+    let mut w = tar.finish()?;
+    w.flush()?;
     Ok(())
 }
