@@ -186,6 +186,11 @@ fn go() {
 
     let json_path = test_path.with_extension(".linked-mir.json");
     eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
+    eprintln!(
+        "  inputs: {}{}",
+        data.mir_path.display(),
+        data.extern_mir_paths.iter().map(|x| format!(" {}", x.display())).collect::<String>(),
+    );
     link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
 
     write_test_script(&test_path, &json_path).unwrap();
