@@ -265,6 +265,11 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        // FIXME simulate the effect of interning types.  Actual interning is NYI
+        if !mir.ty_intern.insert(*self) {
+            return json!(null);
+        }
+
         match &self.sty {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})

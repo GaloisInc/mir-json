@@ -86,6 +86,7 @@ pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used: &'a mut Used<'tcx>,
     pub state: &'a CompileState<'a, 'tcx>,
+    pub ty_intern: HashSet<ty::Ty<'tcx>>,
 }
 
 /// Trait for converting MIR elements to JSON.

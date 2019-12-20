@@ -934,6 +934,7 @@ fn emit_fn<'tcx>(
         mir: Some(mir),
         used: ms.used,
         state: ms.state,
+        ty_intern: HashSet::new(),
     };
     let ms = &mut ms;
 
@@ -1048,6 +1049,7 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             mir: None,
             used: &mut used,
             state: &state,
+            ty_intern: HashSet::new(),
         };
 
         // Traits and top-level statics can be enumerated directly.
