@@ -956,7 +956,6 @@ fn emit_fn<'tcx>(
 
     out.emit(EntryKind::Fn, json!({
         "name": &name,
-        "inst": inst.to_json(ms),
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
         "generics": { "params": [] },

@@ -146,6 +146,33 @@ pub fn inst_def_id<'tcx>(
     }
 }
 
+/// Get the mangled name of a monomorphic function.  As a side effect, this marks the function as
+/// "used", so its body will be emitted too.
+pub fn get_fn_def_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    defid: DefId,
+    substs: ty::subst::SubstsRef<'tcx>,
+) -> String {
+    let inst = ty::Instance::resolve(
+        mir.state.tcx,
+        ty::ParamEnv::reveal_all(),
+        defid,
+        substs,
+    );
+
+    // Compute the mangled name of the monomorphized instance being called.
+    if let Some(inst) = inst {
+        mir.used.instances.insert(inst);
+        inst_id_str(mir.state.tcx, inst)
+    } else {
+        eprintln!(
+            "error: failed to resolve FnDef Instance: {:?}, {:?}",
+            defid, substs,
+        );
+        def_id_str(mir.state.tcx, defid)
+    }
+}
+
 impl ToJson<'_> for hir::def_id::DefId {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!(def_id_str(mir.state.tcx, *self))
@@ -172,8 +199,6 @@ fn adjust_method_index<'tcx>(tcx: TyCtxt<'tcx>, self_ty: ty::Ty<'tcx>, raw_idx: 
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        mir.used.instances.insert(self.clone());
-
         let substs = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
             self.substs,
@@ -323,29 +348,11 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::FnDef(defid, ref substs) => {
-                let inst = ty::Instance::resolve(
-                    mir.state.tcx,
-                    ty::ParamEnv::reveal_all(),
-                    defid,
-                    substs,
-                );
-
-                // Compute the mangled name of the monomorphized instance being called.
-                let name = if let Some(inst) = inst {
-                    inst_id_str(mir.state.tcx, inst)
-                } else {
-                    eprintln!(
-                        "error: failed to resolve FnDef Instance: {:?}, {:?}",
-                        defid, substs,
-                    );
-                    def_id_str(mir.state.tcx, defid)
-                };
-
+                let name = get_fn_def_name(mir, defid, substs);
                 json!({
                     "kind": "FnDef",
                     "defid": name,
                     "substs": [],
-                    "inst": inst.to_json(mir),
                 })
             }
             &ty::TyKind::Param(ref p) =>
@@ -799,8 +806,8 @@ fn render_constant<'tcx>(
         ty::TyKind::FnDef(defid, ref substs) => {
             json!({
                 "kind": "fndef",
-                "def_id": defid.to_json(mir),
-                "substs": substs.to_json(mir),
+                "def_id": get_fn_def_name(mir, defid, substs),
+                "substs": [],
             })
         },
 
