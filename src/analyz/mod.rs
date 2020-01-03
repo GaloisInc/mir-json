@@ -674,6 +674,7 @@ fn emit_traits(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
             "generics": generics.to_json(ms),
             "predicates": preds.to_json(ms),
         }))?;
+        emit_new_types(ms, out)?;
     }
 
     Ok(())
@@ -734,7 +735,8 @@ fn emit_static_decl<'tcx>(
         j.as_object_mut().unwrap().insert("promoted_from".to_owned(), parent.into());
         j.as_object_mut().unwrap().insert("promoted_index".to_owned(), idx.into());
     }
-    out.emit(EntryKind::Static, j)
+    out.emit(EntryKind::Static, j)?;
+    emit_new_types(ms, out)
 }
 
 
@@ -821,6 +823,7 @@ fn emit_instance<'tcx>(
         "name": &name,
         "inst": inst.to_json(ms),
     }))?;
+    emit_new_types(ms, out)?;
 
     let def_id = match inst.def {
         ty::InstanceDef::Item(def_id) => def_id,
@@ -863,7 +866,8 @@ fn emit_vtable<'tcx>(
         "name": vtable_name(ms, trait_ref),
         "desc": trait_ref.skip_binder().to_json(ms),
         "items": build_vtable_items(ms, trait_ref),
-    }))
+    }))?;
+    emit_new_types(ms, out)
 }
 
 fn vtable_name<'tcx>(
@@ -915,6 +919,7 @@ fn emit_adt<'tcx>(
         tcx.sess.note_without_error(
             format!("Emitting ADT definition for {}", adt_name).as_str());
         out.emit(EntryKind::Adt, adt_def.tojson(ms, List::empty()))?;
+        emit_new_types(ms, out)?;
     }
     Ok(())
 }
@@ -934,6 +939,7 @@ fn emit_fn<'tcx>(
         mir: Some(mir),
         used: ms.used,
         state: ms.state,
+        tys: ms.tys,
     };
     let ms = &mut ms;
 
@@ -959,7 +965,29 @@ fn emit_fn<'tcx>(
         "promoted": promoted,
         "abi": abi.to_json(ms),
         "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
-    }))
+    }))?;
+    emit_new_types(ms, out)
+}
+
+fn emit_new_types(
+    ms: &mut MirState,
+    out: &mut impl JsonOutput,
+) -> io::Result<()> {
+    for j in ms.tys.take_new_types() {
+        out.emit(EntryKind::Ty, j)?;
+    }
+    assert!(ms.tys.take_new_types().is_empty());
+    Ok(())
+}
+
+fn emit_entry<'tcx>(
+    ms: &mut MirState<'_, 'tcx>,
+    out: &mut impl JsonOutput,
+    kind: EntryKind,
+    j: serde_json::Value,
+) -> io::Result<()> {
+    out.emit(kind, j)?;
+    emit_new_types(ms, out)
 }
 
 fn inst_abi<'tcx>(
@@ -1033,6 +1061,7 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 
 
         let mut used = Used::default();
+        let mut tys = TyIntern::default();
         let state = CompileState {
             session: comp.session(),
             tcx,
@@ -1041,6 +1070,7 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             mir: None,
             used: &mut used,
             state: &state,
+            tys: &mut tys,
         };
 
         // Traits and top-level statics can be enumerated directly.
@@ -1062,6 +1092,10 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
                 emit_adt(&mut ms, &mut out, adt)?;
             }
         }
+
+        // Any referenced types should normally be emitted immediately after the entry that
+        // references them, but we check again here just in case.
+        emit_new_types(&mut ms, &mut out)?;
 
         Ok(Some(out))
     })?;
@@ -1093,6 +1127,7 @@ pub fn analyze_nonstreaming(comp: &Compiler) -> Result<Option<AnalysisData<()>>,
         "traits": out.traits,
         "intrinsics": out.intrinsics,
         "impls": [],
+        "tys": out.tys,
         "roots": out.roots,
     });
     comp.session().note_without_error(

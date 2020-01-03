@@ -265,7 +265,13 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match &self.sty {
+        // If this type has already been interned, just return its ID.
+        if let Some(id) = mir.tys.get(*self) {
+            return json!(id);
+        }
+
+        // Otherwise, convert the type to JSON and add the new entry to the interning table.
+        let j = match &self.sty {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
             }
@@ -410,7 +416,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Opaque"})
             }
-        }
+        };
+
+        let id = mir.tys.insert(*self, j);
+        json!(id)
     }
 }
 

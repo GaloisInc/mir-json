@@ -69,6 +69,7 @@ pub enum EntryKind {
     Vtable,
     Trait,
     Intrinsic,
+    Ty,
 }
 
 impl EntryKind {
@@ -81,6 +82,7 @@ impl EntryKind {
             Vtable => "vtable",
             Trait => "trait",
             Intrinsic => "intrinsic",
+            Ty => "ty",
         }
     }
 
@@ -93,12 +95,13 @@ impl EntryKind {
             Vtable => "vtables",
             Trait => "traits",
             Intrinsic => "intrinsics",
+            Ty => "tys",
         }
     }
 
     pub fn each() -> impl Iterator<Item = EntryKind> {
         use self::EntryKind::*;
-        [Fn, Adt, Static, Vtable, Trait, Intrinsic].iter().cloned()
+        [Fn, Adt, Static, Vtable, Trait, Intrinsic, Ty].iter().cloned()
     }
 }
 
@@ -408,6 +411,10 @@ pub struct Output {
     /// Provides the `instance` for each monomorphized function used in the crate that doesn't have
     /// a MIR body.
     pub intrinsics: Vec<serde_json::Value>,
+    /// Types that are referenced in this crate.  `ty::Ty` is serialized as a string ID, which is a
+    /// key into this table.  This encoding avoids exponential blowup when large types appear
+    /// repeatedly within a crate.
+    pub tys: Vec<serde_json::Value>,
     /// Entry points for this crate.
     pub roots: Vec<String>,
 }
@@ -421,6 +428,7 @@ impl JsonOutput for Output {
             EntryKind::Vtable => self.vtables.push(j),
             EntryKind::Trait => self.traits.push(j),
             EntryKind::Intrinsic => self.intrinsics.push(j),
+            EntryKind::Ty => self.tys.push(j),
         }
         Ok(())
     }
