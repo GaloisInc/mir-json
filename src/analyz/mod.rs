@@ -892,14 +892,9 @@ fn build_vtable_items<'tcx>(
             Some(x) => x,
             None => continue,
         };
-        let inst =
-            ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
-            .unwrap_or_else(|| panic!("failed to resolve {:?} {:?} for vtable",
-                                      def_id, substs));
-        mir.used.instances.insert(inst);
         parts.push(json!({
-            "def_id": inst_id_str(mir.state.tcx, inst),
-            "instance": inst.to_json(mir),
+            "def_id": get_fn_def_name(mir, def_id, substs),
+            "trait_item": def_id.to_json(mir),
         }));
     }
     parts.into()
