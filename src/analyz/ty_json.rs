@@ -670,8 +670,11 @@ impl<'tcx> ToJson<'tcx> for ty::subst::Kind<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::subst::UnpackedKind::Type(ref ty) => ty.to_json(mir),
-            ty::subst::UnpackedKind::Lifetime(_) => json!({"kind": "Lifetime"}),
-            ty::subst::UnpackedKind::Const(_) => json!({"kind": "Const"}),
+            // In mir-verifier, all substs entries are considered "types", and there are dummy
+            // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
+            // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
+            ty::subst::UnpackedKind::Lifetime(_) => json!("nonty::Lifetime"),
+            ty::subst::UnpackedKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
