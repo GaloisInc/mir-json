@@ -101,7 +101,14 @@ impl EntryKind {
 
     pub fn each() -> impl Iterator<Item = EntryKind> {
         use self::EntryKind::*;
-        [Fn, Adt, Static, Vtable, Trait, Intrinsic, Ty].iter().cloned()
+        // Type annotation ensures we have exactly `count()` entries.
+        let all: &'static [EntryKind; Self::count()] =
+            &[Fn, Adt, Static, Vtable, Trait, Intrinsic, Ty];
+        all.iter().cloned()
+    }
+
+    pub const fn count() -> usize {
+        7
     }
 }
 
