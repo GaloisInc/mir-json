@@ -736,7 +736,11 @@ fn render_constant<'tcx>(
                 val |= -1_i128 << (size * 8);
             }
             json!({
-                "kind": "int",
+                "kind": match ty.sty {
+                    ty::TyKind::Int(ast::IntTy::Isize) => "isize",
+                    ty::TyKind::Int(_) => "int",
+                    _ => unreachable!(),
+                },
                 "size": size,
                 "val": val.to_string(),
             })
@@ -749,6 +753,7 @@ fn render_constant<'tcx>(
                 "kind": match ty.sty {
                     ty::TyKind::Bool => "bool",
                     ty::TyKind::Char => "char",
+                    ty::TyKind::Uint(ast::UintTy::Usize) => "usize",
                     ty::TyKind::Uint(_) => "uint",
                     _ => unreachable!(),
                 },
