@@ -6,8 +6,8 @@ use rustc_interface::interface::Compiler;
 use syntax::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::hash::Hash;
+use std::collections::{HashMap, HashSet, hash_map};
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::mem;
 
@@ -82,10 +82,90 @@ impl<'tcx> Used<'tcx> {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct TyIntern<'tcx> {
+    map: HashMap<ty::Ty<'tcx>, String>,
+    /// Types that are newly referenced since the last `take_new_types()`.
+    new_vals: Vec<serde_json::Value>,
+}
+
+/// Info for describing a type.  The `String` indicates (at minimum) the `TyKind`, and the `bool`
+/// is `true` if a hash of the type should be included when forming the type's unique ID.
+fn ty_desc(ty: ty::Ty) -> (String, bool) {
+    let kind_str = match ty.sty {
+        // Special case: primitive types print as themselves and don't require a hash.
+        ty::TyKind::Bool |
+        ty::TyKind::Char |
+        ty::TyKind::Int(_) |
+        ty::TyKind::Uint(_) |
+        ty::TyKind::Float(_) |
+        ty::TyKind::Str => return (format!("{:?}", ty), false),
+
+        ty::TyKind::Never |
+        ty::TyKind::Error => return (format!("{:?}", ty.sty), false),
+
+        ty::TyKind::Adt(..) => "Adt",
+        ty::TyKind::Foreign(..) => "Foreign",
+        ty::TyKind::Array(..) => "Array",
+        ty::TyKind::Slice(..) => "Slice",
+        ty::TyKind::RawPtr(..) => "RawPtr",
+        ty::TyKind::Ref(..) => "Ref",
+        ty::TyKind::FnDef(..) => "FnDef",
+        ty::TyKind::FnPtr(..) => "FnPtr",
+        ty::TyKind::Dynamic(..) => "Dynamic",
+        ty::TyKind::Closure(..) => "Closure",
+        ty::TyKind::Generator(..) => "Generator",
+        ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
+        ty::TyKind::Tuple(..) => "Tuple",
+        ty::TyKind::Projection(..) => "Projection",
+        ty::TyKind::UnnormalizedProjection(..) => "UnnormalizedProjection",
+        ty::TyKind::Opaque(..) => "Opaque",
+        ty::TyKind::Param(..) => "Param",
+        ty::TyKind::Bound(..) => "Bound",
+        ty::TyKind::Placeholder(..) => "Placeholder",
+        ty::TyKind::Infer(..) => "Infer",
+    };
+    (kind_str.to_owned(), true)
+}
+
+fn ty_unique_id(ty: ty::Ty, j: &serde_json::Value) -> String {
+    let (kind_str, needs_hash) = ty_desc(ty);
+    if needs_hash {
+        let mut h = hash_map::DefaultHasher::new();
+        serde_json::to_string(&j).unwrap().hash(&mut h);
+        let hash_val = h.finish();
+        format!("ty::{}::{:016x}", kind_str, hash_val)
+    } else {
+        format!("ty::{}", kind_str)
+    }
+}
+
+impl<'tcx> TyIntern<'tcx> {
+    pub fn get(&self, ty: ty::Ty<'tcx>) -> Option<&str> {
+        self.map.get(&ty).map(|x| x as &str)
+    }
+
+    pub fn insert(&mut self, ty: ty::Ty<'tcx>, j: serde_json::Value) -> String {
+        let id = ty_unique_id(ty, &j);
+        self.new_vals.push(json!({
+            "name": &id,
+            "ty": j,
+        }));
+        let old = self.map.insert(ty, id.clone());
+        assert!(old.is_none(), "duplicate insert for type {:?}", ty);
+        id
+    }
+
+    pub fn take_new_types(&mut self) -> Vec<serde_json::Value> {
+        mem::replace(&mut self.new_vals, Vec::new())
+    }
+}
+
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used: &'a mut Used<'tcx>,
     pub state: &'a CompileState<'a, 'tcx>,
+    pub tys: &'a mut TyIntern<'tcx>,
 }
 
 /// Trait for converting MIR elements to JSON.

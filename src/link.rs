@@ -95,9 +95,9 @@ where R: Read + Seek, W: Write {
 
 
     // Set up the tables that will be written to the output.
-    let mut output_tables = vec![Vec::new(); 6];
+    let mut output_tables = vec![Vec::new(); EntryKind::count()];
     for &id in &seen_names {
-        let mut saw_entry = [false; 6];
+        let mut saw_entry = [false; EntryKind::count()];
         // Check each input crate that defines the item, in case it has additional entries not
         // present in other crates.
         let def_list = match defs.get(&id) {

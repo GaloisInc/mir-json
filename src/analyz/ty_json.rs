@@ -146,6 +146,33 @@ pub fn inst_def_id<'tcx>(
     }
 }
 
+/// Get the mangled name of a monomorphic function.  As a side effect, this marks the function as
+/// "used", so its body will be emitted too.
+pub fn get_fn_def_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    defid: DefId,
+    substs: ty::subst::SubstsRef<'tcx>,
+) -> String {
+    let inst = ty::Instance::resolve(
+        mir.state.tcx,
+        ty::ParamEnv::reveal_all(),
+        defid,
+        substs,
+    );
+
+    // Compute the mangled name of the monomorphized instance being called.
+    if let Some(inst) = inst {
+        mir.used.instances.insert(inst);
+        inst_id_str(mir.state.tcx, inst)
+    } else {
+        eprintln!(
+            "error: failed to resolve FnDef Instance: {:?}, {:?}",
+            defid, substs,
+        );
+        def_id_str(mir.state.tcx, defid)
+    }
+}
+
 impl ToJson<'_> for hir::def_id::DefId {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!(def_id_str(mir.state.tcx, *self))
@@ -172,8 +199,6 @@ fn adjust_method_index<'tcx>(tcx: TyCtxt<'tcx>, self_ty: ty::Ty<'tcx>, raw_idx: 
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        mir.used.instances.insert(self.clone());
-
         let substs = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
             self.substs,
@@ -265,7 +290,13 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match &self.sty {
+        // If this type has already been interned, just return its ID.
+        if let Some(id) = mir.tys.get(*self) {
+            return json!(id);
+        }
+
+        // Otherwise, convert the type to JSON and add the new entry to the interning table.
+        let j = match &self.sty {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
             }
@@ -317,29 +348,11 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::FnDef(defid, ref substs) => {
-                let inst = ty::Instance::resolve(
-                    mir.state.tcx,
-                    ty::ParamEnv::reveal_all(),
-                    defid,
-                    substs,
-                );
-
-                // Compute the mangled name of the monomorphized instance being called.
-                let name = if let Some(inst) = inst {
-                    inst_id_str(mir.state.tcx, inst)
-                } else {
-                    eprintln!(
-                        "error: failed to resolve FnDef Instance: {:?}, {:?}",
-                        defid, substs,
-                    );
-                    def_id_str(mir.state.tcx, defid)
-                };
-
+                let name = get_fn_def_name(mir, defid, substs);
                 json!({
                     "kind": "FnDef",
                     "defid": name,
                     "substs": [],
-                    "inst": inst.to_json(mir),
                 })
             }
             &ty::TyKind::Param(ref p) =>
@@ -410,7 +423,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Opaque"})
             }
-        }
+        };
+
+        let id = mir.tys.insert(*self, j);
+        json!(id)
     }
 }
 
@@ -654,8 +670,11 @@ impl<'tcx> ToJson<'tcx> for ty::subst::Kind<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::subst::UnpackedKind::Type(ref ty) => ty.to_json(mir),
-            ty::subst::UnpackedKind::Lifetime(_) => json!({"kind": "Lifetime"}),
-            ty::subst::UnpackedKind::Const(_) => json!({"kind": "Const"}),
+            // In mir-verifier, all substs entries are considered "types", and there are dummy
+            // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
+            // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
+            ty::subst::UnpackedKind::Lifetime(_) => json!("nonty::Lifetime"),
+            ty::subst::UnpackedKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
@@ -703,11 +722,11 @@ fn read_static_memory<'tcx>(
 }
 
 fn render_constant<'tcx>(
-    tcx: TyCtxt<'tcx>,
+    mir: &mut MirState<'_, 'tcx>,
     ty: ty::Ty<'tcx>,
     scalar: Option<(u8, u128)>,
     slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
-) -> Option<(&'static str, serde_json::Value)> {
+) -> Option<serde_json::Value> {
     Some(match ty.sty {
         ty::TyKind::Int(_) => {
             let (size, bits) = scalar.expect("int const had non-scalar value?");
@@ -716,23 +735,49 @@ fn render_constant<'tcx>(
                 // Sign-extend to 128 bits
                 val |= -1_i128 << (size * 8);
             }
-            ("int_val", val.to_string().into())
+            json!({
+                "kind": match ty.sty {
+                    ty::TyKind::Int(ast::IntTy::Isize) => "isize",
+                    ty::TyKind::Int(_) => "int",
+                    _ => unreachable!(),
+                },
+                "size": size,
+                "val": val.to_string(),
+            })
         },
         ty::TyKind::Bool |
         ty::TyKind::Char |
         ty::TyKind::Uint(_) => {
-            let (_size, bits) = scalar.expect("uint const had non-scalar value?");
-            ("int_val", bits.to_string().into())
+            let (size, bits) = scalar.expect("uint const had non-scalar value?");
+            json!({
+                "kind": match ty.sty {
+                    ty::TyKind::Bool => "bool",
+                    ty::TyKind::Char => "char",
+                    ty::TyKind::Uint(ast::UintTy::Usize) => "usize",
+                    ty::TyKind::Uint(_) => "uint",
+                    _ => unreachable!(),
+                },
+                "size": size,
+                "val": bits.to_string(),
+            })
         },
         ty::TyKind::Float(ty::layout::FloatTy::F32) => {
-            let (_size, bits) = scalar.expect("f32 const had non-scalar value?");
+            let (size, bits) = scalar.expect("f32 const had non-scalar value?");
             let val = f32::from_bits(bits as u32);
-            ("float_val", val.to_string().into())
+            json!({
+                "kind": "float",
+                "size": size,
+                "val": val.to_string(),
+            })
         },
         ty::TyKind::Float(ty::layout::FloatTy::F64) => {
-            let (_size, bits) = scalar.expect("f64 const had non-scalar value?");
+            let (size, bits) = scalar.expect("f64 const had non-scalar value?");
             let val = f64::from_bits(bits as u64);
-            ("float_val", val.to_string().into())
+            json!({
+                "kind": "float",
+                "size": size,
+                "val": val.to_string(),
+            })
         },
 
         // &str - for string literals
@@ -742,7 +787,10 @@ fn render_constant<'tcx>(
         }, hir::Mutability::MutImmutable) => {
             let (alloc, start, end) = slice.expect("string const had non-slice value");
             let mem = read_static_memory(alloc, start, end);
-            ("str_val", mem.into())
+            json!({
+                "kind": "str",
+                "val": mem,
+            })
         },
 
         // &[u8; _] - for bytestring literals
@@ -753,11 +801,22 @@ fn render_constant<'tcx>(
             }, len_const),
             ..
         }, hir::Mutability::MutImmutable) => {
-            let len = eval_array_len(tcx, len_const);
+            let len = eval_array_len(mir.state.tcx, len_const);
             let (alloc, start, _) = slice.expect("string const had non-slice value");
             let end = start + len;
             let mem = read_static_memory(alloc, start, end);
-            ("bstr_val", mem.into())
+            json!({
+                "kind": "bstr",
+                "val": mem,
+            })
+        },
+
+        ty::TyKind::FnDef(defid, ref substs) => {
+            json!({
+                "kind": "fndef",
+                "def_id": get_fn_def_name(mir, defid, substs),
+                "substs": [],
+            })
         },
 
         _ => return None,
@@ -794,21 +853,21 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         };
         let rendered = match evaluated.val {
             interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
-                render_constant(mir.state.tcx, self.ty, Some((size, data)), None)
+                render_constant(mir, self.ty, Some((size, data)), None)
             },
             interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
                 let alloc = mir.state.tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
                 let start = ptr.offset.bytes() as usize;
                 let end = start;
-                render_constant(mir.state.tcx, self.ty, None, Some((alloc, start, end)))
+                render_constant(mir, self.ty, None, Some((alloc, start, end)))
             },
             interpret::ConstValue::Slice { data, start, end } => {
-                render_constant(mir.state.tcx, self.ty, None, Some((data, start, end)))
+                render_constant(mir, self.ty, None, Some((data, start, end)))
             },
             _ => None,
         };
-        if let Some((key, val)) = rendered {
-            map.insert(key.to_owned(), val);
+        if let Some(rendered) = rendered {
+            map.insert("rendered".to_owned(), rendered);
         }
 
         map.into()
