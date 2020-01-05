@@ -15,7 +15,7 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
 2. Next, switch your version of `rustc` to the one that works with mir-json.
 
-       $ rustup toolchain install nightly-2019-08-05
+       $ rustup toolchain install nightly-2019-08-05 --force
        $ rustup default nightly-2019-08-05
 
 3. Now compile `mir-json` and install its executables to your path.
