@@ -74,8 +74,13 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
     } else {
         tcx.crate_name(def_id.krate)
     };
+    let disambig = if def_id.is_local() {
+        tcx.sess.local_crate_disambiguator()
+    } else {
+        tcx.crate_disambiguator(def_id.krate)
+    };
     let defpath = tcx.def_path(def_id);
-    format!("{}/0{}", crate_name, defpath.to_string_no_crate())
+    format!("{}/{}{}", crate_name, &disambig.to_string()[..8], defpath.to_string_no_crate())
 }
 
 pub fn ext_def_id_str<'tcx, T>(
