@@ -610,6 +610,9 @@ fn subst_const_tys<'tcx>(
         &mut SubstConstTys { tcx, substs },
         body,
     );
+    for promoted in body.promoted.iter_mut() {
+        subst_const_tys(tcx, substs, promoted);
+    }
 }
 
 struct SubstConstTys<'tcx> {
