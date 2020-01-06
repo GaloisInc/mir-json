@@ -75,7 +75,7 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
         tcx.crate_name(def_id.krate)
     };
     let defpath = tcx.def_path(def_id);
-    format!("{}[0]{}", crate_name, defpath.to_string_no_crate())
+    format!("{}/0{}", crate_name, defpath.to_string_no_crate())
 }
 
 pub fn ext_def_id_str<'tcx, T>(
