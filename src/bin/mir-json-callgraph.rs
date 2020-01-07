@@ -25,7 +25,6 @@ use serde_json::Value as JsonValue;
 use mir_json::lib_util::{self, CrateIndex, StringId, InternTable};
 use mir_json::link;
 
-
 fn main() {
     let root_name = env::args().nth(1).unwrap();
     let mut inputs = env::args().skip(2).map(|arg| File::open(&arg))
@@ -35,6 +34,11 @@ fn main() {
     let mut map = HashMap::new();
     for (a, b) in calls {
         if a == b {
+            continue;
+        }
+        // Don't trace outgoing edges from `ty` nodes to non-`ty` nodes.  We still keep the
+        // incoming edges, so it's possible to trace back all uses of a particular type.
+        if it.name(a).starts_with("ty::") && !it.name(b).starts_with("ty::") {
             continue;
         }
         map.entry(b).or_insert_with(HashSet::new).insert(a);
