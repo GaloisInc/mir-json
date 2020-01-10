@@ -18,6 +18,7 @@ extern crate mir_json;
 use mir_json::analyz;
 use mir_json::link;
 use rustc::session::Session;
+use rustc::session::config::Externs;
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::{Compiler, Config};
 use rustc::session::config::{self, Input, ErrorOutputType};
@@ -25,6 +26,7 @@ use rustc_codegen_utils::codegen_backend::CodegenBackend;
 use rustc_metadata::cstore::CStore;
 use rustc_target::spec::PanicStrategy;
 use syntax::ast;
+use std::collections::{HashSet, BTreeSet};
 use std::env;
 use std::error::Error;
 use std::fs::{File, OpenOptions};
@@ -41,9 +43,14 @@ use std::process::Command;
 #[derive(Default)]
 struct GetOutputPathCallbacks {
     output_path: Option<PathBuf>,
+    use_override_crates: HashSet<String>,
 }
 
 impl rustc_driver::Callbacks for GetOutputPathCallbacks {
+    fn config(&mut self, config: &mut Config) {
+        scrub_externs(&mut config.opts.externs, &self.use_override_crates);
+    }
+
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
@@ -61,8 +68,11 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     }
 }
 
-fn get_output_path(args: &[String]) -> PathBuf {
-    let mut callbacks = GetOutputPathCallbacks::default();
+fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> PathBuf {
+    let mut callbacks = GetOutputPathCallbacks {
+        output_path: None,
+        use_override_crates: use_override_crates.clone(),
+    };
     rustc_driver::run_compiler(
         &args,
         &mut callbacks,
@@ -72,15 +82,31 @@ fn get_output_path(args: &[String]) -> PathBuf {
     callbacks.output_path.unwrap()
 }
 
+fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
+    let new_externs = Externs::new(externs.iter().map(|(k, v)| {
+        let k = k.clone();
+        let mut v = v.clone();
+        if use_override_crates.contains(&k) {
+            v.locations = BTreeSet::new();
+            v.locations.insert(None);
+        }
+        (k, v)
+    }).collect());
+    *externs = new_externs;
+}
+
 
 #[derive(Debug, Default)]
 struct MirJsonCallbacks {
     analysis_data: Option<analyz::AnalysisData<()>>,
+    use_override_crates: HashSet<String>,
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    /// Called after analysis. Return value instructs the compiler whether to
-    /// continue the compilation afterwards (defaults to `Compilation::Continue`)
+    fn config(&mut self, config: &mut Config) {
+        scrub_externs(&mut config.opts.externs, &self.use_override_crates);
+    }
+
     fn after_analysis(&mut self, compiler: &Compiler) -> Compilation {
         self.analysis_data = analyz::analyze(compiler).unwrap();
         Compilation::Continue
@@ -134,6 +160,13 @@ fn go() {
         args.push(s);
     }
 
+    let mut use_override_crates = HashSet::new();
+    if let Ok(s) = env::var("CRUX_USE_OVERRIDE_CRATES") {
+        for name in s.split(" ") {
+            use_override_crates.insert(name.to_owned());
+        }
+    }
+
 
     let test_idx = match args.iter().position(|s| s == "--test") {
         None => {
@@ -142,7 +175,10 @@ fn go() {
             // alongside the normal output.
             rustc_driver::run_compiler(
                 &args,
-                &mut MirJsonCallbacks::default(),
+                &mut MirJsonCallbacks {
+                    analysis_data: None,
+                    use_override_crates: use_override_crates.clone(),
+                },
                 None,
                 None,
             ).unwrap();
@@ -158,7 +194,7 @@ fn go() {
     // We're still using the original args (with only a few modifications), so the output path
     // should be the path of the test binary.
     eprintln!("test build - extract output path - {:?}", args);
-    let test_path = get_output_path(&args);
+    let test_path = get_output_path(&args, &use_override_crates);
 
     args.remove(test_idx);
 
@@ -174,7 +210,10 @@ fn go() {
     // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
     // strings to prevent collisions between this build's `.mir` output and other builds of the
     // same crate.
-    let mut callbacks = MirJsonCallbacks::default();
+    let mut callbacks = MirJsonCallbacks {
+        analysis_data: None,
+        use_override_crates: use_override_crates.clone(),
+    };
     rustc_driver::run_compiler(
         &args,
         &mut callbacks,
