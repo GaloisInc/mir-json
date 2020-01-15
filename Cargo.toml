@@ -12,3 +12,6 @@ serde_json = "*"
 serde_cbor = "*"
 tar = "*"
 cargo_metadata = { version = "0.2" }
+cargo = "*"
+toml = "*"
+clap = "*"
