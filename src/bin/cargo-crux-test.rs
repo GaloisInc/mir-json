@@ -13,6 +13,8 @@
 //!    verifier-friendly implementations shipped with Crux.
 
 #![feature(rustc_private)]
+extern crate cargo;
+extern crate clap;
 extern crate rustc;
 extern crate serde_json;
 
@@ -20,34 +22,132 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{self, Command};
+use cargo::core::Workspace;
 use rustc::session::config::host_triple;
+use cargo::util::command_prelude::*;
 
-fn get_root_metadata<'a>(j: &'a serde_json::Value) -> &'a serde_json::Value {
-    let root_name = j["resolve"]["root"].as_str().unwrap();
-    let packages = j["packages"].as_array().unwrap();
-    for p in packages {
-        if p["id"] == root_name {
-            return &p["metadata"];
-        }
-    }
-    panic!("root package {:?} not found", root_name);
+fn cli() -> App {
+    // Copy-pasted from cargo/src/bin/cargo/commands/test.rs, with minor edits to the text.
+    subcommand("crux-test")
+        .setting(AppSettings::TrailingVarArg)
+        .about("Execute all symbolic unit tests of a local package")
+        .arg(
+            Arg::with_name("TESTNAME")
+                .help("If specified, only run tests containing this string in their names"),
+        )
+        .arg(
+            Arg::with_name("args")
+                .help("Arguments for the test binary")
+                .multiple(true)
+                .last(true),
+        )
+        .arg(
+            opt(
+                "quiet",
+                "Display one character per test instead of one line",
+            )
+            .short("q"),
+        )
+        .arg_targets_all(
+            "Test only this package's library unit tests",
+            "Test only the specified binary",
+            "Test all binaries",
+            "Test only the specified example",
+            "Test all examples",
+            "Test only the specified test target",
+            "Test all tests",
+            "Test only the specified bench target",
+            "Test all benches",
+            "Test all targets",
+        )
+        .arg(opt("doc", "Test only this library's documentation"))
+        .arg(opt("no-run", "Compile, but don't run tests"))
+        .arg(opt("no-fail-fast", "Run all tests regardless of failure"))
+        .arg_package_spec(
+            "Package to run tests for",
+            "Test all packages in the workspace",
+            "Exclude packages from the test",
+        )
+        .arg_jobs()
+        .arg_release("Build artifacts in release mode, with optimizations")
+        .arg_profile("Build artifacts with the specified profile")
+        .arg_features()
+        .arg_target_triple("Build for the target triple")
+        .arg_target_dir()
+        .arg_manifest_path()
+        .arg_message_format()
+        .after_help("See `cargo test --help` for more information on these options.")
 }
 
-fn get_override_crates(j: &serde_json::Value) -> Option<String> {
+/// Get the list of crates for which mir-verifier overrides should be used.
+fn get_override_crates() -> String {
+    // `cargo metadata` output includes the settings for each crate in the build, but gives us no
+    // way to determine which crates we're actually building, as that's controlled by various
+    // options that are specific to `cargo test`.  So instead we use the `cargo` library, including
+    // a copy of `cargo test`'s command-line argument definitions (which are not exported), to
+    // parse the arguments just like `cargo test` does and figure out which packages it intends to
+    // test.
+    let mut config = cargo::Config::default()
+        .unwrap_or_else(|e| panic!("error initializing cargo config: {}", e));
+    let app = clap::App::new("cargo-crux-test").subcommand(cli());
+    let args = app.get_matches();
+    let args = args.subcommand_matches("crux-test")
+        .unwrap_or_else(|| panic!("expected crux-test subcommand"));
+    let ws = args.workspace(&config)
+        .unwrap_or_else(|e| panic!("error building workspace: {}", e));
+    let opts = args.compile_options(
+        &config,
+        CompileMode::Test,
+        Some(&ws),
+        ProfileChecking::Unchecked,
+    ).unwrap_or_else(|e| panic!("error reading compile options: {}", e));
+    let pkgs = opts.spec.get_packages(&ws)
+        .unwrap_or_else(|e| panic!("error listing packages: {}", e));
+
+    if pkgs.len() == 0 {
+        return "".to_owned();
+    }
+
+    // If this build contains multiple packages, they all must agree on the set of overrides to
+    // use.  This is because the override settings affect the builds of the dependencies, which are
+    // shared by all packages in the workspace.
+    let overrides = get_package_override_crates(pkgs[0].manifest().custom_metadata());
+    for pkg in pkgs.iter().skip(1) {
+        let pkg_overrides = get_package_override_crates(pkg.manifest().custom_metadata());
+        if pkg_overrides != overrides {
+            panic!(
+                "can't compile multiple packages with different crux overrides\n\
+                - package {} overrides {:?}\n\
+                - package {} overrides {:?}\n\
+                try testing only a single package instead",
+                pkgs[0].package_id(),
+                overrides,
+                pkg.package_id(),
+                pkg_overrides,
+            );
+        }
+    }
+
+    overrides
+}
+
+fn get_package_override_crates(v: Option<&toml::Value>) -> String {
+    get_package_override_crates_opt(v)
+        .unwrap_or_else(String::new)
+}
+
+fn get_package_override_crates_opt(v: Option<&toml::Value>) -> Option<String> {
     // The `crux` key is allowed to be missing, but if present, it must be an object.
-    let crux = j.get("crux")?;
-    assert!(crux.is_object(), "expected `package.metadata.crux` to be an object");
+    let crux = v?.get("crux")?;
+    assert!(crux.is_table(), "expected `package.metadata.crux` to be an object");
     let overrides = crux.get("use_override_crates")?;
     assert!(overrides.is_array(), "expected `crux.use_override_crates` to be an array");
-    let mut s = String::new();
-    for x in overrides.as_array().unwrap() {
-        assert!(x.is_string(), "expected `crux.use_override_crates` items to be strings");
-        if s.len() > 0 {
-            s.push(' ');
-        }
-        s.push_str(x.as_str().unwrap());
-    }
-    Some(s)
+    let mut overrides = overrides.as_array().unwrap().iter().map(|x| {
+        assert!(x.is_str(), "expected `crux.use_override_crates` items to be strings");
+        x.as_str().unwrap().to_owned()
+    }).collect::<Vec<_>>();
+    overrides.sort();
+    Some(overrides.join(" "))
 }
 
 fn main() {
@@ -62,7 +162,6 @@ fn main() {
     // XXX big hack.  See `mir-json-rustc-wrapper.rs` for an explanation of why we set `--target`
     // explicitly to its default value.
     args.push("--target".into());
-    // TODO: autodetect the default target.
     args.push(host_triple().into());
     args.extend(orig_args.into_iter());
 
@@ -73,16 +172,7 @@ fn main() {
         PathBuf::from("mir-json-rustc-wrapper")
     };
 
-    let output = Command::new(&cargo)
-        .arg("metadata")
-        .args(&["--format-version", "1"])
-        .output().unwrap();
-    std::io::stderr().write_all(&output.stderr).unwrap();
-    assert!(output.status.success());
-    let all_metadata = serde_json::from_slice(&output.stdout).unwrap();
-    let metadata = get_root_metadata(&all_metadata);
-    eprintln!("{:?}", metadata);
-    let override_crates = get_override_crates(&metadata).unwrap_or_else(String::new);
+    let override_crates = get_override_crates();
 
     let status = Command::new(&cargo)
         .args(&args)
