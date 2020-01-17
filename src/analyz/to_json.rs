@@ -64,21 +64,103 @@ pub struct Used<'tcx> {
     pub types: UsedSet<DefId>,
     pub vtables: UsedSet<ty::PolyTraitRef<'tcx>>,
     pub instances: UsedSet<ty::Instance<'tcx>>,
+    pub traits: UsedSet<TraitInst<'tcx>>,
 }
 
 impl<'tcx> Used<'tcx> {
     pub fn has_new(&self) -> bool {
-        let Used { ref types, ref vtables, ref instances } = *self;
+        let Used { ref types, ref vtables, ref instances, ref traits } = *self;
         types.has_new() ||
         vtables.has_new() ||
-        instances.has_new()
+        instances.has_new() ||
+        traits.has_new()
     }
 
     pub fn count_new(&self) -> usize {
-        let Used { ref types, ref vtables, ref instances } = *self;
+        let Used { ref types, ref vtables, ref instances, ref traits } = *self;
         types.count_new() +
         vtables.count_new() +
-        instances.count_new()
+        instances.count_new() +
+        traits.count_new()
+    }
+}
+
+/// A trait, specialized to a particular set of type parameters and assignments to its associated
+/// types.  For example, `Iterator<Item = u8>`.  Only the `Self` type is left unconstrained.
+///
+/// Another way to think of this is as the name of a single monomorphic "vtable signature".  The
+/// types `dyn Iterator<Item = u8>` and `dyn Iterator<Item = i32>` are based on the same `TraitRef`
+/// (and the same trait `DefId`), but have distinct `TraitInst`s and distinct vtable signatures,
+/// because their `next` methods return different types.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TraitInst<'tcx> {
+    pub trait_ref: Option<ty::ExistentialTraitRef<'tcx>>,
+    pub projs: Vec<ty::ExistentialProjection<'tcx>>,
+}
+
+impl<'tcx> TraitInst<'tcx> {
+    pub fn from_dynamic_predicates(
+        tcx: TyCtxt<'tcx>,
+        preds: ty::Binder<&'tcx ty::List<ty::ExistentialPredicate<'tcx>>>,
+    ) -> TraitInst<'tcx> {
+        let preds = tcx.erase_late_bound_regions(&preds);
+        let trait_ref = preds.principal();
+        let mut projs = preds.projection_bounds().collect::<Vec<_>>();
+        projs.sort_by_key(|p| p.item_def_id);
+        TraitInst { trait_ref, projs }
+    }
+
+    /// Obtain the `TraitInst` from a concrete `TraitRef`.  This erases the `Self` type, and
+    /// generates a list of `ExistentialProjection` predicates based on the actual associated types
+    /// declared in the impl.
+    pub fn from_trait_ref(
+        tcx: TyCtxt<'tcx>,
+        trait_ref: ty::TraitRef<'tcx>,
+    ) -> TraitInst<'tcx> {
+        let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
+
+        let mut projs = Vec::new();
+        // FIXME: build projs for supertrait trait_refs as well
+        for ai in tcx.associated_items(trait_ref.def_id) {
+            match ai.kind {
+                ty::AssocKind::Type | ty::AssocKind::OpaqueTy => {},
+                _ => continue,
+            }
+            let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
+            let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
+            projs.push(ty::ExistentialProjection {
+                item_def_id: ai.def_id,
+                substs: ex_trait_ref.substs,
+                ty: actual_ty,
+            });
+        }
+        projs.sort_by_key(|p| p.item_def_id);
+
+        TraitInst {
+            trait_ref: Some(ex_trait_ref),
+            projs,
+        }
+    }
+
+    pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> ty::Ty<'tcx> {
+        let mut preds = Vec::with_capacity(self.projs.len() + 1);
+        if let Some(trait_ref) = self.trait_ref {
+            preds.push(ty::ExistentialPredicate::Trait(trait_ref));
+        }
+        preds.extend(self.projs.iter().map(|p| ty::ExistentialPredicate::Projection(*p)));
+        let preds = tcx.intern_existential_predicates(&preds);
+        tcx.mk_dynamic(ty::Binder::bind(preds), tcx.mk_region(ty::RegionKind::ReErased))
+    }
+
+    /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
+    /// type representing this trait instance.  For example: `dyn Trait<T, Assoc=U>: Trait<T>`.
+    /// The substs from the resulting trait ref should be sufficient to `subst_and_normalize` the
+    /// signature of any object-safe method to a concrete, monomorphic signature (no params or
+    /// projections).
+    pub fn concrete_trait_ref(&self, tcx: TyCtxt<'tcx>) -> ty::TraitRef<'tcx> {
+        self.trait_ref
+            .expect("tried to get TraitRef for empty TraitInst")
+            .with_self_ty(tcx, self.dyn_ty(tcx))
     }
 }
 

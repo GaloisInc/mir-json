@@ -132,6 +132,17 @@ pub fn inst_id_str<'tcx>(
     }
 }
 
+pub fn trait_inst_id_str<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    ti: &TraitInst<'tcx>,
+) -> String {
+    let trait_ref = match ti.trait_ref {
+        Some(x) => x,
+        None => return "trait/0::empty[0]".to_owned(),
+    };
+    ext_def_id_str(tcx, trait_ref.def_id, "_trait", ti.dyn_ty(tcx))
+}
+
 pub fn inst_def_id<'tcx>(
     inst: ty::Instance<'tcx>,
 ) -> DefId {
@@ -229,12 +240,21 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceDef::Virtual(did, idx) => {
+                let assoc = mir.state.tcx.associated_item(did);
+                let trait_id = assoc.container.assert_trait();
+                // Note that object-safe methods cannot have their own generics, so all substs
+                // apply to the trait.
+                let trait_ref = ty::TraitRef::new(trait_id, substs);
+                let ti = TraitInst::from_trait_ref(mir.state.tcx, trait_ref);
+                let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
+                mir.used.traits.insert(ti);
+
                 let self_ty = substs.types().next()
                     .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
                 json!({
                     "kind": "Virtual",
-                    "def_id": did.to_json(mir),
-                    "substs": substs.to_json(mir),
+                    "trait_id": trait_name,
+                    "item_id": did.to_json(mir),
                     "index": adjust_method_index(mir.state.tcx, self_ty, idx),
                 })
             },
@@ -369,8 +389,12 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::Dynamic(ref preds, _region) => {
+                let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, *preds);
+                let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
+                mir.used.traits.insert(ti);
                 json!({
                     "kind": "Dynamic",
+                    "trait_id": trait_name,
                     "predicates": preds.skip_binder().to_json(mir),
                 })
             }

@@ -638,48 +638,45 @@ impl<'tcx> mir::visit::MutVisitor<'tcx> for SubstConstTys<'tcx> {
 
 
 
-/// Emit all traits defined in the current crate.
-fn emit_traits(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
+fn emit_trait<'tcx>(
+    ms: &mut MirState<'_, 'tcx>,
+    out: &mut impl JsonOutput,
+    ti: TraitInst<'tcx>,
+) -> io::Result<()> {
     let tcx = ms.state.tcx;
+    let methods = tcx.vtable_methods(ty::Binder::dummy(ti.concrete_trait_ref(tcx)));
+    let mut items = Vec::with_capacity(methods.len());
+    for &m in methods {
+        // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
+        // adjust `InstanceDef::Virtual` indices accordingly.
+        let (def_id, substs) = match m {
+            Some(x) => x,
+            None => continue,
+        };
+        let sig = tcx.subst_and_normalize_erasing_regions(
+            substs, ty::ParamEnv::reveal_all(), &tcx.fn_sig(def_id));
+        let sig = tcx.erase_late_bound_regions(&sig);
 
-    // Emit definitions for all traits.
-    for def_id in iter_trait_def_ids(ms.state) {
-        if !def_id.is_local() {
-            continue;
-        }
-        if !tcx.is_object_safe(def_id) {
-            continue;
-        }
-
-        let trait_name = def_id_str(tcx, def_id);
-        let items = tcx.associated_items(def_id);
-        tcx.sess.note_without_error(
-            format!("Emitting trait items for {}",
-                    trait_name).as_str());
-        let mut items_json = Vec::new();
-        for item in items {
-            if !tcx.is_vtable_safe_method(def_id, &item) {
-                continue;
-            }
-            items_json.push(assoc_item_json(ms, tcx, &item));
-        }
-        let supers = traits::supertrait_def_ids(tcx, def_id);
-        let mut supers_json = Vec::new();
-        for item in supers {
-            supers_json.push(item.to_json(ms));
-        }
-        let preds = tcx.predicates_of(def_id);
-        let generics = tcx.generics_of(def_id);
-        out.emit(EntryKind::Trait, json!({
-            "name": def_id.to_json(ms),
-            "items": serde_json::Value::Array(items_json),
-            "supertraits": serde_json::Value::Array(supers_json),
-            "generics": generics.to_json(ms),
-            "predicates": preds.to_json(ms),
-        }))?;
-        emit_new_types(ms, out)?;
+        items.push(json!({
+            "kind": "Method",
+            "item_id": def_id.to_json(ms),
+            "signature": sig.to_json(ms),
+            "generics": { "params": [] },
+            "predicates": { "predicates": [] },
+        }));
     }
 
+    ms.state.session.note_without_error(&format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
+
+    out.emit(EntryKind::Trait, json!({
+        // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
+        "name": trait_inst_id_str(ms.state.tcx, &ti),
+        "items": items,
+        "supertraits": [],
+        "generics": { "params": [] },
+        "predicates": { "predicates": [] },
+    }))?;
+    emit_new_types(ms, out)?;
     Ok(())
 }
 
@@ -865,9 +862,10 @@ fn emit_vtable<'tcx>(
     out: &mut impl JsonOutput,
     trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
+    let ti = TraitInst::from_trait_ref(ms.state.tcx, *trait_ref.skip_binder());
     out.emit(EntryKind::Vtable, json!({
+        "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
         "name": vtable_name(ms, trait_ref),
-        "desc": trait_ref.skip_binder().to_json(ms),
         "items": build_vtable_items(ms, trait_ref),
     }))?;
     emit_new_types(ms, out)
@@ -896,8 +894,9 @@ fn build_vtable_items<'tcx>(
             None => continue,
         };
         parts.push(json!({
+            "item_id": def_id.to_json(mir),
+            // `def_id` is the name of the concrete function.
             "def_id": get_fn_def_name(mir, def_id, substs),
-            "trait_item": def_id.to_json(mir),
         }));
     }
     parts.into()
@@ -1071,7 +1070,6 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         };
 
         // Traits and top-level statics can be enumerated directly.
-        emit_traits(&mut ms, &mut out)?;
         emit_statics(&mut ms, &mut out)?;
 
         // Everything else is demand-driven, to handle monomorphization.  We start with all #[test]
@@ -1087,6 +1085,9 @@ fn analyze_inner<O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             }
             for adt in ms.used.types.take_new() {
                 emit_adt(&mut ms, &mut out, adt)?;
+            }
+            for ti in ms.used.traits.take_new() {
+                emit_trait(&mut ms, &mut out, ti)?;
             }
         }
 
