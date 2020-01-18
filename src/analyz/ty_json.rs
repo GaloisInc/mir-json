@@ -965,6 +965,8 @@ impl ToJsonAg for ty::AdtDef {
             "name": self.did.to_json(mir),
             "kind": format!("{:?}", self.adt_kind()),
             "variants": self.variants.tojson(mir, substs)
+            "orig_def_id": self.did.to_json(mir),
+            "orig_substs": substs.to_json(mir),
         })
     }
 }
