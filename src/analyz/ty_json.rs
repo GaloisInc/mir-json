@@ -366,6 +366,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "Adt",
                     "name": did.to_json(mir),
+                    "orig_def_id": did.to_json(mir),
                     "substs": substs.to_json(mir)
                 })
             }
