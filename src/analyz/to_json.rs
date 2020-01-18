@@ -61,7 +61,7 @@ impl<T: Hash+Eq> Deref for UsedSet<T> {
 
 #[derive(Default)]
 pub struct Used<'tcx> {
-    pub types: UsedSet<DefId>,
+    pub types: UsedSet<AdtInst<'tcx>>,
     pub vtables: UsedSet<ty::PolyTraitRef<'tcx>>,
     pub instances: UsedSet<ty::Instance<'tcx>>,
     pub traits: UsedSet<TraitInst<'tcx>>,
@@ -161,6 +161,22 @@ impl<'tcx> TraitInst<'tcx> {
         self.trait_ref
             .expect("tried to get TraitRef for empty TraitInst")
             .with_self_ty(tcx, self.dyn_ty(tcx))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct AdtInst<'tcx> {
+    pub adt: &'tcx ty::AdtDef,
+    pub substs: ty::subst::SubstsRef<'tcx>,
+}
+
+impl<'tcx> AdtInst<'tcx> {
+    pub fn new(adt: &'tcx ty::AdtDef, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+        AdtInst { adt, substs }
+    }
+
+    pub fn def_id(&self) -> DefId {
+        self.adt.did
     }
 }
 

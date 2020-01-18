@@ -906,18 +906,15 @@ fn build_vtable_items<'tcx>(
 fn emit_adt<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
-    def_id: DefId,
+    ai: AdtInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
-    let ty = tcx.type_of(def_id);
-    if let Some(adt_def) = ty.ty_adt_def() {
-        let adt_name = def_id_str(tcx, def_id);
-        tcx.sess.note_without_error(
-            format!("Emitting ADT definition for {}", adt_name).as_str());
-        out.emit(EntryKind::Adt, adt_def.tojson(ms, List::empty()))?;
-        emit_new_types(ms, out)?;
-    }
+    let adt_name = adt_inst_id_str(tcx, ai);
+    tcx.sess.note_without_error(
+        format!("Emitting ADT definition for {}", adt_name).as_str());
+    out.emit(EntryKind::Adt, ai.to_json(ms))?;
+    emit_new_types(ms, out)?;
     Ok(())
 }
 

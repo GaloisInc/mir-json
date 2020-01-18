@@ -98,6 +98,13 @@ where T: HashStable<StableHashingContext<'tcx>> {
     format!("{}::{}{:016x}[0]", base, prefix, hash)
 }
 
+pub fn adt_inst_id_str<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    ai: AdtInst<'tcx>,
+) -> String {
+    ext_def_id_str(tcx, ai.def_id(), "_adt", ai.substs)
+}
+
 pub fn inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     inst: ty::Instance<'tcx>,
@@ -360,14 +367,14 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "mutability": tm.mutbl.to_json(mir)
                 })
             }
-            &ty::TyKind::Adt(ref adtdef, ref substs) => {
-                let did = adtdef.did;
-                mir.used.types.insert(did);
+            &ty::TyKind::Adt(adtdef, substs) => {
+                let ai = AdtInst::new(adtdef, substs);
+                mir.used.types.insert(ai);
                 json!({
                     "kind": "Adt",
-                    "name": did.to_json(mir),
-                    "orig_def_id": did.to_json(mir),
-                    "substs": substs.to_json(mir)
+                    "name": adt_inst_id_str(mir.state.tcx, ai),
+                    "orig_def_id": adtdef.did.to_json(mir),
+                    "substs": substs.to_json(mir),
                 })
             }
             &ty::TyKind::FnDef(defid, ref substs) => {
@@ -955,18 +962,17 @@ pub fn is_adt_ak(ak: &mir::AggregateKind) -> bool {
     }
 }
 
-impl ToJsonAg for ty::AdtDef {
-    fn tojson<'tcx>(
+impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
+    fn to_json(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
         json!({
-            "name": self.did.to_json(mir),
-            "kind": format!("{:?}", self.adt_kind()),
-            "variants": self.variants.tojson(mir, substs)
-            "orig_def_id": self.did.to_json(mir),
-            "orig_substs": substs.to_json(mir),
+            "name": adt_inst_id_str(mir.state.tcx, *self),
+            "kind": format!("{:?}", self.adt.adt_kind()),
+            "variants": self.adt.variants.tojson(mir, self.substs),
+            "orig_def_id": self.adt.did.to_json(mir),
+            "orig_substs": self.substs.to_json(mir),
         })
     }
 }
@@ -992,10 +998,13 @@ impl ToJsonAg for ty::FieldDef {
         mir: &mut MirState<'_, 'tcx>,
         substs: ty::subst::SubstsRef<'tcx>,
     ) -> serde_json::Value {
+        let unsubst_ty = mir.state.tcx.type_of(self.did);
+        let ty = mir.state.tcx.subst_and_normalize_erasing_regions(
+            substs, ty::ParamEnv::reveal_all(), &unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
-            "ty": defid_ty(&self.did, mir),
-            "substs": substs.to_json(mir)
+            "ty": ty.to_json(mir),
+            "substs": [],
         })
     }
 }
@@ -1008,7 +1017,7 @@ pub fn handle_adt_ag<'tcx>(
     match ak {
         &mir::AggregateKind::Adt(ref adt, variant, substs, _, _) => {
             json!({
-                "adt": adt.tojson(mir, substs),
+                "adt": AdtInst::new(adt, substs).to_json(mir),
                 "variant": variant.to_json(mir),
                 "ops": opv.to_json(mir)
             })
