@@ -12,6 +12,6 @@ serde_json = "*"
 serde_cbor = "*"
 tar = "*"
 cargo_metadata = { version = "0.2" }
-cargo = "*"
+cargo = { version = "*", features = [ "vendored-openssl" ] }
 toml = "*"
 clap = "*"
