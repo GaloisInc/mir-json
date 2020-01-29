@@ -102,7 +102,9 @@ pub fn adt_inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     ai: AdtInst<'tcx>,
 ) -> String {
-    ext_def_id_str(tcx, ai.def_id(), "_adt", ai.substs)
+    // Erase all early-bound regions.
+    let substs = tcx.erase_regions(&ai.substs);
+    ext_def_id_str(tcx, ai.def_id(), "_adt", substs)
 }
 
 pub fn inst_id_str<'tcx>(
@@ -472,9 +474,8 @@ impl ToJson<'_> for ty::ParamTy {
 
 impl<'tcx> ToJson<'tcx> for ty::PolyFnSig<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        // Note: I don't think we need binders in MIR, but we can change
-        // this if we do.
-        self.skip_binder().to_json(ms)
+        let sig = ms.state.tcx.erase_late_bound_regions(self);
+        sig.to_json(ms)
     }
 }
 
@@ -532,7 +533,8 @@ impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for ty::PolyTraitPredicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        self.skip_binder().trait_ref.to_json(ms)
+        let pred = ms.state.tcx.erase_late_bound_regions(self);
+        pred.trait_ref.to_json(ms)
     }
 }
 
