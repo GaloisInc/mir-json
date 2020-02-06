@@ -20,8 +20,7 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
 3. Now compile `mir-json` and install its executables to your path.
 
-       $ RUSTC_WRAPPER=./rustc-rpath.sh cargo build
-       $ RUSTC_WRAPPER=./rustc-rpath.sh cargo install
+       $ RUSTC_WRAPPER=./rustc-rpath.sh cargo install --locked
 
 4. Check that `mir-json` was installed correctly
 
