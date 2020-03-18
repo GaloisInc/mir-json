@@ -644,7 +644,11 @@ fn emit_trait<'tcx>(
     ti: TraitInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
-    let methods = tcx.vtable_methods(ty::Binder::dummy(ti.concrete_trait_ref(tcx)));
+    let methods = if let Some(tref) = ti.concrete_trait_ref(tcx) {
+        tcx.vtable_methods(ty::Binder::dummy(tref))
+    } else {
+        &[]
+    };
     let mut items = Vec::with_capacity(methods.len());
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and

@@ -142,14 +142,13 @@ impl<'tcx> TraitInst<'tcx> {
         }
     }
 
-    pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> ty::Ty<'tcx> {
+    pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> Option<ty::Ty<'tcx>> {
+        let trait_ref = self.trait_ref?;
         let mut preds = Vec::with_capacity(self.projs.len() + 1);
-        if let Some(trait_ref) = self.trait_ref {
-            preds.push(ty::ExistentialPredicate::Trait(trait_ref));
-        }
+        preds.push(ty::ExistentialPredicate::Trait(trait_ref));
         preds.extend(self.projs.iter().map(|p| ty::ExistentialPredicate::Projection(*p)));
         let preds = tcx.intern_existential_predicates(&preds);
-        tcx.mk_dynamic(ty::Binder::bind(preds), tcx.mk_region(ty::RegionKind::ReErased))
+        Some(tcx.mk_dynamic(ty::Binder::bind(preds), tcx.mk_region(ty::RegionKind::ReErased)))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -157,10 +156,11 @@ impl<'tcx> TraitInst<'tcx> {
     /// The substs from the resulting trait ref should be sufficient to `subst_and_normalize` the
     /// signature of any object-safe method to a concrete, monomorphic signature (no params or
     /// projections).
-    pub fn concrete_trait_ref(&self, tcx: TyCtxt<'tcx>) -> ty::TraitRef<'tcx> {
-        self.trait_ref
-            .expect("tried to get TraitRef for empty TraitInst")
-            .with_self_ty(tcx, self.dyn_ty(tcx))
+    pub fn concrete_trait_ref(&self, tcx: TyCtxt<'tcx>) -> Option<ty::TraitRef<'tcx>> {
+        let tref = self.trait_ref?;
+        let dyn_ty = self.dyn_ty(tcx)
+            .expect("dyn_ty should only return None when self.trait_ref is None");
+        Some(tref.with_self_ty(tcx, dyn_ty))
     }
 }
 

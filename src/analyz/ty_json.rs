@@ -145,11 +145,13 @@ pub fn trait_inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     ti: &TraitInst<'tcx>,
 ) -> String {
-    let trait_ref = match ti.trait_ref {
-        Some(x) => x,
-        None => return "trait/0::empty[0]".to_owned(),
-    };
-    ext_def_id_str(tcx, trait_ref.def_id, "_trait", ti.dyn_ty(tcx))
+    if let Some(trait_ref) = ti.trait_ref {
+        let dyn_ty = ti.dyn_ty(tcx)
+            .expect("dyn_ty should only return None when self.trait_ref is None");
+        ext_def_id_str(tcx, trait_ref.def_id, "_trait", dyn_ty)
+    } else {
+        "trait/0::empty[0]".to_owned()
+    }
 }
 
 pub fn inst_def_id<'tcx>(
