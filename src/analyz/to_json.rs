@@ -1,9 +1,9 @@
-use rustc::hir::def_id::DefId;
+use rustc_hir::def_id::DefId;
 use rustc::mir::Body;
-use rustc::session::Session;
+use rustc_session::Session;
 use rustc::ty::{self, TyCtxt};
 use rustc_interface::interface::Compiler;
-use syntax::symbol::Symbol;
+use rustc_span::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, hash_map};
@@ -121,7 +121,7 @@ impl<'tcx> TraitInst<'tcx> {
 
         let mut projs = Vec::new();
         // FIXME: build projs for supertrait trait_refs as well
-        for ai in tcx.associated_items(trait_ref.def_id) {
+        for ai in tcx.associated_items(trait_ref.def_id).in_definition_order() {
             match ai.kind {
                 ty::AssocKind::Type | ty::AssocKind::OpaqueTy => {},
                 _ => continue,
@@ -190,7 +190,7 @@ pub struct TyIntern<'tcx> {
 /// Info for describing a type.  The `String` indicates (at minimum) the `TyKind`, and the `bool`
 /// is `true` if a hash of the type should be included when forming the type's unique ID.
 fn ty_desc(ty: ty::Ty) -> (String, bool) {
-    let kind_str = match ty.sty {
+    let kind_str = match ty.kind {
         // Special case: primitive types print as themselves and don't require a hash.
         ty::TyKind::Bool |
         ty::TyKind::Char |
@@ -200,7 +200,7 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Str => return (format!("{:?}", ty), false),
 
         ty::TyKind::Never |
-        ty::TyKind::Error => return (format!("{:?}", ty.sty), false),
+        ty::TyKind::Error => return (format!("{:?}", ty.kind), false),
 
         ty::TyKind::Adt(..) => "Adt",
         ty::TyKind::Foreign(..) => "Foreign",
