@@ -2,6 +2,7 @@
 
 use rustc::ty::{self, TyCtxt, List, TyS};
 use rustc::mir::{self, Body};
+use rustc_ast::{ast, token, tokenstream};
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
@@ -10,15 +11,18 @@ use rustc_session::config::OutputType;
 use rustc::traits;
 use rustc::ty::subst::Subst;
 use rustc_session;
+use rustc_index::vec::Idx;
 use rustc_interface::Queries;
 use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
 use rustc_target::spec::abi;
 use rustc_session::Session;
 use rustc_span::symbol::Symbol;
+use rustc_span::Span;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::io::Write;
+use std::iter;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use serde::ser::{Serialize, Serializer, SerializeSeq};
@@ -1014,6 +1018,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 ) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
     let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
+
     let output = queries.global_ctxt().unwrap().peek_mut().enter(|tcx| -> io::Result<_> {
         let outputs = tcx.output_filenames(LOCAL_CRATE);
         if !outputs.outputs.contains_key(&OutputType::Exe) {
@@ -1142,6 +1147,33 @@ pub fn analyze_streaming<'tcx>(
 }
 
 pub use self::analyze_streaming as analyze;
+
+fn make_attr(key: &str, value: &str) -> ast::Attribute {
+    ast::Attribute {
+        kind: ast::AttrKind::Normal(ast::AttrItem {
+            path: ast::Path::from_ident(ast::Ident::from_str(key)),
+            args: ast::MacArgs::Delimited(
+                tokenstream::DelimSpan::dummy(),
+                ast::MacDelimiter::Parenthesis,
+                iter::once(
+                    tokenstream::TokenTree::token(
+                        token::TokenKind::Ident(ast::Name::intern(value), false),
+                        Span::default(),
+                        ),
+                        ).collect(),
+                        ),
+        }),
+        id: ast::AttrId::new(0),
+        style: ast::AttrStyle::Inner,
+        span: Span::default(),
+    }
+}
+
+pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
+    let mut krate = queries.parse().unwrap().peek_mut();
+    krate.attrs.push(make_attr("feature", "register_attr"));
+    krate.attrs.push(make_attr("register_attr", "crux_test"));
+}
 
 // format:
 // top: function name || function args || return ty || body

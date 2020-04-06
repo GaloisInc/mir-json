@@ -31,6 +31,15 @@ use std::path::Path;
 struct MirJsonCallbacks;
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
+    fn after_parsing<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::inject_attrs(queries);
+        Compilation::Continue
+    }
+
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis<'tcx>(
