@@ -867,7 +867,15 @@ fn render_constant<'tcx>(
             })
         },
 
-        _ => return None,
+        _ => {
+            if let Some((0, _)) = scalar {
+                json!({
+                    "kind": "zst",
+                })
+            } else {
+                return None;
+            }
+        },
     })
 }
 
