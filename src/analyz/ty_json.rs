@@ -859,6 +859,14 @@ fn render_constant<'tcx>(
         },
         */
 
+        ty::TyKind::RawPtr(_) => {
+            let (size, bits) = scalar.expect("raw_ptr const had non-scalar value?");
+            json!({
+                "kind": "raw_ptr",
+                "val": bits.to_string(),
+            })
+        },
+
         ty::TyKind::FnDef(defid, ref substs) => {
             json!({
                 "kind": "fndef",
