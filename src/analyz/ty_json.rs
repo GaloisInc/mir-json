@@ -908,14 +908,18 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
                 render_constant(mir, self.ty, Some((size, data)), None)
             },
-            /*
             interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
-                let alloc = mir.state.tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
-                let start = ptr.offset.bytes() as usize;
-                let end = start;
-                render_constant(mir, self.ty, None, Some((alloc, start, end)))
+                match mir.state.tcx.alloc_map.lock().get(ptr.alloc_id) {
+                    Some(ga) => match ga {
+                        interpret::GlobalAlloc::Static(def_id) => Some(json!({
+                            "kind": "static_ref",
+                            "def_id": def_id.to_json(mir),
+                        })),
+                        _ => None,
+                    },
+                    None => None,
+                }
             },
-            */
             interpret::ConstValue::Slice { data, start, end } => {
                 render_constant(mir, self.ty, None, Some((data, start, end)))
             },
