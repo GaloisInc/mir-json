@@ -722,21 +722,22 @@ impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
     }
 }
 
-/* FIXME constant eval + rendering
 fn do_const_eval<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
-    substs: ty::subst::SubstsRef<'tcx>
-) -> &'tcx ty::Const<'tcx> {
+    substs: ty::subst::SubstsRef<'tcx>,
+    promoted: Option<mir::Promoted>,
+) -> mir::interpret::ConstValue<'tcx> {
     let param_env = ty::ParamEnv::reveal_all();
     let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
     let cid = interpret::GlobalId {
         instance,
-        promoted: None,
+        promoted,
     };
-    tcx.const_eval(param_env.and(cid)).unwrap()
+    tcx.const_eval_validated(param_env.and(cid)).unwrap()
 }
 
+/*
 fn eval_array_len<'tcx>(
     tcx: TyCtxt<'tcx>,
     c: &'tcx ty::Const<'tcx>,
@@ -755,14 +756,15 @@ fn eval_array_len<'tcx>(
         _ => panic!("impossible: array size is not a scalar?"),
     }
 }
+*/
 
 fn read_static_memory<'tcx>(
     alloc: &'tcx mir::interpret::Allocation,
     start: usize,
     end: usize,
 ) -> &'tcx [u8] {
-    assert!(alloc.relocations.len() == 0);
-    &alloc.bytes[start .. end]
+    assert!(alloc.relocations().len() == 0);
+    alloc.inspect_with_undef_and_ptr_outside_interpreter(start .. end)
 }
 
 fn render_constant<'tcx>(
@@ -837,6 +839,7 @@ fn render_constant<'tcx>(
             })
         },
 
+        /*
         // &[u8; _] - for bytestring literals
         ty::TyKind::Ref(_, &ty::TyS {
             kind: ty::TyKind::Array(&ty::TyS {
@@ -854,6 +857,7 @@ fn render_constant<'tcx>(
                 "val": mem,
             })
         },
+        */
 
         ty::TyKind::FnDef(defid, ref substs) => {
             json!({
@@ -866,7 +870,6 @@ fn render_constant<'tcx>(
         _ => return None,
     })
 }
-*/
 
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
@@ -875,8 +878,8 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         map.insert("ty".to_owned(), self.ty.to_json(mir));
 
         match self.val {
-            // FIXME: `promoted` is needed for const eval and maybe others
-            ty::ConstKind::Unevaluated(def_id, substs, _promoted) => {
+            ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
+                // TODO: output `promoted`
                 map.insert("initializer".to_owned(), json!({
                     "def_id": get_fn_def_name(mir, def_id, substs),
                     "substs": &[] as &[()],
@@ -885,25 +888,26 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             _ => {},
         }
 
-        /*
         let evaluated = match self.val {
-            interpret::ConstKind::Unevaluated(def_id, substs) => {
-                do_const_eval(mir.state.tcx, def_id, substs)
+            ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
+                do_const_eval(mir.state.tcx, def_id, substs, promoted)
             },
-            interpret::ConstKind::Value(val) => val,
+            ty::ConstKind::Value(val) => val,
             _ => panic!("don't know how to translate ConstKind::{:?}", self.val),
         };
 
-        let rendered = match evaluated.val {
+        let rendered = match evaluated {
             interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
                 render_constant(mir, self.ty, Some((size, data)), None)
             },
+            /*
             interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
                 let alloc = mir.state.tcx.alloc_map.lock().unwrap_memory(ptr.alloc_id);
                 let start = ptr.offset.bytes() as usize;
                 let end = start;
                 render_constant(mir, self.ty, None, Some((alloc, start, end)))
             },
+            */
             interpret::ConstValue::Slice { data, start, end } => {
                 render_constant(mir, self.ty, None, Some((data, start, end)))
             },
@@ -912,7 +916,6 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         if let Some(rendered) = rendered {
             map.insert("rendered".to_owned(), rendered);
         }
-        */
 
         map.into()
     }
