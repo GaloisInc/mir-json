@@ -200,6 +200,20 @@ pub fn get_fn_def_name<'tcx>(
     }
 }
 
+pub fn get_promoted_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    defid: DefId,
+    substs: ty::subst::SubstsRef<'tcx>,
+    promoted: Option<mir::Promoted>,
+) -> String {
+    let parent = get_fn_def_name(mir, defid, substs);
+    let idx = match promoted {
+        Some(x) => x,
+        None => return parent,
+    };
+    format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize())
+}
+
 impl ToJson<'_> for hir::def_id::DefId {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!(def_id_str(mir.state.tcx, *self))
@@ -895,9 +909,8 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 
         match self.val {
             ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
-                // TODO: output `promoted`
                 map.insert("initializer".to_owned(), json!({
-                    "def_id": get_fn_def_name(mir, def_id, substs),
+                    "def_id": get_promoted_name(mir, def_id, substs, promoted),
                     "substs": &[] as &[()],
                 }));
             },
