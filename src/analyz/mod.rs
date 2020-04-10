@@ -1203,9 +1203,3 @@ pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
     krate.attrs.push(make_attr("feature", "register_attr"));
     krate.attrs.push(make_attr("register_attr", "crux_test"));
 }
-
-// format:
-// top: function name || function args || return ty || body
-// args: name || type || scope || mutability
-// body: all locals || all basicblocks
-// basicblock: all statements || terminator

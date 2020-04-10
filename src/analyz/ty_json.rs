@@ -2,7 +2,7 @@ use rustc_hir as hir;
 use rustc_hir::Defaultness;
 use rustc_hir::def_id::DefId;
 use rustc::mir;
-use rustc::mir::interpret;
+use rustc_mir::interpret;
 use rustc::ty;
 use rustc::ty::{TyCtxt, TypeFoldable};
 use rustc::ich::StableHashingContext;
@@ -10,6 +10,7 @@ use rustc_index::vec::{IndexVec, Idx};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_target::spec::abi;
 use rustc_ast::ast;
+use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
 use std::usize;
@@ -751,18 +752,18 @@ fn do_const_eval<'tcx>(
     tcx.const_eval_validated(param_env.and(cid)).unwrap()
 }
 
-/*
 fn eval_array_len<'tcx>(
     tcx: TyCtxt<'tcx>,
     c: &'tcx ty::Const<'tcx>,
 ) -> usize {
     let evaluated = match c.val {
-        interpret::ConstValue::Unevaluated(def_id, substs) => {
-            do_const_eval(tcx, def_id, substs)
+        ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
+            do_const_eval(tcx, def_id, substs, promoted)
         },
-        _ => c,
+        ty::ConstKind::Value(val) => val,
+        _ => panic!("don't know how to translate ConstKind::{:?}", c.val),
     };
-    match evaluated.val {
+    match evaluated {
         interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
             assert!(data <= usize::MAX as u128);
             data as usize
@@ -770,7 +771,6 @@ fn eval_array_len<'tcx>(
         _ => panic!("impossible: array size is not a scalar?"),
     }
 }
-*/
 
 fn read_static_memory<'tcx>(
     alloc: &'tcx mir::interpret::Allocation,
@@ -781,15 +781,52 @@ fn read_static_memory<'tcx>(
     alloc.inspect_with_undef_and_ptr_outside_interpreter(start .. end)
 }
 
+fn render_constant_scalar<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    ty: ty::Ty<'tcx>,
+    s: interpret::Scalar,
+) -> Option<serde_json::Value> {
+    match s {
+        interpret::Scalar::Raw { size, data } => {
+            render_constant(mir, ty, Some(s), Some((size, data)), None)
+        },
+        interpret::Scalar::Ptr(ptr) => {
+            match mir.state.tcx.alloc_map.lock().get(ptr.alloc_id) {
+                Some(ga) => match ga {
+                    interpret::GlobalAlloc::Static(def_id) => Some(json!({
+                        "kind": "static_ref",
+                        "def_id": def_id.to_json(mir),
+                    })),
+                    interpret::GlobalAlloc::Memory(alloc) => {
+                        let start = ptr.offset.bytes() as usize;
+                        render_constant(
+                            mir,
+                            ty,
+                            Some(s),
+                            None,
+                            Some((alloc, start, start)),
+                        )
+                    },
+                    _ => None,
+                },
+                None => None,
+            }
+        },
+    }
+}
+
+// TODO: migrate all constant rendering to use InterpCx + OpTy.  This should reduce special cases
+// and let us handle both in-memory and immediate constants.
 fn render_constant<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ty: ty::Ty<'tcx>,
-    scalar: Option<(u8, u128)>,
+    scalar: Option<interpret::Scalar>,
+    scalar_bits: Option<(u8, u128)>,
     slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
 ) -> Option<serde_json::Value> {
     Some(match ty.kind {
         ty::TyKind::Int(_) => {
-            let (size, bits) = scalar.expect("int const had non-scalar value?");
+            let (size, bits) = scalar_bits.expect("int const had non-scalar value?");
             let mut val = bits as i128;
             if bits & (1 << (size * 8 - 1)) != 0 && size < 128 / 8 {
                 // Sign-extend to 128 bits
@@ -808,7 +845,7 @@ fn render_constant<'tcx>(
         ty::TyKind::Bool |
         ty::TyKind::Char |
         ty::TyKind::Uint(_) => {
-            let (size, bits) = scalar.expect("uint const had non-scalar value?");
+            let (size, bits) = scalar_bits.expect("uint const had non-scalar value?");
             json!({
                 "kind": match ty.kind {
                     ty::TyKind::Bool => "bool",
@@ -822,7 +859,7 @@ fn render_constant<'tcx>(
             })
         },
         ty::TyKind::Float(ast::FloatTy::F32) => {
-            let (size, bits) = scalar.expect("f32 const had non-scalar value?");
+            let (size, bits) = scalar_bits.expect("f32 const had non-scalar value?");
             let val = f32::from_bits(bits as u32);
             json!({
                 "kind": "float",
@@ -831,7 +868,7 @@ fn render_constant<'tcx>(
             })
         },
         ty::TyKind::Float(ast::FloatTy::F64) => {
-            let (size, bits) = scalar.expect("f64 const had non-scalar value?");
+            let (size, bits) = scalar_bits.expect("f64 const had non-scalar value?");
             let val = f64::from_bits(bits as u64);
             json!({
                 "kind": "float",
@@ -853,7 +890,6 @@ fn render_constant<'tcx>(
             })
         },
 
-        /*
         // &[u8; _] - for bytestring literals
         ty::TyKind::Ref(_, &ty::TyS {
             kind: ty::TyKind::Array(&ty::TyS {
@@ -871,10 +907,9 @@ fn render_constant<'tcx>(
                 "val": mem,
             })
         },
-        */
 
         ty::TyKind::RawPtr(_) => {
-            let (size, bits) = scalar.expect("raw_ptr const had non-scalar value?");
+            let (size, bits) = scalar_bits.expect("raw_ptr const had non-scalar value?");
             json!({
                 "kind": "raw_ptr",
                 "val": bits.to_string(),
@@ -889,8 +924,54 @@ fn render_constant<'tcx>(
             })
         },
 
+        ty::TyKind::Adt(adt_def, substs) if adt_def.is_struct() => {
+            let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
+                .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
+            let scalar = scalar.expect("adt had non-scalar value (NYI)");
+            let variant = adt_def.non_enum_variant();
+            json!({
+                "kind": "struct",
+                "fields": render_constant_variant(
+                    mir,
+                    variant,
+                    interpret::ImmTy::from_scalar(scalar, tyl).into(),
+                ),
+            })
+        },
+
+        ty::TyKind::Adt(adt_def, substs) if adt_def.is_enum() => {
+            let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
+                .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
+            let scalar = scalar.expect("adt had non-scalar value (NYI)");
+
+            let icx = interpret::InterpCx::new(
+                mir.state.tcx.at(DUMMY_SP),
+                ty::ParamEnv::reveal_all(),
+                RenderConstMachine,
+                (),
+            );
+            let op_ty = interpret::ImmTy::from_scalar(scalar, tyl).into();
+            let (_discr, variant_idx) = icx.read_discriminant(op_ty).unwrap_or_else(|e| {
+                panic!("failed to access discriminant of {:?}: {}", op_ty.layout.ty, e)
+            });
+
+            let variant = &adt_def.variants[variant_idx];
+            json!({
+                "kind": "enum",
+                "variant": variant_idx.as_u32(),
+                "fields": render_constant_variant(
+                    mir,
+                    variant,
+                    icx.operand_downcast(op_ty, variant_idx).unwrap_or_else(|e| {
+                        panic!("failed to downcast {:?} to variant {:?}: {}",
+                            op_ty.layout.ty, variant_idx, e)
+                    }),
+                ),
+            })
+        },
+
         _ => {
-            if let Some((0, _)) = scalar {
+            if let Some((0, _)) = scalar_bits {
                 json!({
                     "kind": "zst",
                 })
@@ -899,6 +980,197 @@ fn render_constant<'tcx>(
             }
         },
     })
+}
+
+fn render_constant_variant<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    variant: &'tcx ty::VariantDef,
+    op_ty: interpret::OpTy<'tcx>,
+) -> Option<serde_json::Value> {
+    let icx = interpret::InterpCx::new(
+        mir.state.tcx.at(DUMMY_SP),
+        ty::ParamEnv::reveal_all(),
+        RenderConstMachine,
+        (),
+    );
+    let mut vals = Vec::with_capacity(variant.fields.len());
+    for i in 0 .. variant.fields.len() {
+        let field = icx.operand_field(op_ty, i as u64).unwrap_or_else(|e| {
+            panic!("failed to access field {} of {:?}: {}", i, op_ty.layout.ty, e)
+        });
+
+        // `try_as_mplace` always "succeeds" (returns an `MPlace`, dangling) for ZSTs.  We want it
+        // to be an immediate instead.
+        if field.layout.is_zst() {
+            vals.push(render_constant_scalar(mir, field.layout.ty, interpret::Scalar::zst())?);
+            continue;
+        }
+
+        let val = match field.try_as_mplace(&icx) {
+            Ok(_mpl) => None,
+            Err(imm) => match *imm {
+                interpret::Immediate::Scalar(maybe_scalar) => match maybe_scalar {
+                    interpret::ScalarMaybeUndef::Scalar(s) => {
+                        render_constant_scalar(mir, field.layout.ty, s)
+                    },
+                    _ => None,
+                },
+                _ => None,
+            },
+        }?;
+        vals.push(val);
+    }
+    Some(vals.into())
+}
+
+struct RenderConstMachine;
+
+mod machine {
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+    use super::*;
+    use rustc_mir::interpret::*;
+    use rustc::ty::*;
+    use rustc::mir::*;
+    use rustc_data_structures::fx::FxHashMap;
+    use rustc_span::Span;
+
+    impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine {
+        type MemoryKinds = !;
+        type PointerTag = ();
+        type ExtraFnVal = !;
+        type FrameExtra = ();
+        type MemoryExtra = ();
+        type AllocExtra = ();
+        type MemoryMap = FxHashMap<
+            AllocId,
+            (MemoryKind<!>, Allocation),
+        >;
+
+        const STATIC_KIND: Option<!> = None;
+        const CHECK_ALIGN: bool = false;
+
+        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        fn find_mir_or_eval_fn(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            span: Span,
+            instance: Instance<'tcx>,
+            args: &[OpTy<'tcx>],
+            ret: Option<(PlaceTy<'tcx>, BasicBlock)>,
+            _unwind: Option<BasicBlock>, // unwinding is not supported in consts
+        ) -> InterpResult<'tcx, Option<&'mir Body<'tcx>>> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "find_mir_or_eval_fn".into(),
+                ),
+            ).into())
+        }
+
+        fn call_extra_fn(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            fn_val: Self::ExtraFnVal,
+            args: &[OpTy<'tcx, Self::PointerTag>],
+            ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
+            unwind: Option<BasicBlock>
+        ) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "call_extra_fn".into(),
+                ),
+            ).into())
+        }
+
+        fn call_intrinsic(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            span: Span,
+            instance: Instance<'tcx>,
+            args: &[OpTy<'tcx, Self::PointerTag>],
+            ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
+            unwind: Option<BasicBlock>
+        ) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "call_intrinsic".into(),
+                ),
+            ).into())
+        }
+
+        fn assert_panic(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            msg: &AssertMessage<'tcx>,
+            unwind: Option<BasicBlock>
+        ) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "assert_panic".into(),
+                ),
+            ).into())
+        }
+
+        fn binary_ptr_op(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            bin_op: BinOp,
+            left: ImmTy<'tcx, Self::PointerTag>,
+            right: ImmTy<'tcx, Self::PointerTag>
+        ) -> InterpResult<'tcx, (Scalar<Self::PointerTag>, bool, Ty<'tcx>)> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "binary_ptr_op".into(),
+                ),
+            ).into())
+        }
+
+        fn tag_static_base_pointer(
+            _memory_extra: &Self::MemoryExtra,
+            _id: AllocId,
+        ) -> Self::PointerTag {
+            ()
+        }
+
+        fn box_alloc(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            dest: PlaceTy<'tcx, Self::PointerTag>
+        ) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "box_alloc".into(),
+                ),
+            ).into())
+        }
+
+        fn init_allocation_extra<'b>(
+            memory_extra: &Self::MemoryExtra,
+            id: AllocId,
+            alloc: Cow<'b, Allocation>,
+            kind: Option<MemoryKind<Self::MemoryKinds>>
+        ) -> (Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>>, Self::PointerTag) {
+            (alloc, ())
+        }
+
+        fn stack_push(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>
+        ) -> InterpResult<'tcx, Self::FrameExtra> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "stack_push".into(),
+                ),
+            ).into())
+        }
+
+        fn ptr_to_int(
+            _mem: &Memory<'mir, 'tcx, Self>,
+            _ptr: Pointer<Self::PointerTag>
+        ) -> InterpResult<'tcx, u64> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "ptr_to_int".into(),
+                ),
+            ).into())
+        }
+    }
 }
 
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
@@ -926,23 +1198,11 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         };
 
         let rendered = match evaluated {
-            interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
-                render_constant(mir, self.ty, Some((size, data)), None)
-            },
-            interpret::ConstValue::Scalar(interpret::Scalar::Ptr(ptr)) => {
-                match mir.state.tcx.alloc_map.lock().get(ptr.alloc_id) {
-                    Some(ga) => match ga {
-                        interpret::GlobalAlloc::Static(def_id) => Some(json!({
-                            "kind": "static_ref",
-                            "def_id": def_id.to_json(mir),
-                        })),
-                        _ => None,
-                    },
-                    None => None,
-                }
+            interpret::ConstValue::Scalar(s) => {
+                render_constant_scalar(mir, self.ty, s)
             },
             interpret::ConstValue::Slice { data, start, end } => {
-                render_constant(mir, self.ty, None, Some((data, start, end)))
+                render_constant(mir, self.ty, None, None, Some((data, start, end)))
             },
             _ => None,
         };
