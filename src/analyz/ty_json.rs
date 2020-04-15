@@ -223,18 +223,16 @@ impl ToJson<'_> for hir::def_id::DefId {
 
 /// rustc's vtables have null entries for non-object-safe methods (those with `Where Self: Sized`).
 /// We omit such methods from our vtables.  This function adjusts vtable indices from rustc's way
-/// of counting to ours.  `self_ty` should be `dyn Trait`.
-fn adjust_method_index<'tcx>(tcx: TyCtxt<'tcx>, self_ty: ty::Ty<'tcx>, raw_idx: usize) -> usize {
-    let preds = match self_ty.kind {
-        ty::TyKind::Dynamic(ref preds, _region) => preds,
-        _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
-    };
-    let ex_tref = match preds.principal() {
-        Some(x) => x,
-        None => panic!("no principal trait for {:?}?", self_ty),
-    };
-    let tref = ex_tref.with_self_ty(tcx, self_ty);
+/// of counting to ours.
+fn adjust_method_index<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    tref: ty::Binder<ty::TraitRef<'tcx>>,
+    raw_idx: usize,
+) -> usize {
     let methods = tcx.vtable_methods(tref);
+    eprintln!("adjust_method_idx: raw {} => adj {}, tref {:?}, methods {:?}",
+        raw_idx, methods.iter().take(raw_idx).filter(|m| m.is_some()).count(),
+        tref, methods);
 
     methods.iter().take(raw_idx).filter(|m| m.is_some()).count()
 }
@@ -274,22 +272,28 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceDef::Virtual(did, idx) => {
-                let assoc = mir.state.tcx.associated_item(did);
-                let trait_id = assoc.container.assert_trait();
-                // Note that object-safe methods cannot have their own generics, so all substs
-                // apply to the trait.
-                let trait_ref = ty::TraitRef::new(trait_id, substs);
-                let ti = TraitInst::from_trait_ref(mir.state.tcx, trait_ref);
+                let self_ty = substs.types().next()
+                    .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
+                let preds = match self_ty.kind {
+                    ty::TyKind::Dynamic(ref preds, _region) => preds,
+                    _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
+                };
+                let ex_tref = match preds.principal() {
+                    Some(x) => x,
+                    None => panic!("no principal trait for {:?}?", self_ty),
+                };
+                let tref = ex_tref.with_self_ty(mir.state.tcx, self_ty);
+
+                let erased_tref = mir.state.tcx.erase_late_bound_regions(&tref);
+                let ti = TraitInst::from_trait_ref(mir.state.tcx, erased_tref);
                 let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
                 mir.used.traits.insert(ti);
 
-                let self_ty = substs.types().next()
-                    .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
                 json!({
                     "kind": "Virtual",
                     "trait_id": trait_name,
                     "item_id": did.to_json(mir),
-                    "index": adjust_method_index(mir.state.tcx, self_ty, idx),
+                    "index": adjust_method_index(mir.state.tcx, tref, idx),
                 })
             },
             ty::InstanceDef::ClosureOnceShim { call_once } => json!({
