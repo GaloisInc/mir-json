@@ -278,7 +278,6 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
                     "kind": "Subslice",
                     "from": from,
                     "to": to,
-                    // FIXME add to mir-verifier
                     "from_end": from_end,
                 })
             }
