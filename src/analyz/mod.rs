@@ -561,83 +561,6 @@ fn mir_body(
 }
 
 
-/*
-/// Workaround for a rustc bug.  MIR bodies are usually stored in normalized form, but for
-/// associated constants whose types involve parameters, one occurrence of the constant type is not
-/// substituted or normalized properly:
-///
-///     trait TheTrait {
-///         const THE_CONST: Self;
-///     }
-///
-///     impl TheTrait for u32 {
-///         const THE_CONST: u32 = 123;
-///     }
-///
-///
-///     mir::Constant {
-///         ty: u32,        // Substituted + normalized type of <u32 as TheTrait>::THE_CONST
-///         literal: Const {
-///             ty: Self,   // Unsubstituted declared type of THE_CONST.  This is the bug.
-///             val: Unevaluated(
-///                 the_crate::TheTrait::THE_CONST,
-///                 [u32],  // Substs for TheTrait::THE_CONST
-///             ),
-///         },
-///     }
-///
-/// This pass looks for Unevaluated constants, and copies the outer ty (which is computed
-/// correctly) over top of the inner one.  Afterward, the MIR is well-formed and running `subst` on
-/// it no longer panics.
-fn subst_const_tys<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    substs: ty::subst::SubstsRef<'tcx>,
-    body: &mut Body<'tcx>,
-) {
-    mir::visit::MutVisitor::visit_body(
-        &mut SubstConstTys { tcx, substs },
-        body,
-    );
-    for promoted in body.promoted.iter_mut() {
-        subst_const_tys(tcx, substs, promoted);
-    }
-}
-
-struct SubstConstTys<'tcx> {
-    tcx: TyCtxt<'tcx>,
-    substs: ty::subst::SubstsRef<'tcx>,
-}
-
-impl<'tcx> mir::visit::MutVisitor<'tcx> for SubstConstTys<'tcx> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_constant(
-        &mut self,
-        constant: &mut mir::Constant<'tcx>,
-        location: mir::Location,
-    ) {
-        if let mir::interpret::ConstValue::Unevaluated(..) = constant.literal.val {
-            constant.literal = self.tcx.mk_const(ty::Const {
-                ty: constant.ty,
-                val: constant.literal.val,
-            });
-        }
-        self.super_constant(constant, location);
-    }
-}
-*/
-fn subst_const_tys<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    substs: ty::subst::SubstsRef<'tcx>,
-    body: &mut Body<'tcx>,
-) {
-    // FIXME remove
-}
-
-
-
 fn emit_trait<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
@@ -857,7 +780,6 @@ fn emit_instance<'tcx>(
 
     // Look up and monomorphize the MIR for this instance.
     let mut mir = tcx.optimized_mir(inst_def_id(inst)).clone();
-    subst_const_tys(tcx, inst.substs, &mut mir);
     let mir = tcx.subst_and_normalize_erasing_regions(
         inst.substs, ty::ParamEnv::reveal_all(), &mir);
     let mir = tcx.arena.alloc(mir);
@@ -865,7 +787,6 @@ fn emit_instance<'tcx>(
 
     for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
         let mut mir = mir.clone();
-        subst_const_tys(tcx, inst.substs, &mut mir);
         let mir = tcx.subst_and_normalize_erasing_regions(
             inst.substs, ty::ParamEnv::reveal_all(), &mir);
         let mir = tcx.arena.alloc(mir);
