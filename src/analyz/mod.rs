@@ -1069,7 +1069,6 @@ pub fn analyze_nonstreaming<'tcx>(
         "vtables": out.vtables,
         "traits": out.traits,
         "intrinsics": out.intrinsics,
-        "impls": [],
         "tys": out.tys,
         "roots": out.roots,
     });
