@@ -421,10 +421,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Closure(defid, ref substs) => {
                 json!({
                     "kind": "Closure",
-                    "defid": defid.to_json(mir),
-                    "closuresubsts": substs.to_json(mir),
                     "upvar_tys": substs.as_closure().upvar_tys(defid, mir.state.tcx)
                         .collect::<Vec<_>>().to_json(mir),
+                    // mir-verifier uses the same representation for closures as it does for
+                    // tuples, so no additional information is needed.
                 })
             }
             &ty::TyKind::Dynamic(ref preds, _region) => {

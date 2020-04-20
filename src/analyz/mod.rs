@@ -65,12 +65,11 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
             &mir::AggregateKind::Adt(_, _, _, _, _) => {
                 panic!("adt should be handled upstream")
             }
-            &mir::AggregateKind::Closure(ref defid, ref substs) => {
+            &mir::AggregateKind::Closure(_, _) => {
                 json!({
                     "kind": "Closure",
-                    "defid": defid.to_json(mir),
-                    // FIXME rename
-                    "closuresubsts": substs.to_json(mir)
+                    // mir-verifier uses the same representation for closures as it does for
+                    // tuples, so no additional information is needed.
                 })
             }
             &mir::AggregateKind::Generator(_, _, _,) => {
