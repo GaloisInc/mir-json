@@ -4,28 +4,30 @@
 #![feature(rustc_private)]
 
 extern crate rustc;
-extern crate rustc_codegen_utils;
+extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
 extern crate rustc_metadata;
 extern crate getopts;
-extern crate syntax;
+extern crate rustc_ast;
 extern crate rustc_errors;
 extern crate rustc_target;
+extern crate rustc_session;
 
 extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
-use rustc::session::Session;
-use rustc::session::config::Externs;
+use rustc_session::Session;
+use rustc_session::config::Externs;
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::{Compiler, Config};
-use rustc::session::config::{self, Input, ErrorOutputType};
-use rustc_codegen_utils::codegen_backend::CodegenBackend;
-use rustc_metadata::cstore::CStore;
+use rustc_interface::Queries;
+use rustc_session::config::{self, Input, ErrorOutputType, ExternLocation};
+use rustc_codegen_ssa::traits::CodegenBackend;
+use rustc_metadata::creader::CStore;
 use rustc_target::spec::PanicStrategy;
-use syntax::ast;
+use rustc_ast::ast;
 use std::collections::{HashSet, BTreeSet};
 use std::env;
 use std::error::Error;
@@ -54,11 +56,12 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
         let sess = compiler.session();
-        let crate_name = compiler.crate_name().unwrap().peek();
-        let outputs = compiler.prepare_outputs().unwrap().peek();
-        self.output_path = Some(rustc_codegen_utils::link::out_filename(
+        let crate_name = queries.crate_name().unwrap().peek();
+        let outputs = queries.prepare_outputs().unwrap().peek();
+        self.output_path = Some(rustc_session::output::out_filename(
             sess,
             sess.crate_types.get().first().unwrap().clone(),
             &outputs,
@@ -87,8 +90,7 @@ fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
         let k = k.clone();
         let mut v = v.clone();
         if use_override_crates.contains(&k) {
-            v.locations = BTreeSet::new();
-            v.locations.insert(None);
+            v.location = ExternLocation::FoundInLibrarySearchDirectories;
         }
         (k, v)
     }).collect());
@@ -107,8 +109,12 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_analysis(&mut self, compiler: &Compiler) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler).unwrap();
+    fn after_analysis<'tcx>(
+        &mut self,
+        compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        self.analysis_data = analyz::analyze(compiler.session(), queries).unwrap();
         Compilation::Continue
     }
 }

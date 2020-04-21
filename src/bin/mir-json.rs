@@ -1,26 +1,28 @@
 #![feature(rustc_private)]
 
 extern crate rustc;
-extern crate rustc_codegen_utils;
+extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
 extern crate rustc_metadata;
+extern crate rustc_session;
 extern crate getopts;
-extern crate syntax;
 extern crate rustc_errors;
 extern crate rustc_target;
+extern crate rustc_ast;
 
 extern crate mir_json;
 
 use mir_json::analyz;
-use rustc::session::Session;
+use rustc_session::Session;
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::{Compiler, Config};
-use rustc::session::config::{self, Input, ErrorOutputType};
-use rustc_codegen_utils::codegen_backend::CodegenBackend;
-use rustc_metadata::cstore::CStore;
+use rustc_interface::Queries;
+use rustc_session::config::{self, Input, ErrorOutputType};
+use rustc_codegen_ssa::traits::CodegenBackend;
+use rustc_metadata::creader::CStore;
 use rustc_target::spec::PanicStrategy;
-use syntax::ast;
+use rustc_ast::ast;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
@@ -29,10 +31,23 @@ use std::path::Path;
 struct MirJsonCallbacks;
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
+    fn after_parsing<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::inject_attrs(queries);
+        Compilation::Continue
+    }
+
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
-    fn after_analysis(&mut self, compiler: &Compiler) -> Compilation {
-        analyz::analyze(compiler).unwrap();
+    fn after_analysis<'tcx>(
+        &mut self,
+        compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::analyze(compiler.session(), queries).unwrap();
         Compilation::Continue
     }
 }

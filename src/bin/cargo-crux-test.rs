@@ -16,6 +16,7 @@
 extern crate cargo;
 extern crate clap;
 extern crate rustc;
+extern crate rustc_session;
 extern crate serde_json;
 
 use std::env;
@@ -23,7 +24,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{self, Command};
 use cargo::core::Workspace;
-use rustc::session::config::host_triple;
+use rustc_session::config::host_triple;
 use cargo::util::command_prelude::*;
 
 fn cli() -> App {
