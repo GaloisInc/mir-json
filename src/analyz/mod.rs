@@ -325,7 +325,6 @@ impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let pos = mir.state.session.source_map().span_to_string(self.source_info.span);
         json!({
             "mut": self.mutability.to_json(mir),
             "ty": self.ty.to_json(mir),
@@ -333,8 +332,6 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             // allows reading and taking refs of uninitialized zero-sized locals.
             "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(self.ty))
                 .expect("failed to get layout").is_zst(),
-            "scope": format!("{:?}", self.source_info.scope),
-            "pos": pos
         })
     }
 }
@@ -634,7 +631,7 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
 
     let mir = tcx.optimized_mir(def_id);
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id), None)?;
+    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
 
     for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
         emit_promoted(ms, out, &name, idx, mir)?;
@@ -650,17 +647,12 @@ fn emit_static_decl<'tcx>(
     name: &str,
     ty: ty::Ty<'tcx>,
     mutable: bool,
-    promoted_info: Option<(&str, usize)>,
 ) -> io::Result<()> {
     let mut j = json!({
         "name": name,
         "ty": ty.to_json(ms),
         "mutable": mutable,
     });
-    if let Some((parent, idx)) = promoted_info {
-        j.as_object_mut().unwrap().insert("promoted_from".to_owned(), parent.into());
-        j.as_object_mut().unwrap().insert("promoted_index".to_owned(), idx.into());
-    }
     out.emit(EntryKind::Static, j)?;
     emit_new_types(ms, out)
 }
@@ -799,8 +791,7 @@ fn emit_promoted<'tcx>(
 ) -> io::Result<()> {
     let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false,
-        Some((parent, idx.as_usize())))?;
+    emit_static_decl(ms, out, &name, mir.return_ty(), false);
     Ok(())
 }
 
