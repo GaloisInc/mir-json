@@ -416,8 +416,9 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "substs": [],
                 })
             }
-            &ty::TyKind::Param(ref p) =>
-                json!({"kind": "Param", "param": p.to_json(mir)}),
+            &ty::TyKind::Param(ref p) => unreachable!(
+                "no TyKind::Param should remain after monomorphization"
+            ),
             &ty::TyKind::Closure(defid, ref substs) => {
                 json!({
                     "kind": "Closure",
@@ -437,20 +438,12 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "predicates": preds.skip_binder().to_json(mir),
                 })
             }
-            &ty::TyKind::Projection(ref pty) => {
-                json!({
-                    "kind": "Projection",
-                    "substs": pty.substs.to_json(mir),
-                    "defid": pty.item_def_id.to_json(mir)
-                })
-            }
-            &ty::TyKind::UnnormalizedProjection(ref pty) => {
-                json!({
-                    "kind": "UnnormalizedProjection",
-                    "substs": pty.substs.to_json(mir),
-                    "defid": pty.item_def_id.to_json(mir)
-                })
-            }
+            &ty::TyKind::Projection(ref pty) => unreachable!(
+                "no TyKind::Projection should remain after monomorphization"
+            ),
+            &ty::TyKind::UnnormalizedProjection(ref pty) => unreachable!(
+                "no TyKind::UnnormalizedProjection should remain after monomorphization"
+            ),
             &ty::TyKind::FnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
             }
