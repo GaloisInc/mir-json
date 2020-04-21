@@ -879,8 +879,6 @@ fn emit_fn<'tcx>(
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
         "body": mir_body(ms),
-        // FIXME remove
-        "promoted": [],
         "abi": abi.to_json(ms),
         "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
     }))?;
