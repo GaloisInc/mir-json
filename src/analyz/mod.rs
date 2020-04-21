@@ -587,8 +587,6 @@ fn emit_trait<'tcx>(
             "kind": "Method",
             "item_id": def_id.to_json(ms),
             "signature": sig.to_json(ms),
-            "generics": { "params": [] },
-            "predicates": { "predicates": [] },
         }));
     }
 
@@ -598,9 +596,6 @@ fn emit_trait<'tcx>(
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
         "name": trait_inst_id_str(ms.state.tcx, &ti),
         "items": items,
-        "supertraits": [],
-        "generics": { "params": [] },
-        "predicates": { "predicates": [] },
     }))?;
     emit_new_types(ms, out)?;
     Ok(())
@@ -896,8 +891,6 @@ fn emit_fn<'tcx>(
         "name": &name,
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
-        "generics": { "params": [] },
-        "predicates": { "predicates": [] },
         "body": mir_body(ms),
         // FIXME remove
         "promoted": [],

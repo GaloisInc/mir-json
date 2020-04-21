@@ -413,7 +413,6 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "FnDef",
                     "defid": name,
-                    "substs": [],
                 })
             }
             &ty::TyKind::Param(ref p) => unreachable!(
@@ -917,7 +916,6 @@ fn render_constant<'tcx>(
             json!({
                 "kind": "fndef",
                 "def_id": get_fn_def_name(mir, defid, substs),
-                "substs": [],
             })
         },
 
@@ -1180,7 +1178,6 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
                 map.insert("initializer".to_owned(), json!({
                     "def_id": get_promoted_name(mir, def_id, substs, promoted),
-                    "substs": &[] as &[()],
                 }));
             },
             _ => {},
@@ -1313,7 +1310,6 @@ impl ToJsonAg for ty::FieldDef {
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
-            "substs": [],
         })
     }
 }
