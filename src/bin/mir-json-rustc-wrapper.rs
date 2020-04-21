@@ -53,6 +53,17 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
+    fn after_parsing<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        // This phase runs with `--cfg crux`, so some `#[crux_test]` attrs may be visible.  Even
+        // the limited amount of compilation we do will fail without the injected `register_attr`.
+        analyz::inject_attrs(queries);
+        Compilation::Continue
+    }
+
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
@@ -107,6 +118,15 @@ struct MirJsonCallbacks {
 impl rustc_driver::Callbacks for MirJsonCallbacks {
     fn config(&mut self, config: &mut Config) {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
+    }
+
+    fn after_parsing<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::inject_attrs(queries);
+        Compilation::Continue
     }
 
     fn after_analysis<'tcx>(
