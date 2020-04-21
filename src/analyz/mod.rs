@@ -234,11 +234,7 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
 impl<'tcx> ToJson<'tcx> for mir::Place<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
-            // FIXME flatten
-            "base": {
-                "kind": "Local",
-                "localvar": local_json(mir, self.local),
-            },
+            "var": local_json(mir, self.local),
             "data" : self.projection.to_json(mir)
         })
     }
