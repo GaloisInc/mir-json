@@ -1171,7 +1171,6 @@ mod machine {
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
-        map.insert("kind".to_owned(), "Const".into());
         map.insert("ty".to_owned(), self.ty.to_json(mir));
 
         match self.val {

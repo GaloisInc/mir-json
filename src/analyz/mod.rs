@@ -315,11 +315,7 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        json!({
-            // FIXME remove
-            "ty": self.literal.ty.to_json(mir),
-            "literal": self.literal.to_json(mir)
-        })
+        self.literal.to_json(mir)
     }
 }
 
