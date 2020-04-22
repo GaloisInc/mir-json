@@ -230,10 +230,6 @@ fn adjust_method_index<'tcx>(
     raw_idx: usize,
 ) -> usize {
     let methods = tcx.vtable_methods(tref);
-    eprintln!("adjust_method_idx: raw {} => adj {}, tref {:?}, methods {:?}",
-        raw_idx, methods.iter().take(raw_idx).filter(|m| m.is_some()).count(),
-        tref, methods);
-
     methods.iter().take(raw_idx).filter(|m| m.is_some()).count()
 }
 
