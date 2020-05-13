@@ -419,11 +419,13 @@ impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
                 ref target,
                 ref unwind,
             } => {
+                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "Drop",
                     "location": location.to_json(mir),
                     "target" : target.to_json(mir),
-                    "unwind": unwind.to_json(mir)
+                    "unwind": unwind.to_json(mir),
+                    "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
             &mir::TerminatorKind::DropAndReplace {
@@ -432,12 +434,14 @@ impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
                 ref target,
                 ref unwind,
             } => {
+                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "DropAndReplace",
                     "location": location.to_json(mir),
                     "value": value.to_json(mir),
                     "target": target.to_json(mir),
-                    "unwind": unwind.to_json(mir)
+                    "unwind": unwind.to_json(mir),
+                    "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
             &mir::TerminatorKind::Call {
