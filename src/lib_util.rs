@@ -312,8 +312,6 @@ impl<W: Write> Emitter<W> {
         write!(self.writer, ",")?;
         self.emit_table_from(EntryKind::Intrinsic, j);
         write!(self.writer, ",")?;
-        write!(self.writer, "\"impls\":[]")?;
-        write!(self.writer, ",")?;
         write!(self.writer, "\"roots\":")?;
         serde_json::to_writer(&mut self.writer, &j["roots"])?;
         write!(self.writer, "}}")?;

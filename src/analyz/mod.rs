@@ -65,12 +65,11 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
             &mir::AggregateKind::Adt(_, _, _, _, _) => {
                 panic!("adt should be handled upstream")
             }
-            &mir::AggregateKind::Closure(ref defid, ref substs) => {
+            &mir::AggregateKind::Closure(_, _) => {
                 json!({
                     "kind": "Closure",
-                    "defid": defid.to_json(mir),
-                    // FIXME rename
-                    "closuresubsts": substs.to_json(mir)
+                    // mir-verifier uses the same representation for closures as it does for
+                    // tuples, so no additional information is needed.
                 })
             }
             &mir::AggregateKind::Generator(_, _, _,) => {
@@ -235,11 +234,7 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
 impl<'tcx> ToJson<'tcx> for mir::Place<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
-            // FIXME flatten
-            "base": {
-                "kind": "Local",
-                "localvar": local_json(mir, self.local),
-            },
+            "var": local_json(mir, self.local),
             "data" : self.projection.to_json(mir)
         })
     }
@@ -316,17 +311,12 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        json!({
-            // FIXME remove
-            "ty": self.literal.ty.to_json(mir),
-            "literal": self.literal.to_json(mir)
-        })
+        self.literal.to_json(mir)
     }
 }
 
 impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let pos = mir.state.session.source_map().span_to_string(self.source_info.span);
         json!({
             "mut": self.mutability.to_json(mir),
             "ty": self.ty.to_json(mir),
@@ -334,8 +324,6 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             // allows reading and taking refs of uninitialized zero-sized locals.
             "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(self.ty))
                 .expect("failed to get layout").is_zst(),
-            "scope": format!("{:?}", self.source_info.scope),
-            "pos": pos
         })
     }
 }
@@ -588,8 +576,6 @@ fn emit_trait<'tcx>(
             "kind": "Method",
             "item_id": def_id.to_json(ms),
             "signature": sig.to_json(ms),
-            "generics": { "params": [] },
-            "predicates": { "predicates": [] },
         }));
     }
 
@@ -599,9 +585,6 @@ fn emit_trait<'tcx>(
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
         "name": trait_inst_id_str(ms.state.tcx, &ti),
         "items": items,
-        "supertraits": [],
-        "generics": { "params": [] },
-        "predicates": { "predicates": [] },
     }))?;
     emit_new_types(ms, out)?;
     Ok(())
@@ -640,7 +623,7 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
 
     let mir = tcx.optimized_mir(def_id);
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id), None)?;
+    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
 
     for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
         emit_promoted(ms, out, &name, idx, mir)?;
@@ -656,17 +639,12 @@ fn emit_static_decl<'tcx>(
     name: &str,
     ty: ty::Ty<'tcx>,
     mutable: bool,
-    promoted_info: Option<(&str, usize)>,
 ) -> io::Result<()> {
     let mut j = json!({
         "name": name,
         "ty": ty.to_json(ms),
         "mutable": mutable,
     });
-    if let Some((parent, idx)) = promoted_info {
-        j.as_object_mut().unwrap().insert("promoted_from".to_owned(), parent.into());
-        j.as_object_mut().unwrap().insert("promoted_index".to_owned(), idx.into());
-    }
     out.emit(EntryKind::Static, j)?;
     emit_new_types(ms, out)
 }
@@ -805,8 +783,7 @@ fn emit_promoted<'tcx>(
 ) -> io::Result<()> {
     let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false,
-        Some((parent, idx.as_usize())))?;
+    emit_static_decl(ms, out, &name, mir.return_ty(), false);
     Ok(())
 }
 
@@ -897,11 +874,7 @@ fn emit_fn<'tcx>(
         "name": &name,
         "args": mir.args_iter().map(|l| local_json(ms, l)).collect::<Vec<_>>(),
         "return_ty": mir.return_ty().to_json(ms),
-        "generics": { "params": [] },
-        "predicates": { "predicates": [] },
         "body": mir_body(ms),
-        // FIXME remove
-        "promoted": [],
         "abi": abi.to_json(ms),
         "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
     }))?;
@@ -1070,7 +1043,6 @@ pub fn analyze_nonstreaming<'tcx>(
         "vtables": out.vtables,
         "traits": out.traits,
         "intrinsics": out.intrinsics,
-        "impls": [],
         "tys": out.tys,
         "roots": out.roots,
     });

@@ -138,8 +138,6 @@ where R: Read + Seek, W: Write {
         write!(output, "]")?;
     }
     write!(output, ",")?;
-    write!(output, "\"impls\":[]")?;
-    write!(output, ",")?;
     write!(output, "\"roots\":[")?;
     for (i, &id) in roots.iter().enumerate() {
         if i > 0 {

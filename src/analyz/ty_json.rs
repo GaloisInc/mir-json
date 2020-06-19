@@ -230,10 +230,6 @@ fn adjust_method_index<'tcx>(
     raw_idx: usize,
 ) -> usize {
     let methods = tcx.vtable_methods(tref);
-    eprintln!("adjust_method_idx: raw {} => adj {}, tref {:?}, methods {:?}",
-        raw_idx, methods.iter().take(raw_idx).filter(|m| m.is_some()).count(),
-        tref, methods);
-
     methods.iter().take(raw_idx).filter(|m| m.is_some()).count()
 }
 
@@ -413,18 +409,18 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "FnDef",
                     "defid": name,
-                    "substs": [],
                 })
             }
-            &ty::TyKind::Param(ref p) =>
-                json!({"kind": "Param", "param": p.to_json(mir)}),
+            &ty::TyKind::Param(ref p) => unreachable!(
+                "no TyKind::Param should remain after monomorphization"
+            ),
             &ty::TyKind::Closure(defid, ref substs) => {
                 json!({
                     "kind": "Closure",
-                    "defid": defid.to_json(mir),
-                    "closuresubsts": substs.to_json(mir),
                     "upvar_tys": substs.as_closure().upvar_tys(defid, mir.state.tcx)
                         .collect::<Vec<_>>().to_json(mir),
+                    // mir-verifier uses the same representation for closures as it does for
+                    // tuples, so no additional information is needed.
                 })
             }
             &ty::TyKind::Dynamic(ref preds, _region) => {
@@ -437,20 +433,12 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "predicates": preds.skip_binder().to_json(mir),
                 })
             }
-            &ty::TyKind::Projection(ref pty) => {
-                json!({
-                    "kind": "Projection",
-                    "substs": pty.substs.to_json(mir),
-                    "defid": pty.item_def_id.to_json(mir)
-                })
-            }
-            &ty::TyKind::UnnormalizedProjection(ref pty) => {
-                json!({
-                    "kind": "UnnormalizedProjection",
-                    "substs": pty.substs.to_json(mir),
-                    "defid": pty.item_def_id.to_json(mir)
-                })
-            }
+            &ty::TyKind::Projection(ref pty) => unreachable!(
+                "no TyKind::Projection should remain after monomorphization"
+            ),
+            &ty::TyKind::UnnormalizedProjection(ref pty) => unreachable!(
+                "no TyKind::UnnormalizedProjection should remain after monomorphization"
+            ),
             &ty::TyKind::FnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
             }
@@ -924,7 +912,6 @@ fn render_constant<'tcx>(
             json!({
                 "kind": "fndef",
                 "def_id": get_fn_def_name(mir, defid, substs),
-                "substs": [],
             })
         },
 
@@ -1180,14 +1167,12 @@ mod machine {
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
-        map.insert("kind".to_owned(), "Const".into());
         map.insert("ty".to_owned(), self.ty.to_json(mir));
 
         match self.val {
             ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
                 map.insert("initializer".to_owned(), json!({
                     "def_id": get_promoted_name(mir, def_id, substs, promoted),
-                    "substs": &[] as &[()],
                 }));
             },
             _ => {},
@@ -1320,7 +1305,6 @@ impl ToJsonAg for ty::FieldDef {
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
-            "substs": [],
         })
     }
 }
