@@ -419,11 +419,13 @@ impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
                 ref target,
                 ref unwind,
             } => {
+                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "Drop",
                     "location": location.to_json(mir),
                     "target" : target.to_json(mir),
-                    "unwind": unwind.to_json(mir)
+                    "unwind": unwind.to_json(mir),
+                    "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
             &mir::TerminatorKind::DropAndReplace {
@@ -432,12 +434,14 @@ impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
                 ref target,
                 ref unwind,
             } => {
+                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "DropAndReplace",
                     "location": location.to_json(mir),
                     "value": value.to_json(mir),
                     "target": target.to_json(mir),
-                    "unwind": unwind.to_json(mir)
+                    "unwind": unwind.to_json(mir),
+                    "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
             &mir::TerminatorKind::Call {
@@ -735,40 +739,44 @@ fn emit_instance<'tcx>(
     }))?;
     emit_new_types(ms, out)?;
 
-    let def_id = match inst.def {
-        ty::InstanceDef::Item(def_id) => def_id,
-        _ => return Ok(()),
-    };
-
-    // Foreign items and non-generics have no MIR available.
-    if tcx.is_foreign_item(def_id) {
-        return Ok(());
-    }
-    if !def_id.is_local() {
-        if tcx.is_reachable_non_generic(def_id) {
-            return Ok(());
-        }
-        // Items with upstream monomorphizations have already been translated into an upstream
-        // crate, so we can skip them.
-        if tcx.upstream_monomorphizations_for(def_id)
-                .map_or(false, |monos| monos.contains_key(&inst.substs)) {
-            return Ok(());
-        }
+    match inst.def {
+        ty::InstanceDef::Item(def_id) => {
+            // Foreign items and non-generics have no MIR available.
+            if tcx.is_foreign_item(def_id) {
+                return Ok(());
+            }
+            if !def_id.is_local() {
+                if tcx.is_reachable_non_generic(def_id) {
+                    return Ok(());
+                }
+                // Items with upstream monomorphizations have already been translated into an upstream
+                // crate, so we can skip them.
+                if tcx.upstream_monomorphizations_for(def_id)
+                        .map_or(false, |monos| monos.contains_key(&inst.substs)) {
+                    return Ok(());
+                }
+            }
+        },
+        // These variants are unsupported by the `mir_shims` query, which backs `instance_mir`.
+        ty::InstanceDef::Virtual(..) |
+        ty::InstanceDef::Intrinsic(..) => return Ok(()),
+        _ => {},
     }
 
     // Look up and monomorphize the MIR for this instance.
-    let mut mir = tcx.optimized_mir(inst_def_id(inst)).clone();
-    let mir = tcx.subst_and_normalize_erasing_regions(
-        inst.substs, ty::ParamEnv::reveal_all(), &mir);
-    let mir = tcx.arena.alloc(mir);
+    let mir = tcx.instance_mir(inst.def);
+    let mir: Body = tcx.subst_and_normalize_erasing_regions(
+        inst.substs, ty::ParamEnv::reveal_all(), &mir as &Body);
+    let mir = tcx.arena.alloc(mir::BodyAndCache::new(mir));
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
-    for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-        let mut mir = mir.clone();
-        let mir = tcx.subst_and_normalize_erasing_regions(
-            inst.substs, ty::ParamEnv::reveal_all(), &mir);
-        let mir = tcx.arena.alloc(mir);
-        emit_promoted(ms, out, &name, idx, mir)?;
+    if let ty::InstanceDef::Item(def_id) = inst.def {
+        for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
+            let mir = tcx.subst_and_normalize_erasing_regions(
+                inst.substs, ty::ParamEnv::reveal_all(), mir);
+            let mir = tcx.arena.alloc(mir);
+            emit_promoted(ms, out, &name, idx, mir)?;
+        }
     }
 
     Ok(())

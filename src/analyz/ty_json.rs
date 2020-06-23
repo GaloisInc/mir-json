@@ -215,6 +215,19 @@ pub fn get_promoted_name<'tcx>(
     format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize())
 }
 
+pub fn get_drop_fn_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    ty: ty::Ty<'tcx>,
+) -> Option<String> {
+    let inst = ty::Instance::resolve_drop_in_place(mir.state.tcx, ty);
+    if let ty::InstanceDef::DropGlue(_, None) = inst.def {
+        // `None` instead of a `Ty` indicates this drop glue is a no-op.
+        return None;
+    }
+    mir.used.instances.insert(inst);
+    Some(inst_id_str(mir.state.tcx, inst))
+}
+
 impl ToJson<'_> for hir::def_id::DefId {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         json!(def_id_str(mir.state.tcx, *self))
