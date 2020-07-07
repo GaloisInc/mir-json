@@ -383,9 +383,9 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
+impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match self {
+        let mut j = match &self.kind {
             &mir::TerminatorKind::Goto { ref target } => {
                 json!({"kind": "Goto", "target": target.to_json(mir)})
             }
@@ -500,7 +500,13 @@ impl<'tcx> ToJson<'tcx> for mir::TerminatorKind<'tcx> {
             &mir::TerminatorKind::GeneratorDrop => {
                 json!({ "kind": "GeneratorDrop" })
             }
-        }
+        };
+        let pos = mir.state
+                    .session
+                    .source_map()
+                    .span_to_string(self.source_info.span);
+        j["pos"] = json!(pos);
+        j
     }
 }
 
@@ -512,7 +518,7 @@ impl<'tcx> ToJson<'tcx> for mir::BasicBlockData<'tcx> {
         }
         json!({
             "data": sts,
-            "terminator": self.terminator().kind.to_json(mir)
+            "terminator": self.terminator().to_json(mir)
         })
     }
 }
