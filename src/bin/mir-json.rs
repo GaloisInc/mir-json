@@ -40,6 +40,15 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         Compilation::Continue
     }
 
+    fn after_expansion<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::gather_match_spans(queries);
+        Compilation::Continue
+    }
+
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis<'tcx>(

@@ -2,7 +2,7 @@
 
 use rustc::ty::{self, TyCtxt, List, TyS};
 use rustc::mir::{self, Body};
-use rustc_ast::{ast, token, tokenstream};
+use rustc_ast::{ast, token, tokenstream, visit};
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
@@ -18,13 +18,16 @@ use rustc_target::spec::abi;
 use rustc_session::Session;
 use rustc_span::symbol::Symbol;
 use rustc_span::Span;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::io::Write;
 use std::iter;
 use std::fs::File;
+use std::mem;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use serde::ser::{Serialize, Serializer, SerializeSeq};
 use serde_json;
 use serde_cbor;
@@ -383,6 +386,11 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
     }
 }
 
+fn operand_span(mir: &MirState, op: &mir::Operand) -> Option<Span> {
+    let local = op.place()?.as_local()?;
+    Some(mir.mir?.local_decls[local].source_info.span)
+}
+
 impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut j = match &self.kind {
@@ -396,10 +404,18 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref targets,
             } => {
                 let vals: Vec<String> =
-                  values.iter().map(|&c| c.to_string()).collect();
+                    values.iter().map(|&c| c.to_string()).collect();
+                let discr_span = mir.match_span_map.get(&self.source_info.span).cloned()
+                    .or_else(|| operand_span(mir, discr))
+                    .unwrap_or(self.source_info.span);
+                let discr_span_str = mir.state
+                            .session
+                            .source_map()
+                            .span_to_string(discr_span);
                 json!({
                     "kind": "SwitchInt",
                     "discr": discr.to_json(mir),
+                    "discr_span": discr_span_str,
                     "switch_ty": switch_ty.to_json(mir),
                     "values": vals,
                     "targets": targets.to_json(mir)
@@ -879,6 +895,7 @@ fn emit_fn<'tcx>(
         used: ms.used,
         state: ms.state,
         tys: ms.tys,
+        match_span_map: ms.match_span_map,
     };
     let ms = &mut ms;
 
@@ -997,6 +1014,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             used: &mut used,
             state: &state,
             tys: &mut tys,
+            match_span_map: &get_match_spans(),
         };
 
         // Traits and top-level statics can be enumerated directly.
@@ -1108,4 +1126,84 @@ pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
     let mut krate = queries.parse().unwrap().peek_mut();
     krate.attrs.push(make_attr("feature", "register_attr"));
     krate.attrs.push(make_attr("register_attr", "crux_test"));
+}
+
+#[derive(Default)]
+struct GatherMatchSpans {
+    match_span_map: HashMap<Span, Span>,
+    cur_match_discr_span: Option<Span>,
+}
+
+impl GatherMatchSpans {
+    fn with_cur_match_discr_span(&mut self, val: Option<Span>, f: impl FnOnce(&mut Self)) {
+        let old = mem::replace(&mut self.cur_match_discr_span, val);
+        f(self);
+        self.cur_match_discr_span = old;
+    }
+}
+
+impl<'a> visit::Visitor<'a> for GatherMatchSpans {
+    fn visit_expr(&mut self, e: &ast::Expr) {
+        match e.kind {
+            ast::ExprKind::Match(ref discr, ref arms) => {
+                self.visit_expr(discr);
+
+                self.with_cur_match_discr_span(Some(discr.span), |self_| {
+                    for arm in arms {
+                        self_.visit_arm(arm);
+                    }
+                });
+            },
+            _ => visit::walk_expr(self, e),
+        }
+    }
+
+    fn visit_arm(&mut self, a: &ast::Arm) {
+        // The discr span should be available in the patterns of the arm, but not its guard or body
+        // expressions.
+        self.visit_pat(&a.pat);
+        self.with_cur_match_discr_span(None, |self_| {
+            if let Some(ref e) = a.guard {
+                self_.visit_expr(e);
+            }
+            self_.visit_expr(&a.body);
+        });
+    }
+
+    fn visit_pat(&mut self, p: &ast::Pat) {
+        if let Some(span) = self.cur_match_discr_span {
+            self.match_span_map.insert(p.span, span);
+        }
+        visit::walk_pat(self, p)
+    }
+}
+
+thread_local! {
+    /// See documentation on `MirState::match_span_map` for info.
+    ///
+    /// The handling of the `match_span_map` is a little tricky.  The map must be constructed
+    /// during `rustc_driver::Callbacks::after_expansion`, then used during `after_analysis`.  We'd
+    /// like to pass the map from one callback to the other through our struct that implements
+    /// `Callbacks`, but this is forbidden: the callbacks must implement `Send`, while `Span` is
+    /// `!Send` and `!Sync`.  Instead, we pass it through this thread-local variable, and just hope
+    /// that `after_expansion` and `after_analysis` get called on the same thread.  It seems likely
+    /// that they will be, since both get access to data structures that contain spans, and the
+    /// span interning table is also thread-local (likely this is why spans are `!Sync`).
+    static MATCH_SPAN_MAP: RefCell<Option<Rc<HashMap<Span, Span>>>> = RefCell::default()
+}
+
+pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
+    let krate = &queries.expansion().unwrap().peek().0;
+    let mut v = GatherMatchSpans::default();
+    visit::walk_crate(&mut v, krate);
+    MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
+}
+
+fn get_match_spans() -> Rc<HashMap<Span, Span>> {
+    MATCH_SPAN_MAP.with(|m| {
+        match *m.borrow() {
+            Some(ref rc) => rc.clone(),
+            None => panic!("MATCH_SPAN_MAP is uninitialized on this thread"),
+        }
+    })
 }

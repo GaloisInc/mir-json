@@ -129,6 +129,15 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         Compilation::Continue
     }
 
+    fn after_expansion<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::gather_match_spans(queries);
+        Compilation::Continue
+    }
+
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
