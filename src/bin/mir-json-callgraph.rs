@@ -7,22 +7,16 @@
 
 extern crate serde;
 extern crate serde_cbor;
-#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde_json;
 extern crate env_logger;
-#[macro_use] extern crate log;
 extern crate mir_json;
 
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io;
-use std::mem;
-use std::sync::atomic::{self, AtomicUsize};
-use std::time::Instant;
-use serde::{Deserialize, Deserializer};
 use serde_json::Value as JsonValue;
-use mir_json::lib_util::{self, CrateIndex, StringId, InternTable};
+use mir_json::lib_util::{StringId, InternTable};
 use mir_json::link;
 
 fn main() {

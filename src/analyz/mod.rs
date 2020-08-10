@@ -1,15 +1,12 @@
 #![macro_use]
 
-use rustc::ty::{self, TyCtxt, List, TyS};
+use rustc::ty::{self, TyCtxt, List};
 use rustc::mir::{self, Body};
 use rustc_ast::{ast, token, tokenstream, visit};
-use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
 use rustc::mir::mono::MonoItem;
 use rustc_session::config::OutputType;
-use rustc::traits;
-use rustc::ty::subst::Subst;
 use rustc_session;
 use rustc_index::vec::Idx;
 use rustc_interface::Queries;
@@ -19,16 +16,14 @@ use rustc_session::Session;
 use rustc_span::symbol::Symbol;
 use rustc_span::Span;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
 use std::io;
-use std::io::Write;
 use std::iter;
 use std::fs::File;
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use serde::ser::{Serialize, Serializer, SerializeSeq};
 use serde_json;
 use serde_cbor;
 
@@ -616,18 +611,6 @@ fn emit_trait<'tcx>(
     Ok(())
 }
 
-fn iter_trait_def_ids<'tcx>(
-    state: &CompileState<'_, 'tcx>
-) -> impl Iterator<Item=DefId> + 'tcx {
-    let hir_map = state.tcx.hir();
-    hir_map.krate().items.values()
-        .filter(|it| match it.kind {
-            hir::ItemKind::Trait(..) => true,
-            _ => false,
-        })
-        .map(|it| it.hir_id.owner.to_def_id())
-}
-
 
 /// Emit all statics defined in the current crate.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
@@ -666,7 +649,7 @@ fn emit_static_decl<'tcx>(
     ty: ty::Ty<'tcx>,
     mutable: bool,
 ) -> io::Result<()> {
-    let mut j = json!({
+    let j = json!({
         "name": name,
         "ty": ty.to_json(ms),
         "mutable": mutable,
@@ -813,7 +796,7 @@ fn emit_promoted<'tcx>(
 ) -> io::Result<()> {
     let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false);
+    emit_static_decl(ms, out, &name, mir.return_ty(), false)?;
     Ok(())
 }
 
@@ -921,16 +904,6 @@ fn emit_new_types(
     }
     assert!(ms.tys.take_new_types().is_empty());
     Ok(())
-}
-
-fn emit_entry<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    out: &mut impl JsonOutput,
-    kind: EntryKind,
-    j: serde_json::Value,
-) -> io::Result<()> {
-    out.emit(kind, j)?;
-    emit_new_types(ms, out)
 }
 
 fn inst_abi<'tcx>(

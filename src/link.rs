@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 
-use serde_cbor::Value as CborValue;
-use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
 
@@ -41,10 +39,9 @@ fn assign_global_ids(
             let id = it.intern(name.into());
             translate.insert((crate_num, local_id), id);
 
-            let item = match index.items.get(&local_id) {
-                Some(x) => x,
-                None => continue,
-            };
+            if !index.items.contains_key(&local_id) {
+                continue;
+            }
             defs.entry(id).or_insert_with(Vec::new).push((crate_num, local_id));
         }
     }
@@ -156,7 +153,7 @@ where R: Read + Seek, W: Write {
 pub fn gather_calls<R: Read + Seek>(
     inputs: &mut [R],
 ) -> serde_cbor::Result<(InternTable, Vec<(StringId, StringId)>)> {
-    let (indexes, json_offsets) = read_crates(inputs)?;
+    let (indexes, _json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
     let roots = collect_roots(&indexes, &translate);
 

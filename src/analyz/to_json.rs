@@ -2,7 +2,6 @@ use rustc_hir::def_id::DefId;
 use rustc::mir::Body;
 use rustc_session::Session;
 use rustc::ty::{self, TyCtxt};
-use rustc_interface::interface::Compiler;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
 use serde_json;
@@ -47,10 +46,6 @@ impl<T: Hash+Eq+Clone> UsedSet<T> {
     pub fn has_new(&self) -> bool {
         self.new.len() > 0
     }
-
-    pub fn count_new(&self) -> usize {
-        self.new.len()
-    }
 }
 
 impl<T: Hash+Eq> Deref for UsedSet<T> {
@@ -75,14 +70,6 @@ impl<'tcx> Used<'tcx> {
         vtables.has_new() ||
         instances.has_new() ||
         traits.has_new()
-    }
-
-    pub fn count_new(&self) -> usize {
-        let Used { ref types, ref vtables, ref instances, ref traits } = *self;
-        types.count_new() +
-        vtables.count_new() +
-        instances.count_new() +
-        traits.count_new()
     }
 }
 
