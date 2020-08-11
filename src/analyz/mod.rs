@@ -372,11 +372,7 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 json!({"kind": "Nop"})
             }
         };
-        let pos = mir.state
-                    .session
-                    .source_map()
-                    .span_to_string(self.source_info.span);
-        j["pos"] = json!(pos);
+        j["pos"] = self.source_info.span.to_json(mir);
         j
     }
 }
@@ -384,6 +380,23 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
 fn operand_span(mir: &MirState, op: &mir::Operand) -> Option<Span> {
     let local = op.place()?.as_local()?;
     Some(mir.mir?.local_decls[local].source_info.span)
+}
+
+impl ToJson<'_> for Span {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        let source_map = mir.state.session.source_map();
+        let callsite = self.source_callsite();
+        let s = if callsite == *self {
+            source_map.span_to_string(*self)
+        } else {
+            format!(
+                "{} !{}",
+                source_map.span_to_string(*self),
+                source_map.span_to_string(callsite),
+            )
+        };
+        s.into()
+    }
 }
 
 impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
@@ -403,14 +416,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 let discr_span = mir.match_span_map.get(&self.source_info.span).cloned()
                     .or_else(|| operand_span(mir, discr))
                     .unwrap_or(self.source_info.span);
-                let discr_span_str = mir.state
-                            .session
-                            .source_map()
-                            .span_to_string(discr_span);
                 json!({
                     "kind": "SwitchInt",
                     "discr": discr.to_json(mir),
-                    "discr_span": discr_span_str,
+                    "discr_span": discr_span.to_json(mir),
                     "switch_ty": switch_ty.to_json(mir),
                     "values": vals,
                     "targets": targets.to_json(mir)
@@ -512,11 +521,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 json!({ "kind": "GeneratorDrop" })
             }
         };
-        let pos = mir.state
-                    .session
-                    .source_map()
-                    .span_to_string(self.source_info.span);
-        j["pos"] = json!(pos);
+        j["pos"] = self.source_info.span.to_json(mir);
         j
     }
 }
