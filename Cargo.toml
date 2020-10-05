@@ -15,3 +15,52 @@ cargo_metadata = { version = "0.2" }
 cargo = { version = "0.43", features = [ "vendored-openssl" ] }
 toml = "0.5"
 clap = "2.33"
+
+[[bin]]
+name = "cargo-crux-test"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "cargo-crux-test_real"
+path = "src/bin/cargo-crux-test.rs"
+
+[[bin]]
+name = "cargo-mir-json"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "cargo-mir-json_real"
+path = "src/bin/cargo-mir-json.rs"
+
+[[bin]]
+name = "crux-rustc"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "crux-rustc_real"
+path = "src/bin/crux-rustc.rs"
+
+[[bin]]
+name = "mir-json-callgraph"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "mir-json-callgraph_real"
+path = "src/bin/mir-json-callgraph.rs"
+
+[[bin]]
+name = "mir-json-dce"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "mir-json-dce_real"
+path = "src/bin/mir-json-dce.rs"
+
+[[bin]]
+name = "mir-json-rustc-wrapper"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "mir-json-rustc-wrapper_real"
+path = "src/bin/mir-json-rustc-wrapper.rs"
+
+[[bin]]
+name = "mir-json"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "mir-json_real"
+path = "src/bin/mir-json.rs"
