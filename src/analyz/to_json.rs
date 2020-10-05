@@ -2,7 +2,7 @@ use rustc_hir::def_id::DefId;
 use rustc::mir::Body;
 use rustc_session::Session;
 use rustc::ty::{self, TyCtxt};
-use rustc_interface::interface::Compiler;
+use rustc_span::Span;
 use rustc_span::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
@@ -46,10 +46,6 @@ impl<T: Hash+Eq+Clone> UsedSet<T> {
     pub fn has_new(&self) -> bool {
         self.new.len() > 0
     }
-
-    pub fn count_new(&self) -> usize {
-        self.new.len()
-    }
 }
 
 impl<T: Hash+Eq> Deref for UsedSet<T> {
@@ -74,14 +70,6 @@ impl<'tcx> Used<'tcx> {
         vtables.has_new() ||
         instances.has_new() ||
         traits.has_new()
-    }
-
-    pub fn count_new(&self) -> usize {
-        let Used { ref types, ref vtables, ref instances, ref traits } = *self;
-        types.count_new() +
-        vtables.count_new() +
-        instances.count_new() +
-        traits.count_new()
     }
 }
 
@@ -264,6 +252,17 @@ pub struct MirState<'a, 'tcx : 'a> {
     pub used: &'a mut Used<'tcx>,
     pub state: &'a CompileState<'a, 'tcx>,
     pub tys: &'a mut TyIntern<'tcx>,
+    /// Maps the span of each pattern in a `match` expression to the span of the `match`'s
+    /// scrutinee expression.  We use this for coverage reporting: the `SwitchInt` terminator
+    /// introduced by the `match` will have its span set to one of the patterns, but we'd rather
+    /// report coverage errors on the scrutinee instead, so we adjust the `discr_span` of the
+    /// `SwitchInt` using this map.
+    ///
+    /// Note this works only for `match` expressions in the current crate.  Code inlined
+    /// cross-crate will not have an entry in this map, and will not have its `SwitchInt` spans
+    /// rewritten.  This seems okay for now since the user is mostly interested in coverage in
+    /// their own top-level crate anyway.
+    pub match_span_map: &'a HashMap<Span, Span>,
 }
 
 /// Trait for converting MIR elements to JSON.

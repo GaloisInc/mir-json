@@ -18,15 +18,11 @@
 //! live items is known, those items can be copied directly into the output JSON without parsing.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, Read, Write, Seek, SeekFrom, Cursor, BufWriter};
-use std::mem;
 use std::path::Path;
-use std::sync::mpsc::{self, SyncSender, Receiver};
-use std::thread;
 
-use serde_cbor::Value as CborValue;
 use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
@@ -215,7 +211,7 @@ impl EmitterState {
         // Serialize the entry, and record its position.
         let (start, end) = write_entry(kind, j)?;
         let len = end - start;
-        let old = self.entry_loc.insert((name_id, kind), (start, len));
+        let _old = self.entry_loc.insert((name_id, kind), (start, len));
         // FIXME - shouldn't allow multiple overlapping names, but `nix` has multiple versions of
         // `libc` in its dependency graph, and their types collide.  For now we let it go through
         // and just hope for the best
@@ -229,7 +225,7 @@ impl EmitterState {
         self.roots.insert(name_id);
     }
 
-    pub fn finish(mut self) -> CrateIndex {
+    pub fn finish(self) -> CrateIndex {
         let names = self.intern.into_names();
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
@@ -300,17 +296,17 @@ impl<W: Write> Emitter<W> {
 
     pub fn emit_crate(&mut self, j: &JsonValue) -> io::Result<()> {
         write!(self.writer, "{{")?;
-        self.emit_table_from(EntryKind::Fn, j);
+        self.emit_table_from(EntryKind::Fn, j)?;
         write!(self.writer, ",")?;
-        self.emit_table_from(EntryKind::Adt, j);
+        self.emit_table_from(EntryKind::Adt, j)?;
         write!(self.writer, ",")?;
-        self.emit_table_from(EntryKind::Static, j);
+        self.emit_table_from(EntryKind::Static, j)?;
         write!(self.writer, ",")?;
-        self.emit_table_from(EntryKind::Vtable, j);
+        self.emit_table_from(EntryKind::Vtable, j)?;
         write!(self.writer, ",")?;
-        self.emit_table_from(EntryKind::Trait, j);
+        self.emit_table_from(EntryKind::Trait, j)?;
         write!(self.writer, ",")?;
-        self.emit_table_from(EntryKind::Intrinsic, j);
+        self.emit_table_from(EntryKind::Intrinsic, j)?;
         write!(self.writer, ",")?;
         write!(self.writer, "\"roots\":")?;
         serde_json::to_writer(&mut self.writer, &j["roots"])?;
@@ -458,7 +454,7 @@ pub struct StreamingEmitter<W> {
 }
 
 impl<W: Write> StreamingEmitter<W> {
-    pub fn new(mut w: W) -> io::Result<StreamingEmitter<W>> {
+    pub fn new(w: W) -> io::Result<StreamingEmitter<W>> {
         let mut se = StreamingEmitter {
             inner: Emitter::new(w),
             len: 0,
@@ -513,20 +509,20 @@ impl JsonOutput for MirStream {
     }
 }
 
-fn make_tar_entry(path: &str) -> tar::Header {
+fn make_tar_entry(path: &str) -> io::Result<tar::Header> {
     let mut h = tar::Header::new_gnu();
-    h.set_path(path);
+    h.set_path(path)?;
     h.set_mode(0o644);
     h.set_uid(0);
     h.set_gid(0);
     h.set_mtime(0);
     h.set_entry_type(tar::EntryType::Regular);
-    h
+    Ok(h)
 }
 
 pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
     let tar = TarStream::new(BufWriter::new(File::create(path)?));
-    let entry = tar.start_entry(make_tar_entry("crate.json"))?;
+    let entry = tar.start_entry(make_tar_entry("crate.json")?)?;
     let emitter = StreamingEmitter::new(entry)?;
     Ok(MirStream { emitter })
 }
@@ -534,7 +530,7 @@ pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
 pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
     let (json_entry, index) = ms.emitter.finish()?;
     let tar = json_entry.finish_entry()?;
-    let mut index_entry = tar.start_entry(make_tar_entry("index.cbor"))?;
+    let mut index_entry = tar.start_entry(make_tar_entry("index.cbor")?)?;
     serde_cbor::to_writer(&mut index_entry, &index)?;
     let tar = index_entry.finish_entry()?;
     let mut w = tar.finish()?;

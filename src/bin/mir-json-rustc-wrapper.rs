@@ -18,19 +18,13 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
-use rustc_session::Session;
 use rustc_session::config::Externs;
-use rustc_driver::{Callbacks, Compilation};
+use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
 use rustc_interface::Queries;
-use rustc_session::config::{self, Input, ErrorOutputType, ExternLocation};
-use rustc_codegen_ssa::traits::CodegenBackend;
-use rustc_metadata::creader::CStore;
-use rustc_target::spec::PanicStrategy;
-use rustc_ast::ast;
-use std::collections::{HashSet, BTreeSet};
+use rustc_session::config::ExternLocation;
+use std::collections::HashSet;
 use std::env;
-use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::iter;
@@ -129,6 +123,15 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         Compilation::Continue
     }
 
+    fn after_expansion<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        analyz::gather_match_spans(queries);
+        Compilation::Continue
+    }
+
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
@@ -143,7 +146,7 @@ fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
     let mut inputs = iter::once(&main_path).chain(extern_paths.iter())
         .map(File::open)
         .collect::<io::Result<Vec<_>>>().unwrap();
-    let mut output = io::BufWriter::new(File::create(out_path).unwrap());
+    let output = io::BufWriter::new(File::create(out_path).unwrap());
     link::link_crates(&mut inputs, output).unwrap();
 }
 

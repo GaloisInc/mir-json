@@ -1,5 +1,4 @@
 use rustc_hir as hir;
-use rustc_hir::Defaultness;
 use rustc_hir::def_id::DefId;
 use rustc::mir;
 use rustc_mir::interpret;
@@ -154,23 +153,6 @@ pub fn trait_inst_id_str<'tcx>(
         ext_def_id_str(tcx, trait_ref.def_id, "_trait", dyn_ty)
     } else {
         "trait/0::empty[0]".to_owned()
-    }
-}
-
-pub fn inst_def_id<'tcx>(
-    inst: ty::Instance<'tcx>,
-) -> DefId {
-    match inst.def {
-        ty::InstanceDef::Item(def_id) |
-        ty::InstanceDef::Intrinsic(def_id) |
-        ty::InstanceDef::VtableShim(def_id) |
-        ty::InstanceDef::ReifyShim(def_id) |
-        ty::InstanceDef::Virtual(def_id, _) |
-        ty::InstanceDef::FnPtrShim(def_id, _) |
-        ty::InstanceDef::ClosureOnceShim { call_once: def_id } |
-        ty::InstanceDef::DropGlue(def_id, _) |
-        ty::InstanceDef::CloneShim(def_id, _) =>
-            def_id,
     }
 }
 
@@ -424,7 +406,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "defid": name,
                 })
             }
-            &ty::TyKind::Param(ref p) => unreachable!(
+            &ty::TyKind::Param(..) => unreachable!(
                 "no TyKind::Param should remain after monomorphization"
             ),
             &ty::TyKind::Closure(defid, ref substs) => {
@@ -446,10 +428,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "predicates": preds.skip_binder().to_json(mir),
                 })
             }
-            &ty::TyKind::Projection(ref pty) => unreachable!(
+            &ty::TyKind::Projection(..) => unreachable!(
                 "no TyKind::Projection should remain after monomorphization"
             ),
-            &ty::TyKind::UnnormalizedProjection(ref pty) => unreachable!(
+            &ty::TyKind::UnnormalizedProjection(..) => unreachable!(
                 "no TyKind::UnnormalizedProjection should remain after monomorphization"
             ),
             &ty::TyKind::FnPtr(ref sig) => {
@@ -659,68 +641,6 @@ impl ToJson<'_> for ty::Generics {
     }
 }
 
-pub fn trait_item_for_impl_item<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    item: &ty::AssocItem,
-) -> Option<&'tcx ty::AssocItem> {
-    if let ty::AssocItemContainer::ImplContainer(impl_did) = item.container {
-        if let Some(trait_ref) = tcx.impl_trait_ref(impl_did) {
-            let trait_did = trait_ref.def_id;
-            return tcx.associated_items(trait_did)
-                .find_by_name_and_kind(tcx, item.ident, item.kind, trait_did);
-        }
-    }
-    None
-}
-
-pub fn assoc_item_json<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    tcx: ty::TyCtxt<'tcx>,
-    item: &ty::AssocItem
-) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-
-    let did = item.def_id;
-    map.insert("name".to_owned(), did.to_json(ms));
-    map.insert("generics".to_owned(), tcx.generics_of(did).to_json(ms));
-    map.insert("predicates".to_owned(), tcx.predicates_of(did).to_json(ms));
-
-    match item.kind {
-        ty::AssocKind::Const => {
-            map.insert("kind".to_owned(), json!("Const"));
-            map.insert("type".to_owned(), tcx.type_of(did).to_json(ms));
-        }
-        ty::AssocKind::Method => {
-            map.insert("kind".to_owned(), json!("Method"));
-            map.insert("signature".to_owned(), tcx.fn_sig(did).to_json(ms));
-        }
-        ty::AssocKind::Type => {
-            map.insert("kind".to_owned(), json!("Type"));
-            match item.defaultness {
-                Defaultness::Default { has_value: false } => {},
-                Defaultness::Default { has_value: true } |
-                Defaultness::Final => {
-                    map.insert("type".to_owned(), tcx.type_of(did).to_json(ms));
-                },
-            };
-        }
-        ty::AssocKind::OpaqueTy => {
-            map.insert("kind".to_owned(), json!("Existential"));
-        }
-    }
-
-    if let Some(trait_item) = trait_item_for_impl_item(tcx, item) {
-        map.insert("implements".to_owned(), trait_item.def_id.to_json(ms));
-    }
-
-    map.into()
-}
-
-pub fn defid_ty(d: &hir::def_id::DefId, mir: &mut MirState) -> serde_json::Value {
-    let tcx = mir.state.tcx;
-    tcx.type_of(*d).to_json(mir)
-}
-
 pub trait ToJsonAg {
     fn tojson<'tcx>(
         &self,
@@ -769,7 +689,7 @@ fn eval_array_len<'tcx>(
         _ => panic!("don't know how to translate ConstKind::{:?}", c.val),
     };
     match evaluated {
-        interpret::ConstValue::Scalar(interpret::Scalar::Raw { size, data }) => {
+        interpret::ConstValue::Scalar(interpret::Scalar::Raw { size: _, data }) => {
             assert!(data <= usize::MAX as u128);
             data as usize
         },
@@ -914,7 +834,7 @@ fn render_constant<'tcx>(
         },
 
         ty::TyKind::RawPtr(_) => {
-            let (size, bits) = scalar_bits.expect("raw_ptr const had non-scalar value?");
+            let (_size, bits) = scalar_bits.expect("raw_ptr const had non-scalar value?");
             json!({
                 "kind": "raw_ptr",
                 "val": bits.to_string(),
@@ -928,7 +848,7 @@ fn render_constant<'tcx>(
             })
         },
 
-        ty::TyKind::Adt(adt_def, substs) if adt_def.is_struct() => {
+        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_struct() => {
             let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
                 .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
             let scalar = scalar.expect("adt had non-scalar value (NYI)");
@@ -943,7 +863,7 @@ fn render_constant<'tcx>(
             })
         },
 
-        ty::TyKind::Adt(adt_def, substs) if adt_def.is_enum() => {
+        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_enum() => {
             let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
                 .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
             let scalar = scalar.expect("adt had non-scalar value (NYI)");
@@ -1031,7 +951,6 @@ struct RenderConstMachine;
 
 mod machine {
     use std::borrow::Cow;
-    use std::collections::HashMap;
     use super::*;
     use rustc_mir::interpret::*;
     use rustc::ty::*;
@@ -1054,16 +973,16 @@ mod machine {
         const STATIC_KIND: Option<!> = None;
         const CHECK_ALIGN: bool = false;
 
-        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_validity(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
         fn find_mir_or_eval_fn(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            span: Span,
-            instance: Instance<'tcx>,
-            args: &[OpTy<'tcx>],
-            ret: Option<(PlaceTy<'tcx>, BasicBlock)>,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _span: Span,
+            _instance: Instance<'tcx>,
+            _args: &[OpTy<'tcx>],
+            _ret: Option<(PlaceTy<'tcx>, BasicBlock)>,
             _unwind: Option<BasicBlock>, // unwinding is not supported in consts
         ) -> InterpResult<'tcx, Option<&'mir Body<'tcx>>> {
             Err(InterpError::Unsupported(
@@ -1074,11 +993,11 @@ mod machine {
         }
 
         fn call_extra_fn(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            fn_val: Self::ExtraFnVal,
-            args: &[OpTy<'tcx, Self::PointerTag>],
-            ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            unwind: Option<BasicBlock>
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _fn_val: Self::ExtraFnVal,
+            _args: &[OpTy<'tcx, Self::PointerTag>],
+            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
+            _unwind: Option<BasicBlock>
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1088,12 +1007,12 @@ mod machine {
         }
 
         fn call_intrinsic(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            span: Span,
-            instance: Instance<'tcx>,
-            args: &[OpTy<'tcx, Self::PointerTag>],
-            ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            unwind: Option<BasicBlock>
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _span: Span,
+            _instance: Instance<'tcx>,
+            _args: &[OpTy<'tcx, Self::PointerTag>],
+            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
+            _unwind: Option<BasicBlock>
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1103,9 +1022,9 @@ mod machine {
         }
 
         fn assert_panic(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            msg: &AssertMessage<'tcx>,
-            unwind: Option<BasicBlock>
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _msg: &AssertMessage<'tcx>,
+            _unwind: Option<BasicBlock>
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1115,10 +1034,10 @@ mod machine {
         }
 
         fn binary_ptr_op(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            bin_op: BinOp,
-            left: ImmTy<'tcx, Self::PointerTag>,
-            right: ImmTy<'tcx, Self::PointerTag>
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _bin_op: BinOp,
+            _left: ImmTy<'tcx, Self::PointerTag>,
+            _right: ImmTy<'tcx, Self::PointerTag>
         ) -> InterpResult<'tcx, (Scalar<Self::PointerTag>, bool, Ty<'tcx>)> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1135,8 +1054,8 @@ mod machine {
         }
 
         fn box_alloc(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            dest: PlaceTy<'tcx, Self::PointerTag>
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _dest: PlaceTy<'tcx, Self::PointerTag>
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1146,16 +1065,16 @@ mod machine {
         }
 
         fn init_allocation_extra<'b>(
-            memory_extra: &Self::MemoryExtra,
-            id: AllocId,
+            _memory_extra: &Self::MemoryExtra,
+            _id: AllocId,
             alloc: Cow<'b, Allocation>,
-            kind: Option<MemoryKind<Self::MemoryKinds>>
+            _kind: Option<MemoryKind<Self::MemoryKinds>>
         ) -> (Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>>, Self::PointerTag) {
             (alloc, ())
         }
 
         fn stack_push(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>
         ) -> InterpResult<'tcx, Self::FrameExtra> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(

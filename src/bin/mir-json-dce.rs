@@ -9,21 +9,14 @@
 
 extern crate serde;
 extern crate serde_cbor;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate serde_json;
 extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate mir_json;
 
-use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io;
-use std::mem;
-use std::sync::atomic::{self, AtomicUsize};
 use std::time::Instant;
-use serde::{Deserialize, Deserializer};
-use serde_json::Value as JsonValue;
 use mir_json::link;
 
 
@@ -41,7 +34,7 @@ fn main() {
 
     let mut inputs = env::args().skip(1).map(|arg| File::open(&arg))
         .collect::<io::Result<Vec<_>>>().unwrap();
-    let mut output = io::BufWriter::new(io::stdout());
-    let j = link::link_crates(&mut inputs, output).unwrap();
+    let output = io::BufWriter::new(io::stdout());
+    link::link_crates(&mut inputs, output).unwrap();
     debug!("{:?}: link crates", measure());
 }
