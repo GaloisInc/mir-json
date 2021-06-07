@@ -1200,10 +1200,15 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         &self,
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
+        let ty = mir.state.tcx.mk_adt(self.adt, self.substs);
+        let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
+            .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
         json!({
             "name": adt_inst_id_str(mir.state.tcx, *self),
             "kind": format!("{:?}", self.adt.adt_kind()),
             "variants": self.adt.variants.tojson(mir, self.substs),
+            "size": tyl.size.bytes(),
+            "repr_transparent": self.adt.repr.transparent(),
             "orig_def_id": self.adt.did.to_json(mir),
             "orig_substs": self.substs.to_json(mir),
         })
