@@ -155,7 +155,7 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
     let mut f = OpenOptions::new().write(true).create(true).truncate(true)
         .mode(0o755).open(script_path)?;
     writeln!(f, "#!/bin/sh")?;
-    writeln!(f, r#"exec crux-mir --assert-false-on-error --cargo-test-file "$(dirname "$0")"/'{}' "$@""#, json_name)?;
+    writeln!(f, r#"exec "${{CRUX_MIR:-crux-mir}}" --assert-false-on-error --cargo-test-file "$(dirname "$0")"/'{}' "$@""#, json_name)?;
     Ok(())
 }
 
