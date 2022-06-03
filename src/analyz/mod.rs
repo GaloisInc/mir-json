@@ -1,20 +1,18 @@
 #![macro_use]
 
-use rustc::ty::{self, TyCtxt, List};
-use rustc::mir::{self, Body};
 use rustc_ast::{ast, token, tokenstream, visit};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
-use rustc::mir::mono::MonoItem;
-use rustc_session::config::OutputType;
-use rustc_session;
 use rustc_index::vec::Idx;
 use rustc_interface::Queries;
-use rustc_mir::monomorphize::collector::{self, MonoItemCollectionMode};
-use rustc_target::spec::abi;
-use rustc_session::Session;
-use rustc_span::symbol::Symbol;
+use rustc_middle::ty::{self, TyCtxt, List};
+use rustc_middle::mir::{self, Body};
+use rustc_middle::mir::mono::MonoItem;
+use rustc_session::{self, Session};
+use rustc_session::config::OutputType;
 use rustc_span::Span;
+use rustc_span::symbol::{Symbol, Ident};
+use rustc_target::abi;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
@@ -39,7 +37,7 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
-impl<'tcx> ToJson<'tcx> for ty::layout::VariantIdx {
+impl<'tcx> ToJson<'tcx> for abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()
     }
@@ -619,6 +617,9 @@ fn emit_trait<'tcx>(
 
 /// Emit all statics defined in the current crate.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
+    // Now uses tcx.collect_and_partition_mono_items()
+    todo!()
+        /*
     let tcx = ms.state.tcx;
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
     for mono_item in mono_items {
@@ -629,6 +630,7 @@ fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> 
         }
     }
     Ok(())
+    */
 }
 
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
@@ -683,6 +685,9 @@ fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()
 
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
 fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
+    // Now uses tcx.collect_and_partition_mono_items()
+    todo!()
+        /*
     let tcx = ms.state.tcx;
     let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
     for mono_item in mono_items {
@@ -693,6 +698,7 @@ fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
         }
     }
     Ok(())
+    */
 }
 
 /// Initialize the set of needed instances.  Returns a list of root instances.
@@ -777,7 +783,7 @@ fn emit_instance<'tcx>(
     let mir = tcx.instance_mir(inst.def);
     let mir: Body = tcx.subst_and_normalize_erasing_regions(
         inst.substs, ty::ParamEnv::reveal_all(), &mir as &Body);
-    let mir = tcx.arena.alloc(mir::BodyAndCache::new(mir));
+    let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
     if let ty::InstanceDef::Item(def_id) = inst.def {
@@ -1082,13 +1088,13 @@ pub use self::analyze_streaming as analyze;
 fn make_attr(key: &str, value: &str) -> ast::Attribute {
     ast::Attribute {
         kind: ast::AttrKind::Normal(ast::AttrItem {
-            path: ast::Path::from_ident(ast::Ident::from_str(key)),
+            path: ast::Path::from_ident(Ident::from_str(key)),
             args: ast::MacArgs::Delimited(
                 tokenstream::DelimSpan::dummy(),
                 ast::MacDelimiter::Parenthesis,
                 iter::once(
                     tokenstream::TokenTree::token(
-                        token::TokenKind::Ident(ast::Name::intern(value), false),
+                        token::TokenKind::Ident(Symbol::intern(value), false),
                         Span::default(),
                         ),
                         ).collect(),

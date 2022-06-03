@@ -1,12 +1,12 @@
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc::mir;
-use rustc_mir::interpret;
-use rustc::ty;
-use rustc::ty::{TyCtxt, TypeFoldable};
-use rustc::ich::StableHashingContext;
 use rustc_index::vec::{IndexVec, Idx};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_middle::mir;
+use rustc_const_eval::interpret;
+use rustc_middle::ty;
+use rustc_middle::ty::{TyCtxt, TypeFoldable};
+use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
 use rustc_ast::ast;
 use rustc_span::DUMMY_SP;
@@ -749,6 +749,34 @@ fn render_constant<'tcx>(
     scalar_bits: Option<(u8, u128)>,
     slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
 ) -> Option<serde_json::Value> {
+
+    // Special cases: &str and &[u8; _]
+    if let ty::TyKind::Ref(_, inner_ty, hir::Mutability::Not) = ty.kind() {
+        if let ty::TyKind::Str = inner_ty.kind() {
+            // String literal
+            let (alloc, start, end) = slice.expect("string const had non-slice value");
+            let mem = read_static_memory(alloc, start, end);
+            return Some(json!({
+                "kind": "str",
+                "val": mem,
+            }));
+        }
+
+        if let ty::TyKind::Array(elem_ty, len_const) = inner_ty.kind() {
+            if let ty::TyKind::Uint(ast::UintTy::U8) = elem_ty.kind() {
+                // Bytestring literal
+                let len = eval_array_len(mir.state.tcx, len_const);
+                let (alloc, start, _) = slice.expect("string const had non-slice value");
+                let end = start + len;
+                let mem = read_static_memory(alloc, start, end);
+                return Some(json!({
+                    "kind": "bstr",
+                    "val": mem,
+                }));
+            }
+        }
+    }
+
     Some(match ty.kind {
         ty::TyKind::Int(_) => {
             let (size, bits) = scalar_bits.expect("int const had non-scalar value?");
@@ -799,37 +827,6 @@ fn render_constant<'tcx>(
                 "kind": "float",
                 "size": size,
                 "val": val.to_string(),
-            })
-        },
-
-        // &str - for string literals
-        ty::TyKind::Ref(_, &ty::TyS {
-            kind: ty::TyKind::Str,
-            ..
-        }, hir::Mutability::Not) => {
-            let (alloc, start, end) = slice.expect("string const had non-slice value");
-            let mem = read_static_memory(alloc, start, end);
-            json!({
-                "kind": "str",
-                "val": mem,
-            })
-        },
-
-        // &[u8; _] - for bytestring literals
-        ty::TyKind::Ref(_, &ty::TyS {
-            kind: ty::TyKind::Array(&ty::TyS {
-                kind: ty::TyKind::Uint(ast::UintTy::U8),
-                ..
-            }, len_const),
-            ..
-        }, hir::Mutability::Not) => {
-            let len = eval_array_len(mir.state.tcx, len_const);
-            let (alloc, start, _) = slice.expect("string const had non-slice value");
-            let end = start + len;
-            let mem = read_static_memory(alloc, start, end);
-            json!({
-                "kind": "bstr",
-                "val": mem,
             })
         },
 
@@ -952,10 +949,10 @@ struct RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
     use super::*;
-    use rustc_mir::interpret::*;
-    use rustc::ty::*;
-    use rustc::mir::*;
     use rustc_data_structures::fx::FxHashMap;
+    use rustc_middle::mir::interpret::*;
+    use rustc_middle::ty::*;
+    use rustc_middle::mir::*;
     use rustc_span::Span;
 
     impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine {

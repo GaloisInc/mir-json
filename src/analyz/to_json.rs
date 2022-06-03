@@ -1,7 +1,7 @@
 use rustc_hir::def_id::DefId;
-use rustc::mir::Body;
+use rustc_middle::mir::Body;
+use rustc_middle::ty::{self, TyCtxt};
 use rustc_session::Session;
-use rustc::ty::{self, TyCtxt};
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
 use serde_json;
@@ -154,7 +154,7 @@ impl<'tcx> TraitInst<'tcx> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
-    pub adt: &'tcx ty::AdtDef,
+    pub adt: ty::AdtDef<'tcx>,
     pub substs: ty::subst::SubstsRef<'tcx>,
 }
 
