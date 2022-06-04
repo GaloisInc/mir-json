@@ -866,7 +866,8 @@ fn render_constant<'tcx>(
             let scalar = scalar.expect("adt had non-scalar value (NYI)");
 
             let icx = interpret::InterpCx::new(
-                mir.state.tcx.at(DUMMY_SP),
+                mir.state.tcx,
+                DUMMY_SP,
                 ty::ParamEnv::reveal_all(),
                 RenderConstMachine,
                 (),
@@ -931,7 +932,7 @@ fn render_constant_variant<'tcx>(
             Ok(_mpl) => None,
             Err(imm) => match *imm {
                 interpret::Immediate::Scalar(maybe_scalar) => match maybe_scalar {
-                    interpret::ScalarMaybeUndef::Scalar(s) => {
+                    interpret::ScalarMaybeUninit::Scalar(s) => {
                         render_constant_scalar(mir, field.layout.ty, s)
                     },
                     _ => None,
@@ -949,39 +950,58 @@ struct RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
     use super::*;
+    use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxHashMap;
-    use rustc_middle::mir::interpret::*;
     use rustc_middle::ty::*;
     use rustc_middle::mir::*;
     use rustc_span::Span;
+    use rustc_target::abi::Size;
+    use rustc_target::spec::abi::Abi;
 
     impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine {
-        type MemoryKinds = !;
-        type PointerTag = ();
+        type MemoryKind = !;
+        type PointerTag = AllocId;
+        type TagExtra = ();
         type ExtraFnVal = !;
         type FrameExtra = ();
-        type MemoryExtra = ();
         type AllocExtra = ();
         type MemoryMap = FxHashMap<
             AllocId,
             (MemoryKind<!>, Allocation),
         >;
 
-        const STATIC_KIND: Option<!> = None;
-        const CHECK_ALIGN: bool = false;
+        const GLOBAL_KIND: Option<Self::MemoryKind> = None;
+        const PANIC_ON_ALLOC_FAIL: bool = false;
 
-        fn enforce_validity(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_alignment(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        fn force_int_for_alignment_check(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        fn enforce_number_init(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        fn enforce_number_no_provenance(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
         fn find_mir_or_eval_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _span: Span,
-            _instance: Instance<'tcx>,
-            _args: &[OpTy<'tcx>],
-            _ret: Option<(PlaceTy<'tcx>, BasicBlock)>,
-            _unwind: Option<BasicBlock>, // unwinding is not supported in consts
-        ) -> InterpResult<'tcx, Option<&'mir Body<'tcx>>> {
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            instance: ty::Instance<'tcx>,
+            abi: Abi,
+            args: &[OpTy<'tcx, Self::PointerTag>],
+            destination: &PlaceTy<'tcx, Self::PointerTag>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
+        ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "find_mir_or_eval_fn".into(),
@@ -990,11 +1010,13 @@ mod machine {
         }
 
         fn call_extra_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _fn_val: Self::ExtraFnVal,
-            _args: &[OpTy<'tcx, Self::PointerTag>],
-            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            fn_val: Self::ExtraFnVal,
+            abi: Abi,
+            args: &[OpTy<'tcx, Self::PointerTag>],
+            destination: &PlaceTy<'tcx, Self::PointerTag>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1004,12 +1026,12 @@ mod machine {
         }
 
         fn call_intrinsic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _span: Span,
-            _instance: Instance<'tcx>,
-            _args: &[OpTy<'tcx, Self::PointerTag>],
-            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            instance: ty::Instance<'tcx>,
+            args: &[OpTy<'tcx, Self::PointerTag>],
+            destination: &PlaceTy<'tcx, Self::PointerTag>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1019,9 +1041,9 @@ mod machine {
         }
 
         fn assert_panic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _msg: &AssertMessage<'tcx>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            msg: &mir::AssertMessage<'tcx>,
+            unwind: Option<mir::BasicBlock>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1031,10 +1053,10 @@ mod machine {
         }
 
         fn binary_ptr_op(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
-            _bin_op: BinOp,
-            _left: ImmTy<'tcx, Self::PointerTag>,
-            _right: ImmTy<'tcx, Self::PointerTag>
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            bin_op: mir::BinOp,
+            left: &ImmTy<'tcx, Self::PointerTag>,
+            right: &ImmTy<'tcx, Self::PointerTag>,
         ) -> InterpResult<'tcx, (Scalar<Self::PointerTag>, bool, Ty<'tcx>)> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1043,52 +1065,86 @@ mod machine {
             ).into())
         }
 
-        fn tag_static_base_pointer(
-            _memory_extra: &Self::MemoryExtra,
-            _id: AllocId,
-        ) -> Self::PointerTag {
-            ()
+        fn extern_static_base_pointer(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            def_id: DefId,
+        ) -> InterpResult<'tcx, Pointer<Self::PointerTag>> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "extern_static_base_pointer".into(),
+                ),
+            ).into())
         }
 
-        fn box_alloc(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _dest: PlaceTy<'tcx, Self::PointerTag>
+        fn tag_alloc_base_pointer(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer,
+        ) -> Pointer<Self::PointerTag> {
+            unimplemented!("tag_alloc_base_pointer")
+        }
+
+        fn ptr_from_addr_cast(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            addr: u64,
+        ) -> Pointer<Option<Self::PointerTag>> {
+            unimplemented!("ptr_from_addr_cast")
+        }
+
+        fn ptr_from_addr_transmute(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            addr: u64,
+        ) -> Pointer<Option<Self::PointerTag>> {
+            unimplemented!("ptr_from_addr_transmute")
+        }
+
+        fn expose_ptr(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer<Self::PointerTag>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
-                    "box_alloc".into(),
+                    "expose_ptr".into(),
                 ),
             ).into())
+        }
+
+        fn ptr_get_alloc(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer<Self::PointerTag>,
+        ) -> Option<(AllocId, Size, Self::TagExtra)> {
+            None
         }
 
         fn init_allocation_extra<'b>(
-            _memory_extra: &Self::MemoryExtra,
-            _id: AllocId,
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            id: AllocId,
             alloc: Cow<'b, Allocation>,
-            _kind: Option<MemoryKind<Self::MemoryKinds>>
-        ) -> (Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>>, Self::PointerTag) {
-            (alloc, ())
+            kind: Option<MemoryKind<Self::MemoryKind>>,
+        ) -> Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>> {
+            alloc
         }
 
-        fn stack_push(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>
-        ) -> InterpResult<'tcx, Self::FrameExtra> {
+        fn init_frame_extra(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            frame: Frame<'mir, 'tcx, Self::PointerTag>,
+        ) -> InterpResult<'tcx, Frame<'mir, 'tcx, Self::PointerTag, Self::FrameExtra>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
-                    "stack_push".into(),
+                    "init_frame_extra".into(),
                 ),
             ).into())
         }
 
-        fn ptr_to_int(
-            _mem: &Memory<'mir, 'tcx, Self>,
-            _ptr: Pointer<Self::PointerTag>
-        ) -> InterpResult<'tcx, u64> {
-            Err(InterpError::Unsupported(
-                UnsupportedOpInfo::Unsupported(
-                    "ptr_to_int".into(),
-                ),
-            ).into())
+        fn stack<'a>(
+            ecx: &'a InterpCx<'mir, 'tcx, Self>,
+        ) -> &'a [Frame<'mir, 'tcx, Self::PointerTag, Self::FrameExtra>] {
+            unimplemented!("stack")
+        }
+
+        fn stack_mut<'a>(
+            ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
+        ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::PointerTag, Self::FrameExtra>> {
+            unimplemented!("stack_mut")
         }
     }
 }
