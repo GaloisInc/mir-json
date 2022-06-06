@@ -149,6 +149,12 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "refvar": l.to_json(mir)
                 })
             }
+            &mir::Rvalue::ThreadLocalRef(did) => {
+                json!({
+                    "kind": "ThreadLocalRef",
+                    "def_id": did.to_json(mir)
+                })
+            }
             &mir::Rvalue::AddressOf(mutbl, ref l) => {
                 json!({
                     "kind": "AddressOf",
@@ -223,6 +229,13 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                         "ops": opv.to_json(mir)
                     })
                 }
+            }
+            &mir::Rvalue::ShallowInitBox(ref op, ty) => {
+                json!({
+                    "kind": "ShallowInitBox",
+                    "ptr": op.to_json(mir),
+                    "ty": ty.to_json(mir)
+                })
             }
         }
     }
@@ -342,6 +355,10 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 // TODO
                 json!({"kind": "FakeRead"})
             }
+            &mir::StatementKind::Deinit { .. } => {
+                // TODO
+                json!({"kind": "Deinit"})
+            }
             &mir::StatementKind::SetDiscriminant {
                 ref place,
                 ref variant_index,
@@ -365,6 +382,14 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::AscribeUserType { .. } => {
                 // TODO
                 json!({"kind": "AscribeUserType"})
+            }
+            &mir::StatementKind::Coverage { .. } => {
+                // TODO
+                json!({"kind": "Coverage"})
+            }
+            &mir::StatementKind::CopyNonOverlapping { .. } => {
+                // TODO
+                json!({"kind": "CopyNonOverlapping"})
             }
             &mir::StatementKind::Nop => {
                 json!({"kind": "Nop"})

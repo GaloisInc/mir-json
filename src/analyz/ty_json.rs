@@ -662,8 +662,8 @@ fn eval_array_len<'tcx>(
         ref val => panic!("don't know how to translate ConstKind::{:?}", val),
     };
     match evaluated {
-        interpret::ConstValue::Scalar(interpret::Scalar::Int(
-                ty::ScalarInt { size: _, data })) => {
+        interpret::ConstValue::Scalar(interpret::Scalar::Int(sint)) => {
+            let data = sint.to_bits(sint.size()).unwrap();
             assert!(data <= usize::MAX as u128);
             data as usize
         },
@@ -686,8 +686,9 @@ fn render_constant_scalar<'tcx>(
     s: interpret::Scalar,
 ) -> Option<serde_json::Value> {
     match s {
-        interpret::Scalar::Int(ty::ScalarInt { size, data }) => {
-            render_constant(mir, ty, Some(s), Some((size, data)), None)
+        interpret::Scalar::Int(sint) => {
+            let data = sint.to_bits(sint.size()).unwrap();
+            render_constant(mir, ty, Some(s), Some((sint.size().bytes() as u8, data)), None)
         },
         interpret::Scalar::Ptr(ptr, _) => {
             match mir.state.tcx.get_global_alloc(ptr.provenance) {
