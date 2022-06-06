@@ -310,7 +310,7 @@ impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.literal {
             mir::ConstantKind::Ty(c) => c.to_json(mir),
-            mir::ConstantKind::Val(cv, _) => cv.to_json(mir),
+            mir::ConstantKind::Val(cv, ty) => (cv, ty).to_json(mir),
         }
     }
 }
