@@ -418,8 +418,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &ty::TyKind::Dynamic(ref preds, _region) => {
-                let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, *preds);
+            &ty::TyKind::Dynamic(preds, _region) => {
+                let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, preds);
                 let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
                 mir.used.traits.insert(ti);
                 json!({

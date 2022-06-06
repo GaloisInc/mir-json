@@ -89,11 +89,12 @@ pub struct TraitInst<'tcx> {
 impl<'tcx> TraitInst<'tcx> {
     pub fn from_dynamic_predicates(
         tcx: TyCtxt<'tcx>,
-        preds: ty::Binder<&'tcx ty::List<ty::ExistentialPredicate<'tcx>>>,
+        preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
-        let preds = tcx.erase_late_bound_regions(&preds);
-        let trait_ref = preds.principal();
-        let mut projs = preds.projection_bounds().collect::<Vec<_>>();
+        let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        let mut projs = preds.projection_bounds()
+            .map(|proj| tcx.erase_late_bound_regions(proj))
+            .collect::<Vec<_>>();
         projs.sort_by_key(|p| p.item_def_id);
         TraitInst { trait_ref, projs }
     }
@@ -111,7 +112,7 @@ impl<'tcx> TraitInst<'tcx> {
         // FIXME: build projs for supertrait trait_refs as well
         for ai in tcx.associated_items(trait_ref.def_id).in_definition_order() {
             match ai.kind {
-                ty::AssocKind::Type | ty::AssocKind::OpaqueTy => {},
+                ty::AssocKind::Type => {},
                 _ => continue,
             }
             let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
@@ -119,7 +120,7 @@ impl<'tcx> TraitInst<'tcx> {
             projs.push(ty::ExistentialProjection {
                 item_def_id: ai.def_id,
                 substs: ex_trait_ref.substs,
-                ty: actual_ty,
+                term: ty::Term::Ty(actual_ty),
             });
         }
         projs.sort_by_key(|p| p.item_def_id);
@@ -133,10 +134,12 @@ impl<'tcx> TraitInst<'tcx> {
     pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> Option<ty::Ty<'tcx>> {
         let trait_ref = self.trait_ref?;
         let mut preds = Vec::with_capacity(self.projs.len() + 1);
-        preds.push(ty::ExistentialPredicate::Trait(trait_ref));
-        preds.extend(self.projs.iter().map(|p| ty::ExistentialPredicate::Projection(*p)));
-        let preds = tcx.intern_existential_predicates(&preds);
-        Some(tcx.mk_dynamic(ty::Binder::bind(preds), tcx.mk_region(ty::RegionKind::ReErased)))
+        preds.push(ty::Binder::dummy(ty::ExistentialPredicate::Trait(trait_ref)));
+        preds.extend(
+            self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
+        );
+        let preds = tcx.intern_poly_existential_predicates(&preds);
+        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased)))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -159,12 +162,12 @@ pub struct AdtInst<'tcx> {
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: &'tcx ty::AdtDef, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
         AdtInst { adt, substs }
     }
 
     pub fn def_id(&self) -> DefId {
-        self.adt.did
+        self.adt.did()
     }
 }
 
@@ -187,9 +190,6 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Float(_) |
         ty::TyKind::Str => return (format!("{:?}", ty), false),
 
-        ty::TyKind::Never |
-        ty::TyKind::Error => return (format!("{:?}", ty.kind), false),
-
         ty::TyKind::Adt(..) => "Adt",
         ty::TyKind::Foreign(..) => "Foreign",
         ty::TyKind::Array(..) => "Array",
@@ -202,14 +202,15 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Closure(..) => "Closure",
         ty::TyKind::Generator(..) => "Generator",
         ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
+        ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
         ty::TyKind::Projection(..) => "Projection",
-        ty::TyKind::UnnormalizedProjection(..) => "UnnormalizedProjection",
         ty::TyKind::Opaque(..) => "Opaque",
         ty::TyKind::Param(..) => "Param",
         ty::TyKind::Bound(..) => "Bound",
         ty::TyKind::Placeholder(..) => "Placeholder",
         ty::TyKind::Infer(..) => "Infer",
+        ty::TyKind::Error(..) => "Error",
     };
     (kind_str.to_owned(), true)
 }
