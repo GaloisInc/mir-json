@@ -178,7 +178,7 @@ pub struct TyIntern<'tcx> {
 /// Info for describing a type.  The `String` indicates (at minimum) the `TyKind`, and the `bool`
 /// is `true` if a hash of the type should be included when forming the type's unique ID.
 fn ty_desc(ty: ty::Ty) -> (String, bool) {
-    let kind_str = match ty.kind {
+    let kind_str = match *ty.kind() {
         // Special case: primitive types print as themselves and don't require a hash.
         ty::TyKind::Bool |
         ty::TyKind::Char |

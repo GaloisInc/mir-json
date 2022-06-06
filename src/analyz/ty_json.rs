@@ -265,7 +265,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceDef::Virtual(did, idx) => {
                 let self_ty = substs.types().next()
                     .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
-                let preds = match self_ty.kind {
+                let preds = match *self_ty.kind() {
                     ty::TyKind::Dynamic(ref preds, _region) => preds,
                     _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
                 };
@@ -299,7 +299,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceDef::CloneShim(did, ty) => {
-                let sub_tys = match ty.kind {
+                let sub_tys = match *ty.kind() {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(substs) => substs.types().collect(),
                     ty::TyKind::Closure(closure_did, substs) =>
@@ -347,7 +347,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         }
 
         // Otherwise, convert the type to JSON and add the new entry to the interning table.
-        let j = match &self.kind {
+        let j = match self.kind() {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
             }
@@ -751,8 +751,8 @@ fn render_constant<'tcx>(
 ) -> Option<serde_json::Value> {
 
     // Special cases: &str and &[u8; _]
-    if let ty::TyKind::Ref(_, inner_ty, hir::Mutability::Not) = ty.kind() {
-        if let ty::TyKind::Str = inner_ty.kind() {
+    if let ty::TyKind::Ref(_, inner_ty, hir::Mutability::Not) = *ty.kind() {
+        if let ty::TyKind::Str = *inner_ty.kind() {
             // String literal
             let (alloc, start, end) = slice.expect("string const had non-slice value");
             let mem = read_static_memory(alloc, start, end);
@@ -762,8 +762,8 @@ fn render_constant<'tcx>(
             }));
         }
 
-        if let ty::TyKind::Array(elem_ty, len_const) = inner_ty.kind() {
-            if let ty::TyKind::Uint(ast::UintTy::U8) = elem_ty.kind() {
+        if let ty::TyKind::Array(elem_ty, len_const) = *inner_ty.kind() {
+            if let ty::TyKind::Uint(ast::UintTy::U8) = *elem_ty.kind() {
                 // Bytestring literal
                 let len = eval_array_len(mir.state.tcx, len_const);
                 let (alloc, start, _) = slice.expect("string const had non-slice value");
@@ -777,7 +777,7 @@ fn render_constant<'tcx>(
         }
     }
 
-    Some(match ty.kind {
+    Some(match *ty.kind() {
         ty::TyKind::Int(_) => {
             let (size, bits) = scalar_bits.expect("int const had non-scalar value?");
             let mut val = bits as i128;
@@ -786,7 +786,7 @@ fn render_constant<'tcx>(
                 val |= -1_i128 << (size * 8);
             }
             json!({
-                "kind": match ty.kind {
+                "kind": match *ty.kind() {
                     ty::TyKind::Int(ast::IntTy::Isize) => "isize",
                     ty::TyKind::Int(_) => "int",
                     _ => unreachable!(),
@@ -800,7 +800,7 @@ fn render_constant<'tcx>(
         ty::TyKind::Uint(_) => {
             let (size, bits) = scalar_bits.expect("uint const had non-scalar value?");
             json!({
-                "kind": match ty.kind {
+                "kind": match *ty.kind() {
                     ty::TyKind::Bool => "bool",
                     ty::TyKind::Char => "char",
                     ty::TyKind::Uint(ast::UintTy::Usize) => "usize",
@@ -1185,6 +1185,22 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         }
 
         map.into()
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for interpret::ConstValue<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match *self {
+            interpret::ConstValue::Scalar(s) => {
+                render_constant_scalar(mir, self.ty, s)
+                    .unwrap_or_else(|| json!({"type": "unknown_scalar"}))
+            },
+            interpret::ConstValue::Slice { data, start, end } => {
+                render_constant(mir, self.ty, None, None, Some((data, start, end)))
+                    .unwrap_or_else(|| json!({"type": "unknown_slice"}))
+            },
+            interpret::ConstValue::ByRef { .. } => json!({"kind": "unknown_by_ref"}),
+        };
     }
 }
 
