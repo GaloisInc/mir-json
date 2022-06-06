@@ -9,9 +9,9 @@
 
 extern crate serde;
 extern crate serde_cbor;
-extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate mir_json;
+extern crate rustc_log;
 
 use std::env;
 use std::fs::File;
@@ -22,7 +22,7 @@ use mir_json::link;
 
 
 fn main() {
-    env_logger::init();
+    rustc_log::init_env_logger("RUST_LOG").unwrap();
 
     let mut last_time = Instant::now();
     let mut measure = || {

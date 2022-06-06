@@ -3,7 +3,6 @@
 //! as specified by `--extern` and/or `#![no_std]` and run `mir-verifier` on the result.
 #![feature(rustc_private)]
 
-extern crate rustc;
 extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
@@ -68,7 +67,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         let outputs = queries.prepare_outputs().unwrap().peek();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
-            sess.crate_types.get().first().unwrap().clone(),
+            sess.crate_types().first().unwrap().clone(),
             &outputs,
             &crate_name,
         ));
@@ -81,12 +80,7 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Pa
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::run_compiler(
-        &args,
-        &mut callbacks,
-        None,
-        None,
-    ).unwrap();
+    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
     callbacks.output_path.unwrap()
 }
 
@@ -202,15 +196,13 @@ fn go() {
             eprintln!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
-            rustc_driver::run_compiler(
+            rustc_driver::RunCompiler::new(
                 &args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
                 },
-                None,
-                None,
-            ).unwrap();
+            ).run().unwrap();
             return;
         },
         Some(x) => x,
@@ -243,12 +235,7 @@ fn go() {
         analysis_data: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::run_compiler(
-        &args,
-        &mut callbacks,
-        None,
-        None,
-    ).unwrap();
+    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 

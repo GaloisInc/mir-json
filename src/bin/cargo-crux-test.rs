@@ -15,7 +15,6 @@
 #![feature(rustc_private)]
 extern crate cargo;
 extern crate clap;
-extern crate rustc;
 extern crate rustc_session;
 extern crate serde_json;
 
@@ -26,6 +25,7 @@ use rustc_session::config::host_triple;
 use cargo::util::command_prelude::*;
 
 fn cli() -> App {
+    todo!("update to match recent cargo-test cli");
     // Copy-pasted from cargo/src/bin/cargo/commands/test.rs, with minor edits to the text.
     subcommand("crux-test")
         .setting(AppSettings::TrailingVarArg)

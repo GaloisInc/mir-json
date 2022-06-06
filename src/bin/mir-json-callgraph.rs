@@ -8,7 +8,6 @@
 extern crate serde;
 extern crate serde_cbor;
 #[macro_use] extern crate serde_json;
-extern crate env_logger;
 extern crate mir_json;
 
 use std::collections::{HashMap, HashSet};
