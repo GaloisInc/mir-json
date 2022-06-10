@@ -17,27 +17,30 @@ extern crate cargo;
 extern crate clap;
 extern crate rustc_session;
 extern crate serde_json;
+extern crate toml_edit;
 
 use std::env;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use rustc_session::config::host_triple;
 use cargo::util::command_prelude::*;
+use toml_edit::easy::value::Value as TomlValue;
 
 fn cli() -> App {
-    todo!("update to match recent cargo-test cli");
     // Copy-pasted from cargo/src/bin/cargo/commands/test.rs, with minor edits to the text.
-    subcommand("crux-test")
-        .setting(AppSettings::TrailingVarArg)
+    subcommand("test")
+        // Subcommand aliases are handled in `aliased_command()`.
+        // .alias("t")
+        .trailing_var_arg(true)
         .about("Execute all symbolic unit tests of a local package")
         .arg(
-            Arg::with_name("TESTNAME")
+            Arg::new("TESTNAME")
                 .help("If specified, only run tests containing this string in their names"),
         )
         .arg(
-            Arg::with_name("args")
+            Arg::new("args")
                 .help("Arguments for the test binary")
-                .multiple(true)
+                .multiple_values(true)
                 .last(true),
         )
         .arg(
@@ -45,7 +48,7 @@ fn cli() -> App {
                 "quiet",
                 "Display one character per test instead of one line",
             )
-            .short("q"),
+            .short('q'),
         )
         .arg_targets_all(
             "Test only this package's library unit tests",
@@ -74,7 +77,11 @@ fn cli() -> App {
         .arg_target_triple("Build for the target triple")
         .arg_target_dir()
         .arg_manifest_path()
+        .arg_ignore_rust_version()
         .arg_message_format()
+        .arg_unit_graph()
+        .arg_future_incompat_report()
+        .arg_timings()
         .after_help("See `cargo test --help` for more information on these options.")
 }
 
@@ -98,7 +105,7 @@ fn get_override_crates() -> String {
         &config,
         CompileMode::Test,
         Some(&ws),
-        ProfileChecking::Unchecked,
+        ProfileChecking::Custom,
     ).unwrap_or_else(|e| panic!("error reading compile options: {}", e));
     let pkgs = opts.spec.get_packages(&ws)
         .unwrap_or_else(|e| panic!("error listing packages: {}", e));
@@ -130,12 +137,12 @@ fn get_override_crates() -> String {
     overrides
 }
 
-fn get_package_override_crates(v: Option<&toml::Value>) -> String {
+fn get_package_override_crates(v: Option<&TomlValue>) -> String {
     get_package_override_crates_opt(v)
         .unwrap_or_else(String::new)
 }
 
-fn get_package_override_crates_opt(v: Option<&toml::Value>) -> Option<String> {
+fn get_package_override_crates_opt(v: Option<&TomlValue>) -> Option<String> {
     // The `crux` key is allowed to be missing, but if present, it must be an object.
     let crux = v?.get("crux")?;
     assert!(crux.is_table(), "expected `package.metadata.crux` to be an object");
