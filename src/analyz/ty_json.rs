@@ -8,7 +8,6 @@ use rustc_middle::ty;
 use rustc_middle::ty::{TyCtxt, TypeFoldable};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
-use rustc_ast::ast;
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -928,8 +927,6 @@ mod machine {
     use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxHashMap;
     use rustc_middle::ty::*;
-    use rustc_middle::mir::*;
-    use rustc_span::Span;
     use rustc_target::abi::Size;
     use rustc_target::spec::abi::Abi;
 

@@ -2,7 +2,7 @@
 
 use rustc_ast::{ast, token, tokenstream, visit};
 use rustc_hir::def::DefKind;
-use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
+use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::vec::Idx;
 use rustc_interface::Queries;
 use rustc_middle::ty::{self, TyCtxt, List};

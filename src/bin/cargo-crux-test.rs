@@ -95,7 +95,7 @@ fn get_override_crates() -> String {
     // test.
     let config = cargo::Config::default()
         .unwrap_or_else(|e| panic!("error initializing cargo config: {}", e));
-    let app = clap::App::new("cargo-crux-test").subcommand(cli());
+    let app = App::new("cargo-crux-test").subcommand(cli());
     let args = app.get_matches();
     let args = args.subcommand_matches("crux-test")
         .unwrap_or_else(|| panic!("expected crux-test subcommand"));
