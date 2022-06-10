@@ -655,20 +655,17 @@ fn emit_trait<'tcx>(
 
 /// Emit all statics defined in the current crate.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    // Now uses tcx.collect_and_partition_mono_items()
-    todo!()
-        /*
-    let tcx = ms.state.tcx;
-    let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
-    for mono_item in mono_items {
-        match mono_item {
-            MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
-            MonoItem::Fn(_) |
-            MonoItem::GlobalAsm(_) => {},
+    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in cgus {
+        for mono_item in cgu.items().keys() {
+            match *mono_item {
+                MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
+                MonoItem::Fn(_) |
+                MonoItem::GlobalAsm(_) => {},
+            }
         }
     }
     Ok(())
-    */
 }
 
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
@@ -723,20 +720,17 @@ fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()
 
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
 fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
-    // Now uses tcx.collect_and_partition_mono_items()
-    todo!()
-        /*
-    let tcx = ms.state.tcx;
-    let (mono_items, _) = collector::collect_crate_mono_items(tcx, MonoItemCollectionMode::Lazy);
-    for mono_item in mono_items {
-        match mono_item {
-            MonoItem::Fn(inst) => ms.used.instances.insert(inst),
-            MonoItem::Static(_) |
-            MonoItem::GlobalAsm(_) => {},
+    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in cgus {
+        for mono_item in cgu.items().keys() {
+            match *mono_item {
+                MonoItem::Fn(inst) => ms.used.instances.insert(inst),
+                MonoItem::Static(_) |
+                MonoItem::GlobalAsm(_) => {},
+            }
         }
     }
     Ok(())
-    */
 }
 
 /// Initialize the set of needed instances.  Returns a list of root instances.
