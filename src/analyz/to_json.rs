@@ -91,7 +91,9 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
+        use rustc_middle::ty::fold::TypeFoldable;
         let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        assert!(!trait_ref.has_escaping_bound_vars(), "escaping: {:?}", trait_ref);
         let mut projs = preds.projection_bounds()
             .map(|proj| tcx.erase_late_bound_regions(proj))
             .collect::<Vec<_>>();
@@ -106,6 +108,8 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         trait_ref: ty::TraitRef<'tcx>,
     ) -> TraitInst<'tcx> {
+        use rustc_middle::ty::fold::TypeFoldable;
+        assert!(!trait_ref.has_escaping_bound_vars(), "escaping: {:?}", trait_ref);
         let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
 
         let mut projs = Vec::new();
@@ -133,6 +137,8 @@ impl<'tcx> TraitInst<'tcx> {
 
     pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> Option<ty::Ty<'tcx>> {
         let trait_ref = self.trait_ref?;
+        use rustc_middle::ty::fold::TypeFoldable;
+        assert!(!trait_ref.has_escaping_bound_vars(), "escaping: {:?}", trait_ref);
         let mut preds = Vec::with_capacity(self.projs.len() + 1);
         preds.push(ty::Binder::dummy(ty::ExistentialPredicate::Trait(trait_ref)));
         preds.extend(
@@ -163,6 +169,8 @@ pub struct AdtInst<'tcx> {
 
 impl<'tcx> AdtInst<'tcx> {
     pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+        use rustc_middle::ty::fold::TypeFoldable;
+        assert!(!substs.has_escaping_bound_vars(), "bad substs: {:?}, {:?}", adt, substs);
         AdtInst { adt, substs }
     }
 

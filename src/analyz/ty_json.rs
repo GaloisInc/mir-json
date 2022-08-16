@@ -341,6 +341,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        let tcx = mir.state.tcx;
+
         // If this type has already been interned, just return its ID.
         if let Some(id) = mir.tys.get(*self) {
             return json!(id);
@@ -425,8 +427,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "Dynamic",
                     "trait_id": trait_name,
-                    "predicates": preds.iter().map(|p| p.skip_binder().to_json(mir))
-                        .collect::<Vec<_>>(),
+                    "predicates": preds.iter().map(|p|{
+                        let p = tcx.erase_late_bound_regions(p);
+                        p.to_json(mir)
+                    }).collect::<Vec<_>>(),
                 })
             }
             &ty::TyKind::Projection(..) => unreachable!(

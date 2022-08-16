@@ -330,6 +330,8 @@ impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        use rustc_middle::ty::fold::TypeFoldable;
+        assert!(!self.ty.has_escaping_bound_vars(), "local ty = {:?}", self.ty);
         json!({
             "mut": self.mutability.to_json(mir),
             "ty": self.ty.to_json(mir),
@@ -853,13 +855,14 @@ fn emit_promoted<'tcx>(
 fn emit_vtable<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
-    trait_ref: ty::PolyTraitRef<'tcx>,
+    poly_trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
-    let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref.skip_binder());
+    let trait_ref = ms.state.tcx.erase_late_bound_regions(poly_trait_ref);
+    let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref);
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
-        "name": vtable_name(ms, trait_ref),
-        "items": build_vtable_items(ms, trait_ref),
+        "name": vtable_name(ms, poly_trait_ref),
+        "items": build_vtable_items(ms, poly_trait_ref),
     }))?;
     emit_new_types(ms, out)
 }
