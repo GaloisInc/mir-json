@@ -108,20 +108,41 @@ impl<'tcx> TraitInst<'tcx> {
     ) -> TraitInst<'tcx> {
         let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
 
-        let mut projs = Vec::new();
-        // FIXME: build projs for supertrait trait_refs as well
-        for ai in tcx.associated_items(trait_ref.def_id).in_definition_order() {
-            match ai.kind {
-                ty::AssocKind::Type => {},
-                _ => continue,
+        let mut all_super_traits = HashSet::new();
+        let mut pending = vec![trait_ref.def_id];
+        all_super_traits.insert(trait_ref.def_id);
+        while let Some(def_id) = pending.pop() {
+            let super_preds = tcx.super_predicates_of(def_id);
+            for &(ref pred, _) in super_preds.predicates {
+                let tpred = match tcx.erase_late_bound_regions(pred.kind()) {
+                    ty::PredicateKind::Trait(x) => x,
+                    ty::PredicateKind::TypeOutlives(..) => continue,
+                    _ => panic!("unexpected predicate kind: {:?}", pred),
+                };
+                assert_eq!(tpred.polarity, ty::ImplPolarity::Positive);
+                if all_super_traits.insert(tpred.trait_ref.def_id) {
+                    pending.push(tpred.trait_ref.def_id);
+                }
             }
-            let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
-            let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
-            projs.push(ty::ExistentialProjection {
-                item_def_id: ai.def_id,
-                substs: ex_trait_ref.substs,
-                term: ty::Term::Ty(actual_ty),
-            });
+        }
+        let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
+        all_super_traits.sort();
+
+        let mut projs = Vec::new();
+        for super_trait_def_id in all_super_traits {
+            for ai in tcx.associated_items(super_trait_def_id).in_definition_order() {
+                match ai.kind {
+                    ty::AssocKind::Type => {},
+                    _ => continue,
+                }
+                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
+                let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
+                projs.push(ty::ExistentialProjection {
+                    item_def_id: ai.def_id,
+                    substs: ex_trait_ref.substs,
+                    term: ty::Term::Ty(actual_ty),
+                });
+            }
         }
         projs.sort_by_key(|p| p.item_def_id);
 
