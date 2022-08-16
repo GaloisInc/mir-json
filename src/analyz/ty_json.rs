@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
@@ -690,8 +691,13 @@ fn render_constant_scalar<'tcx>(
 ) -> Option<serde_json::Value> {
     match s {
         interpret::Scalar::Int(sint) => {
-            let data = sint.to_bits(sint.size()).unwrap();
-            render_constant(mir, ty, Some(s), Some((sint.size().bytes() as u8, data)), None)
+            let data = if sint.size() == Size::ZERO {
+                0
+            } else {
+                sint.to_bits(sint.size()).unwrap()
+            };
+            let size = u8::try_from(sint.size().bytes()).unwrap();
+            render_constant(mir, ty, Some(s), Some((size, data)), None)
         },
         interpret::Scalar::Ptr(ptr, _) => {
             match mir.state.tcx.get_global_alloc(ptr.provenance) {
