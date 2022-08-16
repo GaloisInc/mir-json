@@ -330,8 +330,6 @@ impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        use rustc_middle::ty::fold::TypeFoldable;
-        assert!(!self.ty.has_escaping_bound_vars(), "local ty = {:?}", self.ty);
         json!({
             "mut": self.mutability.to_json(mir),
             "ty": self.ty.to_json(mir),
