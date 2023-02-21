@@ -1,6 +1,6 @@
 use rustc_hir::def_id::DefId;
 use rustc_middle::mir::Body;
-use rustc_middle::ty::{self, TyCtxt};
+use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
@@ -95,7 +95,7 @@ impl<'tcx> TraitInst<'tcx> {
         let mut projs = preds.projection_bounds()
             .map(|proj| tcx.erase_late_bound_regions(proj))
             .collect::<Vec<_>>();
-        projs.sort_by_key(|p| p.item_def_id);
+        projs.sort_by_key(|p| p.def_id);
         TraitInst { trait_ref, projs }
     }
 
@@ -118,12 +118,12 @@ impl<'tcx> TraitInst<'tcx> {
             let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
             let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
             projs.push(ty::ExistentialProjection {
-                item_def_id: ai.def_id,
+                def_id: ai.def_id,
                 substs: ex_trait_ref.substs,
-                term: ty::Term::Ty(actual_ty),
+                term: actual_ty.into(), // TO REVIEW: structure of Term has changed
             });
         }
-        projs.sort_by_key(|p| p.item_def_id);
+        projs.sort_by_key(|p| p.def_id);
 
         TraitInst {
             trait_ref: Some(ex_trait_ref),
@@ -139,7 +139,8 @@ impl<'tcx> TraitInst<'tcx> {
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
         let preds = tcx.intern_poly_existential_predicates(&preds);
-        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased)))
+        // TO REVIEW: DynKind?
+        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -204,8 +205,7 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
         ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
-        ty::TyKind::Projection(..) => "Projection",
-        ty::TyKind::Opaque(..) => "Opaque",
+        ty::TyKind::Alias(..) => "Alias", // NB: nightly-2023-01-22 - Projection and Opaque subsumed into Alias
         ty::TyKind::Param(..) => "Param",
         ty::TyKind::Bound(..) => "Bound",
         ty::TyKind::Placeholder(..) => "Placeholder",

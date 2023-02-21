@@ -63,14 +63,19 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
         let sess = compiler.session();
-        let crate_name = queries.crate_name().unwrap().peek();
-        let outputs = queries.prepare_outputs().unwrap().peek();
+        // rustc_session::find_crate_name - get the crate with queries.expansion?
+        let krate = queries.parse().unwrap();
+        let krate = krate.borrow();
+        let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
+        // get global ctxt then call methods inside of enter() to get
+        let outputs = compiler.build_output_filenames(&sess, &krate.attrs);  //queries.prepare_outputs().unwrap().peek();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
             sess.crate_types().first().unwrap().clone(),
             &outputs,
-            &crate_name,
+            crate_name,
         ));
+        let ctx = queries.global_ctxt().unwrap();
         Compilation::Stop
     }
 }

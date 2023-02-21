@@ -1,6 +1,6 @@
 #![macro_use]
 
-use rustc_ast::{ast, token, tokenstream, visit};
+use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
 use rustc_index::vec::Idx;
@@ -111,7 +111,8 @@ fn vtable_descriptor_for_cast<'tcx>(
 
     // Relevant code: rustc_codegen_ssa::meth::get_vtable
     let trait_ref = match *new_pointee.kind() {
-        ty::TyKind::Dynamic(ref preds, _) =>
+        // NB nightly-2023-01-23 dyntype
+        ty::TyKind::Dynamic(ref preds, _, _) =>
             preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
         _ => return None,
     };
@@ -237,6 +238,12 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "ty": ty.to_json(mir)
                 })
             }
+            &mir::Rvalue::CopyForDeref(ref l) => {
+                json!({
+                    "kind": "CopyForDeref",
+                    "place": l.to_json(mir)
+                })
+            }
         }
     }
 }
@@ -289,6 +296,9 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
             &mir::ProjectionElem::Downcast(ref _adt, ref variant) => {
                 json!({"kind": "Downcast", "variant": variant.to_json(mir)})
             }
+            &mir::ProjectionElem::OpaqueCast(ref ty) => {
+                json!({"kind": "OpaqueCast", "variant": ty.to_json(mir) })
+            }
         }
     }
 }
@@ -324,6 +334,9 @@ impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
         match self.literal {
             mir::ConstantKind::Ty(c) => c.to_json(mir),
             mir::ConstantKind::Val(cv, ty) => (cv, ty).to_json(mir),
+            // nightly-20203-01-22 evaluate?
+            mir::ConstantKind::Unevaluated(val, ty) =>
+                panic!("unevaluated const in mir::constant serializer")
         }
     }
 }
@@ -387,12 +400,12 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 // TODO
                 json!({"kind": "Coverage"})
             }
-            &mir::StatementKind::CopyNonOverlapping { .. } => {
-                // TODO
-                json!({"kind": "CopyNonOverlapping"})
-            }
             &mir::StatementKind::Nop => {
                 json!({"kind": "Nop"})
+            }
+            &mir::StatementKind::Intrinsic { .. } => {
+                // TODO
+                json!({"kind": "Intrinsic" })
             }
         };
         j["pos"] = self.source_info.span.to_json(mir);
@@ -431,7 +444,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
             }
             &mir::TerminatorKind::SwitchInt {
                 ref discr,
-                ref switch_ty,
                 ref targets,
             } => {
                 let vals: Vec<String> =
@@ -443,7 +455,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "kind": "SwitchInt",
                     "discr": discr.to_json(mir),
                     "discr_span": discr_span.to_json(mir),
-                    "switch_ty": switch_ty.to_json(mir),
                     "values": vals,
                     "targets": targets.all_targets().iter().map(|x| x.to_json(mir))
                         .collect::<Vec<_>>(),
@@ -596,7 +607,7 @@ fn mir_body(
     }
 
     let mut blocks = Vec::new();
-    for bb in mir.basic_blocks().indices() {
+    for bb in mir.basic_blocks.indices() {
         blocks.push(
             json!({
                 "blockid": bb.to_json(ms),
@@ -995,7 +1006,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
 
-    let output = queries.global_ctxt().unwrap().peek_mut().enter(|tcx| -> io::Result<_> {
+    let output = queries.global_ctxt().unwrap().enter(|tcx| -> io::Result<_> {
         let outputs = tcx.output_filenames(());
         if !outputs.outputs.contains_key(&OutputType::Exe) {
             return Ok(None);
@@ -1004,7 +1015,8 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             sess,
             sess.crate_types().first().unwrap().clone(),
             &outputs,
-            &tcx.crate_name(LOCAL_CRATE).to_string(),
+            // nightly-2023-01-22 call symbol constructor
+            tcx.crate_name(LOCAL_CRATE),
         ).with_extension("mir");
         let mut out = mk_output(&mir_path_)?;
         mir_path = Some(mir_path_);
@@ -1126,20 +1138,25 @@ pub use self::analyze_streaming as analyze;
 
 fn make_attr(key: &str, value: &str) -> ast::Attribute {
     ast::Attribute {
-        kind: ast::AttrKind::Normal(ast::AttrItem {
-            path: ast::Path::from_ident(Ident::from_str(key)),
-            args: ast::MacArgs::Delimited(
-                tokenstream::DelimSpan::dummy(),
-                ast::MacDelimiter::Parenthesis,
-                iter::once(
-                    tokenstream::TokenTree::token(
-                        token::TokenKind::Ident(Symbol::intern(value), false),
-                        Span::default(),
-                        ),
-                        ).collect(),
-                        ),
-            tokens: None,
-        }, None),
+        kind: ast::AttrKind::Normal(
+            ptr::P(ast::NormalAttr {
+                item: ast::AttrItem {
+                    path: ast::Path::from_ident(Ident::from_str(key)),
+                    args: ast::AttrArgs::Delimited(
+                        ast::DelimArgs {
+                            dspan: tokenstream::DelimSpan::dummy(),
+                            delim: ast::MacDelimiter::Parenthesis,
+                            tokens: iter::once(
+                                tokenstream::TokenTree::token_alone(
+                                    token::TokenKind::Ident(Symbol::intern(value), false),
+                                    Span::default(),
+                                ),
+                            ).collect(),
+                        }),
+                    tokens: None,
+                },
+                tokens: None,
+            })),
         id: ast::AttrId::new(0),
         style: ast::AttrStyle::Inner,
         span: Span::default(),
@@ -1147,7 +1164,8 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
 }
 
 pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let mut krate = queries.parse().unwrap().peek_mut();
+    let mut k = queries.parse().unwrap(); // need to call `get_mut`?
+    let krate: &mut Crate = k.get_mut();
     krate.attrs.push(make_attr("feature", "register_attr"));
     krate.attrs.push(make_attr("register_attr", "crux_test"));
 }
@@ -1217,7 +1235,8 @@ thread_local! {
 }
 
 pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let krate = &queries.expansion().unwrap().peek().0;
+    let k = queries.expansion().unwrap();
+    let krate = &k.borrow().0;
     let mut v = GatherMatchSpans::default();
     visit::walk_crate(&mut v, krate);
     MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
