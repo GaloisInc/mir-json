@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
@@ -345,6 +346,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        let tcx = mir.state.tcx;
+
         // If this type has already been interned, just return its ID.
         if let Some(id) = mir.tys.get(*self) {
             return json!(id);
@@ -430,8 +433,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "Dynamic",
                     "trait_id": trait_name,
-                    "predicates": preds.iter().map(|p| p.skip_binder().to_json(mir))
-                        .collect::<Vec<_>>(),
+                    "predicates": preds.iter().map(|p|{
+                        let p = tcx.erase_late_bound_regions(p);
+                        p.to_json(mir)
+                    }).collect::<Vec<_>>(),
                 })
             }
             &ty::TyKind::Alias(ty::AliasKind::Projection, _) => unreachable!(
@@ -698,6 +703,8 @@ fn render_constant_scalar<'tcx>(
         interpret::Scalar::Int(sint) => {
             let data = sint.to_bits(sint.size()).unwrap();
             render_constant(mir, ty, Some(s), Some((sint.size().bytes() as u8, data)), None)
+            // let size = u8::try_from(sint.size().bytes()).unwrap();
+            // render_constant(mir, ty, Some(s), Some((size, data)), None)
         },
         interpret::Scalar::Ptr(ptr, _) => {
             match mir.state.tcx.try_get_global_alloc(ptr.provenance) {
@@ -943,8 +950,6 @@ mod machine {
     use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
-    use rustc_middle::mir::*;
-    use rustc_span::Span;
     use rustc_target::abi::Size;
     use rustc_target::spec::abi::Abi;
 

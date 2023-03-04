@@ -2,7 +2,7 @@
 
 use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
-use rustc_hir::def_id::{self, DefId, LOCAL_CRATE};
+use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::vec::Idx;
 use rustc_interface::Queries;
 use rustc_middle::ty::{self, TyCtxt, List};
@@ -866,13 +866,14 @@ fn emit_promoted<'tcx>(
 fn emit_vtable<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
-    trait_ref: ty::PolyTraitRef<'tcx>,
+    poly_trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
-    let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref.skip_binder());
+    let trait_ref = ms.state.tcx.erase_late_bound_regions(poly_trait_ref);
+    let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref);
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
-        "name": vtable_name(ms, trait_ref),
-        "items": build_vtable_items(ms, trait_ref),
+        "name": vtable_name(ms, poly_trait_ref),
+        "items": build_vtable_items(ms, poly_trait_ref),
     }))?;
     emit_new_types(ms, out)
 }
