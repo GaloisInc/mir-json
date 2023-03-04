@@ -331,13 +331,14 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match self.literal {
-            mir::ConstantKind::Ty(c) => c.to_json(mir),
-            mir::ConstantKind::Val(cv, ty) => (cv, ty).to_json(mir),
-            // nightly-20203-01-22 evaluate?
-            mir::ConstantKind::Unevaluated(val, ty) =>
-                panic!("unevaluated const in mir::constant serializer")
-        }
+        (eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
+        // match self.literal {
+        //     mir::ConstantKind::Ty(c) => c.to_json(mir),
+        //     mir::ConstantKind::Val(cv, ty) => (cv, ty).to_json(mir),
+        //     // nightly-2023-01-22 evaluate?
+        //     mir::ConstantKind::Unevaluated(val, ty) =>
+        //         panic!("unevaluated const in mir::constant serializer val:{:?} ty:{:?}", val, ty)
+        // }
     }
 }
 
@@ -683,7 +684,8 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
     let tcx = ms.state.tcx;
     let name = def_id_str(tcx, def_id);
 
-    let mir = tcx.optimized_mir(def_id);
+    // let mir = tcx.optimized_mir(def_id);
+    let mir = tcx.mir_for_ctfe(def_id);
     emit_fn(ms, out, &name, None, mir)?;
     emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
 
@@ -1166,8 +1168,8 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
 pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
     let mut k = queries.parse().unwrap(); // need to call `get_mut`?
     let krate: &mut Crate = k.get_mut();
-    krate.attrs.push(make_attr("feature", "register_attr"));
-    krate.attrs.push(make_attr("register_attr", "crux_test"));
+    krate.attrs.push(make_attr("feature", "register_tool"));
+    krate.attrs.push(make_attr("register_tool", "crux"));
 }
 
 #[derive(Default)]
@@ -1235,11 +1237,17 @@ thread_local! {
 }
 
 pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let k = queries.expansion().unwrap();
-    let krate = &k.borrow().0;
-    let mut v = GatherMatchSpans::default();
-    visit::walk_crate(&mut v, krate);
-    MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
+    queries.global_ctxt().unwrap().enter(|tcx| {
+        let resolver = tcx.resolver_for_lowering(());
+        let krate = &resolver.borrow().1;
+        let mut v = GatherMatchSpans::default();
+        visit::walk_crate(&mut v, krate);
+        MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
+    });
+    // let k = queries.expansion().unwrap();
+    // let krate: &ast::Crate = &k.borrow().0;
+
+
 }
 
 fn get_match_spans() -> Rc<HashMap<Span, Span>> {

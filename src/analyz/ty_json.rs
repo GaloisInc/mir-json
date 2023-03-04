@@ -739,7 +739,6 @@ fn render_constant<'tcx>(
     scalar_bits: Option<(u8, u128)>,
     slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
 ) -> Option<serde_json::Value> {
-
     // Special cases: &str and &[u8; _]
     if let ty::TyKind::Ref(_, inner_ty, hir::Mutability::Not) = *ty.kind() {
         if let ty::TyKind::Str = *inner_ty.kind() {
@@ -821,7 +820,12 @@ fn render_constant<'tcx>(
         },
 
         ty::TyKind::RawPtr(_) => {
-            let (_size, bits) = scalar_bits.expect("raw_ptr const had non-scalar value?");
+            let (_size, bits) =
+                match scalar_bits {
+                    Some(s) => s,
+                    None => return None
+                };
+
             json!({
                 "kind": "raw_ptr",
                 "val": bits.to_string(),
@@ -1186,7 +1190,7 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 
         let rendered = match self.kind() {
             ty::ConstKind::Value(ty::ValTree::Leaf(val)) =>
-                render_constant(mir, self.ty(), None, Some((val.size().bytes() as u8, val.try_to_u128().unwrap())), None),
+                render_constant(mir, self.ty(), None, Some((val.size().bytes() as u8, val.try_to_uint(val.size()).unwrap())), None),
             _ => panic!("don't know how to translate ConstKind::{:?}", self.kind())
         };
         if let Some(rendered) = rendered {
@@ -1344,4 +1348,42 @@ pub fn handle_adt_ag<'tcx>(
         }
         _ => unreachable!("bad"),
     }
+}
+
+pub fn eval_mir_constant<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    constant: &mir::Constant<'tcx>,
+) -> interpret::ConstValue<'tcx> {
+    // let ct = self.monomorphize(constant.literal);
+    let uv = match constant.literal {
+        mir::ConstantKind::Ty(ct) => match ct.kind() {
+            ty::ConstKind::Unevaluated(uv) => uv.expand(),
+            ty::ConstKind::Value(val) => {
+                return tcx.valtree_to_const_val((ct.ty(), val));
+            }
+            err => panic!(
+                // constant.span,
+                "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
+                err, constant.span
+            ),
+        },
+        mir::ConstantKind::Unevaluated(uv, _) => uv,
+        mir::ConstantKind::Val(val, _) => return val,
+    };
+
+    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap() // .map_err(|err| {
+    //     match err {
+    //         ErrorHandled::Reported(_) => {
+    //             self.cx.tcx().sess.emit_err(errors::ErroneousConstant { span: constant.span });
+    //         }
+    //         ErrorHandled::TooGeneric => {
+    //             self.cx
+    //                 .tcx()
+    //                 .sess
+    //                 .diagnostic()
+    //                 .emit_bug(errors::PolymorphicConstantTooGeneric { span: constant.span });
+    //         }
+    //     }
+    //     err
+    // }).unwrap()
 }
