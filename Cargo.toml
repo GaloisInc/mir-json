@@ -5,6 +5,9 @@ authors = ["Joshua Gancher <jrg358@cornell.edu>"]
 repository = "https://github.com/GaloisInc/mir-json.git"
 license = "MIT/Apache-2.0"
 
+[package.metadata.rust-analyzer]
+rustc_private=true
+
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"

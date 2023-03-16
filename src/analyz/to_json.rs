@@ -1,5 +1,5 @@
 use rustc_hir::def_id::DefId;
-use rustc_middle::mir::Body;
+use rustc_middle::mir::{Body, interpret};
 use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -226,7 +226,7 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
         ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
-        ty::TyKind::Alias(..) => "Alias", // NB: nightly-2023-01-22 - Projection and Opaque subsumed into Alias
+        ty::TyKind::Alias(..) => "Alias",
         ty::TyKind::Param(..) => "Param",
         ty::TyKind::Bound(..) => "Bound",
         ty::TyKind::Placeholder(..) => "Placeholder",
@@ -269,6 +269,32 @@ impl<'tcx> TyIntern<'tcx> {
     }
 }
 
+
+#[derive(Default, Debug)]
+pub struct AllocIntern<'tcx> {
+    map: HashMap<interpret::ConstAllocation<'tcx>, String>,
+    new_vals: Vec<serde_json::Value>,
+}
+
+impl<'tcx> AllocIntern<'tcx> {
+    pub fn get(&self, alloc: interpret::ConstAllocation<'tcx>) -> Option<&str> {
+        self.map.get(&alloc).map(|x| x as &str)
+    }
+
+    pub fn insert(&mut self, alloc: interpret::ConstAllocation<'tcx>, mut static_def: serde_json::Value) -> String {
+        let id = format!("alloc${}", self.map.len());
+        static_def["name"] = id.clone().into();
+        self.new_vals.push(static_def);
+        let old = self.map.insert(alloc, id.clone());
+        assert!(old.is_none(), "duplicate insert for type {:?}", alloc);
+        id
+    }
+
+    pub fn take_new_allocs(&mut self) -> Vec<serde_json::Value> {
+        mem::replace(&mut self.new_vals, Vec::new())
+    }
+}
+
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used: &'a mut Used<'tcx>,
@@ -285,6 +311,7 @@ pub struct MirState<'a, 'tcx : 'a> {
     /// rewritten.  This seems okay for now since the user is mostly interested in coverage in
     /// their own top-level crate anyway.
     pub match_span_map: &'a HashMap<Span, Span>,
+    pub allocs: &'a mut AllocIntern<'tcx>,
 }
 
 /// Trait for converting MIR elements to JSON.

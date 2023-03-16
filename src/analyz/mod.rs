@@ -111,7 +111,6 @@ fn vtable_descriptor_for_cast<'tcx>(
 
     // Relevant code: rustc_codegen_ssa::meth::get_vtable
     let trait_ref = match *new_pointee.kind() {
-        // NB nightly-2023-01-23 dyntype
         ty::TyKind::Dynamic(ref preds, _, _) =>
             preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
         _ => return None,
@@ -139,7 +138,7 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({
                     "kind": "Repeat",
                     "op": op.to_json(mir),
-                    "len": s.to_json(mir),
+                    "len": get_const_usize(mir.state.tcx, s)
                 })
             }
             &mir::Rvalue::Ref(_, ref bk, ref l) => {
@@ -332,13 +331,6 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         (eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
-        // match self.literal {
-        //     mir::ConstantKind::Ty(c) => c.to_json(mir),
-        //     mir::ConstantKind::Val(cv, ty) => (cv, ty).to_json(mir),
-        //     // nightly-2023-01-22 evaluate?
-        //     mir::ConstantKind::Unevaluated(val, ty) =>
-        //         panic!("unevaluated const in mir::constant serializer val:{:?} ty:{:?}", val, ty)
-        // }
     }
 }
 
@@ -404,9 +396,25 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::Nop => {
                 json!({"kind": "Nop"})
             }
-            &mir::StatementKind::Intrinsic { .. } => {
+            &mir::StatementKind::Intrinsic(ref ndi) => {
+                match **ndi {
+                    mir::NonDivergingIntrinsic::Assume(ref a) =>
+                        json!({
+                            "kind": "Intrinsic",
+                            "intrinsic_kind": "Assume",
+                            "operand": a.to_json(mir),
+                        }),
+                    mir::NonDivergingIntrinsic::CopyNonOverlapping(ref cno) =>
+                        json!({
+                            "kind": "Intrinsic",
+                            "intrinsic_kind": "CopyNonOverlapping",
+                            "src": cno.src.to_json(mir),
+                            "dst": cno.dst.to_json(mir),
+                            "count": cno.count.to_json(mir),
+                        })
+                }
                 // TODO
-                json!({"kind": "Intrinsic" })
+                //json!({"kind": "Intrinsic" })
             }
         };
         j["pos"] = self.source_info.span.to_json(mir);
@@ -459,6 +467,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "values": vals,
                     "targets": targets.all_targets().iter().map(|x| x.to_json(mir))
                         .collect::<Vec<_>>(),
+                    "switch_ty": discr.ty(mir.mir.unwrap(), mir.state.tcx).to_json(mir)
                 })
             }
             &mir::TerminatorKind::Resume => {
@@ -660,7 +669,7 @@ fn emit_trait<'tcx>(
         "name": trait_inst_id_str(ms.state.tcx, &ti),
         "items": items,
     }))?;
-    emit_new_types(ms, out)?;
+    emit_new_defs(ms, out)?;
     Ok(())
 }
 
@@ -708,14 +717,50 @@ fn emit_static_decl<'tcx>(
         "name": name,
         "ty": ty.to_json(ms),
         "mutable": mutable,
+        "kind": "body",
     });
     out.emit(EntryKind::Static, j)?;
-    emit_new_types(ms, out)
+    emit_new_defs(ms, out)
 }
 
 
 fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
-    def_id.is_local() && tcx.has_attr(def_id, Symbol::intern("crux_test"))
+    if !def_id.is_local() {
+        return false;
+    }
+
+    for attr in tcx.get_attrs_unchecked(def_id) {
+        let crux = Symbol::intern("crux");
+        let test = Symbol::intern("test");
+        match &attr.kind {
+            rustc_ast::AttrKind::Normal(na) => {
+                let segs = &na.item.path.segments;
+                if segs.len() == 2 && segs[0].ident.name == crux && segs[1].ident.name == test {
+                    return true;
+                }
+            }
+            _ => { }
+        }
+    }
+    return false;
+
+    // let mut file =
+    //     std::fs::OpenOptions::new()
+    //         .create(true)
+    //         .append(true)
+    //         .open("/tmp/attrs")
+    //         .unwrap();
+
+
+    // writeln!(file, "has crux::test attr:{}", tcx.has_attr(def_id, Symbol::intern("crux::test"))).unwrap();
+    // for a in attrs {
+    //     writeln!(file, "attr: {:?}", a).unwrap();
+    // }
+    // file.flush().unwrap();
+
+    // for
+
+    // def_id.is_local() && tcx.has_attr(def_id, Symbol::intern("crux::test"))
 }
 
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
@@ -802,7 +847,7 @@ fn emit_instance<'tcx>(
         "name": &name,
         "inst": inst.to_json(ms),
     }))?;
-    emit_new_types(ms, out)?;
+    emit_new_defs(ms, out)?;
 
     match inst.def {
         ty::InstanceDef::Item(def_id) => {
@@ -875,7 +920,7 @@ fn emit_vtable<'tcx>(
         "name": vtable_name(ms, poly_trait_ref),
         "items": build_vtable_items(ms, poly_trait_ref),
     }))?;
-    emit_new_types(ms, out)
+    emit_new_defs(ms, out)
 }
 
 fn vtable_name<'tcx>(
@@ -921,7 +966,7 @@ fn emit_adt<'tcx>(
     tcx.sess.note_without_error(
         format!("Emitting ADT definition for {}", adt_name).as_str());
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
-    emit_new_types(ms, out)?;
+    emit_new_defs(ms, out)?;
     Ok(())
 }
 
@@ -942,6 +987,7 @@ fn emit_fn<'tcx>(
         state: ms.state,
         tys: ms.tys,
         match_span_map: ms.match_span_map,
+        allocs: ms.allocs,
     };
     let ms = &mut ms;
 
@@ -955,15 +1001,18 @@ fn emit_fn<'tcx>(
         "abi": abi.to_json(ms),
         "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
     }))?;
-    emit_new_types(ms, out)
+    emit_new_defs(ms, out)
 }
 
-fn emit_new_types(
+fn emit_new_defs(
     ms: &mut MirState,
     out: &mut impl JsonOutput,
 ) -> io::Result<()> {
     for j in ms.tys.take_new_types() {
         out.emit(EntryKind::Ty, j)?;
+    }
+    for j in ms.allocs.take_new_allocs() {
+        out.emit(EntryKind::Static, j)?;
     }
     assert!(ms.tys.take_new_types().is_empty());
     Ok(())
@@ -1018,7 +1067,6 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             sess,
             sess.crate_types().first().unwrap().clone(),
             &outputs,
-            // nightly-2023-01-22 call symbol constructor
             tcx.crate_name(LOCAL_CRATE),
         ).with_extension("mir");
         let mut out = mk_output(&mir_path_)?;
@@ -1043,6 +1091,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 
         let mut used = Used::default();
         let mut tys = TyIntern::default();
+        let mut allocs = AllocIntern::default();
         let state = CompileState {
             session: sess,
             tcx,
@@ -1053,6 +1102,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             state: &state,
             tys: &mut tys,
             match_span_map: &get_match_spans(),
+            allocs: &mut allocs,
         };
 
         // Traits and top-level statics can be enumerated directly.
@@ -1079,7 +1129,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 
         // Any referenced types should normally be emitted immediately after the entry that
         // references them, but we check again here just in case.
-        emit_new_types(&mut ms, &mut out)?;
+        emit_new_defs(&mut ms, &mut out)?;
 
         Ok(Some(out))
     })?;
