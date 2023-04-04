@@ -282,7 +282,10 @@ impl<'tcx> AllocIntern<'tcx> {
     }
 
     pub fn insert(&mut self, alloc: interpret::ConstAllocation<'tcx>, mut static_def: serde_json::Value) -> String {
-        let id = format!("alloc${}", self.map.len());
+        // NB: The use of :: in "alloc::${}" is important, as mir-json's dead
+        // code elimination relies on it.
+        // See https://github.com/GaloisInc/mir-json/issues/36.
+        let id = format!("alloc::${}", self.map.len());
         static_def["name"] = id.clone().into();
         self.new_vals.push(static_def);
         let old = self.map.insert(alloc, id.clone());
