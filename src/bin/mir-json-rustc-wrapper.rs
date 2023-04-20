@@ -107,6 +107,7 @@ fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
 struct MirJsonCallbacks {
     analysis_data: Option<analyz::AnalysisData<()>>,
     use_override_crates: HashSet<String>,
+    export_style: analyz::ExportStyle,
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
@@ -137,7 +138,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler.session(), queries).unwrap();
+        self.analysis_data = analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
         Compilation::Continue
     }
 }
@@ -196,6 +197,12 @@ fn go() {
         }
     }
 
+    let export_style = if env::var("EXPORT_ALL").is_ok() {
+        analyz::ExportStyle::ExportAll
+    } else {
+        analyz::ExportStyle::ExportCruxTests
+    };
+
 
     let test_idx = match args.iter().position(|s| s == "--test") {
         None => {
@@ -207,6 +214,7 @@ fn go() {
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
+                    export_style,
                 },
                 None,
                 None,
@@ -242,6 +250,7 @@ fn go() {
     let mut callbacks = MirJsonCallbacks {
         analysis_data: None,
         use_override_crates: use_override_crates.clone(),
+        export_style,
     };
     rustc_driver::run_compiler(
         &args,

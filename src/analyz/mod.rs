@@ -699,7 +699,7 @@ fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
 fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let tcx = ms.state.tcx;
     for &def_id in tcx.mir_keys(def_id::LOCAL_CRATE) {
-        if !has_test_attr(tcx, def_id) {
+        if ms.export_style == ExportStyle::ExportCruxTests && !has_test_attr(tcx, def_id) {
             continue;
         }
 
@@ -884,6 +884,7 @@ fn emit_fn<'tcx>(
         state: ms.state,
         tys: ms.tys,
         match_span_map: ms.match_span_map,
+        export_style: ms.export_style,
     };
     let ms = &mut ms;
 
@@ -945,6 +946,7 @@ pub struct AnalysisData<O> {
 fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     sess: &Session,
     queries: &'tcx Queries<'tcx>,
+    export_style: ExportStyle,
     mk_output: F,
 ) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
     let mut mir_path = None;
@@ -993,6 +995,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
             state: &state,
             tys: &mut tys,
             match_span_map: &get_match_spans(),
+            export_style: export_style,
         };
 
         // Traits and top-level statics can be enumerated directly.
@@ -1037,8 +1040,9 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 pub fn analyze_nonstreaming<'tcx>(
     sess: &Session,
     queries: &'tcx Queries<'tcx>,
+    export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, |_| { Ok(lib_util::Output::default()) })?;
+    let opt_ad = analyze_inner(sess, queries, export_style, |_| { Ok(lib_util::Output::default()) })?;
     let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1067,8 +1071,9 @@ pub fn analyze_nonstreaming<'tcx>(
 pub fn analyze_streaming<'tcx>(
     sess: &Session,
     queries: &'tcx Queries<'tcx>,
+    export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, lib_util::start_streaming)?;
+    let opt_ad = analyze_inner(sess, queries, export_style, lib_util::start_streaming)?;
     let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1078,6 +1083,7 @@ pub fn analyze_streaming<'tcx>(
 }
 
 pub use self::analyze_streaming as analyze;
+pub use analyz::to_json::ExportStyle;
 
 fn make_attr(key: &str, value: &str) -> ast::Attribute {
     ast::Attribute {
