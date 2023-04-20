@@ -50,6 +50,9 @@ variables:
    dependencies.
 * `CRUX_USE_OVERRIDE_CRATES`: The list of crates for which `crucible-mir`
    overrides should be used.
+* `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
+  will export all top-level functions. Otherwise, it will only export those
+  functions with a `#[crux_test]` attribute.
 
 ## Other binaries
 

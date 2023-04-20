@@ -247,6 +247,21 @@ impl<'tcx> TyIntern<'tcx> {
     }
 }
 
+/// How many functions should be exported in the JSON output?
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ExportStyle {
+    /// Only export functions annotated with the `#[crux_test]` attribute.
+    ExportCruxTests,
+    /// Export all functions.
+    ExportAll
+}
+
+impl Default for ExportStyle {
+    fn default() -> Self {
+        ExportStyle::ExportCruxTests
+    }
+}
+
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used: &'a mut Used<'tcx>,
@@ -263,6 +278,7 @@ pub struct MirState<'a, 'tcx : 'a> {
     /// rewritten.  This seems okay for now since the user is mostly interested in coverage in
     /// their own top-level crate anyway.
     pub match_span_map: &'a HashMap<Span, Span>,
+    pub export_style: ExportStyle,
 }
 
 /// Trait for converting MIR elements to JSON.
