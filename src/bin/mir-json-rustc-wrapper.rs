@@ -252,7 +252,7 @@ fn go() {
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 
-    let json_path = test_path.with_extension(".linked-mir.json");
+    let json_path = test_path.with_extension("linked-mir.json");
     eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
     eprintln!(
         "  inputs: {}{}",
