@@ -39,6 +39,26 @@ filtering flags like `--lib`/`--bin`.
    all its dependencies, and replaces the test binary output with a script that
    invokes `crux-mir`'s symbolic execution backend on the linked `.mir`.
 
+## Other binaries
+
+Besides the main binaries above, `mir-json` also provides a variety of other
+binaries for specialized purposes:
+
+* `cargo-mir-json`: This invokes `cargo rustc`, but replacing `rustc` with
+  `mir-json`.
+* `crux-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
+  `cargo-crux-test` would run it. This is useful for testing a single file,
+  e.g., `crux-rustc --test foo.rs`.
+* `mir-json-callgraph`: This prints the reverse callgraph of a function, which
+  can be helpful for debugging.
+* `mir-json-dce`: This takes in several `.mir` files, combines them, and then
+  runs dead-code elimination on them. It is unlikely that you will need to use
+  this binary directly, as dead-code elimination is performed as an intermediate
+  step in other binaries.
+* `mir-json`: This produces a `.mir` file from a single `.rs` file and does not
+  do anything else, such as testing with `crux-mir`. It is unlikely that you
+  will need to use this binary directly, as producing `.mir` files is performed
+  as an intermediate step in other binaries.
 
 ## `TyCtxt` usage
 
