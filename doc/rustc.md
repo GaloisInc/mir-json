@@ -8,6 +8,8 @@
 * `mir-json-rustc-wrapper`, a `RUSTC_WRAPPER` binary, uses `rustc_interface` to
   invoke normal `rustc` compilation with some additional callbacks installed.
 
+## `cargo-crux-test`
+
 In general, `crux-mir` tries to reuse as much of the normal `cargo`
 functionality as possible.  `cargo-crux-test` makes some minor adjustments to
 the command line arguments, sets up some environment variables (notably
@@ -16,6 +18,8 @@ symbolic tests.  Since `cargo-crux-test` is essentially just `cargo test` with
 a special `RUSTC_WRAPPER`, it supports almost all the standard `cargo`
 features, such as `build.rs` files, dependencies on proc-macro crates, and test
 filtering flags like `--lib`/`--bin`.
+
+## `mir-json-rustc-wrapper`
 
 `mir-json-rustc-wrapper` has three modes of operation:
 
@@ -38,6 +42,14 @@ filtering flags like `--lib`/`--bin`.
    building, it links together the `.mir` files for the crate being tested and
    all its dependencies, and replaces the test binary output with a script that
    invokes `crux-mir`'s symbolic execution backend on the linked `.mir`.
+
+`mir-json-rustc-wrapper`'s behavior is controlled by a variety of environment
+variables:
+
+* `CRUX_RUST_LIBRARY_PATH`: The path containing `.rlib` files for crate
+   dependencies.
+* `CRUX_USE_OVERRIDE_CRATES`: The list of crates for which `crucible-mir`
+   overrides should be used.
 
 ## Other binaries
 
