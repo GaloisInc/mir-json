@@ -78,7 +78,7 @@ fn cli() -> App {
         .after_help("See `cargo test --help` for more information on these options.")
 }
 
-/// Get the list of crates for which mir-verifier overrides should be used.
+/// Get the list of crates for which crux-mir overrides should be used.
 fn get_override_crates() -> String {
     // `cargo metadata` output includes the settings for each crate in the build, but gives us no
     // way to determine which crates we're actually building, as that's controlled by various

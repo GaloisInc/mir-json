@@ -66,7 +66,7 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
             &mir::AggregateKind::Closure(_, _) => {
                 json!({
                     "kind": "Closure",
-                    // mir-verifier uses the same representation for closures as it does for
+                    // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
             }

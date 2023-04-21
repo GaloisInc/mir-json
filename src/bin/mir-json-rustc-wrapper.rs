@@ -1,6 +1,6 @@
 //! Entry point for use with `cargo crux-test` / `RUSTC_WRAPPER`.  This will export MIR (like the
 //! main `mir-json` binary), and if this is a top-level build, it will also link in all libraries
-//! as specified by `--extern` and/or `#![no_std]` and run `mir-verifier` on the result.
+//! as specified by `--extern` and/or `#![no_std]` and run `crux-mir` on the result.
 #![feature(rustc_private)]
 
 extern crate rustc;
