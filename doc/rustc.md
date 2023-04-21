@@ -1,10 +1,12 @@
 # `rustc` integration in `crux-mir`
 
 `mir-json` (the component of `crux-mir` responsible for interfacing with
-`cargo` and `rustc`) consists of two main binaries:
+`cargo` and `rustc`) consists of three main binaries:
 
 * `cargo-crux-test`, a `cargo` subcommand, is the main user-facing entry point
   for `crux-mir`.
+* `cargo-saw-build`, a `cargo` subcommand, is the main user-facing entry point
+  for SAW's MIR verification support.
 * `mir-json-rustc-wrapper`, a `RUSTC_WRAPPER` binary, uses `rustc_interface` to
   invoke normal `rustc` compilation with some additional callbacks installed.
 
@@ -18,6 +20,14 @@ symbolic tests.  Since `cargo-crux-test` is essentially just `cargo test` with
 a special `RUSTC_WRAPPER`, it supports almost all the standard `cargo`
 features, such as `build.rs` files, dependencies on proc-macro crates, and test
 filtering flags like `--lib`/`--bin`.
+
+## `cargo-saw-build`
+
+`cargo-saw-build` is very similar in operation to `cargo-crux-test` in that
+both will compile Rust code into a MIR JSON file. The difference between
+`cargo-saw-build` and `cargo-crux-test` is that the former will stop after
+producing the JSON file, whereas the latter will proceed to run `crux-mir` on
+the JSON afterwards. The former is more useful for SAW's needs.
 
 ## `mir-json-rustc-wrapper`
 
@@ -74,6 +84,9 @@ binaries for specialized purposes:
   do anything else, such as testing with `crux-mir`. It is unlikely that you
   will need to use this binary directly, as producing `.mir` files is performed
   as an intermediate step in other binaries.
+* `saw-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
+  `cargo-saw-build` would run it. This is useful for building a single file,
+  e.g., `saw-rustc foo.rs`.
 
 ## `TyCtxt` usage
 

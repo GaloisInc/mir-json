@@ -24,6 +24,13 @@ name = "cargo-crux-test_real"
 path = "src/bin/cargo-crux-test.rs"
 
 [[bin]]
+name = "cargo-saw-build"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "cargo-saw-build_real"
+path = "src/bin/cargo-saw-build.rs"
+
+[[bin]]
 name = "cargo-mir-json"
 path = "src/bin/wrapper.rs"
 [[bin]]
@@ -64,3 +71,10 @@ path = "src/bin/wrapper.rs"
 [[bin]]
 name = "mir-json_real"
 path = "src/bin/mir-json.rs"
+
+[[bin]]
+name = "saw-rustc"
+path = "src/bin/wrapper.rs"
+[[bin]]
+name = "saw-rustc_real"
+path = "src/bin/saw-rustc.rs"
