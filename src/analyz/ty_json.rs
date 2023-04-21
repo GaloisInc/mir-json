@@ -414,7 +414,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "kind": "Closure",
                     "upvar_tys": substs.as_closure().upvar_tys(defid, mir.state.tcx)
                         .collect::<Vec<_>>().to_json(mir),
-                    // mir-verifier uses the same representation for closures as it does for
+                    // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
             }
@@ -653,7 +653,7 @@ impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::subst::GenericArgKind::Type(ref ty) => ty.to_json(mir),
-            // In mir-verifier, all substs entries are considered "types", and there are dummy
+            // In crucible-mir, all substs entries are considered "types", and there are dummy
             // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
             // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
             ty::subst::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
