@@ -1,4 +1,4 @@
-use rustc_hir::def_id::DefId;
+use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::mir::{Body, interpret};
 use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
@@ -281,11 +281,14 @@ impl<'tcx> AllocIntern<'tcx> {
         self.map.get(&alloc).map(|x| x as &str)
     }
 
-    pub fn insert(&mut self, alloc: interpret::ConstAllocation<'tcx>, mut static_def: serde_json::Value) -> String {
-        // NB: The use of :: in "alloc::${}" is important, as mir-json's dead
+    pub fn insert(&mut self, tcx: TyCtxt<'tcx>,
+                  alloc: interpret::ConstAllocation<'tcx>, mut static_def: serde_json::Value) -> String {
+        let crate_name = tcx.crate_name(LOCAL_CRATE);
+        let disambig = tcx.crate_hash(LOCAL_CRATE);
+        // NB: The use of :: here is important, as mir-json's dead
         // code elimination relies on it.
         // See https://github.com/GaloisInc/mir-json/issues/36.
-        let id = format!("alloc::${}", self.map.len());
+        let id = format!("{}/{}::{{{{alloc}}}}[{}]", crate_name, disambig, self.map.len());
         static_def["name"] = id.clone().into();
         self.new_vals.push(static_def);
         let old = self.map.insert(alloc, id.clone());

@@ -1240,7 +1240,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
                         "rendered": rendered,
                     });
 
-                    mir.allocs.insert(ca, static_ref)
+                    mir.allocs.insert(tcx, ca, static_ref)
                 }
             };
 
