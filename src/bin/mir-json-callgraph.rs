@@ -2,7 +2,7 @@
 //!
 //! Print the reverse callgraph of item `NAME`, after linking together `CRATES` as in
 //! `mir-json-dce`.  Useful for figuring out how to prevent a function from being called, when
-//! that function is causing mir-verifier translation errors.
+//! that function is causing crucible-mir translation errors.
 #![feature(rustc_private)]
 
 extern crate serde;

@@ -4,7 +4,7 @@
 //! `#[crux_test]`s as the roots.  This is useful because library .mir files contain entries for
 //! all "reachable non-generic" items in the library crate, but some of those items are not
 //! actually used by the top-level crate.  We run this pass on the raw JSON in hopes of removing
-//! constructs that `mir-verifier` can't yet parse.
+//! constructs that `crucible-mir` can't yet parse.
 #![feature(rustc_private)]
 
 extern crate serde;

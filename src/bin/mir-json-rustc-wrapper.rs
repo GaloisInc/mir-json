@@ -1,6 +1,6 @@
 //! Entry point for use with `cargo crux-test` / `RUSTC_WRAPPER`.  This will export MIR (like the
 //! main `mir-json` binary), and if this is a top-level build, it will also link in all libraries
-//! as specified by `--extern` and/or `#![no_std]` and run `mir-verifier` on the result.
+//! as specified by `--extern` and/or `#![no_std]` and run `crux-mir` on the result.
 #![feature(rustc_private)]
 
 extern crate rustc_codegen_ssa;
@@ -106,6 +106,7 @@ fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
 struct MirJsonCallbacks {
     analysis_data: Option<analyz::AnalysisData<()>>,
     use_override_crates: HashSet<String>,
+    export_style: analyz::ExportStyle,
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
@@ -136,7 +137,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler.session(), queries).unwrap();
+        self.analysis_data = analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
         Compilation::Continue
     }
 }
@@ -195,6 +196,12 @@ fn go() {
         }
     }
 
+    let export_style = if env::var("EXPORT_ALL").is_ok() {
+        analyz::ExportStyle::ExportAll
+    } else {
+        analyz::ExportStyle::ExportCruxTests
+    };
+
 
     let test_idx = match args.iter().position(|s| s == "--test") {
         None => {
@@ -206,6 +213,7 @@ fn go() {
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
+                    export_style,
                 },
             ).run().unwrap();
             return;
@@ -239,12 +247,13 @@ fn go() {
     let mut callbacks = MirJsonCallbacks {
         analysis_data: None,
         use_override_crates: use_override_crates.clone(),
+        export_style,
     };
     rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 
-    let json_path = test_path.with_extension(".linked-mir.json");
+    let json_path = test_path.with_extension("linked-mir.json");
     eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
     eprintln!(
         "  inputs: {}{}",

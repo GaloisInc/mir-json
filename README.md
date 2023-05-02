@@ -1,5 +1,5 @@
-`mir-json` provides `rustc` and `cargo` integration for
-[mir-verifier][mir-verifier-repo].
+`mir-json` provides `rustc` and `cargo` integration for interfacing with
+[crux-mir][crux-mir-repo].
 
 ## Installation instructions
 
@@ -34,7 +34,7 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
 ## Usage
 
-See the [mir-verifier][mir-verifier-repo] README for usage instructions.
+See the [crux-mir][crux-mir-repo] README for usage instructions.
 
 
-[mir-verifier-repo]: https://github.com/GaloisInc/mir-verifier
+[crux-mir-repo]: https://github.com/GaloisInc/crucible/tree/master/crux-mir

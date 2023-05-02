@@ -269,6 +269,20 @@ impl<'tcx> TyIntern<'tcx> {
     }
 }
 
+/// How many functions should be exported in the JSON output?
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ExportStyle {
+    /// Only export functions annotated with the `#[crux_test]` attribute.
+    ExportCruxTests,
+    /// Export all functions.
+    ExportAll
+}
+
+impl Default for ExportStyle {
+    fn default() -> Self {
+        ExportStyle::ExportCruxTests
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct AllocIntern<'tcx> {
@@ -318,6 +332,7 @@ pub struct MirState<'a, 'tcx : 'a> {
     /// their own top-level crate anyway.
     pub match_span_map: &'a HashMap<Span, Span>,
     pub allocs: &'a mut AllocIntern<'tcx>,
+    pub export_style: ExportStyle,
 }
 
 /// Trait for converting MIR elements to JSON.

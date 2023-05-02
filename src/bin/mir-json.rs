@@ -16,8 +16,11 @@ use mir_json::analyz;
 use rustc_driver::Compilation;
 use rustc_interface::Queries;
 use rustc_interface::interface::Compiler;
+use std::env;
 
-struct MirJsonCallbacks;
+struct MirJsonCallbacks {
+    export_style: analyz::ExportStyle,
+}
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
     fn after_parsing<'tcx>(
@@ -45,7 +48,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        analyz::analyze(compiler.session(), queries).unwrap();
+        analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
         Compilation::Continue
     }
 }
@@ -53,7 +56,13 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
 fn go() {
     let args: Vec<String> = std::env::args().collect();
 
-    rustc_driver::RunCompiler::new(&args, &mut MirJsonCallbacks).run().unwrap();
+    let export_style = if env::var("EXPORT_ALL").is_ok() {
+        analyz::ExportStyle::ExportAll
+    } else {
+        analyz::ExportStyle::ExportCruxTests
+    };
+
+    rustc_driver::RunCompiler::new(&args, &mut MirJsonCallbacks { export_style }).run().unwrap();
 }
 
 fn main() {

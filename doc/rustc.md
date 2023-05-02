@@ -1,12 +1,16 @@
 # `rustc` integration in `crux-mir`
 
 `mir-json` (the component of `crux-mir` responsible for interfacing with
-`cargo` and `rustc`) consists of two main binaries:
+`cargo` and `rustc`) consists of three main binaries:
 
 * `cargo-crux-test`, a `cargo` subcommand, is the main user-facing entry point
   for `crux-mir`.
+* `cargo-saw-build`, a `cargo` subcommand, is the main user-facing entry point
+  for SAW's MIR verification support.
 * `mir-json-rustc-wrapper`, a `RUSTC_WRAPPER` binary, uses `rustc_interface` to
   invoke normal `rustc` compilation with some additional callbacks installed.
+
+## `cargo-crux-test`
 
 In general, `crux-mir` tries to reuse as much of the normal `cargo`
 functionality as possible.  `cargo-crux-test` makes some minor adjustments to
@@ -16,6 +20,16 @@ symbolic tests.  Since `cargo-crux-test` is essentially just `cargo test` with
 a special `RUSTC_WRAPPER`, it supports almost all the standard `cargo`
 features, such as `build.rs` files, dependencies on proc-macro crates, and test
 filtering flags like `--lib`/`--bin`.
+
+## `cargo-saw-build`
+
+`cargo-saw-build` is very similar in operation to `cargo-crux-test` in that
+both will compile Rust code into a MIR JSON file. The difference between
+`cargo-saw-build` and `cargo-crux-test` is that the former will stop after
+producing the JSON file, whereas the latter will proceed to run `crux-mir` on
+the JSON afterwards. The former is more useful for SAW's needs.
+
+## `mir-json-rustc-wrapper`
 
 `mir-json-rustc-wrapper` has three modes of operation:
 
@@ -39,6 +53,40 @@ filtering flags like `--lib`/`--bin`.
    all its dependencies, and replaces the test binary output with a script that
    invokes `crux-mir`'s symbolic execution backend on the linked `.mir`.
 
+`mir-json-rustc-wrapper`'s behavior is controlled by a variety of environment
+variables:
+
+* `CRUX_RUST_LIBRARY_PATH`: The path containing `.rlib` files for crate
+   dependencies.
+* `CRUX_USE_OVERRIDE_CRATES`: The list of crates for which `crucible-mir`
+   overrides should be used.
+* `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
+  will export all top-level functions. Otherwise, it will only export those
+  functions with a `#[crux_test]` attribute.
+
+## Other binaries
+
+Besides the main binaries above, `mir-json` also provides a variety of other
+binaries for specialized purposes:
+
+* `cargo-mir-json`: This invokes `cargo rustc`, but replacing `rustc` with
+  `mir-json`.
+* `crux-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
+  `cargo-crux-test` would run it. This is useful for testing a single file,
+  e.g., `crux-rustc --test foo.rs`.
+* `mir-json-callgraph`: This prints the reverse callgraph of a function, which
+  can be helpful for debugging.
+* `mir-json-dce`: This takes in several `.mir` files, combines them, and then
+  runs dead-code elimination on them. It is unlikely that you will need to use
+  this binary directly, as dead-code elimination is performed as an intermediate
+  step in other binaries.
+* `mir-json`: This produces a `.mir` file from a single `.rs` file and does not
+  do anything else, such as testing with `crux-mir`. It is unlikely that you
+  will need to use this binary directly, as producing `.mir` files is performed
+  as an intermediate step in other binaries.
+* `saw-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
+  `cargo-saw-build` would run it. This is useful for building a single file,
+  e.g., `saw-rustc foo.rs`.
 
 ## `TyCtxt` usage
 
