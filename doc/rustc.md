@@ -11,8 +11,11 @@
   invoke normal `rustc` compilation with some additional callbacks installed.
 
 These tools require a version of the Rust standard library that has been
-translated with `mir-json`. The `CRUX_RUST_LIBRARY_PATH` environment variable
-should be defined with this path before using one of these tools.
+translated with `mir-json`. The `CRUX_RUST_LIBRARY_PATH` or
+`SAW_RUST_LIBRARY_PATH` environment variable should be defined with this path
+before using one of these tools. Note that these two environment variables are
+functionally equivalent, and the only difference is to more clearly signal
+which tool is intended to be used in combination with `mir-json`.
 
 ## `cargo-crux-test`
 
