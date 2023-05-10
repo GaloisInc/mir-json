@@ -214,7 +214,14 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 })
             }
             &mir::Rvalue::Discriminant(ref lv) => {
-                json!({"kind": "Discriminant", "val": lv.to_json(mir)})
+                json!({
+                    "kind": "Discriminant",
+                    "val": lv.to_json(mir),
+                    "ty": lv.ty(mir.mir.unwrap(), mir.state.tcx)
+                            .ty
+                            .discriminant_ty(mir.state.tcx)
+                            .to_json(mir),
+                })
             }
             &mir::Rvalue::Aggregate(ref ak, ref opv) => {
                 if ty_json::is_adt_ak(ak) {

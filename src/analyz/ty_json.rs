@@ -7,7 +7,8 @@ use rustc_middle::mir;
 use rustc_const_eval::interpret::{self, InterpCx};
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::ty;
-use rustc_middle::ty::{TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::{AdtKind, TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
 use rustc_target::abi::{Align, Size};
@@ -1371,6 +1372,20 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
+        let kind = match self.adt.adt_kind() {
+            AdtKind::Struct => json!({"kind": "Struct"}),
+            AdtKind::Enum =>
+                json!({
+                    "kind": "Enum",
+                    "discr_ty": self.adt
+                                    .repr()
+                                    .discr_type()
+                                    .to_ty(mir.state.tcx)
+                                    .to_json(mir)
+                }),
+            AdtKind::Union => json!({"kind": "Union"}),
+        };
+
         let variants =
             if self.adt.is_enum() {
                 render_enum_variants(mir, &self)
@@ -1384,7 +1399,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
 
         json!({
             "name": adt_inst_id_str(mir.state.tcx, *self),
-            "kind": format!("{:?}", self.adt.adt_kind()),
+            "kind": kind,
             "variants": variants,
             "size": tyl.size.bytes(),
             "repr_transparent": self.adt.repr().transparent(),
