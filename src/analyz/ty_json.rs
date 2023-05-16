@@ -1094,28 +1094,7 @@ pub fn try_render_opty<'mir, 'tcx>(
             })
 
         }
-        ty::TyKind::Slice(slice_ty) => {
-            eprintln!("slice op_ty: {:?}", op_ty);
-            let mb_slice_len = op_ty.len(icx);
-            match mb_slice_len {
-                Ok(slice_len) => {
-                    let mut elt_values = Vec::with_capacity(slice_len as usize);
-                    for idx in 0..slice_len {
-                        let elt = icx.operand_index(op_ty, idx).unwrap();
-                        elt_values.push(try_render_opty(mir, icx, &elt));
-                    }
-
-                    json!({
-                        "kind": "slice",
-                        "element_ty": slice_ty.to_json(mir),
-                        "elements": elt_values
-                    })
-                }
-                Err(err) => {
-                    panic!("Cannot get slice length: {:?}", op_ty)
-                }
-            }
-        }
+        ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
 
         // similar to ref in some ways
         ty::TyKind::RawPtr(m_ty) =>
@@ -1194,26 +1173,46 @@ fn try_render_ref_opty<'mir, 'tcx>(
     let d = icx.deref_operand(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
-    // Special case for &str
-    if !is_mut && *rty.kind() == ty::TyKind::Str {
-        let len = mplace_ty_len(&d, icx).unwrap();
-        let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
-        return Some(json!({
-            "kind": "str",
-            "val": mem
-        }))
-    }
-
-    // Special case for &u8
     if !is_mut {
-        if let ty::TyKind::Array(elem_ty, _) = *rty.kind() {
-            if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
-                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+        match *rty.kind() {
+            // Special case for &str
+            ty::TyKind::Str => {
+                let len = mplace_ty_len(&d, icx).unwrap();
+                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
                 return Some(json!({
-                    "kind": "bstr",
-                    "val": mem,
-                }));
-            }
+                    "kind": "str",
+                    "val": mem
+                }))
+            },
+            // Special case for &u8
+            ty::TyKind::Array(elem_ty, _) => {
+                if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
+                    let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+                    return Some(json!({
+                        "kind": "bstr",
+                        "val": mem,
+                    }))
+                } else {
+                    ()
+                }
+            },
+            // Special case for &[T]
+            ty::TyKind::Slice(slice_ty) => {
+                eprintln!("slice op_ty: {:?}", op_ty);
+                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let mut elt_values = Vec::with_capacity(slice_len as usize);
+                for idx in 0..slice_len {
+                    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                    elt_values.push(try_render_opty(mir, icx, &elt));
+                }
+
+                return Some(json!({
+                    "kind": "slice",
+                    "element_ty": slice_ty.to_json(mir),
+                    "elements": elt_values
+                }))
+            },
+            _ => ()
         }
     }
 
