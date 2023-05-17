@@ -4,14 +4,15 @@ use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_index::vec::{IndexVec, Idx};
 use rustc_middle::mir;
-use rustc_const_eval::interpret::{self, InterpCx};
+use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
 use rustc_const_eval::const_eval::CheckAlignment;
+use rustc_middle::bug;
 use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, TyCtxt, TypeFoldable, TypeVisitable};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
-use rustc_target::abi::{Align, Size};
+use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -1195,7 +1196,8 @@ fn try_render_ref_opty<'mir, 'tcx>(
 
     // Special case for &str
     if !is_mut && *rty.kind() == ty::TyKind::Str {
-        let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+        let len = mplace_ty_len(&d, icx).unwrap();
+        let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
         return Some(json!({
             "kind": "str",
             "val": mem
@@ -1254,6 +1256,25 @@ fn try_render_ref_opty<'mir, 'tcx>(
     }
 }
 
+// A copied version of MPlaceTy::len, which (sadly) isn't exported. See
+// https://github.com/rust-lang/rust/blob/56ee85274e5a3a4dda92f3bf73d1664c74ff9c15/compiler/rustc_const_eval/src/interpret/place.rs#L227C5-L243
+#[inline]
+pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx: &impl HasDataLayout) -> InterpResult<'tcx, u64> {
+    if mplace_ty.layout.is_unsized() {
+        // We need to consult `meta` metadata
+        match mplace_ty.layout.ty.kind() {
+            ty::Slice(..) | ty::Str => mplace_ty.meta.unwrap_meta().to_machine_usize(cx),
+            _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
+        }
+    } else {
+        // Go through the layout.  There are lots of types that support a length,
+        // e.g., SIMD types. (But not all repr(simd) types even have FieldsShape::Array!)
+        match mplace_ty.layout.fields {
+            FieldsShape::Array { count, .. } => Ok(count),
+            _ => bug!("len not supported on sized type {:?}", mplace_ty.layout.ty),
+        }
+    }
+}
 
 // TODO: move
 pub fn mk_interp<'mir, 'tcx>(tcx: TyCtxt<'tcx>) -> interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>> {
