@@ -1120,7 +1120,19 @@ pub fn try_render_opty<'mir, 'tcx>(
         }
         ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
 
-        ty::TyKind::Closure(_, _) => todo!("closure not supported yet"), // not supported in haskell
+        ty::TyKind::Closure(_defid, substs) => {
+            let upvars_count = substs.as_closure().upvar_tys().count();
+            let mut upvar_vals = Vec::with_capacity(upvars_count);
+            for idx in 0 .. upvars_count {
+                let upvar_opty = icx.operand_field(&op_ty, idx).unwrap();
+                upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
+            }
+
+            json!({
+                "kind": "closure",
+                "upvars": upvar_vals,
+            })
+        }
         ty::TyKind::Generator(_, _, _) => todo!("generator not supported yet"), // not supported in haskell
         ty::TyKind::GeneratorWitness(_) => todo!("generatorwitness not supported yet"), // not supported in haskell
         ty::TyKind::Never => unreachable!("never type should be uninhabited"),
