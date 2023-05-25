@@ -1109,12 +1109,14 @@ pub fn try_render_opty<'mir, 'tcx>(
             let (prov, _offset) = ptr.into_parts();
             let alloc = tcx.try_get_global_alloc(prov?)?;
             match alloc {
-                interpret::GlobalAlloc::Function(i) =>
+                interpret::GlobalAlloc::Function(i) => {
+                    mir.used.instances.insert(i);
                     json!({
                         "kind": "fn_ptr",
                         "instance": i.to_json(mir),
 
-                    }),
+                    })
+                },
                 _ => unreachable!("Function pointer doesn't point to a function"),
             }
         }
