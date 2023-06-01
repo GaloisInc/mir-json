@@ -152,7 +152,8 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
             &mir::Rvalue::ThreadLocalRef(did) => {
                 json!({
                     "kind": "ThreadLocalRef",
-                    "def_id": did.to_json(mir)
+                    "def_id": did.to_json(mir),
+                    "ty": mir.state.tcx.static_ptr_ty(did).to_json(mir),
                 })
             }
             &mir::Rvalue::AddressOf(mutbl, ref l) => {
