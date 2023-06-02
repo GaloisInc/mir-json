@@ -1239,7 +1239,8 @@ fn try_render_ref_opty<'mir, 'tcx>(
                 "def_id": def_id.to_json(mir),
             })),
         interpret::GlobalAlloc::Memory(ca) => {
-            let aid = match mir.allocs.get(ca) {
+            let ty = op_ty.layout.ty;
+            let aid = match mir.allocs.get(ca, ty) {
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
                     let ma = tcx.create_memory_alloc(ca);
@@ -1256,7 +1257,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
                         "rendered": rendered,
                     });
 
-                    mir.allocs.insert(tcx, ca, static_ref)
+                    mir.allocs.insert(tcx, ca, ty, static_ref)
                 }
             };
 

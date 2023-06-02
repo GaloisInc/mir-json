@@ -286,17 +286,22 @@ impl Default for ExportStyle {
 
 #[derive(Default, Debug)]
 pub struct AllocIntern<'tcx> {
-    map: HashMap<interpret::ConstAllocation<'tcx>, String>,
+    /// We key this map on both ConstAllocations and their Tys. Keying the map
+    /// on ConstAllocations alone is not sufficient, as two ConstAllocations
+    /// with different types can share the same underlying memory representation
+    /// (e.g., `0: u8` and `Ok(()) : Result<(), ()>`).
+    map: HashMap<(interpret::ConstAllocation<'tcx>, ty::Ty<'tcx>), String>,
     new_vals: Vec<serde_json::Value>,
 }
 
 impl<'tcx> AllocIntern<'tcx> {
-    pub fn get(&self, alloc: interpret::ConstAllocation<'tcx>) -> Option<&str> {
-        self.map.get(&alloc).map(|x| x as &str)
+    pub fn get(&self, alloc: interpret::ConstAllocation<'tcx>, ty: ty::Ty<'tcx>) -> Option<&str> {
+        self.map.get(&(alloc, ty)).map(|x| x as &str)
     }
 
     pub fn insert(&mut self, tcx: TyCtxt<'tcx>,
-                  alloc: interpret::ConstAllocation<'tcx>, mut static_def: serde_json::Value) -> String {
+                  alloc: interpret::ConstAllocation<'tcx>, ty: ty::Ty<'tcx>,
+                  mut static_def: serde_json::Value) -> String {
         let crate_name = tcx.crate_name(LOCAL_CRATE);
         let disambig = tcx.crate_hash(LOCAL_CRATE);
         // NB: The use of :: here is important, as mir-json's dead
@@ -305,7 +310,7 @@ impl<'tcx> AllocIntern<'tcx> {
         let id = format!("{}/{}::{{{{alloc}}}}[{}]", crate_name, disambig, self.map.len());
         static_def["name"] = id.clone().into();
         self.new_vals.push(static_def);
-        let old = self.map.insert(alloc, id.clone());
+        let old = self.map.insert((alloc, ty), id.clone());
         assert!(old.is_none(), "duplicate insert for type {:?}", alloc);
         id
     }
