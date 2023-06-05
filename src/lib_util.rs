@@ -39,6 +39,8 @@ pub struct CrateIndex {
     pub items: HashMap<StringId, ItemData>,
 
     pub roots: Vec<StringId>,
+
+    pub crate_hashes: HashMap<String, String>,
 }
 
 /// Metadata about a single item.
@@ -170,6 +172,7 @@ struct EmitterState {
     entry_loc: HashMap<(StringId, EntryKind), (u64, u64)>,
     roots: HashSet<StringId>,
     intern: InternTable,
+    crate_hashes: HashMap<String, String>,
 }
 
 impl EmitterState {
@@ -225,6 +228,10 @@ impl EmitterState {
         self.roots.insert(name_id);
     }
 
+    fn add_crate_hash(&mut self, crate_name: Cow<str>, crate_hash: Cow<str>) {
+        self.crate_hashes.insert(crate_name.into_owned(), crate_hash.into_owned());
+    }
+
     pub fn finish(self) -> CrateIndex {
         let names = self.intern.into_names();
 
@@ -245,7 +252,9 @@ impl EmitterState {
         let mut roots = self.roots.into_iter().collect::<Vec<_>>();
         roots.sort();
 
-        CrateIndex { names, items, roots }
+        let crate_hashes = self.crate_hashes;
+
+        CrateIndex { names, items, roots, crate_hashes }
     }
 }
 
@@ -274,6 +283,10 @@ impl<W: Write> Emitter<W> {
 
     fn add_root(&mut self, name: Cow<str>) {
         self.state.add_root(name);
+    }
+
+    fn add_crate_hash(&mut self, crate_name: Cow<str>, crate_hash: Cow<str>) {
+        self.state.add_crate_hash(crate_name, crate_hash);
     }
 
     fn emit_table(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
@@ -310,6 +323,9 @@ impl<W: Write> Emitter<W> {
         write!(self.writer, ",")?;
         write!(self.writer, "\"roots\":")?;
         serde_json::to_writer(&mut self.writer, &j["roots"])?;
+        write!(self.writer, ",")?;
+        write!(self.writer, "\"crate_hashes\":")?;
+        serde_json::to_writer(&mut self.writer, &j["crate_hashes"])?;
         write!(self.writer, "}}")?;
         self.writer.flush()?;
 
@@ -317,6 +333,12 @@ impl<W: Write> Emitter<W> {
             .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
         for x in j_roots {
             self.add_root(x.as_str().unwrap().into());
+        }
+
+        let j_crate_hashes = j["crate_hashes"].as_object()
+            .unwrap_or_else(|| panic!("expected \"crate_hashes\" table to be an object"));
+        for (crate_name, crate_hash) in j_crate_hashes {
+            self.add_crate_hash(crate_name.into(), crate_hash.as_str().unwrap().into());
         }
 
         Ok(())
@@ -391,6 +413,7 @@ pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(Cra
 pub trait JsonOutput {
     fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()>;
     fn add_root(&mut self, name: String) -> io::Result<()>;
+    fn add_crate_hash(&mut self, crate_name: String, crate_hash: String) -> io::Result<()>;
 }
 
 #[derive(Default)]
@@ -418,6 +441,9 @@ pub struct Output {
     pub tys: Vec<serde_json::Value>,
     /// Entry points for this crate.
     pub roots: Vec<String>,
+    /// A map of crate dependency names to their respective crate hashes, the
+    /// latter of which are used to disambiguate identifier names.
+    pub crate_hashes: HashMap<String, String>,
 }
 
 impl JsonOutput for Output {
@@ -436,6 +462,11 @@ impl JsonOutput for Output {
 
     fn add_root(&mut self, name: String) -> io::Result<()> {
         self.roots.push(name);
+        Ok(())
+    }
+
+    fn add_crate_hash(&mut self, crate_name: String, crate_hash: String) -> io::Result<()> {
+        self.crate_hashes.insert(crate_name, crate_hash);
         Ok(())
     }
 }
@@ -490,6 +521,11 @@ impl<W: Write> JsonOutput for StreamingEmitter<W> {
         self.inner.add_root(name.into());
         Ok(())
     }
+
+    fn add_crate_hash(&mut self, crate_name: String, crate_hash: String) -> io::Result<()> {
+        self.inner.add_crate_hash(crate_name.into(), crate_hash.into());
+        Ok(())
+    }
 }
 
 
@@ -506,6 +542,10 @@ impl JsonOutput for MirStream {
 
     fn add_root(&mut self, name: String) -> io::Result<()> {
         self.emitter.add_root(name)
+    }
+
+    fn add_crate_hash(&mut self, crate_name: String, crate_hash: String) -> io::Result<()> {
+        self.emitter.add_crate_hash(crate_name, crate_hash)
     }
 }
 

@@ -6,6 +6,7 @@ use rustc_index::vec::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
 use rustc_const_eval::const_eval::CheckAlignment;
+use rustc_data_structures::svh::Svh;
 use rustc_middle::bug;
 use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, TyCtxt, TypeFoldable, TypeVisitable};
@@ -76,9 +77,13 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
     format!(
         "{}/{}{}",
         crate_name,
-        &disambig.to_string()[..8],
+        format_crate_hash(disambig),
         defpath.to_string_no_crate_verbose(),
     )
+}
+
+pub fn format_crate_hash(hash: Svh) -> String {
+    hash.to_string()[..8].to_owned()
 }
 
 pub fn ext_def_id_str<'tcx, T>(

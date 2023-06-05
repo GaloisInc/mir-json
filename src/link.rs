@@ -62,6 +62,19 @@ fn collect_roots(
     roots
 }
 
+fn collect_crate_hashes(
+    indexes: &[CrateIndex],
+    translate: &HashMap<(usize, StringId), StringId>,
+) -> HashMap<String, String> {
+    let mut crate_hashes: HashMap<String, String> = HashMap::new();
+    for index in indexes {
+        for (crate_num, crate_hash) in &index.crate_hashes {
+            crate_hashes.insert(crate_num.to_owned(), crate_hash.to_owned());
+        }
+    }
+    crate_hashes
+}
+
 
 /// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
 pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
@@ -69,6 +82,7 @@ where R: Read + Seek, W: Write {
     let (indexes, json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
     let roots = collect_roots(&indexes, &translate);
+    let crate_hashes = collect_crate_hashes(&indexes, &translate);
 
 
     let mut seen_names = HashSet::new();
@@ -145,6 +159,15 @@ where R: Read + Seek, W: Write {
             .map_err(|e| -> io::Error { e.into() })?;
     }
     write!(output, "]")?;
+    write!(output, ",")?;
+    write!(output, "\"crate_hashes\":{{")?;
+    for (i, (crate_num, crate_hash)) in crate_hashes.iter().enumerate() {
+        if i > 0 {
+            write!(output, ",")?;
+        }
+        write!(output, "\"{}\":\"{}\"", crate_num, crate_hash)?;
+    }
+    write!(output, "}}")?;
     write!(output, "}}")?;
 
     Ok(())

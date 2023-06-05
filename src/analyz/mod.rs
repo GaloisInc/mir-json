@@ -1142,6 +1142,13 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         // references them, but we check again here just in case.
         emit_new_defs(&mut ms, &mut out)?;
 
+        // Record the names and hashes of all crate dependencies.
+        for &cnum in tcx.crates(()) {
+            let cname = tcx.crate_name(cnum);
+            let chash = tcx.crate_hash(cnum);
+            out.add_crate_hash(cname.as_str().to_owned(), format_crate_hash(chash));
+        }
+
         Ok(Some(out))
     })?;
 
@@ -1177,6 +1184,7 @@ pub fn analyze_nonstreaming<'tcx>(
         "intrinsics": out.intrinsics,
         "tys": out.tys,
         "roots": out.roots,
+        "crate_hashes": out.crate_hashes,
     });
     sess.note_without_error(
         &format!("Indexing MIR ({} items)...", total_items));
