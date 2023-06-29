@@ -24,7 +24,8 @@ use rustc_interface::Queries;
 use rustc_session::config::ExternLocation;
 use std::collections::HashSet;
 use std::env;
-use std::fs::{File, OpenOptions};
+use std::ffi::OsStr;
+use std::fs::{File, OpenOptions, read_dir};
 use std::io::{self, Write};
 use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
@@ -48,34 +49,31 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
 
     fn after_parsing<'tcx>(
         &mut self,
-        _compiler: &Compiler,
+        compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
         // This phase runs with `--cfg crux`, so some `#[crux_test]` attrs may be visible.  Even
         // the limited amount of compilation we do will fail without the injected `register_attr`.
         analyz::inject_attrs(queries);
-        Compilation::Continue
-    }
 
-    fn after_analysis<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
         let sess = compiler.session();
-        // rustc_session::find_crate_name - get the crate with queries.expansion?
-        let krate = queries.parse().unwrap();
-        let krate = krate.borrow();
-        let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-        // get global ctxt then call methods inside of enter() to get
-        let outputs = compiler.build_output_filenames(&sess, &krate.attrs);  //queries.prepare_outputs().unwrap().peek();
+        let (crate_name, outputs) = {
+            // rustc_session::find_crate_name - get the crate with queries.expansion?
+            let krate = queries.parse().unwrap();
+            let krate = krate.borrow();
+            let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
+            // get global ctxt then call methods inside of enter() to get
+            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);  //queries.prepare_outputs().unwrap().peek();
+            (crate_name, outputs)
+        };
+        // Advance the state slightly further, initializing crate_types()
+        queries.register_plugins();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
             sess.crate_types().first().unwrap().clone(),
             &outputs,
             crate_name,
         ));
-        let ctx = queries.global_ctxt().unwrap();
         Compilation::Stop
     }
 }
@@ -186,7 +184,10 @@ fn go() {
 
     if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH") {
         args.push("-L".into());
-        args.push(s);
+        args.push(s.clone());
+
+        args.push("--sysroot".into());
+        args.push(s.clone());
     }
 
     let mut use_override_crates = HashSet::new();
