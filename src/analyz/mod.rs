@@ -808,7 +808,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        if tcx.def_kind(def_id) != DefKind::Fn {
+        if !([DefKind::Fn, DefKind::AnonConst].contains(&tcx.def_kind(def_id))) {
             tcx.sess.span_err(
                 tcx.def_span(def_id),
                 "#[test] can only be applied to functions",
