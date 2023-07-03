@@ -10,6 +10,13 @@
 * `mir-json-rustc-wrapper`, a `RUSTC_WRAPPER` binary, uses `rustc_interface` to
   invoke normal `rustc` compilation with some additional callbacks installed.
 
+These tools require a version of the Rust standard library that has been
+translated with `mir-json`. The `CRUX_RUST_LIBRARY_PATH` or
+`SAW_RUST_LIBRARY_PATH` environment variable should be defined with this path
+before using one of these tools. Note that these two environment variables are
+functionally equivalent, and the only difference is to more clearly signal
+which tool is intended to be used in combination with `mir-json`.
+
 ## `cargo-crux-test`
 
 In general, `crux-mir` tries to reuse as much of the normal `cargo`
@@ -54,12 +61,15 @@ the JSON afterwards. The former is more useful for SAW's needs.
    invokes `crux-mir`'s symbolic execution backend on the linked `.mir`.
 
 `mir-json-rustc-wrapper`'s behavior is controlled by a variety of environment
-variables:
+variables. Aside from `CRUX_RUST_LIBRARY_PATH`, it also uses the following
+internal environment variables, which most users will not need to care about:
 
-* `CRUX_RUST_LIBRARY_PATH`: The path containing `.rlib` files for crate
-   dependencies.
+* `CRUX_MIR_ALREADY_SET_PATH`: If this environment variable is set, then the
+  parent process has already set up the `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` to
+  point to the appropriate `lib` directory for the Rust toolchain currently in
+  use.
 * `CRUX_USE_OVERRIDE_CRATES`: The list of crates for which `crucible-mir`
-   overrides should be used.
+  overrides should be used.
 * `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
   will export all top-level functions. Otherwise, it will only export those
   functions with a `#[crux_test]` attribute.

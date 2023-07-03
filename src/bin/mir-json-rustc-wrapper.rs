@@ -182,7 +182,7 @@ fn go() {
     args.push("--cfg".into());
     args.push("crux".into());
 
-    if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH") {
+    if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
         args.push("-L".into());
         args.push(s.clone());
 
