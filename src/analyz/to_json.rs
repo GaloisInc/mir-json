@@ -272,7 +272,7 @@ impl<'tcx> TyIntern<'tcx> {
 /// How many functions should be exported in the JSON output?
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ExportStyle {
-    /// Only export functions annotated with the `#[crux_test]` attribute.
+    /// Only export functions annotated with the `#[crux::test]` attribute.
     ExportCruxTests,
     /// Export all functions.
     ExportAll

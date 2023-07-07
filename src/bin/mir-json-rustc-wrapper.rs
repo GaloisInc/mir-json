@@ -52,7 +52,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        // This phase runs with `--cfg crux`, so some `#[crux_test]` attrs may be visible.  Even
+        // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may be visible.  Even
         // the limited amount of compilation we do will fail without the injected `register_attr`.
         analyz::inject_attrs(queries);
 

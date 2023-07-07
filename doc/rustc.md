@@ -72,7 +72,7 @@ internal environment variables, which most users will not need to care about:
   overrides should be used.
 * `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
   will export all top-level functions. Otherwise, it will only export those
-  functions with a `#[crux_test]` attribute.
+  functions with a `#[crux::test]` attribute.
 
 ## Other binaries
 
@@ -125,7 +125,7 @@ in the following ways:
   representation required by the `crux-mir` backend.
 
 * Miscellaneous: `has_attr` for identifying symbolic tests (marked with the
-  `#[crux_test]` attribute); `all_crate_nums` and related queries to identify
+  `#[crux::test]` attribute); `all_crate_nums` and related queries to identify
   dependencies; `output_filenames` to get the path of the normal `rustc` output
   (`mir-json` stores the `.mir` files it generates alongside the normal `.rlib`
   library output).

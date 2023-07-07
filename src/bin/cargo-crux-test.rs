@@ -1,6 +1,6 @@
 //! `cargo crux-test`: Run symbolic tests of the current crate.
 //!
-//! Symbolic tests are identified by the `#[crux_test]` attribute, analogous to the `#[test]`
+//! Symbolic tests are identified by the `#[crux::test]` attribute, analogous to the `#[test]`
 //! attribute used with `cargo test`.  Symbolic tests often need to use the `crucible` crate, which
 //! is unavailable when building normally, and thus should be conditionally compiled using
 //! `#[cfg(crux)]`.
