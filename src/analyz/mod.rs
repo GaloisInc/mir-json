@@ -737,9 +737,9 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
         return false;
     }
 
+    let crux = Symbol::intern("crux");
+    let test = Symbol::intern("test");
     for attr in tcx.get_attrs_unchecked(def_id) {
-        let crux = Symbol::intern("crux");
-        let test = Symbol::intern("test");
         match &attr.kind {
             rustc_ast::AttrKind::Normal(na) => {
                 let segs = &na.item.path.segments;
@@ -751,24 +751,6 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
         }
     }
     return false;
-
-    // let mut file =
-    //     std::fs::OpenOptions::new()
-    //         .create(true)
-    //         .append(true)
-    //         .open("/tmp/attrs")
-    //         .unwrap();
-
-
-    // writeln!(file, "has crux::test attr:{}", tcx.has_attr(def_id, Symbol::intern("crux::test"))).unwrap();
-    // for a in attrs {
-    //     writeln!(file, "attr: {:?}", a).unwrap();
-    // }
-    // file.flush().unwrap();
-
-    // for
-
-    // def_id.is_local() && tcx.has_attr(def_id, Symbol::intern("crux::test"))
 }
 
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
@@ -1231,7 +1213,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
 }
 
 pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let mut k = queries.parse().unwrap(); // need to call `get_mut`?
+    let mut k = queries.parse().unwrap();
     let krate: &mut Crate = k.get_mut();
     krate.attrs.push(make_attr("feature", "register_tool"));
     krate.attrs.push(make_attr("register_tool", "crux"));
@@ -1309,10 +1291,6 @@ pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
         visit::walk_crate(&mut v, krate);
         MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
     });
-    // let k = queries.expansion().unwrap();
-    // let krate: &ast::Crate = &k.borrow().0;
-
-
 }
 
 fn get_match_spans() -> Rc<HashMap<Span, Span>> {

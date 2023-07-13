@@ -62,8 +62,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
             let krate = queries.parse().unwrap();
             let krate = krate.borrow();
             let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-            // get global ctxt then call methods inside of enter() to get
-            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);  //queries.prepare_outputs().unwrap().peek();
+            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
             (crate_name, outputs)
         };
         // Advance the state slightly further, initializing crate_types()

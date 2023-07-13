@@ -671,14 +671,6 @@ fn eval_array_len<'tcx>(
             val.try_to_machine_usize(tcx).expect("expecting usize value from constant") as usize,
         ref val => panic!("don't know how to translate ConstKind::{:?}", val),
     }
-    // match evaluated {
-    //     interpret::ConstValue::Scalar(interpret::Scalar::Int(sint)) => {
-    //         let data = sint.to_bits(sint.size()).unwrap();
-    //         assert!(data <= usize::MAX as u128);
-    //         data as usize
-    //     },
-    //     _ => panic!("impossible: array size is not a scalar?"),
-    // }
 }
 
 use self::machine::RenderConstMachine;
@@ -742,14 +734,6 @@ mod machine {
         fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
-
-        // fn enforce_number_init(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
-        //     false
-        // }
-
-        // fn enforce_number_no_provenance(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
-        //     false
-        // }
 
         fn find_mir_or_eval_fn(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
@@ -957,13 +941,6 @@ pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize
         _ => panic!("don't know how to translate ConstKind::{:?}", c.kind())
     }
 }
-
-// fn eval_op<'tcx>(op_ty: interpret::OpTy<'tcx>) -> interpret::Scalar<interpret::AllocId> {
-//     match *op_ty {
-//         interpret::Operand::Immediate(imm) => imm.to_scalar(),
-//         interpret::Operand::Indirect(place) => place.,
-//     }
-// }
 
 pub fn render_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
@@ -1198,7 +1175,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
                     "val": mem
                 }))
             },
-            // Special case for &u8
+            // Special case for &[u8; N]
             ty::TyKind::Array(elem_ty, _) => {
                 if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
                     let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
@@ -1522,11 +1499,11 @@ pub fn eval_mir_constant2<'mir, 'tcx>(
     icx.eval_mir_constant(&constant.literal, Some(constant.span), Some(layout)).unwrap()
 }
 
+// Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
 pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
     constant: &mir::Constant<'tcx>,
 ) -> interpret::ConstValue<'tcx> {
-    // let ct = self.monomorphize(constant.literal);
     let uv = match constant.literal {
         mir::ConstantKind::Ty(ct) => match ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv.expand(),
@@ -1534,7 +1511,6 @@ pub fn eval_mir_constant<'tcx>(
                 return tcx.valtree_to_const_val((ct.ty(), val));
             }
             err => panic!(
-                // constant.span,
                 "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
                 err, constant.span
             ),
@@ -1543,19 +1519,5 @@ pub fn eval_mir_constant<'tcx>(
         mir::ConstantKind::Val(val, _) => return val,
     };
 
-    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap() // .map_err(|err| {
-    //     match err {
-    //         ErrorHandled::Reported(_) => {
-    //             self.cx.tcx().sess.emit_err(errors::ErroneousConstant { span: constant.span });
-    //         }
-    //         ErrorHandled::TooGeneric => {
-    //             self.cx
-    //                 .tcx()
-    //                 .sess
-    //                 .diagnostic()
-    //                 .emit_bug(errors::PolymorphicConstantTooGeneric { span: constant.span });
-    //         }
-    //     }
-    //     err
-    // }).unwrap()
+    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap()
 }
