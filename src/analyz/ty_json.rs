@@ -924,7 +924,13 @@ impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
         let op_ty = as_opty(mir.state.tcx, val, ty);
-        let mut icx = mk_interp(mir.state.tcx);
+        let mut icx = interpret::InterpCx::new(
+            mir.state.tcx,
+            DUMMY_SP,
+            ty::ParamEnv::reveal_all(),
+            RenderConstMachine::new(),
+        );
+
         json!({
             "ty": ty.to_json(mir),
             "rendered": render_opty(mir, &mut icx, &op_ty),
@@ -1265,16 +1271,6 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
             _ => bug!("len not supported on sized type {:?}", mplace_ty.layout.ty),
         }
     }
-}
-
-// TODO: move
-pub fn mk_interp<'mir, 'tcx>(tcx: TyCtxt<'tcx>) -> interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>> {
-    interpret::InterpCx::new(
-        tcx,
-        DUMMY_SP,
-        ty::ParamEnv::reveal_all(),
-        RenderConstMachine::new(),
-    )
 }
 
 pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
