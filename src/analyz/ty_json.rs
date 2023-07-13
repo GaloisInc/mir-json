@@ -8,7 +8,7 @@ use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Proven
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
-use rustc_middle::ty::{AdtKind, TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeFoldable, TypeVisitable};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
@@ -425,18 +425,26 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &ty::TyKind::Dynamic(preds, _region, _dynkind) => {
-                let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, preds);
-                let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
-                mir.used.traits.insert(ti);
-                json!({
-                    "kind": "Dynamic",
-                    "trait_id": trait_name,
-                    "predicates": preds.iter().map(|p|{
-                        let p = tcx.erase_late_bound_regions(p);
-                        p.to_json(mir)
-                    }).collect::<Vec<_>>(),
-                })
+            &ty::TyKind::Dynamic(preds, _region, dynkind) => {
+                match dynkind {
+                    DynKind::Dyn => {
+                        let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, preds);
+                        let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
+                        mir.used.traits.insert(ti);
+                        json!({
+                            "kind": "Dynamic",
+                            "trait_id": trait_name,
+                            "predicates": preds.iter().map(|p|{
+                                let p = tcx.erase_late_bound_regions(p);
+                                p.to_json(mir)
+                            }).collect::<Vec<_>>(),
+                        })
+                    },
+                    DynKind::DynStar =>
+                        json!({
+                            "kind": "DynamicStar",
+                        }),
+                }
             }
             &ty::TyKind::Alias(ty::AliasKind::Projection, _) => unreachable!(
                 "no TyKind::Alias with AliasKind Projection should remain after monomorphization"
