@@ -140,7 +140,7 @@ impl<'tcx> TraitInst<'tcx> {
                 projs.push(ty::ExistentialProjection {
                     def_id: ai.def_id,
                     substs: ex_trait_ref.substs,
-                    term: actual_ty.into(), // TO REVIEW: structure of Term has changed
+                    term: actual_ty.into(),
                 });
             }
         }
