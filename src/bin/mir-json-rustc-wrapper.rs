@@ -3,7 +3,6 @@
 //! as specified by `--extern` and/or `#![no_std]` and run `crux-mir` on the result.
 #![feature(rustc_private)]
 
-extern crate rustc;
 extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
@@ -25,7 +24,8 @@ use rustc_interface::Queries;
 use rustc_session::config::ExternLocation;
 use std::collections::HashSet;
 use std::env;
-use std::fs::{File, OpenOptions};
+use std::ffi::OsStr;
+use std::fs::{File, OpenOptions, read_dir};
 use std::io::{self, Write};
 use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
@@ -49,28 +49,29 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
 
     fn after_parsing<'tcx>(
         &mut self,
-        _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
-        // This phase runs with `--cfg crux`, so some `#[crux_test]` attrs may be visible.  Even
-        // the limited amount of compilation we do will fail without the injected `register_attr`.
-        analyz::inject_attrs(queries);
-        Compilation::Continue
-    }
-
-    fn after_analysis<'tcx>(
-        &mut self,
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
+        // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may be visible.  Even
+        // the limited amount of compilation we do will fail without the injected `register_attr`.
+        analyz::inject_attrs(queries);
+
         let sess = compiler.session();
-        let crate_name = queries.crate_name().unwrap().peek();
-        let outputs = queries.prepare_outputs().unwrap().peek();
+        let (crate_name, outputs) = {
+            // rustc_session::find_crate_name - get the crate with queries.expansion?
+            let krate = queries.parse().unwrap();
+            let krate = krate.borrow();
+            let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
+            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
+            (crate_name, outputs)
+        };
+        // Advance the state slightly further, initializing crate_types()
+        queries.register_plugins();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
-            sess.crate_types.get().first().unwrap().clone(),
+            sess.crate_types().first().unwrap().clone(),
             &outputs,
-            &crate_name,
+            crate_name,
         ));
         Compilation::Stop
     }
@@ -81,12 +82,7 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Pa
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::run_compiler(
-        &args,
-        &mut callbacks,
-        None,
-        None,
-    ).unwrap();
+    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
     callbacks.output_path.unwrap()
 }
 
@@ -187,7 +183,10 @@ fn go() {
 
     if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
         args.push("-L".into());
-        args.push(s);
+        args.push(s.clone());
+
+        args.push("--sysroot".into());
+        args.push(s.clone());
     }
 
     let mut use_override_crates = HashSet::new();
@@ -209,16 +208,14 @@ fn go() {
             eprintln!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
-            rustc_driver::run_compiler(
+            rustc_driver::RunCompiler::new(
                 &args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
                     export_style,
                 },
-                None,
-                None,
-            ).unwrap();
+            ).run().unwrap();
             return;
         },
         Some(x) => x,
@@ -252,12 +249,7 @@ fn go() {
         use_override_crates: use_override_crates.clone(),
         export_style,
     };
-    rustc_driver::run_compiler(
-        &args,
-        &mut callbacks,
-        None,
-        None,
-    ).unwrap();
+    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 

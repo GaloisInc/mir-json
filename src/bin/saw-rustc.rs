@@ -2,6 +2,7 @@
 //! saw-build`.  Useful for building a single file, with `saw-rustc foo.rs`.
 
 #![feature(rustc_private)]
+extern crate rustc_driver;
 extern crate rustc_session;
 
 use std::env;

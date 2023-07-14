@@ -1,14 +1,18 @@
+use std::convert::TryFrom;
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc::mir;
-use rustc_mir::interpret;
-use rustc::ty;
-use rustc::ty::{TyCtxt, TypeFoldable};
-use rustc::ich::StableHashingContext;
 use rustc_index::vec::{IndexVec, Idx};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_middle::mir;
+use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
+use rustc_const_eval::const_eval::CheckAlignment;
+use rustc_middle::bug;
+use rustc_middle::ty;
+use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::util::{IntTypeExt};
+use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
-use rustc_ast::ast;
+use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -22,16 +26,16 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
 {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut j = Vec::new();
-        for v in self {
+        for v in self.iter() {
             j.push(v.to_json(mir));
         }
         json!(j)
     }
 }
 
-basic_json_enum_impl!(ast::FloatTy);
-basic_json_enum_impl!(ast::IntTy);
-basic_json_enum_impl!(ast::UintTy);
+basic_json_enum_impl!(ty::FloatTy);
+basic_json_enum_impl!(ty::IntTy);
+basic_json_enum_impl!(ty::UintTy);
 basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::CastKind);
@@ -66,18 +70,15 @@ impl ToJson<'_> for ty::VariantDiscr {
 
 pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
     // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
-    let crate_name = if def_id.is_local() {
-        tcx.crate_name.clone()
-    } else {
-        tcx.crate_name(def_id.krate)
-    };
-    let disambig = if def_id.is_local() {
-        tcx.sess.local_crate_disambiguator()
-    } else {
-        tcx.crate_disambiguator(def_id.krate)
-    };
+    let crate_name = tcx.crate_name(def_id.krate);
+    let disambig = tcx.crate_hash(def_id.krate);
     let defpath = tcx.def_path(def_id);
-    format!("{}/{}{}", crate_name, &disambig.to_string()[..8], defpath.to_string_no_crate())
+    format!(
+        "{}/{}{}",
+        crate_name,
+        &disambig.to_string()[..8],
+        defpath.to_string_no_crate_verbose(),
+    )
 }
 
 pub fn ext_def_id_str<'tcx, T>(
@@ -86,15 +87,15 @@ pub fn ext_def_id_str<'tcx, T>(
     prefix: &str,
     extra: T,
 ) -> String
-where T: HashStable<StableHashingContext<'tcx>> {
+where T: for<'a> HashStable<StableHashingContext<'a>> {
     let base = def_id_str(tcx, def_id);
 
     // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
-    let mut hasher = StableHasher::new();
-    let mut hcx = tcx.create_stable_hashing_context();
-    extra.hash_stable(&mut hcx, &mut hasher);
-    let hash: u64 = hasher.finish();
-
+    let hash: u64 = tcx.with_stable_hashing_context(|mut hcx| {
+        let mut hasher = StableHasher::new();
+        extra.hash_stable(&mut hcx, &mut hasher);
+        hasher.finish()
+    });
     format!("{}::{}{:016x}[0]", base, prefix, hash)
 }
 
@@ -103,7 +104,7 @@ pub fn adt_inst_id_str<'tcx>(
     ai: AdtInst<'tcx>,
 ) -> String {
     // Erase all early-bound regions.
-    let substs = tcx.erase_regions(&ai.substs);
+    let substs = tcx.erase_regions(ai.substs);
     ext_def_id_str(tcx, ai.def_id(), "_adt", substs)
 }
 
@@ -119,7 +120,7 @@ pub fn inst_id_str<'tcx>(
     assert!(!substs.needs_subst());
 
     match inst.def {
-        ty::InstanceDef::Item(def_id) |
+        ty::InstanceDef::Item(ty::WithOptConstParam { did: def_id, .. }) |
         ty::InstanceDef::Intrinsic(def_id) => {
             if substs.len() == 0 {
                 def_id_str(tcx, def_id)
@@ -127,7 +128,7 @@ pub fn inst_id_str<'tcx>(
                 ext_def_id_str(tcx, def_id, "_inst", substs)
             }
         },
-        ty::InstanceDef::VtableShim(def_id) =>
+        ty::InstanceDef::VTableShim(def_id) =>
             ext_def_id_str(tcx, def_id, "_vtshim", substs),
         ty::InstanceDef::ReifyShim(def_id) =>
             ext_def_id_str(tcx, def_id, "_reify", substs),
@@ -136,7 +137,7 @@ pub fn inst_id_str<'tcx>(
         ty::InstanceDef::DropGlue(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_drop", substs),
         ty::InstanceDef::FnPtrShim(def_id, _) |
-        ty::InstanceDef::ClosureOnceShim { call_once: def_id } =>
+        ty::InstanceDef::ClosureOnceShim { call_once: def_id, .. } =>
             ext_def_id_str(tcx, def_id, "_callonce", substs),
         ty::InstanceDef::CloneShim(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_shim", substs),
@@ -171,7 +172,7 @@ pub fn get_fn_def_name<'tcx>(
     );
 
     // Compute the mangled name of the monomorphized instance being called.
-    if let Some(inst) = inst {
+    if let Ok(Some(inst)) = inst {
         mir.used.instances.insert(inst);
         inst_id_str(mir.state.tcx, inst)
     } else {
@@ -221,11 +222,13 @@ impl ToJson<'_> for hir::def_id::DefId {
 /// of counting to ours.
 fn adjust_method_index<'tcx>(
     tcx: TyCtxt<'tcx>,
-    tref: ty::Binder<ty::TraitRef<'tcx>>,
+    tref: ty::Binder<'tcx, ty::TraitRef<'tcx>>,
     raw_idx: usize,
 ) -> usize {
-    let methods = tcx.vtable_methods(tref);
-    methods.iter().take(raw_idx).filter(|m| m.is_some()).count()
+    let methods = tcx.vtable_entries(tref);
+    methods.iter().take(raw_idx)
+        .filter(|m| matches!(m, ty::vtable::VtblEntry::Method(_)))
+        .count()
 }
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
@@ -238,7 +241,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
         match self.def {
             ty::InstanceDef::Item(did) => json!({
                 "kind": "Item",
-                "def_id": did.to_json(mir),
+                "def_id": did.did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
             ty::InstanceDef::Intrinsic(did) => json!({
@@ -246,8 +249,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::VtableShim(did) => json!({
-                "kind": "VtableShim",
+            ty::InstanceDef::VTableShim(did) => json!({
+                "kind": "VTableShim",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
@@ -265,8 +268,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceDef::Virtual(did, idx) => {
                 let self_ty = substs.types().next()
                     .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
-                let preds = match self_ty.kind {
-                    ty::TyKind::Dynamic(ref preds, _region) => preds,
+                let preds = match *self_ty.kind() {
+                    ty::TyKind::Dynamic(ref preds, _region, _dynkind) => preds,
                     _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
                 };
                 let ex_tref = match preds.principal() {
@@ -275,7 +278,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 };
                 let tref = ex_tref.with_self_ty(mir.state.tcx, self_ty);
 
-                let erased_tref = mir.state.tcx.erase_late_bound_regions(&tref);
+                let erased_tref = mir.state.tcx.erase_late_bound_regions(tref);
                 let ti = TraitInst::from_trait_ref(mir.state.tcx, erased_tref);
                 let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
                 mir.used.traits.insert(ti);
@@ -287,7 +290,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "index": adjust_method_index(mir.state.tcx, tref, idx),
                 })
             },
-            ty::InstanceDef::ClosureOnceShim { call_once } => json!({
+            ty::InstanceDef::ClosureOnceShim { call_once, .. } => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
                 "substs": substs.to_json(mir),
@@ -299,11 +302,11 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceDef::CloneShim(did, ty) => {
-                let sub_tys = match ty.kind {
+                let sub_tys = match *ty.kind() {
                     ty::TyKind::Array(t, _) => vec![t],
-                    ty::TyKind::Tuple(substs) => substs.types().collect(),
+                    ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(closure_did, substs) =>
-                        substs.as_closure().upvar_tys(closure_did, mir.state.tcx).collect(),
+                        substs.as_closure().upvar_tys().collect(),
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]
@@ -316,7 +319,9 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                             ty::ParamEnv::reveal_all(),
                             did,
                             mir.state.tcx.intern_substs(&[ty.into()]),
-                        );
+                        ).unwrap_or_else(|_| {
+                            panic!("failed to resolve instance: {:?}, {:?}", did, ty);
+                        });
                         if let Some(inst) = inst {
                             // Add the callee to `used.insances`, so we'll emit code for it even if
                             // it's otherwise unused.  If `inst` is itself a `CloneShim`, its own
@@ -341,23 +346,25 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
 // For type _references_. To translate ADT defintions, do it explicitly.
 impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        let tcx = mir.state.tcx;
+
         // If this type has already been interned, just return its ID.
         if let Some(id) = mir.tys.get(*self) {
             return json!(id);
         }
 
         // Otherwise, convert the type to JSON and add the new entry to the interning table.
-        let j = match &self.kind {
+        let j = match self.kind() {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
             }
             &ty::TyKind::Char => {
                 json!({"kind": "Char"})
             }
-            &ty::TyKind::Int(ref t) => {
+            &ty::TyKind::Int(t) => {
                 json!({"kind": "Int", "intkind": t.to_json(mir)})
             }
-            &ty::TyKind::Uint(ref t) => {
+            &ty::TyKind::Uint(t) => {
                 json!({"kind": "Uint", "uintkind": t.to_json(mir)})
             }
             &ty::TyKind::Tuple(ref sl) => {
@@ -369,7 +376,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Str => {
                 json!({"kind": "Str"})
             }
-            &ty::TyKind::Float(ref sz) => {
+            &ty::TyKind::Float(sz) => {
                 json!({"kind": "Float", "size": sz.to_json(mir)})
             }
             &ty::TyKind::Array(ref t, ref size) => {
@@ -395,7 +402,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "Adt",
                     "name": adt_inst_id_str(mir.state.tcx, ai),
-                    "orig_def_id": adtdef.did.to_json(mir),
+                    "orig_def_id": adtdef.did().to_json(mir),
                     "substs": substs.to_json(mir),
                 })
             }
@@ -412,27 +419,35 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Closure(defid, ref substs) => {
                 json!({
                     "kind": "Closure",
-                    "upvar_tys": substs.as_closure().upvar_tys(defid, mir.state.tcx)
+                    "upvar_tys": substs.as_closure().upvar_tys()
                         .collect::<Vec<_>>().to_json(mir),
                     // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
             }
-            &ty::TyKind::Dynamic(ref preds, _region) => {
-                let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, *preds);
-                let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
-                mir.used.traits.insert(ti);
-                json!({
-                    "kind": "Dynamic",
-                    "trait_id": trait_name,
-                    "predicates": preds.skip_binder().to_json(mir),
-                })
+            &ty::TyKind::Dynamic(preds, _region, dynkind) => {
+                match dynkind {
+                    DynKind::Dyn => {
+                        let ti = TraitInst::from_dynamic_predicates(mir.state.tcx, preds);
+                        let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
+                        mir.used.traits.insert(ti);
+                        json!({
+                            "kind": "Dynamic",
+                            "trait_id": trait_name,
+                            "predicates": preds.iter().map(|p|{
+                                let p = tcx.erase_late_bound_regions(p);
+                                p.to_json(mir)
+                            }).collect::<Vec<_>>(),
+                        })
+                    },
+                    DynKind::DynStar =>
+                        json!({
+                            "kind": "DynamicStar",
+                        }),
+                }
             }
-            &ty::TyKind::Projection(..) => unreachable!(
-                "no TyKind::Projection should remain after monomorphization"
-            ),
-            &ty::TyKind::UnnormalizedProjection(..) => unreachable!(
-                "no TyKind::UnnormalizedProjection should remain after monomorphization"
+            &ty::TyKind::Alias(ty::AliasKind::Projection, _) => unreachable!(
+                "no TyKind::Alias with AliasKind Projection should remain after monomorphization"
             ),
             &ty::TyKind::FnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
@@ -440,7 +455,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Never => {
                 json!({"kind": "Never"})
             }
-            &ty::TyKind::Error => {
+            &ty::TyKind::Error(_) => {
                 json!({"kind": "Error"})
             }
             &ty::TyKind::Infer(_) => {
@@ -467,9 +482,9 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "GeneratorWitness"})
             }
-            &ty::TyKind::Opaque(_, _) => {
+            &ty::TyKind::Alias(ty::AliasKind::Opaque, _) => {
                 // TODO
-                json!({"kind": "Opaque"})
+                json!({"kind": "Alias"})
             }
         };
 
@@ -486,7 +501,7 @@ impl ToJson<'_> for ty::ParamTy {
 
 impl<'tcx> ToJson<'tcx> for ty::PolyFnSig<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let sig = ms.state.tcx.erase_late_bound_regions(self);
+        let sig = ms.state.tcx.erase_late_bound_regions(*self);
         sig.to_json(ms)
     }
 }
@@ -512,11 +527,11 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for ty::ProjectionTy<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "substs": self.substs.to_json(ms),
-            "item_def_id": self.item_def_id.to_json(ms)
+            "def_id": self.def_id.to_json(ms)
         })
     }
 }
@@ -525,37 +540,23 @@ impl<'tcx> ToJson<'tcx> for ty::ProjectionTy<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match self {
-            &ty::Predicate::Trait(ref ptp, _constness) => {
+        match self.kind().skip_binder() {
+            ty::PredicateKind::Clause(ty::Clause::Trait(tp)) => {
                 json!({
-                    "trait_pred": ptp.to_json(ms)
+                    "trait_pred": tp.trait_ref.to_json(ms)
                 })
             }
-            &ty::Predicate::Projection(ref ppp) => {
-                json!({
-                    "trait_proj": ppp.skip_binder().to_json(ms)
-                })
+            ty::PredicateKind::Clause(ty::Clause::Projection(pp)) => match pp.term.unpack() {
+                ty::TermKind::Ty(ty) => json!({
+                    "projection_ty": pp.projection_ty.to_json(ms),
+                    "ty": ty.to_json(ms),
+                }),
+                ty::TermKind::Const(_) => json!("unknown_const_projection"),
             }
             _ => {
                 json!("unknown_pred")
             }
         }
-    }
-}
-
-impl<'tcx> ToJson<'tcx> for ty::PolyTraitPredicate<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let pred = ms.state.tcx.erase_late_bound_regions(self);
-        pred.trait_ref.to_json(ms)
-    }
-}
-
-impl<'tcx> ToJson<'tcx> for ty::ProjectionPredicate<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        json!({
-            "projection_ty": self.projection_ty.to_json(ms),
-            "ty": self.ty.to_json(ms)
-        })
     }
 }
 
@@ -571,13 +572,16 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
                     "substs": trait_ref.substs.to_json(ms),
                 })
             },
-            &ty::ExistentialPredicate::Projection(ref proj) => {
-                json!({
+            &ty::ExistentialPredicate::Projection(ref proj) => match proj.term.unpack() {
+                ty::TermKind::Ty(ty) => json!({
                     "kind": "Projection",
-                    "proj": proj.item_def_id.to_json(ms),
+                    "proj": proj.def_id.to_json(ms),
                     "substs": proj.substs.to_json(ms),
-                    "rhs_ty": proj.ty.to_json(ms),
-                })
+                    "rhs_ty": ty.to_json(ms),
+                }),
+                ty::TermKind::Const(_) => json!({
+                    "kind": "Projection_Const",
+                }),
             },
             &ty::ExistentialPredicate::AutoTrait(ref did) => {
                 json!({
@@ -662,329 +666,92 @@ impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
     }
 }
 
-fn do_const_eval<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    def_id: DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
-    promoted: Option<mir::Promoted>,
-) -> mir::interpret::ConstValue<'tcx> {
-    let param_env = ty::ParamEnv::reveal_all();
-    let instance = ty::Instance::resolve(tcx, param_env, def_id, substs).unwrap();
-    let cid = interpret::GlobalId {
-        instance,
-        promoted,
-    };
-    tcx.const_eval_validated(param_env.and(cid)).unwrap()
-}
-
 fn eval_array_len<'tcx>(
     tcx: TyCtxt<'tcx>,
-    c: &'tcx ty::Const<'tcx>,
+    c: ty::Const<'tcx>,
 ) -> usize {
-    let evaluated = match c.val {
-        ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
-            do_const_eval(tcx, def_id, substs, promoted)
-        },
-        ty::ConstKind::Value(val) => val,
-        _ => panic!("don't know how to translate ConstKind::{:?}", c.val),
-    };
-    match evaluated {
-        interpret::ConstValue::Scalar(interpret::Scalar::Raw { size: _, data }) => {
-            assert!(data <= usize::MAX as u128);
-            data as usize
-        },
-        _ => panic!("impossible: array size is not a scalar?"),
+    match c.kind() {
+        // ty::ConstKind::Unevaluated(un) => {
+        //     tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), un.expand(), None).unwrap()
+        // },
+        // NB: the type of "val" changed to valtree - try to get the size out of that
+        ty::ConstKind::Value(ty::ValTree::Leaf(val)) =>
+            val.try_to_machine_usize(tcx).expect("expecting usize value from constant") as usize,
+        ref val => panic!("don't know how to translate ConstKind::{:?}", val),
     }
 }
 
-fn read_static_memory<'tcx>(
-    alloc: &'tcx mir::interpret::Allocation,
-    start: usize,
-    end: usize,
-) -> &'tcx [u8] {
-    assert!(alloc.relocations().len() == 0);
-    alloc.inspect_with_undef_and_ptr_outside_interpreter(start .. end)
-}
-
-fn render_constant_scalar<'tcx>(
-    mir: &mut MirState<'_, 'tcx>,
-    ty: ty::Ty<'tcx>,
-    s: interpret::Scalar,
-) -> Option<serde_json::Value> {
-    match s {
-        interpret::Scalar::Raw { size, data } => {
-            render_constant(mir, ty, Some(s), Some((size, data)), None)
-        },
-        interpret::Scalar::Ptr(ptr) => {
-            match mir.state.tcx.alloc_map.lock().get(ptr.alloc_id) {
-                Some(ga) => match ga {
-                    interpret::GlobalAlloc::Static(def_id) => Some(json!({
-                        "kind": "static_ref",
-                        "def_id": def_id.to_json(mir),
-                    })),
-                    interpret::GlobalAlloc::Memory(alloc) => {
-                        let start = ptr.offset.bytes() as usize;
-                        render_constant(
-                            mir,
-                            ty,
-                            Some(s),
-                            None,
-                            Some((alloc, start, start)),
-                        )
-                    },
-                    _ => None,
-                },
-                None => None,
-            }
-        },
-    }
-}
-
-// TODO: migrate all constant rendering to use InterpCx + OpTy.  This should reduce special cases
-// and let us handle both in-memory and immediate constants.
-fn render_constant<'tcx>(
-    mir: &mut MirState<'_, 'tcx>,
-    ty: ty::Ty<'tcx>,
-    scalar: Option<interpret::Scalar>,
-    scalar_bits: Option<(u8, u128)>,
-    slice: Option<(&'tcx mir::interpret::Allocation, usize, usize)>,
-) -> Option<serde_json::Value> {
-    Some(match ty.kind {
-        ty::TyKind::Int(_) => {
-            let (size, bits) = scalar_bits.expect("int const had non-scalar value?");
-            let mut val = bits as i128;
-            if bits & (1 << (size * 8 - 1)) != 0 && size < 128 / 8 {
-                // Sign-extend to 128 bits
-                val |= -1_i128 << (size * 8);
-            }
-            json!({
-                "kind": match ty.kind {
-                    ty::TyKind::Int(ast::IntTy::Isize) => "isize",
-                    ty::TyKind::Int(_) => "int",
-                    _ => unreachable!(),
-                },
-                "size": size,
-                "val": val.to_string(),
-            })
-        },
-        ty::TyKind::Bool |
-        ty::TyKind::Char |
-        ty::TyKind::Uint(_) => {
-            let (size, bits) = scalar_bits.expect("uint const had non-scalar value?");
-            json!({
-                "kind": match ty.kind {
-                    ty::TyKind::Bool => "bool",
-                    ty::TyKind::Char => "char",
-                    ty::TyKind::Uint(ast::UintTy::Usize) => "usize",
-                    ty::TyKind::Uint(_) => "uint",
-                    _ => unreachable!(),
-                },
-                "size": size,
-                "val": bits.to_string(),
-            })
-        },
-        ty::TyKind::Float(ast::FloatTy::F32) => {
-            let (size, bits) = scalar_bits.expect("f32 const had non-scalar value?");
-            let val = f32::from_bits(bits as u32);
-            json!({
-                "kind": "float",
-                "size": size,
-                "val": val.to_string(),
-            })
-        },
-        ty::TyKind::Float(ast::FloatTy::F64) => {
-            let (size, bits) = scalar_bits.expect("f64 const had non-scalar value?");
-            let val = f64::from_bits(bits as u64);
-            json!({
-                "kind": "float",
-                "size": size,
-                "val": val.to_string(),
-            })
-        },
-
-        // &str - for string literals
-        ty::TyKind::Ref(_, &ty::TyS {
-            kind: ty::TyKind::Str,
-            ..
-        }, hir::Mutability::Not) => {
-            let (alloc, start, end) = slice.expect("string const had non-slice value");
-            let mem = read_static_memory(alloc, start, end);
-            json!({
-                "kind": "str",
-                "val": mem,
-            })
-        },
-
-        // &[u8; _] - for bytestring literals
-        ty::TyKind::Ref(_, &ty::TyS {
-            kind: ty::TyKind::Array(&ty::TyS {
-                kind: ty::TyKind::Uint(ast::UintTy::U8),
-                ..
-            }, len_const),
-            ..
-        }, hir::Mutability::Not) => {
-            let len = eval_array_len(mir.state.tcx, len_const);
-            let (alloc, start, _) = slice.expect("string const had non-slice value");
-            let end = start + len;
-            let mem = read_static_memory(alloc, start, end);
-            json!({
-                "kind": "bstr",
-                "val": mem,
-            })
-        },
-
-        ty::TyKind::RawPtr(_) => {
-            let (_size, bits) = scalar_bits.expect("raw_ptr const had non-scalar value?");
-            json!({
-                "kind": "raw_ptr",
-                "val": bits.to_string(),
-            })
-        },
-
-        ty::TyKind::FnDef(defid, ref substs) => {
-            json!({
-                "kind": "fndef",
-                "def_id": get_fn_def_name(mir, defid, substs),
-            })
-        },
-
-        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_struct() => {
-            let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
-                .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
-            let scalar = scalar.expect("adt had non-scalar value (NYI)");
-            let variant = adt_def.non_enum_variant();
-            json!({
-                "kind": "struct",
-                "fields": render_constant_variant(
-                    mir,
-                    variant,
-                    interpret::ImmTy::from_scalar(scalar, tyl).into(),
-                ),
-            })
-        },
-
-        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_enum() => {
-            let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
-                .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
-            let scalar = scalar.expect("adt had non-scalar value (NYI)");
-
-            let icx = interpret::InterpCx::new(
-                mir.state.tcx.at(DUMMY_SP),
-                ty::ParamEnv::reveal_all(),
-                RenderConstMachine,
-                (),
-            );
-            let op_ty = interpret::ImmTy::from_scalar(scalar, tyl).into();
-            let (_discr, variant_idx) = icx.read_discriminant(op_ty).unwrap_or_else(|e| {
-                panic!("failed to access discriminant of {:?}: {}", op_ty.layout.ty, e)
-            });
-
-            let variant = &adt_def.variants[variant_idx];
-            json!({
-                "kind": "enum",
-                "variant": variant_idx.as_u32(),
-                "fields": render_constant_variant(
-                    mir,
-                    variant,
-                    icx.operand_downcast(op_ty, variant_idx).unwrap_or_else(|e| {
-                        panic!("failed to downcast {:?} to variant {:?}: {}",
-                            op_ty.layout.ty, variant_idx, e)
-                    }),
-                ),
-            })
-        },
-
-        _ => {
-            if let Some((0, _)) = scalar_bits {
-                json!({
-                    "kind": "zst",
-                })
-            } else {
-                return None;
-            }
-        },
-    })
-}
-
-fn render_constant_variant<'tcx>(
-    mir: &mut MirState<'_, 'tcx>,
-    variant: &'tcx ty::VariantDef,
-    op_ty: interpret::OpTy<'tcx>,
-) -> Option<serde_json::Value> {
-    let icx = interpret::InterpCx::new(
-        mir.state.tcx.at(DUMMY_SP),
-        ty::ParamEnv::reveal_all(),
-        RenderConstMachine,
-        (),
-    );
-    let mut vals = Vec::with_capacity(variant.fields.len());
-    for i in 0 .. variant.fields.len() {
-        let field = icx.operand_field(op_ty, i as u64).unwrap_or_else(|e| {
-            panic!("failed to access field {} of {:?}: {}", i, op_ty.layout.ty, e)
-        });
-
-        // `try_as_mplace` always "succeeds" (returns an `MPlace`, dangling) for ZSTs.  We want it
-        // to be an immediate instead.
-        if field.layout.is_zst() {
-            vals.push(render_constant_scalar(mir, field.layout.ty, interpret::Scalar::zst())?);
-            continue;
-        }
-
-        let val = match field.try_as_mplace(&icx) {
-            Ok(_mpl) => None,
-            Err(imm) => match *imm {
-                interpret::Immediate::Scalar(maybe_scalar) => match maybe_scalar {
-                    interpret::ScalarMaybeUndef::Scalar(s) => {
-                        render_constant_scalar(mir, field.layout.ty, s)
-                    },
-                    _ => None,
-                },
-                _ => None,
-            },
-        }?;
-        vals.push(val);
-    }
-    Some(vals.into())
-}
-
-struct RenderConstMachine;
-
+use self::machine::RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
     use super::*;
-    use rustc_mir::interpret::*;
-    use rustc::ty::*;
-    use rustc::mir::*;
-    use rustc_data_structures::fx::FxHashMap;
-    use rustc_span::Span;
+    use rustc_const_eval::interpret::*;
+    use rustc_data_structures::fx::FxIndexMap;
+    use rustc_middle::ty::*;
+    use rustc_target::abi::Size;
+    use rustc_target::spec::abi::Abi;
+    pub struct RenderConstMachine<'mir, 'tcx> {
+        stack: Vec<Frame<'mir, 'tcx, AllocId, ()>>,
+    }
 
-    impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine {
-        type MemoryKinds = !;
-        type PointerTag = ();
+    impl<'mir, 'tcx> RenderConstMachine<'mir, 'tcx> {
+        pub fn new() -> RenderConstMachine<'mir, 'tcx> {
+            RenderConstMachine {
+                stack: Vec::new()
+            }
+        }
+    }
+
+    impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine<'mir, 'tcx> {
+        type MemoryKind = !;
+        type Provenance = AllocId;
+        type ProvenanceExtra = ();
         type ExtraFnVal = !;
         type FrameExtra = ();
-        type MemoryExtra = ();
         type AllocExtra = ();
-        type MemoryMap = FxHashMap<
+        type MemoryMap = FxIndexMap<
             AllocId,
             (MemoryKind<!>, Allocation),
         >;
 
-        const STATIC_KIND: Option<!> = None;
-        const CHECK_ALIGN: bool = false;
+        const GLOBAL_KIND: Option<Self::MemoryKind> = None;
+        const PANIC_ON_ALLOC_FAIL: bool = false;
 
-        fn enforce_validity(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_alignment(ecx: &InterpCx<'mir, 'tcx, Self>) -> CheckAlignment {
+            CheckAlignment::No
+        }
+
+        fn alignment_check_failed(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            has: Align,
+            required: Align,
+            check: CheckAlignment,
+        ) -> InterpResult<'tcx, ()> {
+            panic!("not implemented: alignment_check_failed");
+        }
+
+        fn use_addr_for_alignment_check(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
+        }
+
+        #[inline(always)]
+        fn checked_binop_checks_overflow(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            true
+        }
+
+        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
         fn find_mir_or_eval_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _span: Span,
-            _instance: Instance<'tcx>,
-            _args: &[OpTy<'tcx>],
-            _ret: Option<(PlaceTy<'tcx>, BasicBlock)>,
-            _unwind: Option<BasicBlock>, // unwinding is not supported in consts
-        ) -> InterpResult<'tcx, Option<&'mir Body<'tcx>>> {
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            instance: ty::Instance<'tcx>,
+            abi: Abi,
+            args: &[OpTy<'tcx, Self::Provenance>],
+            destination: &PlaceTy<'tcx, Self::Provenance>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
+        ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "find_mir_or_eval_fn".into(),
@@ -993,11 +760,13 @@ mod machine {
         }
 
         fn call_extra_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _fn_val: Self::ExtraFnVal,
-            _args: &[OpTy<'tcx, Self::PointerTag>],
-            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            fn_val: Self::ExtraFnVal,
+            abi: Abi,
+            args: &[OpTy<'tcx, Self::Provenance>],
+            destination: &PlaceTy<'tcx, Self::Provenance>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1007,12 +776,12 @@ mod machine {
         }
 
         fn call_intrinsic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _span: Span,
-            _instance: Instance<'tcx>,
-            _args: &[OpTy<'tcx, Self::PointerTag>],
-            _ret: Option<(PlaceTy<'tcx, Self::PointerTag>, BasicBlock)>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            instance: ty::Instance<'tcx>,
+            args: &[OpTy<'tcx, Self::Provenance>],
+            destination: &PlaceTy<'tcx, Self::Provenance>,
+            target: Option<mir::BasicBlock>,
+            unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1022,9 +791,9 @@ mod machine {
         }
 
         fn assert_panic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _msg: &AssertMessage<'tcx>,
-            _unwind: Option<BasicBlock>
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            msg: &mir::AssertMessage<'tcx>,
+            unwind: Option<mir::BasicBlock>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -1034,11 +803,11 @@ mod machine {
         }
 
         fn binary_ptr_op(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
-            _bin_op: BinOp,
-            _left: ImmTy<'tcx, Self::PointerTag>,
-            _right: ImmTy<'tcx, Self::PointerTag>
-        ) -> InterpResult<'tcx, (Scalar<Self::PointerTag>, bool, Ty<'tcx>)> {
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            bin_op: mir::BinOp,
+            left: &ImmTy<'tcx, Self::Provenance>,
+            right: &ImmTy<'tcx, Self::Provenance>,
+        ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool, Ty<'tcx>)> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "binary_ptr_op".into(),
@@ -1046,52 +815,81 @@ mod machine {
             ).into())
         }
 
-        fn tag_static_base_pointer(
-            _memory_extra: &Self::MemoryExtra,
-            _id: AllocId,
-        ) -> Self::PointerTag {
-            ()
+        fn extern_static_base_pointer(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            def_id: DefId,
+        ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "extern_static_base_pointer".into(),
+                ),
+            ).into())
         }
 
-        fn box_alloc(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _dest: PlaceTy<'tcx, Self::PointerTag>
+        fn adjust_alloc_base_pointer(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer,
+        ) -> Pointer<Self::Provenance> {
+            ptr
+        }
+
+        fn ptr_from_addr_cast(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            addr: u64,
+        ) -> InterpResult<'tcx, Pointer<Option<Self::Provenance>>> {
+            unimplemented!("ptr_from_addr_cast")
+        }
+
+        fn expose_ptr(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer<Self::Provenance>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
-                    "box_alloc".into(),
+                    "expose_ptr".into(),
                 ),
             ).into())
         }
 
-        fn init_allocation_extra<'b>(
-            _memory_extra: &Self::MemoryExtra,
-            _id: AllocId,
+        fn ptr_get_alloc(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            ptr: Pointer<Self::Provenance>,
+        ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
+            let (prov, offset) = ptr.into_parts();
+            Some((prov, offset, ()))
+        }
+
+        fn adjust_allocation<'b>(
+            ecx: &InterpCx<'mir, 'tcx, Self>,
+            id: AllocId,
             alloc: Cow<'b, Allocation>,
-            _kind: Option<MemoryKind<Self::MemoryKinds>>
-        ) -> (Cow<'b, Allocation<Self::PointerTag, Self::AllocExtra>>, Self::PointerTag) {
-            (alloc, ())
+            kind: Option<MemoryKind<Self::MemoryKind>>,
+        ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
+            Ok(alloc)
         }
 
-        fn stack_push(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>
-        ) -> InterpResult<'tcx, Self::FrameExtra> {
+        fn init_frame_extra(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            frame: Frame<'mir, 'tcx, Self::Provenance>,
+        ) -> InterpResult<'tcx, Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
-                    "stack_push".into(),
+                    "init_frame_extra".into(),
                 ),
             ).into())
         }
 
-        fn ptr_to_int(
-            _mem: &Memory<'mir, 'tcx, Self>,
-            _ptr: Pointer<Self::PointerTag>
-        ) -> InterpResult<'tcx, u64> {
-            Err(InterpError::Unsupported(
-                UnsupportedOpInfo::Unsupported(
-                    "ptr_to_int".into(),
-                ),
-            ).into())
+        fn stack<'a>(
+            ecx: &'a InterpCx<'mir, 'tcx, Self>,
+        ) -> &'a [Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>] {
+            &ecx.machine.stack
+            // unimplemented!("stack")
+        }
+
+        fn stack_mut<'a>(
+            ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
+        ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
+            unimplemented!("stack_mut")
         }
     }
 }
@@ -1099,39 +897,425 @@ mod machine {
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
-        map.insert("ty".to_owned(), self.ty.to_json(mir));
+        map.insert("ty".to_owned(), self.ty().to_json(mir));
 
-        match self.val {
-            ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
+        match self.kind() {
+            // remove? should probably not show up?
+            ty::ConstKind::Unevaluated(un) => {
                 map.insert("initializer".to_owned(), json!({
-                    "def_id": get_promoted_name(mir, def_id, substs, promoted),
+                    "def_id": get_fn_def_name(mir, un.def.did, un.substs),
                 }));
             },
             _ => {},
         }
 
-        let evaluated = match self.val {
-            ty::ConstKind::Unevaluated(def_id, substs, promoted) => {
-                do_const_eval(mir.state.tcx, def_id, substs, promoted)
-            },
-            ty::ConstKind::Value(val) => val,
-            _ => panic!("don't know how to translate ConstKind::{:?}", self.val),
-        };
-
-        let rendered = match evaluated {
-            interpret::ConstValue::Scalar(s) => {
-                render_constant_scalar(mir, self.ty, s)
-            },
-            interpret::ConstValue::Slice { data, start, end } => {
-                render_constant(mir, self.ty, None, None, Some((data, start, end)))
-            },
-            _ => None,
+        let rendered = match self.kind() {
+            ty::ConstKind::Value(ty::ValTree::Leaf(val)) => {
+                let sz = val.size();
+                Some(json!({
+                    "kind": "usize",
+                    "size": sz.bytes(),
+                    "val": get_const_usize(mir.state.tcx, *self).to_string(),
+                }))
+            }
+            _ => panic!("don't know how to translate ConstKind::{:?}", self.kind())
         };
         if let Some(rendered) = rendered {
             map.insert("rendered".to_owned(), rendered);
         }
 
         map.into()
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        let (val, ty) = *self;
+        let op_ty = as_opty(mir.state.tcx, val, ty);
+        let mut icx = interpret::InterpCx::new(
+            mir.state.tcx,
+            DUMMY_SP,
+            ty::ParamEnv::reveal_all(),
+            RenderConstMachine::new(),
+        );
+
+        json!({
+            "ty": ty.to_json(mir),
+            "rendered": render_opty(mir, &mut icx, &op_ty),
+        })
+    }
+}
+
+pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize {
+    match c.kind() {
+        ty::ConstKind::Value(ty::ValTree::Leaf(val)) => {
+            let v = val.try_to_machine_usize(tcx).unwrap();
+            v as usize
+        }
+        _ => panic!("don't know how to translate ConstKind::{:?}", c.kind())
+    }
+}
+
+pub fn render_opty<'mir, 'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+) -> serde_json::Value {
+    try_render_opty(mir, icx, op_ty).unwrap_or_else(|| {
+        json!({
+            "kind": "unsupported_const",
+            "debug_val": format!("{:?}", op_ty),
+        })
+    })
+}
+
+pub fn try_render_opty<'mir, 'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+) -> Option<serde_json::Value> {
+    let ty = op_ty.layout.ty;
+    let layout = op_ty.layout.layout;
+    let tcx = mir.state.tcx;
+
+    Some(match *ty.kind() {
+        ty::TyKind::Bool |
+        ty::TyKind::Char |
+        ty::TyKind::Uint(_) =>
+        {
+            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let size = layout.size();
+            let bits = s.to_bits(size).unwrap();
+
+            json!({
+                "kind": match *ty.kind() {
+                    ty::TyKind::Bool => "bool",
+                    ty::TyKind::Char => "char",
+                    ty::TyKind::Uint(ty::UintTy::Usize) => "usize",
+                    ty::TyKind::Uint(_) => "uint",
+                    _ => unreachable!(),
+                },
+                "size": size.bytes(),
+                "val": bits.to_string(),
+            })
+        }
+        ty::TyKind::Int(i) => {
+            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let size = layout.size();
+            let bits = s.to_bits(size).unwrap();
+            let mut val = bits as i128;
+            if bits & (1 << (size.bits() - 1)) != 0 && size.bits() < 128 {
+                // Sign-extend to 128 bits
+                val |= -1_i128 << size.bits();
+            }
+
+            json!({
+                "kind": match *ty.kind() {
+                    ty::TyKind::Int(ty::IntTy::Isize) => "isize",
+                    ty::TyKind::Int(_) => "int",
+                    _ => unreachable!(),
+                },
+                "size": size.bytes(),
+                "val": val.to_string(),
+            })
+        }
+        ty::TyKind::Float(fty) => {
+            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let size = layout.size();
+            let val_str = match fty {
+                ty::FloatTy::F32 => s.to_f32().unwrap().to_string(),
+                ty::FloatTy::F64 => s.to_f64().unwrap().to_string(),
+            };
+
+            json!({
+                "kind": "float",
+                "size": size.bytes(),
+                "val": val_str,
+            })
+        }
+        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_struct() => {
+            let variant = adt_def.non_enum_variant();
+            let mut field_vals = Vec::new();
+            for field_idx in 0..variant.fields.len() {
+                let field = icx.operand_field(&op_ty, field_idx).unwrap();
+                field_vals.push(try_render_opty(mir, icx, &field)?)
+            }
+
+            let val: serde_json::Value = field_vals.into();
+
+            json!({
+                "kind": "struct",
+                "fields": val,
+            })
+        },
+        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_enum() => {
+            let (_, variant_idx) = icx.read_discriminant(&op_ty).unwrap();
+            let val = icx.operand_downcast(op_ty, variant_idx).unwrap();
+            let mut field_vals = Vec::with_capacity(val.layout.fields.count());
+            for idx in 0 .. val.layout.fields.count() {
+                let field_opty = icx.operand_field(&val, idx).unwrap();
+                field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
+            }
+
+            json!({
+                "kind": "enum",
+                "variant": variant_idx.as_u32(),
+                "fields": field_vals,
+            })
+        },
+
+        ty::TyKind::Adt(_, _) => {
+            panic!("Adt is not enum or struct!")
+        },
+
+        ty::TyKind::Foreign(_) => todo!("foreign is unimplemented"), // can't do this
+        ty::TyKind::Str => unreachable!("str type should not occur here"),
+        ty::TyKind::Array(ety, sz) => {
+            let sz = get_const_usize(tcx, sz);
+            let mut vals = Vec::with_capacity(sz);
+            for field in icx.operand_array_fields(op_ty).unwrap() {
+                let f_json = try_render_opty(mir, icx, &field.unwrap());
+                vals.push(f_json);
+            }
+
+            json!({
+                "kind": "array",
+                "element_ty": ety.to_json(mir),
+                "elements": vals
+            })
+
+        }
+        ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
+
+        // similar to ref in some ways
+        ty::TyKind::RawPtr(m_ty) =>
+            try_render_ref_opty(mir, icx, op_ty, m_ty.ty, m_ty.mutbl)?,
+
+        ty::TyKind::Ref(_, rty, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
+
+        ty::TyKind::FnDef(_, _) => json!({"kind": "zst"}),
+        ty::TyKind::FnPtr(_sig) => {
+            let ptr = icx.read_pointer(op_ty).unwrap();
+            let (prov, _offset) = ptr.into_parts();
+            let alloc = tcx.try_get_global_alloc(prov?)?;
+            match alloc {
+                interpret::GlobalAlloc::Function(i) => {
+                    mir.used.instances.insert(i);
+                    json!({
+                        "kind": "fn_ptr",
+                        "instance": i.to_json(mir),
+
+                    })
+                },
+                _ => unreachable!("Function pointer doesn't point to a function"),
+            }
+        }
+        ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
+
+        ty::TyKind::Closure(_defid, substs) => {
+            let upvars_count = substs.as_closure().upvar_tys().count();
+            let mut upvar_vals = Vec::with_capacity(upvars_count);
+            for idx in 0 .. upvars_count {
+                let upvar_opty = icx.operand_field(&op_ty, idx).unwrap();
+                upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
+            }
+
+            json!({
+                "kind": "closure",
+                "upvars": upvar_vals,
+            })
+        }
+        ty::TyKind::Generator(_, _, _) => todo!("generator not supported yet"), // not supported in haskell
+        ty::TyKind::GeneratorWitness(_) => todo!("generatorwitness not supported yet"), // not supported in haskell
+        ty::TyKind::Never => unreachable!("never type should be uninhabited"),
+
+        ty::TyKind::Tuple(elts) => {
+            let mut vals = Vec::with_capacity(elts.len());
+            for i in 0..elts.len() {
+                let fld: interpret::OpTy<'tcx> = icx.operand_field(&op_ty, i).unwrap();
+                vals.push(render_opty(mir, icx, &fld));
+            }
+            json!({
+                "kind": "tuple",
+                "elements": vals
+            })
+        }
+
+        // should go away during monomorphiszation but could in theory be resolvable to a real type
+        ty::TyKind::Alias(_, _) => unreachable!("alias should not occur after monomorphization"),
+        ty::TyKind::Param(_) => unreachable!("param should not occur after monomorphization"),
+
+        ty::TyKind::Bound(_, _) => unreachable!("bound is not a real type?"),
+        ty::TyKind::Placeholder(_) => unreachable!("placeholder is not a real type?"),
+        ty::TyKind::Infer(_) => unreachable!("infer is not a real type?"),
+        ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
+    })
+}
+
+fn try_render_ref_opty<'mir, 'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+    rty: ty::Ty<'tcx>,
+    mutability: hir::Mutability,
+) -> Option<serde_json::Value> {
+    let tcx = mir.state.tcx;
+
+    // Special case for nullptr
+    let val = icx.read_immediate(op_ty).unwrap();
+    let mplace = icx.ref_to_mplace(&val).unwrap();
+    let (prov, offset) = mplace.ptr.into_parts();
+    if prov.is_none() {
+        assert!(!mplace.meta.has_meta(), "not expecting meta for nullptr");
+
+        return Some(json!({
+            "kind": "raw_ptr",
+            "val": offset.bytes().to_string(),
+        }));
+    }
+
+    let d = icx.deref_operand(op_ty).unwrap();
+    let is_mut = mutability == hir::Mutability::Mut;
+
+    if !is_mut {
+        match *rty.kind() {
+            // Special case for &str
+            ty::TyKind::Str => {
+                let len = mplace_ty_len(&d, icx).unwrap();
+                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                return Some(json!({
+                    "kind": "str",
+                    "val": mem
+                }))
+            },
+            // Special case for &[u8; N]
+            ty::TyKind::Array(elem_ty, _) => {
+                if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
+                    let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+                    return Some(json!({
+                        "kind": "bstr",
+                        "val": mem,
+                    }))
+                } else {
+                    ()
+                }
+            },
+            // Special case for &[T]
+            ty::TyKind::Slice(slice_ty) => {
+                eprintln!("slice op_ty: {:?}", op_ty);
+                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let mut elt_values = Vec::with_capacity(slice_len as usize);
+                for idx in 0..slice_len {
+                    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                    elt_values.push(try_render_opty(mir, icx, &elt));
+                }
+
+                return Some(json!({
+                    "kind": "slice",
+                    "element_ty": slice_ty.to_json(mir),
+                    "elements": elt_values
+                }))
+            },
+            _ => ()
+        }
+    }
+
+    let (prov, _offset) = d.ptr.into_parts();
+    let alloc = tcx.try_get_global_alloc(prov?)?;
+    match alloc {
+        interpret::GlobalAlloc::Static(def_id) =>
+            return Some(json!({
+                "kind": "static_ref",
+                "def_id": def_id.to_json(mir),
+            })),
+        interpret::GlobalAlloc::Memory(ca) => {
+            let ty = op_ty.layout.ty;
+            let aid = match mir.allocs.get(ca, ty) {
+                Some(alloc_id) => alloc_id.to_owned(),
+                None => {
+                    let ma = tcx.create_memory_alloc(ca);
+                    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
+                    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
+
+                    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
+                    let rendered = try_render_opty(mir, icx, &mpty.into());
+
+                    let static_ref = json!({
+                        "kind": "constant",
+                        "mutable": false,
+                        "ty": rty.to_json(mir),
+                        "rendered": rendered,
+                    });
+
+                    mir.allocs.insert(tcx, ca, ty, static_ref)
+                }
+            };
+
+            return Some(json!({
+                "kind": "static_ref",
+                "def_id": aid,
+            }));
+        }
+        _ => return None
+    }
+}
+
+// A copied version of MPlaceTy::len, which (sadly) isn't exported. See
+// https://github.com/rust-lang/rust/blob/56ee85274e5a3a4dda92f3bf73d1664c74ff9c15/compiler/rustc_const_eval/src/interpret/place.rs#L227C5-L243
+#[inline]
+pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx: &impl HasDataLayout) -> InterpResult<'tcx, u64> {
+    if mplace_ty.layout.is_unsized() {
+        // We need to consult `meta` metadata
+        match mplace_ty.layout.ty.kind() {
+            ty::Slice(..) | ty::Str => mplace_ty.meta.unwrap_meta().to_machine_usize(cx),
+            _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
+        }
+    } else {
+        // Go through the layout.  There are lots of types that support a length,
+        // e.g., SIMD types. (But not all repr(simd) types even have FieldsShape::Array!)
+        match mplace_ty.layout.fields {
+            FieldsShape::Array { count, .. } => Ok(count),
+            _ => bug!("len not supported on sized type {:?}", mplace_ty.layout.ty),
+        }
+    }
+}
+
+pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
+    -> interpret::OpTy<'tcx, interpret::AllocId>
+{
+    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, ConstValue, Immediate, Scalar, OpTy, ImmTy, MPlaceTy};
+    use rustc_target::abi::Size;
+    let op = match cv {
+        ConstValue::ByRef { alloc, offset } => {
+            let id = tcx.create_memory_alloc(alloc);
+            // We rely on mutability being set correctly in that allocation to prevent writes
+            // where none should happen.
+            let ptr = Pointer::new(id, offset);
+            Operand::Indirect(MemPlace::from_ptr(ptr.into()))
+        }
+        ConstValue::Scalar(x) => Operand::Immediate(x.into()),
+        ConstValue::ZeroSized => Operand::Immediate(Immediate::Uninit),
+        ConstValue::Slice { data, start, end } => {
+            // We rely on mutability being set correctly in `data` to prevent writes
+            // where none should happen.
+            let ptr = Pointer::new(
+                tcx.create_memory_alloc(data),
+                Size::from_bytes(start), // offset: `start`
+            );
+            Operand::Immediate(Immediate::new_slice(
+                Scalar::from_pointer(ptr, &tcx),
+                u64::try_from(end.checked_sub(start).unwrap()).unwrap(), // len: `end - start`
+                &tcx,
+            ))
+        }
+    };
+
+    let layout = tcx.layout_of(ty::ParamEnv::reveal_all().and(ty)).unwrap();
+
+    match op {
+        Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
+        Operand::Indirect(ind) => MPlaceTy::from_aligned_ptr(ind.ptr, layout).into(),
     }
 }
 
@@ -1203,31 +1387,77 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         let ty = mir.state.tcx.mk_adt(self.adt, self.substs);
         let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
+
+        let kind = match self.adt.adt_kind() {
+            AdtKind::Struct => json!({"kind": "Struct"}),
+            AdtKind::Enum =>
+                json!({
+                    "kind": "Enum",
+                    "discr_ty": self.adt
+                                    .repr()
+                                    .discr_type()
+                                    .to_ty(mir.state.tcx)
+                                    .to_json(mir)
+                }),
+            AdtKind::Union => json!({"kind": "Union"}),
+        };
+
+        let variants =
+            if self.adt.is_enum() {
+                render_enum_variants(mir, &self)
+            } else {
+                self.adt.variants()
+                        .iter()
+                        .map(|v| render_variant(mir, &self, v, &None))
+                        .collect::<Vec<serde_json::Value>>()
+                        .into()
+            };
+
         json!({
             "name": adt_inst_id_str(mir.state.tcx, *self),
-            "kind": format!("{:?}", self.adt.adt_kind()),
-            "variants": self.adt.variants.tojson(mir, self.substs),
+            "kind": kind,
+            "variants": variants,
             "size": tyl.size.bytes(),
-            "repr_transparent": self.adt.repr.transparent(),
-            "orig_def_id": self.adt.did.to_json(mir),
+            "repr_transparent": self.adt.repr().transparent(),
+            "orig_def_id": self.adt.did().to_json(mir),
             "orig_substs": self.substs.to_json(mir),
         })
     }
 }
 
-impl ToJsonAg for ty::VariantDef {
-    fn tojson<'tcx>(
-        &self,
-        mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
-    ) -> serde_json::Value {
-        json!({
-            "name": self.def_id.to_json(mir),
-            "discr": self.discr.to_json(mir),
-            "fields": self.fields.tojson(mir, substs),
-            "ctor_kind": self.ctor_kind.to_json(mir)
-        })
+fn render_enum_variants<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    adt: &AdtInst<'tcx>,
+) -> serde_json::Value {
+    let mut variants = Vec::with_capacity(adt.adt.variants().len());
+    for (idx, d_value) in adt.adt.discriminants(mir.state.tcx) {
+        let v = adt.adt.variant(idx);
+        let rendered = render_variant(mir, adt, v, &Some(d_value.to_string()));
+        variants.push(rendered);
     }
+
+    variants.into()
+}
+
+fn render_variant<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    adt: &AdtInst<'tcx>,
+    v: &ty::VariantDef,
+    mb_discr: &Option<String>
+) -> serde_json::Value {
+    let tcx = mir.state.tcx;
+    let inhabited = v.inhabited_predicate(tcx, adt.adt)
+                     .subst(tcx, adt.substs)
+                     .apply_ignore_module(tcx, ty::ParamEnv::reveal_all());
+
+    json!({
+        "name": v.def_id.to_json(mir),
+        "discr": v.discr.to_json(mir),
+        "fields": v.fields.tojson(mir, adt.substs),
+        "ctor_kind": v.ctor_kind().to_json(mir),
+        "discr_value": mb_discr,
+        "inhabited": inhabited,
+    })
 }
 
 impl ToJsonAg for ty::FieldDef {
@@ -1238,7 +1468,7 @@ impl ToJsonAg for ty::FieldDef {
     ) -> serde_json::Value {
         let unsubst_ty = mir.state.tcx.type_of(self.did);
         let ty = mir.state.tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), &unsubst_ty);
+            substs, ty::ParamEnv::reveal_all(), unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
@@ -1252,7 +1482,8 @@ pub fn handle_adt_ag<'tcx>(
     opv: &Vec<mir::Operand<'tcx>>,
 ) -> serde_json::Value {
     match ak {
-        &mir::AggregateKind::Adt(ref adt, variant, substs, _, _) => {
+        &mir::AggregateKind::Adt(adt_did, variant, substs, _, _) => {
+            let adt = mir.state.tcx.adt_def(adt_did);
             json!({
                 "adt": AdtInst::new(adt, substs).to_json(mir),
                 "variant": variant.to_json(mir),
@@ -1261,4 +1492,36 @@ pub fn handle_adt_ag<'tcx>(
         }
         _ => unreachable!("bad"),
     }
+}
+
+pub fn eval_mir_constant2<'mir, 'tcx>(
+    icx: &InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    tcx: ty::TyCtxt<'tcx>,
+    constant: &mir::Constant<'tcx>,
+) -> interpret::OpTy<'tcx> {
+    let layout =  tcx.layout_of(ty::ParamEnv::reveal_all().and(constant.ty())).unwrap();
+    icx.eval_mir_constant(&constant.literal, Some(constant.span), Some(layout)).unwrap()
+}
+
+// Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
+pub fn eval_mir_constant<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    constant: &mir::Constant<'tcx>,
+) -> interpret::ConstValue<'tcx> {
+    let uv = match constant.literal {
+        mir::ConstantKind::Ty(ct) => match ct.kind() {
+            ty::ConstKind::Unevaluated(uv) => uv.expand(),
+            ty::ConstKind::Value(val) => {
+                return tcx.valtree_to_const_val((ct.ty(), val));
+            }
+            err => panic!(
+                "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
+                err, constant.span
+            ),
+        },
+        mir::ConstantKind::Unevaluated(uv, _) => uv,
+        mir::ConstantKind::Val(val, _) => return val,
+    };
+
+    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap()
 }

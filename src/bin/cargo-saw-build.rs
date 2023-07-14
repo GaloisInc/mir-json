@@ -15,9 +15,10 @@
 #![feature(rustc_private)]
 extern crate cargo;
 extern crate clap;
-extern crate rustc;
+extern crate rustc_driver;
 extern crate rustc_session;
 extern crate serde_json;
+extern crate toml_edit;
 
 mod cargo_test_common;
 use cargo_test_common::*;

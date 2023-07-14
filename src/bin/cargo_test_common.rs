@@ -5,22 +5,25 @@ use std::path::PathBuf;
 use std::process::{self, Command};
 use rustc_session::config::host_triple;
 use cargo::util::command_prelude::*;
+use toml_edit::easy::value::Value as TomlValue;
 
 fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> App {
     // Copy-pasted from
-    // https://github.com/rust-lang/cargo/blob/aa80a984c0121d0808442e2f565171b1bffda3d0/src/bin/cargo/commands/test.rs,
+    // https://github.com/rust-lang/cargo/blob/ba45764a2c0101a7bac8168f8ea8ba408e9ac6e9/src/bin/cargo/commands/test.rs,
     // with minor edits to the text.
     subcommand(subcmd_name)
-        .setting(AppSettings::TrailingVarArg)
+        // Subcommand aliases are handled in `aliased_command()`.
+        // .alias("t")
+        .trailing_var_arg(true)
         .about(subcmd_descr)
         .arg(
-            Arg::with_name("TESTNAME")
+            Arg::new("TESTNAME")
                 .help("If specified, only run tests containing this string in their names"),
         )
         .arg(
-            Arg::with_name("args")
+            Arg::new("args")
                 .help("Arguments for the test binary")
-                .multiple(true)
+                .multiple_values(true)
                 .last(true),
         )
         .arg(
@@ -28,7 +31,7 @@ fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> App {
                 "quiet",
                 "Display one character per test instead of one line",
             )
-            .short("q"),
+            .short('q'),
         )
         .arg_targets_all(
             "Test only this package's library unit tests",
@@ -57,7 +60,11 @@ fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> App {
         .arg_target_triple("Build for the target triple")
         .arg_target_dir()
         .arg_manifest_path()
+        .arg_ignore_rust_version()
         .arg_message_format()
+        .arg_unit_graph()
+        .arg_future_incompat_report()
+        .arg_timings()
         .after_help("See `cargo test --help` for more information on these options.")
 }
 
@@ -71,7 +78,7 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
     // test.
     let config = cargo::Config::default()
         .unwrap_or_else(|e| panic!("error initializing cargo config: {}", e));
-    let app = clap::App::new(format!("cargo-{}", subcmd_name)).subcommand(cli(subcmd_name, subcmd_descr));
+    let app = App::new(format!("cargo-{}", subcmd_name)).subcommand(cli(subcmd_name, subcmd_descr));
     let args = app.get_matches();
     let args = args.subcommand_matches(subcmd_name)
         .unwrap_or_else(|| panic!(format!("expected {} subcommand", subcmd_name)));
@@ -81,7 +88,7 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
         &config,
         CompileMode::Test,
         Some(&ws),
-        ProfileChecking::Unchecked,
+        ProfileChecking::Custom,
     ).unwrap_or_else(|e| panic!("error reading compile options: {}", e));
     let pkgs = opts.spec.get_packages(&ws)
         .unwrap_or_else(|e| panic!("error listing packages: {}", e));
@@ -113,12 +120,12 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
     overrides
 }
 
-fn get_package_override_crates(v: Option<&toml::Value>) -> String {
+fn get_package_override_crates(v: Option<&TomlValue>) -> String {
     get_package_override_crates_opt(v)
         .unwrap_or_else(String::new)
 }
 
-fn get_package_override_crates_opt(v: Option<&toml::Value>) -> Option<String> {
+fn get_package_override_crates_opt(v: Option<&TomlValue>) -> Option<String> {
     // The `crux` key is allowed to be missing, but if present, it must be an object.
     let crux = v?.get("crux")?;
     assert!(crux.is_table(), "expected `package.metadata.crux` to be an object");

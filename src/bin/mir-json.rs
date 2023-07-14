@@ -1,6 +1,5 @@
 #![feature(rustc_private)]
 
-extern crate rustc;
 extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
@@ -15,8 +14,8 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use rustc_driver::Compilation;
-use rustc_interface::interface::Compiler;
 use rustc_interface::Queries;
+use rustc_interface::interface::Compiler;
 use std::env;
 
 struct MirJsonCallbacks {
@@ -63,12 +62,7 @@ fn go() {
         analyz::ExportStyle::ExportCruxTests
     };
 
-    rustc_driver::run_compiler(
-        &args, // args: &[String]
-        &mut MirJsonCallbacks { export_style },
-        None,
-        None,
-    ).unwrap();
+    rustc_driver::RunCompiler::new(&args, &mut MirJsonCallbacks { export_style }).run().unwrap();
 }
 
 fn main() {

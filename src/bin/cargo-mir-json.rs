@@ -47,11 +47,15 @@ fn main() {
         let manifest_path_arg = env::args().skip(skip).find(|val| {
             val.starts_with("--manifest-path=")
         });
+        let manifest_path = manifest_path_arg.map(|arg| {
+            PathBuf::from(Path::new(&arg["--manifest-path=".len()..]))
+        });
 
-        let mut metadata = if let Ok(metadata) = cargo_metadata::metadata(
-            manifest_path_arg.as_ref().map(AsRef::as_ref),
-        )
-        {
+        let mut metadata_command = cargo_metadata::MetadataCommand::new();
+        if let Some(manifest_path) = manifest_path.as_ref() {
+            metadata_command.manifest_path(manifest_path);
+        }
+        let mut metadata = if let Ok(metadata) = metadata_command.exec() {
             metadata
         } else {
             let _ = std::io::stderr().write_fmt(format_args!(
@@ -59,10 +63,6 @@ fn main() {
             ));
             process::exit(101);
         };
-
-        let manifest_path = manifest_path_arg.map(|arg| {
-            PathBuf::from(Path::new(&arg["--manifest-path=".len()..]))
-        });
 
         let current_dir = std::env::current_dir();
 

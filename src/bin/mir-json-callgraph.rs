@@ -8,7 +8,6 @@
 extern crate serde;
 extern crate serde_cbor;
 #[macro_use] extern crate serde_json;
-extern crate env_logger;
 extern crate mir_json;
 
 use std::collections::{HashMap, HashSet};
@@ -28,11 +27,6 @@ fn main() {
     let mut map = HashMap::new();
     for (a, b) in calls {
         if a == b {
-            continue;
-        }
-        // Don't trace outgoing edges from `ty` nodes to non-`ty` nodes.  We still keep the
-        // incoming edges, so it's possible to trace back all uses of a particular type.
-        if it.name(a).starts_with("ty::") && !it.name(b).starts_with("ty::") {
             continue;
         }
         map.entry(b).or_insert_with(HashSet::new).insert(a);

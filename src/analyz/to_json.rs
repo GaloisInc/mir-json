@@ -1,7 +1,7 @@
-use rustc_hir::def_id::DefId;
-use rustc::mir::Body;
+use rustc_hir::def_id::{DefId, LOCAL_CRATE};
+use rustc_middle::mir::{Body, interpret};
+use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
-use rustc::ty::{self, TyCtxt};
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
 use serde_json;
@@ -89,12 +89,13 @@ pub struct TraitInst<'tcx> {
 impl<'tcx> TraitInst<'tcx> {
     pub fn from_dynamic_predicates(
         tcx: TyCtxt<'tcx>,
-        preds: ty::Binder<&'tcx ty::List<ty::ExistentialPredicate<'tcx>>>,
+        preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
-        let preds = tcx.erase_late_bound_regions(&preds);
-        let trait_ref = preds.principal();
-        let mut projs = preds.projection_bounds().collect::<Vec<_>>();
-        projs.sort_by_key(|p| p.item_def_id);
+        let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        let mut projs = preds.projection_bounds()
+            .map(|proj| tcx.erase_late_bound_regions(proj))
+            .collect::<Vec<_>>();
+        projs.sort_by_key(|p| p.def_id);
         TraitInst { trait_ref, projs }
     }
 
@@ -107,22 +108,43 @@ impl<'tcx> TraitInst<'tcx> {
     ) -> TraitInst<'tcx> {
         let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
 
-        let mut projs = Vec::new();
-        // FIXME: build projs for supertrait trait_refs as well
-        for ai in tcx.associated_items(trait_ref.def_id).in_definition_order() {
-            match ai.kind {
-                ty::AssocKind::Type | ty::AssocKind::OpaqueTy => {},
-                _ => continue,
+        let mut all_super_traits = HashSet::new();
+        let mut pending = vec![trait_ref.def_id];
+        all_super_traits.insert(trait_ref.def_id);
+        while let Some(def_id) = pending.pop() {
+            let super_preds = tcx.super_predicates_of(def_id);
+            for &(ref pred, _) in super_preds.predicates {
+                let tpred = match tcx.erase_late_bound_regions(pred.kind()) {
+                    ty::PredicateKind::Clause(ty::Clause::Trait(x)) => x,
+                    ty::PredicateKind::Clause(ty::Clause::TypeOutlives(..)) => continue,
+                    _ => panic!("unexpected predicate kind: {:?}", pred),
+                };
+                assert_eq!(tpred.polarity, ty::ImplPolarity::Positive);
+                if all_super_traits.insert(tpred.trait_ref.def_id) {
+                    pending.push(tpred.trait_ref.def_id);
+                }
             }
-            let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
-            let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
-            projs.push(ty::ExistentialProjection {
-                item_def_id: ai.def_id,
-                substs: ex_trait_ref.substs,
-                ty: actual_ty,
-            });
         }
-        projs.sort_by_key(|p| p.item_def_id);
+        let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
+        all_super_traits.sort();
+
+        let mut projs = Vec::new();
+        for super_trait_def_id in all_super_traits {
+            for ai in tcx.associated_items(super_trait_def_id).in_definition_order() {
+                match ai.kind {
+                    ty::AssocKind::Type => {},
+                    _ => continue,
+                }
+                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
+                let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
+                projs.push(ty::ExistentialProjection {
+                    def_id: ai.def_id,
+                    substs: ex_trait_ref.substs,
+                    term: actual_ty.into(),
+                });
+            }
+        }
+        projs.sort_by_key(|p| p.def_id);
 
         TraitInst {
             trait_ref: Some(ex_trait_ref),
@@ -133,10 +155,13 @@ impl<'tcx> TraitInst<'tcx> {
     pub fn dyn_ty(&self, tcx: TyCtxt<'tcx>) -> Option<ty::Ty<'tcx>> {
         let trait_ref = self.trait_ref?;
         let mut preds = Vec::with_capacity(self.projs.len() + 1);
-        preds.push(ty::ExistentialPredicate::Trait(trait_ref));
-        preds.extend(self.projs.iter().map(|p| ty::ExistentialPredicate::Projection(*p)));
-        let preds = tcx.intern_existential_predicates(&preds);
-        Some(tcx.mk_dynamic(ty::Binder::bind(preds), tcx.mk_region(ty::RegionKind::ReErased)))
+        preds.push(ty::Binder::dummy(ty::ExistentialPredicate::Trait(trait_ref)));
+        preds.extend(
+            self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
+        );
+        let preds = tcx.intern_poly_existential_predicates(&preds);
+        // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
+        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -154,17 +179,17 @@ impl<'tcx> TraitInst<'tcx> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
-    pub adt: &'tcx ty::AdtDef,
+    pub adt: ty::AdtDef<'tcx>,
     pub substs: ty::subst::SubstsRef<'tcx>,
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: &'tcx ty::AdtDef, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
         AdtInst { adt, substs }
     }
 
     pub fn def_id(&self) -> DefId {
-        self.adt.did
+        self.adt.did()
     }
 }
 
@@ -178,7 +203,7 @@ pub struct TyIntern<'tcx> {
 /// Info for describing a type.  The `String` indicates (at minimum) the `TyKind`, and the `bool`
 /// is `true` if a hash of the type should be included when forming the type's unique ID.
 fn ty_desc(ty: ty::Ty) -> (String, bool) {
-    let kind_str = match ty.kind {
+    let kind_str = match *ty.kind() {
         // Special case: primitive types print as themselves and don't require a hash.
         ty::TyKind::Bool |
         ty::TyKind::Char |
@@ -186,9 +211,6 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Uint(_) |
         ty::TyKind::Float(_) |
         ty::TyKind::Str => return (format!("{:?}", ty), false),
-
-        ty::TyKind::Never |
-        ty::TyKind::Error => return (format!("{:?}", ty.kind), false),
 
         ty::TyKind::Adt(..) => "Adt",
         ty::TyKind::Foreign(..) => "Foreign",
@@ -202,14 +224,14 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Closure(..) => "Closure",
         ty::TyKind::Generator(..) => "Generator",
         ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
+        ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
-        ty::TyKind::Projection(..) => "Projection",
-        ty::TyKind::UnnormalizedProjection(..) => "UnnormalizedProjection",
-        ty::TyKind::Opaque(..) => "Opaque",
+        ty::TyKind::Alias(..) => "Alias",
         ty::TyKind::Param(..) => "Param",
         ty::TyKind::Bound(..) => "Bound",
         ty::TyKind::Placeholder(..) => "Placeholder",
         ty::TyKind::Infer(..) => "Infer",
+        ty::TyKind::Error(..) => "Error",
     };
     (kind_str.to_owned(), true)
 }
@@ -250,7 +272,7 @@ impl<'tcx> TyIntern<'tcx> {
 /// How many functions should be exported in the JSON output?
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ExportStyle {
-    /// Only export functions annotated with the `#[crux_test]` attribute.
+    /// Only export functions annotated with the `#[crux::test]` attribute.
     ExportCruxTests,
     /// Export all functions.
     ExportAll
@@ -259,6 +281,42 @@ pub enum ExportStyle {
 impl Default for ExportStyle {
     fn default() -> Self {
         ExportStyle::ExportCruxTests
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct AllocIntern<'tcx> {
+    /// We key this map on both ConstAllocations and their Tys. Keying the map
+    /// on ConstAllocations alone is not sufficient, as two ConstAllocations
+    /// with different types can share the same underlying memory representation
+    /// (e.g., `0: u8` and `Ok(()) : Result<(), ()>`).
+    map: HashMap<(interpret::ConstAllocation<'tcx>, ty::Ty<'tcx>), String>,
+    new_vals: Vec<serde_json::Value>,
+}
+
+impl<'tcx> AllocIntern<'tcx> {
+    pub fn get(&self, alloc: interpret::ConstAllocation<'tcx>, ty: ty::Ty<'tcx>) -> Option<&str> {
+        self.map.get(&(alloc, ty)).map(|x| x as &str)
+    }
+
+    pub fn insert(&mut self, tcx: TyCtxt<'tcx>,
+                  alloc: interpret::ConstAllocation<'tcx>, ty: ty::Ty<'tcx>,
+                  mut static_def: serde_json::Value) -> String {
+        let crate_name = tcx.crate_name(LOCAL_CRATE);
+        let disambig = tcx.crate_hash(LOCAL_CRATE);
+        // NB: The use of :: here is important, as mir-json's dead
+        // code elimination relies on it.
+        // See https://github.com/GaloisInc/mir-json/issues/36.
+        let id = format!("{}/{}::{{{{alloc}}}}[{}]", crate_name, disambig, self.map.len());
+        static_def["name"] = id.clone().into();
+        self.new_vals.push(static_def);
+        let old = self.map.insert((alloc, ty), id.clone());
+        assert!(old.is_none(), "duplicate insert for type {:?}", alloc);
+        id
+    }
+
+    pub fn take_new_allocs(&mut self) -> Vec<serde_json::Value> {
+        mem::replace(&mut self.new_vals, Vec::new())
     }
 }
 
@@ -278,6 +336,7 @@ pub struct MirState<'a, 'tcx : 'a> {
     /// rewritten.  This seems okay for now since the user is mostly interested in coverage in
     /// their own top-level crate anyway.
     pub match_span_map: &'a HashMap<Span, Span>,
+    pub allocs: &'a mut AllocIntern<'tcx>,
     pub export_style: ExportStyle,
 }
 

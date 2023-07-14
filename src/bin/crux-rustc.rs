@@ -2,6 +2,7 @@
 //! crux-test`.  Useful for testing a single file, with `crux-rustc --test foo.rs`.
 
 #![feature(rustc_private)]
+extern crate rustc_driver;
 extern crate rustc_session;
 
 use std::env;

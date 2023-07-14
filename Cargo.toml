@@ -5,16 +5,19 @@ authors = ["Joshua Gancher <jrg358@cornell.edu>"]
 repository = "https://github.com/GaloisInc/mir-json.git"
 license = "MIT/Apache-2.0"
 
+[package.metadata.rust-analyzer]
+rustc_private=true
+
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 serde_cbor = "0.11"
 tar = "0.4"
-cargo_metadata = { version = "0.2" }
-cargo = { version = "0.43", features = [ "vendored-openssl" ] }
-toml = "0.5"
-clap = "2.33"
+cargo_metadata = { version = "0.14.2" }
+cargo = { version = "0.62", features = [ "vendored-openssl" ] }
+toml_edit = { version = "0.13.4", features = [ "easy" ] }
+clap = "3.1.0"
 
 [[bin]]
 name = "cargo-crux-test"
