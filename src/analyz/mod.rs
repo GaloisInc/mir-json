@@ -790,12 +790,25 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        if !([DefKind::Fn, DefKind::AnonConst].contains(&tcx.def_kind(def_id))) {
-            tcx.sess.span_err(
-                tcx.def_span(def_id),
-                "#[test] can only be applied to functions",
-            );
-            continue;
+        // Unless the DefId corresponds to a function, throw an error. We make
+        // an effort to cast a wide net in catching things that look like
+        // functions, as saw-rustc will try to initialize _all_ functions, not
+        // just the ones that users opt into, as is the case with crux-rustc.
+        match tcx.def_kind(def_id) {
+            // A `fn` declaration.
+            DefKind::Fn => (),
+            // Anonymous constants. See #47.
+            DefKind::AnonConst => (),
+            // A synthesized constructor for a tuple struct or tuple enum
+            // variant. See #53.
+            DefKind::Ctor(_, _) => (),
+            _ => {
+                tcx.sess.span_err(
+                    tcx.def_span(def_id),
+                    "#[test] can only be applied to functions",
+                );
+                continue;
+            },
         }
         if tcx.generics_of(def_id).count() > 0 {
             tcx.sess.span_err(
