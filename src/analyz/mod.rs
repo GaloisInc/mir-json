@@ -811,10 +811,18 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             },
         }
         if tcx.generics_of(def_id).count() > 0 {
-            tcx.sess.span_err(
-                tcx.def_span(def_id),
-                "#[test] cannot be applied to generic functions",
-            );
+            // If we are using crux-rustc, then attempting to mark a generic
+            // function as a root constitutes a hard error. If we are using
+            // saw-rustc, however, then we simply do not mark the generic
+            // function as a root and move on. This is fine to do, since there
+            // is likely other monomorphic code that the user _actually_ wants
+            // to verify next to the polymorphic code. See #52.
+            if ms.export_style == ExportStyle::ExportCruxTests {
+                tcx.sess.span_err(
+                    tcx.def_span(def_id),
+                    "#[test] cannot be applied to generic functions",
+                );
+            }
             continue;
         }
 

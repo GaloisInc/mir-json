@@ -31,10 +31,31 @@ filtering flags like `--lib`/`--bin`.
 ## `cargo-saw-build`
 
 `cargo-saw-build` is very similar in operation to `cargo-crux-test` in that
-both will compile Rust code into a MIR JSON file. The difference between
-`cargo-saw-build` and `cargo-crux-test` is that the former will stop after
-producing the JSON file, whereas the latter will proceed to run `crux-mir` on
-the JSON afterwards. The former is more useful for SAW's needs.
+both will compile Rust code into a MIR JSON file. There are two primary
+differences between `cargo-saw-build` and `cargo-crux-test`:
+
+* `cargo-saw-build` will stop after producing the JSON file, whereas
+  `cargo-crux-test` will proceed to run `crux-mir` on the JSON afterwards. The
+  former is more useful for SAW's needs.
+
+* `cargo-crux-build` expects users to annotate each function that they want to
+  test with a `#[crux::test]` attribute (see the `mir-json-rustc-wrapper`
+  section of this document). `cargo-saw-build`, on the other hand, assumes that
+  all monomorphic, top-level functions should be reachable for SAW verification
+  purposes. The operative word here is "monomorphic". If you have this program:
+
+  ```rs
+  pub fn id<A>(x: A) -> A {
+      x
+  }
+
+  pub fn id_u32(x: u32) -> u32 {
+      id(x)
+  }
+  ```
+
+  Then SAW will be able to verify `id_u32` (which is monomorphic) but _not_ `id`
+  (which is polymorphic).
 
 ## `mir-json-rustc-wrapper`
 
