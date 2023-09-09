@@ -790,25 +790,21 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        // Unless the DefId corresponds to a function, throw an error. We make
-        // an effort to cast a wide net in catching things that look like
-        // functions, as saw-rustc will try to initialize _all_ functions, not
-        // just the ones that users opt into, as is the case with crux-rustc.
-        match tcx.def_kind(def_id) {
-            // A `fn` declaration.
-            DefKind::Fn => (),
-            // Anonymous constants. See #47.
-            DefKind::AnonConst => (),
-            // A synthesized constructor for a tuple struct or tuple enum
-            // variant. See #53.
-            DefKind::Ctor(_, _) => (),
-            _ => {
+        if tcx.def_kind(def_id) != DefKind::Fn {
+            // If the DefId does not correspond to a function, then don't mark
+            // the function as a root. For crux-rustc, then also throw an error,
+            // as it doesn't make sense for a user to attach a #[crux::test]
+            // attribute on anything besides functions. For saw-rustc, however,
+            // it is fine to move on without emitting an error, as there are
+            // likely other functions elsewhere in the code that will instead
+            // be marked as roots. See #55.
+            if ms.export_style == ExportStyle::ExportCruxTests {
                 tcx.sess.span_err(
                     tcx.def_span(def_id),
                     "#[test] can only be applied to functions",
                 );
-                continue;
-            },
+            }
+            continue;
         }
         if tcx.generics_of(def_id).count() > 0 {
             // If we are using crux-rustc, then attempting to mark a generic
