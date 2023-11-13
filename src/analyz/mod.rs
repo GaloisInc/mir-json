@@ -790,7 +790,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        if tcx.def_kind(def_id) != DefKind::Fn {
+        if !matches!(tcx.def_kind(def_id), DefKind::Fn | DefKind::AssocFn) {
             // If the DefId does not correspond to a function, then don't mark
             // the function as a root. For crux-rustc, then also throw an error,
             // as it doesn't make sense for a user to attach a #[crux::test]
