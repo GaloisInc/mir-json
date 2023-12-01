@@ -26,7 +26,7 @@ const LIB_PATH_VAR: &str = "LD_LIBRARY_PATH";
 #[cfg(target_os = "macos")]
 const LIB_PATH_VAR: &str = "DYLD_LIBRARY_PATH";
 
-const TOOLCHAIN: &str = "nightly-2023-01-23";
+const TOOLCHAIN: &str = "nightly-2023-12-01";
 
 fn find_lib_dir() -> PathBuf {
     let output = Command::new("rustc")
