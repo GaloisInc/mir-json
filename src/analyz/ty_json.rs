@@ -139,6 +139,10 @@ pub fn inst_id_str<'tcx>(
             ext_def_id_str(tcx, def_id, "_callonce", substs),
         ty::InstanceDef::CloneShim(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_shim", substs),
+        ty::InstanceDef::ThreadLocalShim(def_id) =>
+            ext_def_id_str(tcx, def_id, "_tlsshim", substs),
+        ty::InstanceDef::FnPtrAddrShim(def_id, _) =>
+            ext_def_id_str(tcx, def_id, "_fnptraddrshim", substs),
     }
 }
 
@@ -337,6 +341,21 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "callees": callees.to_json(mir),
                 })
             },
+            ty::InstanceDef::ThreadLocalShim(did) => {
+                json!({
+                    "kind": "ThreadLocalShim",
+                    "def_id": did.to_json(mir),
+                    "substs": substs.to_json(mir),
+                })
+            },
+            ty::InstanceDef::FnPtrAddrShim(did, ty) => {
+                json!({
+                    "kind": "FnPtrAddrShim",
+                    "def_id": did.to_json(mir),
+                    "substs": substs.to_json(mir),
+                    "ty": ty.to_json(mir),
+                })
+            },
         }
     }
 }
@@ -378,7 +397,12 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({"kind": "Float", "size": sz.to_json(mir)})
             }
             &ty::TyKind::Array(ref t, ref size) => {
-                json!({"kind": "Array", "ty": t.to_json(mir), "size": size.to_json(mir)})
+                json!({
+                    "kind": "Array",
+                    "ty": t.to_json(mir),
+                    // FIXME:
+                    //"size": size.to_json(mir),
+                })
             }
             &ty::TyKind::Ref(ref _region, ref ty, ref mtbl) => {
                 json!({
@@ -446,6 +470,16 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Alias(ty::AliasKind::Projection, _) => unreachable!(
                 "no TyKind::Alias with AliasKind Projection should remain after monomorphization"
             ),
+            &ty::TyKind::Alias(ty::AliasKind::Inherent, _) => unreachable!(
+                "no TyKind::Alias with AliasKind Inherent should remain after monomorphization"
+            ),
+            &ty::TyKind::Alias(ty::AliasKind::Weak, _) => unreachable!(
+                "no TyKind::Alias with AliasKind Weak should remain after monomorphization"
+            ),
+            &ty::TyKind::Alias(ty::AliasKind::Opaque, _) => {
+                // TODO
+                json!({"kind": "Alias"})
+            }
             &ty::TyKind::FnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
             }
@@ -478,10 +512,6 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::CoroutineWitness(..) => {
                 // TODO
                 json!({"kind": "CoroutineWitness"})
-            }
-            &ty::TyKind::Alias(ty::AliasKind::Opaque, _) => {
-                // TODO
-                json!({"kind": "Alias"})
             }
         };
 

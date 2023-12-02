@@ -23,7 +23,7 @@ struct MirJsonCallbacks {
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing<'tcx>(
         &mut self,
         _compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
@@ -48,7 +48,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
+        analyz::analyze(&compiler.sess, queries, self.export_style).unwrap();
         Compilation::Continue
     }
 }

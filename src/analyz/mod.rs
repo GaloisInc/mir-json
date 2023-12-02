@@ -324,6 +324,9 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
             &mir::ProjectionElem::OpaqueCast(ref ty) => {
                 json!({"kind": "OpaqueCast", "variant": ty.to_json(mir) })
             }
+            &mir::ProjectionElem::Subtype(ref ty) => {
+                json!({"kind": "Subtype", "ty": ty.to_json(mir) })
+            }
         }
     }
 }
@@ -356,7 +359,8 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::ConstOperand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        (eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
+        todo!() // FIXME
+        //(eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
     }
 }
 
@@ -442,6 +446,15 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 // TODO
                 //json!({"kind": "Intrinsic" })
             }
+            &mir::StatementKind::ConstEvalCounter => {
+                json!({"kind": "ConstEvalCounter"})
+            }
+            &mir::StatementKind::PlaceMention(ref place) => {
+                json!({
+                    "kind": "PlaceMention",
+                    "place": place.to_json(mir),
+                })
+            }
         };
         j["pos"] = self.source_info.span.to_json(mir);
         j
@@ -498,6 +511,9 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
             }
             &mir::TerminatorKind::UnwindResume => {
                 json!({"kind": "UnwindResume"})
+            }
+            &mir::TerminatorKind::UnwindTerminate(..) => {
+                json!({"kind": "UnwindTerminate"})
             }
             &mir::TerminatorKind::Return => {
                 json!({"kind": "Return"})
@@ -986,8 +1002,7 @@ fn emit_adt<'tcx>(
     let tcx = ms.state.tcx;
 
     let adt_name = adt_inst_id_str(tcx, ai);
-    tcx.sess.note_without_error(
-        format!("Emitting ADT definition for {}", adt_name).as_str());
+    tcx.sess.note_without_error(format!("Emitting ADT definition for {}", adt_name));
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
     emit_new_defs(ms, out)?;
     Ok(())

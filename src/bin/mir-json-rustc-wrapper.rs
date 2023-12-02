@@ -47,7 +47,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing<'tcx>(
         &mut self,
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
@@ -56,23 +56,24 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         // the limited amount of compilation we do will fail without the injected `register_attr`.
         analyz::inject_attrs(queries);
 
-        let sess = compiler.session();
+        let sess = &compiler.sess;
         let (crate_name, outputs) = {
             // rustc_session::find_crate_name - get the crate with queries.expansion?
             let krate = queries.parse().unwrap();
             let krate = krate.borrow();
             let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
+            let outputs = rustc_interface::util::build_output_filenames(&krate.attrs, &sess);
             (crate_name, outputs)
         };
-        // Advance the state slightly further, initializing crate_types()
-        queries.register_plugins();
-        self.output_path = Some(rustc_session::output::out_filename(
-            sess,
-            sess.crate_types().first().unwrap().clone(),
-            &outputs,
-            crate_name,
-        ));
+        
+        self.output_path = queries.global_ctxt().unwrap().enter(|tcx| {
+            Some(rustc_session::output::out_filename(
+                sess,
+                tcx.crate_types().first().unwrap().clone(),
+                &outputs,
+                crate_name,
+            ).as_path().to_owned())
+        });
         Compilation::Stop
     }
 }
@@ -111,7 +112,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing<'tcx>(
         &mut self,
         _compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
@@ -134,7 +135,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
+        self.analysis_data = analyz::analyze(&compiler.sess, queries, self.export_style).unwrap();
         Compilation::Continue
     }
 }
