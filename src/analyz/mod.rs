@@ -3,7 +3,7 @@
 use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_index::vec::Idx;
+use rustc_index::Idx;
 use rustc_interface::Queries;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
@@ -33,10 +33,28 @@ use analyz::to_json::*;
 use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 
+
+basic_json_enum_impl!(mir::UnOp);
 basic_json_enum_impl!(mir::BinOp);
 
-basic_json_enum_impl!(mir::NullOp);
-basic_json_enum_impl!(mir::UnOp);
+impl<'tcx> ToJson<'tcx> for mir::NullOp<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match self {
+            &mir::NullOp::SizeOf => {
+                json!({"kind": "SizeOf"})
+            },
+            &mir::NullOp::AlignOf => {
+                json!({"kind": "SizeOf"})
+            },
+            &mir::NullOp::OffsetOf(fields) => {
+                json!({
+                    "kind": "OffsetOf",
+                    "fields": fields.to_json(mir),
+                })
+            },
+        }
+    }
+}
 
 impl<'tcx> ToJson<'tcx> for abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
@@ -69,9 +87,9 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &mir::AggregateKind::Generator(_, _, _,) => {
+            &mir::AggregateKind::Coroutine(..) => {
                 // TODO
-                json!({"kind": "Generator"})
+                json!({"kind": "Coroutine"})
             }
         }
     }
@@ -88,7 +106,7 @@ fn vtable_descriptor_for_cast<'tcx>(
 ) -> Option<ty::PolyTraitRef<'tcx>> {
     let tcx = mir.state.tcx;
 
-    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCast::Unsize) {
+    if kind != mir::CastKind::PointerCoercion(ty::adjustment::PointerCoercion::Unsize) {
         return None;
     }
 
@@ -312,7 +330,7 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
 
 basic_json_impl!(mir::BasicBlock);
 
-impl ToJson<'_> for mir::Field {
+impl ToJson<'_> for abi::FieldIdx {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
@@ -336,7 +354,7 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
+impl<'tcx> ToJson<'tcx> for mir::ConstOperand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         (eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
     }
@@ -478,8 +496,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "switch_ty": discr.ty(mir.mir.unwrap(), mir.state.tcx).to_json(mir)
                 })
             }
-            &mir::TerminatorKind::Resume => {
-                json!({"kind": "Resume"})
+            &mir::TerminatorKind::UnwindResume => {
+                json!({"kind": "UnwindResume"})
             }
             &mir::TerminatorKind::Return => {
                 json!({"kind": "Return"})
@@ -491,6 +509,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 place: ref location,
                 ref target,
                 ref unwind,
+                replace: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
@@ -501,29 +520,13 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
-            &mir::TerminatorKind::DropAndReplace {
-                place: ref location,
-                ref value,
-                ref target,
-                ref unwind,
-            } => {
-                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
-                json!({
-                    "kind": "DropAndReplace",
-                    "location": location.to_json(mir),
-                    "value": value.to_json(mir),
-                    "target": target.to_json(mir),
-                    "unwind": unwind.to_json(mir),
-                    "drop_fn": get_drop_fn_name(mir, ty),
-                })
-            }
             &mir::TerminatorKind::Call {
                 ref func,
                 ref args,
                 destination: ref dest_place,
                 target: ref dest_block,
-                ref cleanup,
-                ref from_hir_call,
+                ref unwind,
+                call_source: _,
                 fn_span: _,
             } => {
                 let destination = dest_block.as_ref().map(|dest_block| {
@@ -537,8 +540,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "func": func.to_json(mir),
                     "args": args.to_json(mir),
                     "destination": destination,
-                    "cleanup": cleanup.to_json(mir),
-                    "from_hir_call": from_hir_call
+                    "unwind": unwind.to_json(mir),
                 })
             }
             &mir::TerminatorKind::Assert {
@@ -546,7 +548,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref expected,
                 ref msg,
                 ref target,
-                ref cleanup,
+                ref unwind,
             } => {
                 json!({
                     "kind": "Assert",
@@ -554,11 +556,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "expected": expected,
                     "msg": msg.to_json(mir),
                     "target": target.to_json(mir),
-                    "cleanup": cleanup.to_json(mir)
+                    "unwind": unwind.to_json(mir)
                 })
-            }
-            &mir::TerminatorKind::Abort => {
-                json!({ "kind": "Abort" })
             }
             &mir::TerminatorKind::Yield { .. } => {
                 // TODO
@@ -578,8 +577,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "kind": "FalseUnwind"
                 })
             }
-            &mir::TerminatorKind::GeneratorDrop => {
-                json!({ "kind": "GeneratorDrop" })
+            &mir::TerminatorKind::CoroutineDrop => {
+                json!({ "kind": "CoroutineDrop" })
             }
             &mir::TerminatorKind::InlineAsm { .. } => {
                 // TODO
@@ -588,6 +587,25 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
         };
         j["pos"] = self.source_info.span.to_json(mir);
         j
+    }
+}
+
+impl<'tcx> ToJson<'tcx> for mir::UnwindAction {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match self {
+            &mir::UnwindAction::Continue => {
+                json!({ "kind": "Continue" })
+            },
+            &mir::UnwindAction::Unreachable => {
+                json!({ "kind": "Unreachable" })
+            },
+            &mir::UnwindAction::Terminate(_reason) => {
+                json!({ "kind": "Terminate" })
+            },
+            &mir::UnwindAction::Cleanup(block) => {
+                json!({ "kind": "Cleanup", "dest": block.to_json(mir) })
+            },
+        }
     }
 }
 
@@ -656,12 +674,12 @@ fn emit_trait<'tcx>(
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
         // adjust `InstanceDef::Virtual` indices accordingly.
         let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
-        let sig = tcx.subst_and_normalize_erasing_regions(
+        let sig = tcx.instantiate_and_normalize_erasing_regions(
             substs, ty::ParamEnv::reveal_all(), tcx.fn_sig(def_id));
-        let sig = tcx.erase_late_bound_regions(sig);
+        let sig = tcx.instantiate_bound_regions_with_erased(sig);
 
         items.push(json!({
             "kind": "Method",
@@ -670,7 +688,7 @@ fn emit_trait<'tcx>(
         }));
     }
 
-    ms.state.session.note_without_error(&format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
+    ms.state.session.note_without_error(format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
 
     out.emit(EntryKind::Trait, json!({
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
@@ -859,7 +877,6 @@ fn emit_instance<'tcx>(
     match inst.def {
         ty::InstanceDef::Item(def_id) => {
             // Foreign items and non-generics have no MIR available.
-            let def_id = def_id.did;
             if tcx.is_foreign_item(def_id) {
                 return Ok(());
             }
@@ -870,7 +887,7 @@ fn emit_instance<'tcx>(
                 // Items with upstream monomorphizations have already been translated into an upstream
                 // crate, so we can skip them.
                 if tcx.upstream_monomorphizations_for(def_id)
-                        .map_or(false, |monos| monos.contains_key(&inst.substs)) {
+                        .map_or(false, |monos| monos.contains_key(&inst.args)) {
                     return Ok(());
                 }
             }
@@ -883,16 +900,15 @@ fn emit_instance<'tcx>(
 
     // Look up and monomorphize the MIR for this instance.
     let mir = tcx.instance_mir(inst.def);
-    let mir: Body = tcx.subst_and_normalize_erasing_regions(
-        inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+    let mir: Body = tcx.instantiate_and_normalize_erasing_regions(
+        inst.args, ty::ParamEnv::reveal_all(), ty::EarlyBinder::bind((*mir).clone()));
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
     if let ty::InstanceDef::Item(def_id) = inst.def {
-        let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = tcx.subst_and_normalize_erasing_regions(
-                inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+            let mir = tcx.instantiate_and_normalize_erasing_regions(
+                inst.args, ty::ParamEnv::reveal_all(), ty::EarlyBinder::bind((*mir).clone()));
             let mir = tcx.arena.alloc(mir);
             emit_promoted(ms, out, &name, idx, mir)?;
         }
@@ -920,7 +936,7 @@ fn emit_vtable<'tcx>(
     out: &mut impl JsonOutput,
     poly_trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
-    let trait_ref = ms.state.tcx.erase_late_bound_regions(poly_trait_ref);
+    let trait_ref = ms.state.tcx.instantiate_bound_regions_with_erased(poly_trait_ref);
     let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref);
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
@@ -949,7 +965,7 @@ fn build_vtable_items<'tcx>(
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
         // adjust `InstanceDef::Virtual` indices accordingly.
         let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
         parts.push(json!({
@@ -986,7 +1002,7 @@ fn emit_fn<'tcx>(
     inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
 ) -> io::Result<()> {
-    ms.state.session.note_without_error(&format!("Emitting MIR for {}", name));
+    ms.state.session.note_without_error(format!("Emitting MIR for {}", name));
 
     let mut ms = MirState {
         mir: Some(mir),
@@ -1032,11 +1048,10 @@ fn inst_abi<'tcx>(
 ) -> spec::abi::Abi {
     match inst.def {
         ty::InstanceDef::Item(def_id) => {
-            let def_id = def_id.did;
             let ty = tcx.type_of(def_id);
-            match *ty.kind() {
+            match *ty.skip_binder().kind() {
                 ty::TyKind::FnDef(_, _) =>
-                    ty.fn_sig(tcx).skip_binder().abi,
+                    ty.skip_binder().fn_sig(tcx).skip_binder().abi,
                 ty::TyKind::Closure(_, _) => spec::abi::Abi::RustCall,
                 _ => spec::abi::Abi::Rust,
             }
@@ -1074,10 +1089,10 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         }
         let mir_path_ = rustc_session::output::out_filename(
             sess,
-            sess.crate_types().first().unwrap().clone(),
+            tcx.crate_types().first().unwrap().clone(),
             &outputs,
             tcx.crate_name(LOCAL_CRATE),
-        ).with_extension("mir");
+        ).as_path().with_extension("mir");
         let mut out = mk_output(&mir_path_)?;
         mir_path = Some(mir_path_);
 
@@ -1178,7 +1193,7 @@ pub fn analyze_nonstreaming<'tcx>(
         "roots": out.roots,
     });
     sess.note_without_error(
-        &format!("Indexing MIR ({} items)...", total_items));
+        format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
     lib_util::write_indexed_crate(file, &j)?;
 
@@ -1211,7 +1226,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                     args: ast::AttrArgs::Delimited(
                         ast::DelimArgs {
                             dspan: tokenstream::DelimSpan::dummy(),
-                            delim: ast::MacDelimiter::Parenthesis,
+                            delim: token::Delimiter::Parenthesis,
                             tokens: iter::once(
                                 tokenstream::TokenTree::token_alone(
                                     token::TokenKind::Ident(Symbol::intern(value), false),

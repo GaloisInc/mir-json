@@ -1,18 +1,17 @@
 use std::convert::TryFrom;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, Hash64};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc_index::vec::{IndexVec, Idx};
+use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
-use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeFoldable, TypeVisitable, TypeVisitableExt};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
-use rustc_target::spec::abi;
-use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
+use rustc_target::abi::{self, Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -39,14 +38,13 @@ basic_json_enum_impl!(ty::UintTy);
 basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::CastKind);
-basic_json_enum_impl!(abi::Abi);
+basic_json_enum_impl!(rustc_target::spec::abi::Abi);
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::BorrowKind::Shared => json!("Shared"),
-            &mir::BorrowKind::Shallow => json!("Shallow"),
-            &mir::BorrowKind::Unique => json!("Unique"),
+            &mir::BorrowKind::Fake => json!("Fake"),
             &mir::BorrowKind::Mut{..} => json!("Mut"),
         }
     }
@@ -94,7 +92,7 @@ where T: for<'a> HashStable<StableHashingContext<'a>> {
     let hash: u64 = tcx.with_stable_hashing_context(|mut hcx| {
         let mut hasher = StableHasher::new();
         extra.hash_stable(&mut hcx, &mut hasher);
-        hasher.finish()
+        hasher.finish::<Hash64>().as_u64()
     });
     format!("{}::{}{:016x}[0]", base, prefix, hash)
 }
@@ -114,13 +112,13 @@ pub fn inst_id_str<'tcx>(
 ) -> String {
     let substs = tcx.normalize_erasing_regions(
         ty::ParamEnv::reveal_all(),
-        inst.substs,
+        inst.args,
     );
     assert!(!substs.has_erasable_regions());
-    assert!(!substs.needs_subst());
+    assert!(!substs.has_param());
 
     match inst.def {
-        ty::InstanceDef::Item(ty::WithOptConstParam { did: def_id, .. }) |
+        ty::InstanceDef::Item(def_id) |
         ty::InstanceDef::Intrinsic(def_id) => {
             if substs.len() == 0 {
                 def_id_str(tcx, def_id)
@@ -162,7 +160,7 @@ pub fn trait_inst_id_str<'tcx>(
 pub fn get_fn_def_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     defid: DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
+    substs: ty::GenericArgsRef<'tcx>,
 ) -> String {
     let inst = ty::Instance::resolve(
         mir.state.tcx,
@@ -187,7 +185,7 @@ pub fn get_fn_def_name<'tcx>(
 pub fn get_promoted_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     defid: DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
+    substs: ty::GenericArgsRef<'tcx>,
     promoted: Option<mir::Promoted>,
 ) -> String {
     let parent = get_fn_def_name(mir, defid, substs);
@@ -235,13 +233,13 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let substs = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
-            self.substs,
+            self.args,
         );
 
         match self.def {
             ty::InstanceDef::Item(did) => json!({
                 "kind": "Item",
-                "def_id": did.did.to_json(mir),
+                "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
             ty::InstanceDef::Intrinsic(did) => json!({
@@ -278,7 +276,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 };
                 let tref = ex_tref.with_self_ty(mir.state.tcx, self_ty);
 
-                let erased_tref = mir.state.tcx.erase_late_bound_regions(tref);
+                let erased_tref = mir.state.tcx.instantiate_bound_regions_with_erased(tref);
                 let ti = TraitInst::from_trait_ref(mir.state.tcx, erased_tref);
                 let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
                 mir.used.traits.insert(ti);
@@ -306,7 +304,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(closure_did, substs) =>
-                        substs.as_closure().upvar_tys().collect(),
+                        substs.as_closure().upvar_tys().iter().collect(),
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]
@@ -318,7 +316,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                             mir.state.tcx,
                             ty::ParamEnv::reveal_all(),
                             did,
-                            mir.state.tcx.intern_substs(&[ty.into()]),
+                            mir.state.tcx.mk_args(&[ty.into()]),
                         ).unwrap_or_else(|_| {
                             panic!("failed to resolve instance: {:?}, {:?}", did, ty);
                         });
@@ -419,8 +417,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Closure(defid, ref substs) => {
                 json!({
                     "kind": "Closure",
-                    "upvar_tys": substs.as_closure().upvar_tys()
-                        .collect::<Vec<_>>().to_json(mir),
+                    "upvar_tys": substs.as_closure().upvar_tys().to_json(mir),
                     // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
@@ -435,7 +432,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                             "kind": "Dynamic",
                             "trait_id": trait_name,
                             "predicates": preds.iter().map(|p|{
-                                let p = tcx.erase_late_bound_regions(p);
+                                let p = tcx.instantiate_bound_regions_with_erased(p);
                                 p.to_json(mir)
                             }).collect::<Vec<_>>(),
                         })
@@ -474,13 +471,13 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Foreign"})
             }
-            &ty::TyKind::Generator(_, _, _) => {
+            &ty::TyKind::Coroutine(..) => {
                 // TODO
-                json!({"kind": "Generator"})
+                json!({"kind": "Coroutine"})
             }
-            &ty::TyKind::GeneratorWitness(_) => {
+            &ty::TyKind::CoroutineWitness(..) => {
                 // TODO
-                json!({"kind": "GeneratorWitness"})
+                json!({"kind": "CoroutineWitness"})
             }
             &ty::TyKind::Alias(ty::AliasKind::Opaque, _) => {
                 // TODO
@@ -501,7 +498,7 @@ impl ToJson<'_> for ty::ParamTy {
 
 impl<'tcx> ToJson<'tcx> for ty::PolyFnSig<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let sig = ms.state.tcx.erase_late_bound_regions(*self);
+        let sig = ms.state.tcx.instantiate_bound_regions_with_erased(*self);
         sig.to_json(ms)
     }
 }
@@ -522,7 +519,7 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "trait":  self.def_id.to_json(ms),
-            "substs":  self.substs.to_json(ms)
+            "substs":  self.args.to_json(ms),
         })
     }
 }
@@ -530,8 +527,8 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
 impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
-            "substs": self.substs.to_json(ms),
-            "def_id": self.def_id.to_json(ms)
+            "def_id": self.def_id.to_json(ms),
+            "substs": self.args.to_json(ms),
         })
     }
 }
@@ -541,12 +538,12 @@ impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
 impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.kind().skip_binder() {
-            ty::PredicateKind::Clause(ty::Clause::Trait(tp)) => {
+            ty::PredicateKind::Clause(ty::ClauseKind::Trait(tp)) => {
                 json!({
                     "trait_pred": tp.trait_ref.to_json(ms)
                 })
             }
-            ty::PredicateKind::Clause(ty::Clause::Projection(pp)) => match pp.term.unpack() {
+            ty::PredicateKind::Clause(ty::ClauseKind::Projection(pp)) => match pp.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
                     "projection_ty": pp.projection_ty.to_json(ms),
                     "ty": ty.to_json(ms),
@@ -569,14 +566,14 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
                 json!({
                     "kind": "Trait",
                     "trait": trait_ref.def_id.to_json(ms),
-                    "substs": trait_ref.substs.to_json(ms),
+                    "substs": trait_ref.args.to_json(ms),
                 })
             },
             &ty::ExistentialPredicate::Projection(ref proj) => match proj.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
                     "kind": "Projection",
                     "proj": proj.def_id.to_json(ms),
-                    "substs": proj.substs.to_json(ms),
+                    "substs": proj.args.to_json(ms),
                     "rhs_ty": ty.to_json(ms),
                 }),
                 ty::TermKind::Const(_) => json!({
@@ -594,93 +591,28 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
 }
 
 
-impl<'tcx> ToJson<'tcx> for ty::GenericPredicates<'tcx> {
-    fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        fn gather_preds<'tcx>(
-            ms: &mut MirState<'_, 'tcx>,
-            preds: &ty::GenericPredicates<'tcx>,
-            dest: &mut Vec<serde_json::Value>,
-        ) {
-            dest.extend(preds.predicates.iter().map(|p| p.0.to_json(ms)));
-            if let Some(parent_id) = preds.parent {
-                let parent_preds = ms.state.tcx.predicates_of(parent_id);
-                gather_preds(ms, &parent_preds, dest);
-            }
-        }
-
-        let mut json_preds: Vec<serde_json::Value> = Vec::new();
-        gather_preds(ms, self, &mut json_preds);
-        json!({ "predicates": json_preds })
-    }
-}
-
-impl ToJson<'_> for ty::GenericParamDef {
-    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
-        json!({
-            "param_def": *(self.name.as_str()),
-            "def_id": self.def_id.to_json(ms),
-        }) // TODO
-    }
-}
-
-impl ToJson<'_> for ty::Generics {
-    fn to_json(&self, ms: &mut MirState) -> serde_json::Value {
-        fn gather_params(
-            ms: &mut MirState,
-            generics: &ty::Generics,
-            dest: &mut Vec<serde_json::Value>,
-        ) {
-            if let Some(parent_id) = generics.parent {
-                let parent_generics = ms.state.tcx.generics_of(parent_id);
-                gather_params(ms, &parent_generics, dest);
-            }
-            dest.extend(generics.params.iter().map(|p| p.to_json(ms)));
-        }
-
-        let mut json_params: Vec<serde_json::Value> = Vec::new();
-        gather_params(ms, self, &mut json_params);
-        json!({
-            "params": json_params
-        }) // TODO
-    }
-}
-
 pub trait ToJsonAg {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value;
 }
 
-impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
-            ty::subst::GenericArgKind::Type(ref ty) => ty.to_json(mir),
+            ty::GenericArgKind::Type(ref ty) => ty.to_json(mir),
             // In crucible-mir, all substs entries are considered "types", and there are dummy
             // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
             // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
-            ty::subst::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
-            ty::subst::GenericArgKind::Const(_) => json!("nonty::Const"),
+            ty::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
+            ty::GenericArgKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
 
-fn eval_array_len<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    c: ty::Const<'tcx>,
-) -> usize {
-    match c.kind() {
-        // ty::ConstKind::Unevaluated(un) => {
-        //     tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), un.expand(), None).unwrap()
-        // },
-        // NB: the type of "val" changed to valtree - try to get the size out of that
-        ty::ConstKind::Value(ty::ValTree::Leaf(val)) =>
-            val.try_to_machine_usize(tcx).expect("expecting usize value from constant") as usize,
-        ref val => panic!("don't know how to translate ConstKind::{:?}", val),
-    }
-}
-
+/* FIXME
 use self::machine::RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
@@ -893,7 +825,9 @@ mod machine {
         }
     }
 }
+*/
 
+/* FIXME
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
@@ -927,7 +861,9 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         map.into()
     }
 }
+*/
 
+/* FIXME
 impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
@@ -945,17 +881,19 @@ impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
         })
     }
 }
+*/
 
 pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize {
     match c.kind() {
         ty::ConstKind::Value(ty::ValTree::Leaf(val)) => {
-            let v = val.try_to_machine_usize(tcx).unwrap();
+            let v = val.try_to_target_usize(tcx).unwrap();
             v as usize
         }
         _ => panic!("don't know how to translate ConstKind::{:?}", c.kind())
     }
 }
 
+/* FIXME
 pub fn render_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -968,7 +906,9 @@ pub fn render_opty<'mir, 'tcx>(
         })
     })
 }
+*/
 
+/* FIXME
 pub fn try_render_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1152,7 +1092,9 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
     })
 }
+*/
 
+/* FIXME
 fn try_render_ref_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1260,7 +1202,9 @@ fn try_render_ref_opty<'mir, 'tcx>(
         _ => return None
     }
 }
+*/
 
+/* FIXME
 // A copied version of MPlaceTy::len, which (sadly) isn't exported. See
 // https://github.com/rust-lang/rust/blob/56ee85274e5a3a4dda92f3bf73d1664c74ff9c15/compiler/rustc_const_eval/src/interpret/place.rs#L227C5-L243
 #[inline]
@@ -1280,11 +1224,14 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
         }
     }
 }
+*/
 
+/* FIXME
 pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
     -> interpret::OpTy<'tcx, interpret::AllocId>
 {
-    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, ConstValue, Immediate, Scalar, OpTy, ImmTy, MPlaceTy};
+    use rustc_const_eval::interpret::{Pointer, MemPlace, ConstValue, Immediate, Scalar, OpTy, ImmTy, MPlaceTy};
+    use rustc_const_eval::interpret::operand::Operand;
     use rustc_target::abi::Size;
     let op = match cv {
         ConstValue::ByRef { alloc, offset } => {
@@ -1318,11 +1265,12 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty:
         Operand::Indirect(ind) => MPlaceTy::from_aligned_ptr(ind.ptr, layout).into(),
     }
 }
+*/
 
 fn iter_tojson<'a, 'tcx, I, V: 'a>(
     it: I,
     mir: &mut MirState<'_, 'tcx>,
-    substs: ty::subst::SubstsRef<'tcx>,
+    substs: ty::GenericArgsRef<'tcx>,
 ) -> serde_json::Value
 where I: Iterator<Item = &'a V>, V: ToJsonAg {
     let mut j = Vec::with_capacity(it.size_hint().0);
@@ -1339,7 +1287,7 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
         iter_tojson(self.iter(), mir, substs)
     }
@@ -1352,7 +1300,7 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
         <[T] as ToJsonAg>::tojson(self, mir, substs)
     }
@@ -1366,7 +1314,7 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
         iter_tojson(self.iter(), mir, substs)
     }
@@ -1384,7 +1332,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         &self,
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
-        let ty = mir.state.tcx.mk_adt(self.adt, self.substs);
+        let ty = ty::Ty::new_adt(mir.state.tcx, self.adt, self.substs);
         let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
@@ -1447,7 +1395,7 @@ fn render_variant<'tcx>(
 ) -> serde_json::Value {
     let tcx = mir.state.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
-                     .subst(tcx, adt.substs)
+                     .instantiate(tcx, adt.substs)
                      .apply_ignore_module(tcx, ty::ParamEnv::reveal_all());
 
     json!({
@@ -1464,10 +1412,10 @@ impl ToJsonAg for ty::FieldDef {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
         let unsubst_ty = mir.state.tcx.type_of(self.did);
-        let ty = mir.state.tcx.subst_and_normalize_erasing_regions(
+        let ty = mir.state.tcx.instantiate_and_normalize_erasing_regions(
             substs, ty::ParamEnv::reveal_all(), unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
@@ -1479,7 +1427,7 @@ impl ToJsonAg for ty::FieldDef {
 pub fn handle_adt_ag<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ak: &mir::AggregateKind<'tcx>,
-    opv: &Vec<mir::Operand<'tcx>>,
+    opv: &IndexVec<abi::FieldIdx, mir::Operand<'tcx>>,
 ) -> serde_json::Value {
     match ak {
         &mir::AggregateKind::Adt(adt_did, variant, substs, _, _) => {
@@ -1494,22 +1442,14 @@ pub fn handle_adt_ag<'tcx>(
     }
 }
 
-pub fn eval_mir_constant2<'mir, 'tcx>(
-    icx: &InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
-    tcx: ty::TyCtxt<'tcx>,
-    constant: &mir::Constant<'tcx>,
-) -> interpret::OpTy<'tcx> {
-    let layout =  tcx.layout_of(ty::ParamEnv::reveal_all().and(constant.ty())).unwrap();
-    icx.eval_mir_constant(&constant.literal, Some(constant.span), Some(layout)).unwrap()
-}
-
+/* FIXME
 // Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
 pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
-    constant: &mir::Constant<'tcx>,
+    constant: &mir::ConstOperand<'tcx>,
 ) -> interpret::ConstValue<'tcx> {
-    let uv = match constant.literal {
-        mir::ConstantKind::Ty(ct) => match ct.kind() {
+    let uv = match constant.const_ {
+        mir::Const::Ty(ct) => match ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv.expand(),
             ty::ConstKind::Value(val) => {
                 return tcx.valtree_to_const_val((ct.ty(), val));
@@ -1519,9 +1459,10 @@ pub fn eval_mir_constant<'tcx>(
                 err, constant.span
             ),
         },
-        mir::ConstantKind::Unevaluated(uv, _) => uv,
-        mir::ConstantKind::Val(val, _) => return val,
+        mir::Const::Unevaluated(uv, _) => uv,
+        mir::Const::Val(val, _) => return val,
     };
 
     tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap()
 }
+*/

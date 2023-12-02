@@ -1,3 +1,4 @@
+use rustc_index::{IndexVec, Idx};
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::mir::{Body, interpret};
 use rustc_middle::ty::{self, TyCtxt, DynKind};
@@ -91,9 +92,9 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
-        let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        let trait_ref = preds.principal().map(|tr| tcx.instantiate_bound_regions_with_erased(tr));
         let mut projs = preds.projection_bounds()
-            .map(|proj| tcx.erase_late_bound_regions(proj))
+            .map(|proj| tcx.instantiate_bound_regions_with_erased(proj))
             .collect::<Vec<_>>();
         projs.sort_by_key(|p| p.def_id);
         TraitInst { trait_ref, projs }
@@ -113,11 +114,11 @@ impl<'tcx> TraitInst<'tcx> {
         all_super_traits.insert(trait_ref.def_id);
         while let Some(def_id) = pending.pop() {
             let super_preds = tcx.super_predicates_of(def_id);
-            for &(ref pred, _) in super_preds.predicates {
-                let tpred = match tcx.erase_late_bound_regions(pred.kind()) {
-                    ty::PredicateKind::Clause(ty::Clause::Trait(x)) => x,
-                    ty::PredicateKind::Clause(ty::Clause::TypeOutlives(..)) => continue,
-                    _ => panic!("unexpected predicate kind: {:?}", pred),
+            for &(ref clause, _) in super_preds.predicates {
+                let tpred = match tcx.instantiate_bound_regions_with_erased(clause.kind()) {
+                    ty::ClauseKind::Trait(x) => x,
+                    ty::ClauseKind::TypeOutlives(..) => continue,
+                    _ => panic!("unexpected clause kind: {:?}", clause),
                 };
                 assert_eq!(tpred.polarity, ty::ImplPolarity::Positive);
                 if all_super_traits.insert(tpred.trait_ref.def_id) {
@@ -135,11 +136,11 @@ impl<'tcx> TraitInst<'tcx> {
                     ty::AssocKind::Type => {},
                     _ => continue,
                 }
-                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
+                let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
                 let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
                 projs.push(ty::ExistentialProjection {
                     def_id: ai.def_id,
-                    substs: ex_trait_ref.substs,
+                    args: ex_trait_ref.args,
                     term: actual_ty.into(),
                 });
             }
@@ -159,9 +160,10 @@ impl<'tcx> TraitInst<'tcx> {
         preds.extend(
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
-        let preds = tcx.intern_poly_existential_predicates(&preds);
+        let preds = tcx.mk_poly_existential_predicates(&preds);
         // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
-        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
+        let rg = ty::Region::new_from_kind(tcx, ty::RegionKind::ReErased);
+        Some(ty::Ty::new_dynamic(tcx, preds, rg, DynKind::Dyn))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -180,11 +182,14 @@ impl<'tcx> TraitInst<'tcx> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
     pub adt: ty::AdtDef<'tcx>,
-    pub substs: ty::subst::SubstsRef<'tcx>,
+    pub substs: ty::GenericArgsRef<'tcx>,
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+    pub fn new(
+        adt: ty::AdtDef<'tcx>,
+        substs: ty::GenericArgsRef<'tcx>,
+    ) -> AdtInst<'tcx> {
         AdtInst { adt, substs }
     }
 
@@ -222,8 +227,8 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::FnPtr(..) => "FnPtr",
         ty::TyKind::Dynamic(..) => "Dynamic",
         ty::TyKind::Closure(..) => "Closure",
-        ty::TyKind::Generator(..) => "Generator",
-        ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
+        ty::TyKind::Coroutine(..) => "Coroutine",
+        ty::TyKind::CoroutineWitness(..) => "CoroutineWitness",
         ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
         ty::TyKind::Alias(..) => "Alias",
@@ -454,6 +459,25 @@ where
 }
 
 impl<'tcx, T> ToJson<'tcx> for Vec<T>
+where
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        <[T] as ToJson>::to_json(self, mir)
+    }
+}
+
+impl<'tcx, I, T> ToJson<'tcx> for IndexVec<I, T>
+where
+    I: Idx,
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        <[T] as ToJson>::to_json(&self.raw, mir)
+    }
+}
+
+impl<'tcx, T> ToJson<'tcx> for [T]
 where
     T: ToJson<'tcx>,
 {
