@@ -151,8 +151,10 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     args.push("test".into());
     // XXX big hack.  See `mir-json-rustc-wrapper.rs` for an explanation of why we set `--target`
     // explicitly to its default value.
-    args.push("--target".into());
-    args.push(host_triple().into());
+    if !orig_args.iter().any(|a| a == "--target") {
+        args.push("--target".into());
+        args.push(host_triple().into());
+    }
     for extra_arg in extra_args {
         args.push(extra_arg.into());
     }
