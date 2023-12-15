@@ -697,16 +697,6 @@ mod machine {
             true
         }
 
-        /// Entry point to all function calls.
-        ///
-        /// Returns either the mir to use for the call, or `None` if execution should
-        /// just proceed (which usually means this hook did all the work that the
-        /// called function should usually have done). In the latter case, it is
-        /// this hook's responsibility to advance the instruction pointer!
-        /// (This is to support functions like `__rust_maybe_catch_panic` that neither find a MIR
-        /// nor just jump to `ret`, but instead push their own stack frame.)
-        /// Passing `dest`and `ret` in the same `Option` proved very annoying when only one of them
-        /// was used.
         fn find_mir_or_eval_fn(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             instance: ty::Instance<'tcx>,
@@ -723,8 +713,6 @@ mod machine {
             ).into())
         }
 
-        /// Execute `fn_val`. It is the hook's responsibility to advance the instruction
-        /// pointer as appropriate.
         fn call_extra_fn(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             fn_val: Self::ExtraFnVal,
@@ -741,8 +729,6 @@ mod machine {
             ).into())
         }
 
-        /// Directly process an intrinsic without pushing a stack frame. It is the hook's
-        /// responsibility to advance the instruction pointer as appropriate.
         fn call_intrinsic(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             instance: ty::Instance<'tcx>,
@@ -758,7 +744,6 @@ mod machine {
             ).into())
         }
 
-        /// Called to evaluate `Assert` MIR terminators that trigger a panic.
         fn assert_panic(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             msg: &mir::AssertMessage<'tcx>,
@@ -771,7 +756,6 @@ mod machine {
             ).into())
         }
 
-        /// Called to trigger a non-unwinding panic.
         fn panic_nounwind(_ecx: &mut InterpCx<'mir, 'tcx, Self>, msg: &str) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -780,7 +764,6 @@ mod machine {
             ).into())
         }
 
-        /// Called when unwinding reached a state where execution should be terminated.
         fn unwind_terminate(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             reason: mir::UnwindTerminateReason,
@@ -792,9 +775,6 @@ mod machine {
             ).into())
         }
 
-        /// Called for all binary operations where the LHS has pointer type.
-        ///
-        /// Returns a (value, overflowed) pair if the operation succeeded
         fn binary_ptr_op(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             bin_op: mir::BinOp,
@@ -808,7 +788,6 @@ mod machine {
             ).into())
         }
 
-        /// Return the root pointer for the given `extern static`.
         fn extern_static_base_pointer(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             def_id: DefId,
@@ -820,10 +799,6 @@ mod machine {
             ).into())
         }
 
-        /// Return a "base" pointer for the given allocation: the one that is used for direct
-        /// accesses to this static/const/fn allocation, or the one returned from the heap allocator.
-        ///
-        /// Not called on `extern` or thread-local statics (those use the methods above).
         fn adjust_alloc_base_pointer(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer,
@@ -831,7 +806,6 @@ mod machine {
             Ok(ptr)
         }
 
-        /// "Int-to-pointer cast"
         fn ptr_from_addr_cast(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             addr: u64,
@@ -843,8 +817,6 @@ mod machine {
             ).into())
         }
 
-        /// Marks a pointer as exposed, allowing it's provenance
-        /// to be recovered. "Pointer-to-int cast"
         fn expose_ptr(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
@@ -856,12 +828,6 @@ mod machine {
             ).into())
         }
 
-        /// Convert a pointer with provenance into an allocation-offset pair
-        /// and extra provenance info.
-        ///
-        /// The returned `AllocId` must be the same as `ptr.provenance.get_alloc_id()`.
-        ///
-        /// When this fails, that means the pointer does not point to a live allocation.
         fn ptr_get_alloc(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
@@ -870,21 +836,6 @@ mod machine {
             Some((prov, offset, ()))
         }
 
-        /// Called to adjust allocations to the Provenance and AllocExtra of this machine.
-        ///
-        /// The way we construct allocations is to always first construct it without extra and then add
-        /// the extra. This keeps uniform code paths for handling both allocations created by CTFE for
-        /// globals, and allocations created by Miri during evaluation.
-        ///
-        /// `kind` is the kind of the allocation being adjusted; it can be `None` when
-        /// it's a global and `GLOBAL_KIND` is `None`.
-        ///
-        /// This should avoid copying if no work has to be done! If this returns an owned
-        /// allocation (because a copy had to be done to adjust things), machine memory will
-        /// cache the result. (This relies on `AllocMap::get_or` being able to add the
-        /// owned allocation to the map even when the map is shared.)
-        ///
-        /// This must only fail if `alloc` contains provenance.
         fn adjust_allocation<'b>(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             id: AllocId,
@@ -894,7 +845,6 @@ mod machine {
             Ok(alloc)
         }
 
-        /// Called immediately before a new stack frame gets pushed.
         fn init_frame_extra(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             frame: Frame<'mir, 'tcx, Self::Provenance>,
@@ -912,7 +862,6 @@ mod machine {
             &ecx.machine.stack
         }
 
-        /// Mutably borrow the current thread's stack.
         fn stack_mut<'a>(
             ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
         ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
