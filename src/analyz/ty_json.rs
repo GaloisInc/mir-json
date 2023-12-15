@@ -4,7 +4,7 @@ use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
-use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
+use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance, Projectable};
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
@@ -642,7 +642,6 @@ impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     }
 }
 
-/* FIXME
 use self::machine::RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
@@ -650,6 +649,7 @@ mod machine {
     use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
+    use rustc_middle::ty::layout::TyAndLayout;
     use rustc_target::abi::Size;
     use rustc_target::spec::abi::Abi;
     pub struct RenderConstMachine<'mir, 'tcx> {
@@ -664,6 +664,7 @@ mod machine {
         }
     }
 
+
     impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine<'mir, 'tcx> {
         type MemoryKind = !;
         type Provenance = AllocId;
@@ -671,48 +672,50 @@ mod machine {
         type ExtraFnVal = !;
         type FrameExtra = ();
         type AllocExtra = ();
+        type Bytes = Box<[u8]>;
+
         type MemoryMap = FxIndexMap<
             AllocId,
             (MemoryKind<!>, Allocation),
         >;
 
         const GLOBAL_KIND: Option<Self::MemoryKind> = None;
-        const PANIC_ON_ALLOC_FAIL: bool = false;
+        const PANIC_ON_ALLOC_FAIL: bool = true;
 
-        fn enforce_alignment(ecx: &InterpCx<'mir, 'tcx, Self>) -> CheckAlignment {
-            CheckAlignment::No
-        }
-
-        fn alignment_check_failed(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            has: Align,
-            required: Align,
-            check: CheckAlignment,
-        ) -> InterpResult<'tcx, ()> {
-            panic!("not implemented: alignment_check_failed");
+        fn enforce_alignment(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            false
         }
 
         fn use_addr_for_alignment_check(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
-        #[inline(always)]
-        fn checked_binop_checks_overflow(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
-            true
-        }
-
-        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>, layout: TyAndLayout<'tcx>) -> bool {
             false
         }
 
+        fn ignore_optional_overflow_checks(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+            true
+        }
+
+        /// Entry point to all function calls.
+        ///
+        /// Returns either the mir to use for the call, or `None` if execution should
+        /// just proceed (which usually means this hook did all the work that the
+        /// called function should usually have done). In the latter case, it is
+        /// this hook's responsibility to advance the instruction pointer!
+        /// (This is to support functions like `__rust_maybe_catch_panic` that neither find a MIR
+        /// nor just jump to `ret`, but instead push their own stack frame.)
+        /// Passing `dest`and `ret` in the same `Option` proved very annoying when only one of them
+        /// was used.
         fn find_mir_or_eval_fn(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             instance: ty::Instance<'tcx>,
             abi: Abi,
-            args: &[OpTy<'tcx, Self::Provenance>],
+            args: &[FnArg<'tcx, Self::Provenance>],
             destination: &PlaceTy<'tcx, Self::Provenance>,
             target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -721,14 +724,16 @@ mod machine {
             ).into())
         }
 
+        /// Execute `fn_val`. It is the hook's responsibility to advance the instruction
+        /// pointer as appropriate.
         fn call_extra_fn(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             fn_val: Self::ExtraFnVal,
             abi: Abi,
-            args: &[OpTy<'tcx, Self::Provenance>],
+            args: &[FnArg<'tcx, Self::Provenance>],
             destination: &PlaceTy<'tcx, Self::Provenance>,
             target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -737,13 +742,15 @@ mod machine {
             ).into())
         }
 
+        /// Directly process an intrinsic without pushing a stack frame. It is the hook's
+        /// responsibility to advance the instruction pointer as appropriate.
         fn call_intrinsic(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             instance: ty::Instance<'tcx>,
             args: &[OpTy<'tcx, Self::Provenance>],
             destination: &PlaceTy<'tcx, Self::Provenance>,
             target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -752,10 +759,11 @@ mod machine {
             ).into())
         }
 
+        /// Called to evaluate `Assert` MIR terminators that trigger a panic.
         fn assert_panic(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             msg: &mir::AssertMessage<'tcx>,
-            unwind: Option<mir::BasicBlock>,
+            unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -764,12 +772,36 @@ mod machine {
             ).into())
         }
 
+        /// Called to trigger a non-unwinding panic.
+        fn panic_nounwind(_ecx: &mut InterpCx<'mir, 'tcx, Self>, msg: &str) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "panic_nounwind".into(),
+                ),
+            ).into())
+        }
+
+        /// Called when unwinding reached a state where execution should be terminated.
+        fn unwind_terminate(
+            ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            reason: mir::UnwindTerminateReason,
+        ) -> InterpResult<'tcx> {
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "unwind_terminate".into(),
+                ),
+            ).into())
+        }
+
+        /// Called for all binary operations where the LHS has pointer type.
+        ///
+        /// Returns a (value, overflowed) pair if the operation succeeded
         fn binary_ptr_op(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             bin_op: mir::BinOp,
             left: &ImmTy<'tcx, Self::Provenance>,
             right: &ImmTy<'tcx, Self::Provenance>,
-        ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool, Ty<'tcx>)> {
+        ) -> InterpResult<'tcx, (ImmTy<'tcx, Self::Provenance>, bool)> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "binary_ptr_op".into(),
@@ -777,6 +809,7 @@ mod machine {
             ).into())
         }
 
+        /// Return the root pointer for the given `extern static`.
         fn extern_static_base_pointer(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             def_id: DefId,
@@ -788,20 +821,31 @@ mod machine {
             ).into())
         }
 
+        /// Return a "base" pointer for the given allocation: the one that is used for direct
+        /// accesses to this static/const/fn allocation, or the one returned from the heap allocator.
+        ///
+        /// Not called on `extern` or thread-local statics (those use the methods above).
         fn adjust_alloc_base_pointer(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer,
-        ) -> Pointer<Self::Provenance> {
-            ptr
+        ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
+            Ok(ptr)
         }
 
+        /// "Int-to-pointer cast"
         fn ptr_from_addr_cast(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             addr: u64,
         ) -> InterpResult<'tcx, Pointer<Option<Self::Provenance>>> {
-            unimplemented!("ptr_from_addr_cast")
+            Err(InterpError::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "ptr_from_addr_cast".into(),
+                ),
+            ).into())
         }
 
+        /// Marks a pointer as exposed, allowing it's provenance
+        /// to be recovered. "Pointer-to-int cast"
         fn expose_ptr(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
@@ -813,6 +857,12 @@ mod machine {
             ).into())
         }
 
+        /// Convert a pointer with provenance into an allocation-offset pair
+        /// and extra provenance info.
+        ///
+        /// The returned `AllocId` must be the same as `ptr.provenance.get_alloc_id()`.
+        ///
+        /// When this fails, that means the pointer does not point to a live allocation.
         fn ptr_get_alloc(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
@@ -821,15 +871,31 @@ mod machine {
             Some((prov, offset, ()))
         }
 
+        /// Called to adjust allocations to the Provenance and AllocExtra of this machine.
+        ///
+        /// The way we construct allocations is to always first construct it without extra and then add
+        /// the extra. This keeps uniform code paths for handling both allocations created by CTFE for
+        /// globals, and allocations created by Miri during evaluation.
+        ///
+        /// `kind` is the kind of the allocation being adjusted; it can be `None` when
+        /// it's a global and `GLOBAL_KIND` is `None`.
+        ///
+        /// This should avoid copying if no work has to be done! If this returns an owned
+        /// allocation (because a copy had to be done to adjust things), machine memory will
+        /// cache the result. (This relies on `AllocMap::get_or` being able to add the
+        /// owned allocation to the map even when the map is shared.)
+        ///
+        /// This must only fail if `alloc` contains provenance.
         fn adjust_allocation<'b>(
             ecx: &InterpCx<'mir, 'tcx, Self>,
             id: AllocId,
             alloc: Cow<'b, Allocation>,
             kind: Option<MemoryKind<Self::MemoryKind>>,
-        ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
+        ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra, Self::Bytes>>> {
             Ok(alloc)
         }
 
+        /// Called immediately before a new stack frame gets pushed.
         fn init_frame_extra(
             ecx: &mut InterpCx<'mir, 'tcx, Self>,
             frame: Frame<'mir, 'tcx, Self::Provenance>,
@@ -845,17 +911,16 @@ mod machine {
             ecx: &'a InterpCx<'mir, 'tcx, Self>,
         ) -> &'a [Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>] {
             &ecx.machine.stack
-            // unimplemented!("stack")
         }
 
+        /// Mutably borrow the current thread's stack.
         fn stack_mut<'a>(
             ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
         ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
-            unimplemented!("stack_mut")
+            &mut ecx.machine.stack
         }
     }
 }
-*/
 
 /* FIXME
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
@@ -893,25 +958,23 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 }
 */
 
-/* FIXME
-impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
+
+impl<'tcx> ToJson<'tcx> for mir::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let (val, ty) = *self;
-        let op_ty = as_opty(mir.state.tcx, val, ty);
         let mut icx = interpret::InterpCx::new(
             mir.state.tcx,
             DUMMY_SP,
             ty::ParamEnv::reveal_all(),
             RenderConstMachine::new(),
         );
+        let op_ty = icx.eval_mir_constant(self, None, None).unwrap();
 
         json!({
-            "ty": ty.to_json(mir),
+            "ty": self.ty().to_json(mir),
             "rendered": render_opty(mir, &mut icx, &op_ty),
         })
     }
 }
-*/
 
 pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize {
     match c.kind() {
@@ -923,7 +986,6 @@ pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize
     }
 }
 
-/* FIXME
 pub fn render_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -936,9 +998,7 @@ pub fn render_opty<'mir, 'tcx>(
         })
     })
 }
-*/
 
-/* FIXME
 pub fn try_render_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1007,7 +1067,7 @@ pub fn try_render_opty<'mir, 'tcx>(
             let variant = adt_def.non_enum_variant();
             let mut field_vals = Vec::new();
             for field_idx in 0..variant.fields.len() {
-                let field = icx.operand_field(&op_ty, field_idx).unwrap();
+                let field = icx.project_field(op_ty, field_idx).unwrap();
                 field_vals.push(try_render_opty(mir, icx, &field)?)
             }
 
@@ -1019,11 +1079,11 @@ pub fn try_render_opty<'mir, 'tcx>(
             })
         },
         ty::TyKind::Adt(adt_def, _substs) if adt_def.is_enum() => {
-            let (_, variant_idx) = icx.read_discriminant(&op_ty).unwrap();
-            let val = icx.operand_downcast(op_ty, variant_idx).unwrap();
+            let variant_idx = icx.read_discriminant(op_ty).unwrap();
+            let val = icx.project_downcast(op_ty, variant_idx).unwrap();
             let mut field_vals = Vec::with_capacity(val.layout.fields.count());
             for idx in 0 .. val.layout.fields.count() {
-                let field_opty = icx.operand_field(&val, idx).unwrap();
+                let field_opty = icx.project_field(&val, idx).unwrap();
                 field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
             }
 
@@ -1043,8 +1103,9 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Array(ety, sz) => {
             let sz = get_const_usize(tcx, sz);
             let mut vals = Vec::with_capacity(sz);
-            for field in icx.operand_array_fields(op_ty).unwrap() {
-                let f_json = try_render_opty(mir, icx, &field.unwrap());
+            let mut field_iter = icx.project_array_fields(op_ty).unwrap();
+            while let Some((_, field)) = field_iter.next(icx).unwrap() {
+                let f_json = try_render_opty(mir, icx, &field);
                 vals.push(f_json);
             }
 
@@ -1084,10 +1145,10 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
 
         ty::TyKind::Closure(_defid, substs) => {
-            let upvars_count = substs.as_closure().upvar_tys().count();
+            let upvars_count = substs.as_closure().upvar_tys().len();
             let mut upvar_vals = Vec::with_capacity(upvars_count);
             for idx in 0 .. upvars_count {
-                let upvar_opty = icx.operand_field(&op_ty, idx).unwrap();
+                let upvar_opty = icx.project_field(op_ty, idx).unwrap();
                 upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
             }
 
@@ -1096,14 +1157,14 @@ pub fn try_render_opty<'mir, 'tcx>(
                 "upvars": upvar_vals,
             })
         }
-        ty::TyKind::Generator(_, _, _) => todo!("generator not supported yet"), // not supported in haskell
-        ty::TyKind::GeneratorWitness(_) => todo!("generatorwitness not supported yet"), // not supported in haskell
+        ty::TyKind::Coroutine(..) => todo!("coroutine not supported yet"), // not supported in haskell
+        ty::TyKind::CoroutineWitness(..) => todo!("coroutinewitness not supported yet"), // not supported in haskell
         ty::TyKind::Never => unreachable!("never type should be uninhabited"),
 
         ty::TyKind::Tuple(elts) => {
             let mut vals = Vec::with_capacity(elts.len());
             for i in 0..elts.len() {
-                let fld: interpret::OpTy<'tcx> = icx.operand_field(&op_ty, i).unwrap();
+                let fld: interpret::OpTy<'tcx> = icx.project_field(op_ty, i).unwrap();
                 vals.push(render_opty(mir, icx, &fld));
             }
             json!({
@@ -1122,9 +1183,7 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
     })
 }
-*/
 
-/* FIXME
 fn try_render_ref_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1137,9 +1196,9 @@ fn try_render_ref_opty<'mir, 'tcx>(
     // Special case for nullptr
     let val = icx.read_immediate(op_ty).unwrap();
     let mplace = icx.ref_to_mplace(&val).unwrap();
-    let (prov, offset) = mplace.ptr.into_parts();
+    let (prov, offset) = mplace.ptr().into_parts();
     if prov.is_none() {
-        assert!(!mplace.meta.has_meta(), "not expecting meta for nullptr");
+        assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
 
         return Some(json!({
             "kind": "raw_ptr",
@@ -1147,15 +1206,16 @@ fn try_render_ref_opty<'mir, 'tcx>(
         }));
     }
 
-    let d = icx.deref_operand(op_ty).unwrap();
+    let d = icx.deref_pointer(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
     if !is_mut {
         match *rty.kind() {
             // Special case for &str
             ty::TyKind::Str => {
-                let len = mplace_ty_len(&d, icx).unwrap();
-                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                let len = d.len(icx).unwrap();
+                let mem = icx.read_bytes_ptr_strip_provenance(
+                    d.ptr(), Size::from_bytes(len)).unwrap();
                 return Some(json!({
                     "kind": "str",
                     "val": mem
@@ -1164,7 +1224,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
             // Special case for &[u8; N]
             ty::TyKind::Array(elem_ty, _) => {
                 if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
-                    let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+                    let mem = icx.read_bytes_ptr_strip_provenance(d.ptr(), d.layout.size).unwrap();
                     return Some(json!({
                         "kind": "bstr",
                         "val": mem,
@@ -1176,10 +1236,10 @@ fn try_render_ref_opty<'mir, 'tcx>(
             // Special case for &[T]
             ty::TyKind::Slice(slice_ty) => {
                 eprintln!("slice op_ty: {:?}", op_ty);
-                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let slice_len = d.len(icx).unwrap();
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
                 for idx in 0..slice_len {
-                    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                    let elt = icx.project_index(&d.clone().into(), idx).unwrap();
                     elt_values.push(try_render_opty(mir, icx, &elt));
                 }
 
@@ -1193,7 +1253,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
         }
     }
 
-    let (prov, _offset) = d.ptr.into_parts();
+    let (prov, _offset) = d.ptr().into_parts();
     let alloc = tcx.try_get_global_alloc(prov?)?;
     match alloc {
         interpret::GlobalAlloc::Static(def_id) =>
@@ -1206,11 +1266,15 @@ fn try_render_ref_opty<'mir, 'tcx>(
             let aid = match mir.allocs.get(ca, ty) {
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
-                    let ma = tcx.create_memory_alloc(ca);
-                    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
-                    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
+                    let ma = tcx.reserve_and_set_memory_alloc(ca);
+                    let ptr = interpret::Pointer::new(ma, Size::ZERO);
+                    let ptr_s = interpret::Scalar::from_pointer(ptr, &tcx);
+                    let ptr_ty = ty::Ty::new_imm_ptr(tcx, rty);
+                    let ptr_layout = tcx.layout_of(
+                        ty::ParamEnv::reveal_all().and(ptr_ty)).unwrap();
+                    let ptr_imm_ty = interpret::ImmTy::from_scalar(ptr_s, ptr_layout);
 
-                    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
+                    let mpty = icx.deref_pointer(&ptr_imm_ty).unwrap();
                     let rendered = try_render_opty(mir, icx, &mpty.into());
 
                     let static_ref = json!({
@@ -1232,70 +1296,6 @@ fn try_render_ref_opty<'mir, 'tcx>(
         _ => return None
     }
 }
-*/
-
-/* FIXME
-// A copied version of MPlaceTy::len, which (sadly) isn't exported. See
-// https://github.com/rust-lang/rust/blob/56ee85274e5a3a4dda92f3bf73d1664c74ff9c15/compiler/rustc_const_eval/src/interpret/place.rs#L227C5-L243
-#[inline]
-pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx: &impl HasDataLayout) -> InterpResult<'tcx, u64> {
-    if mplace_ty.layout.is_unsized() {
-        // We need to consult `meta` metadata
-        match mplace_ty.layout.ty.kind() {
-            ty::Slice(..) | ty::Str => mplace_ty.meta.unwrap_meta().to_machine_usize(cx),
-            _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
-        }
-    } else {
-        // Go through the layout.  There are lots of types that support a length,
-        // e.g., SIMD types. (But not all repr(simd) types even have FieldsShape::Array!)
-        match mplace_ty.layout.fields {
-            FieldsShape::Array { count, .. } => Ok(count),
-            _ => bug!("len not supported on sized type {:?}", mplace_ty.layout.ty),
-        }
-    }
-}
-*/
-
-/* FIXME
-pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
-    -> interpret::OpTy<'tcx, interpret::AllocId>
-{
-    use rustc_const_eval::interpret::{Pointer, MemPlace, ConstValue, Immediate, Scalar, OpTy, ImmTy, MPlaceTy};
-    use rustc_const_eval::interpret::operand::Operand;
-    use rustc_target::abi::Size;
-    let op = match cv {
-        ConstValue::ByRef { alloc, offset } => {
-            let id = tcx.create_memory_alloc(alloc);
-            // We rely on mutability being set correctly in that allocation to prevent writes
-            // where none should happen.
-            let ptr = Pointer::new(id, offset);
-            Operand::Indirect(MemPlace::from_ptr(ptr.into()))
-        }
-        ConstValue::Scalar(x) => Operand::Immediate(x.into()),
-        ConstValue::ZeroSized => Operand::Immediate(Immediate::Uninit),
-        ConstValue::Slice { data, start, end } => {
-            // We rely on mutability being set correctly in `data` to prevent writes
-            // where none should happen.
-            let ptr = Pointer::new(
-                tcx.create_memory_alloc(data),
-                Size::from_bytes(start), // offset: `start`
-            );
-            Operand::Immediate(Immediate::new_slice(
-                Scalar::from_pointer(ptr, &tcx),
-                u64::try_from(end.checked_sub(start).unwrap()).unwrap(), // len: `end - start`
-                &tcx,
-            ))
-        }
-    };
-
-    let layout = tcx.layout_of(ty::ParamEnv::reveal_all().and(ty)).unwrap();
-
-    match op {
-        Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
-        Operand::Indirect(ind) => MPlaceTy::from_aligned_ptr(ind.ptr, layout).into(),
-    }
-}
-*/
 
 fn iter_tojson<'a, 'tcx, I, V: 'a>(
     it: I,
@@ -1471,28 +1471,3 @@ pub fn handle_adt_ag<'tcx>(
         _ => unreachable!("bad"),
     }
 }
-
-/* FIXME
-// Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
-pub fn eval_mir_constant<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    constant: &mir::ConstOperand<'tcx>,
-) -> interpret::ConstValue<'tcx> {
-    let uv = match constant.const_ {
-        mir::Const::Ty(ct) => match ct.kind() {
-            ty::ConstKind::Unevaluated(uv) => uv.expand(),
-            ty::ConstKind::Value(val) => {
-                return tcx.valtree_to_const_val((ct.ty(), val));
-            }
-            err => panic!(
-                "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
-                err, constant.span
-            ),
-        },
-        mir::Const::Unevaluated(uv, _) => uv,
-        mir::Const::Val(val, _) => return val,
-    };
-
-    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap()
-}
-*/
