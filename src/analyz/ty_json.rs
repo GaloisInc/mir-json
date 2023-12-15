@@ -400,8 +400,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({
                     "kind": "Array",
                     "ty": t.to_json(mir),
-                    // FIXME:
-                    //"size": size.to_json(mir),
+                    "size": size.to_json(mir),
                 })
             }
             &ty::TyKind::Ref(ref _region, ref ty, ref mtbl) => {
@@ -922,7 +921,6 @@ mod machine {
     }
 }
 
-/* FIXME
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
@@ -932,7 +930,7 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             // remove? should probably not show up?
             ty::ConstKind::Unevaluated(un) => {
                 map.insert("initializer".to_owned(), json!({
-                    "def_id": get_fn_def_name(mir, un.def.did, un.substs),
+                    "def_id": get_fn_def_name(mir, un.def, un.args),
                 }));
             },
             _ => {},
@@ -956,7 +954,6 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
         map.into()
     }
 }
-*/
 
 
 impl<'tcx> ToJson<'tcx> for mir::Const<'tcx> {
