@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+env:
+  # The NAME makes it easier to copy/paste snippets from other CI configs
+  NAME: mir-json
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deps
+      run: |
+        rustup default nightly-2023-01-23
+        rustup component add clippy rustc-dev
+    - uses: Swatinem/rust-cache@v2.7.0
+    # TODO: Fix lints, use --deny warnings
+    - name: Lint
+      run: cargo clippy
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deps
+      run: |
+        rustup default nightly-2023-01-23
+        rustup component add rustc-dev
+    - uses: Swatinem/rust-cache@v2.7.0
+    # TODO: Fix builds of examples, run tests
+    # - run: cargo test --locked --no-run
+    # - run: cargo test 
+    - run: cargo build --bin=mir-json --release
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      if: github.repository == 'GaloisInc/${{ env.NAME }}'
+      with:
+        name: "${{ env.NAME }}"
+        path: "target/release/${{ env.NAME }}"
+        if-no-files-found: error
