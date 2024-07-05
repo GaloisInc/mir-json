@@ -1203,7 +1203,6 @@ fn try_render_ref_opty<'mir, 'tcx>(
             },
             // Special case for &[T]
             ty::TyKind::Slice(slice_ty) => {
-                eprintln!("slice op_ty: {:?}", op_ty);
                 let slice_len = mplace_ty_len(&d, icx).unwrap();
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
                 for idx in 0..slice_len {
