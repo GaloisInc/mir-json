@@ -1153,6 +1153,50 @@ pub fn try_render_opty<'mir, 'tcx>(
     })
 }
 
+fn get_def_id<'mir, 'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+    rty: ty::Ty<'tcx>,
+    d: MPlaceTy<'_>
+) -> Option<String> {
+    let tcx = mir.state.tcx;
+
+    let (prov, _offset) = d.ptr.into_parts();
+    let alloc = tcx.try_get_global_alloc(prov?)?;
+    match alloc {
+        interpret::GlobalAlloc::Static(def_id) =>
+            return Some(def_id.to_json(mir).to_string()),
+        interpret::GlobalAlloc::Memory(ca) => {
+            let ty = op_ty.layout.ty;
+            let aid = match mir.allocs.get(ca, ty) {
+                Some(alloc_id) => alloc_id.to_owned(),
+                None => {
+                    let ma = tcx.create_memory_alloc(ca);
+                    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
+                    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
+
+                    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
+                    let rendered = try_render_opty(mir, icx, &mpty.into());
+
+                    let static_ref = json!({
+                        "kind": "constant",
+                        "mutable": false,
+                        "ty": rty.to_json(mir),
+                        "rendered": rendered,
+                    });
+
+                    mir.allocs.insert(tcx, ca, ty, static_ref)
+                }
+            };
+
+            // XXX this looks to have already been to_json'd
+            return Some(aid)
+        }
+        _ => return None
+    }
+}
+
 fn try_render_ref_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1183,19 +1227,24 @@ fn try_render_ref_opty<'mir, 'tcx>(
             // Special case for &str
             ty::TyKind::Str => {
                 let len = mplace_ty_len(&d, icx).unwrap();
-                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                //let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                let def_id = get_def_id(mir, icx, op_ty, rty, d).unwrap();
                 return Some(json!({
                     "kind": "str",
-                    "val": mem
+                    //"val": mem,
+                    "def_id": def_id,
+                    "len": len.to_string()
                 }))
             },
             // Special case for &[u8; N]
             ty::TyKind::Array(elem_ty, _) => {
                 if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
                     let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
+                    let def_id = get_def_id(mir, icx, op_ty, rty, d).unwrap();
                     return Some(json!({
                         "kind": "bstr",
-                        "val": mem,
+                        //"val": mem,
+                        "def_id": def_id,
                     }))
                 } else {
                     ()
@@ -1204,60 +1253,30 @@ fn try_render_ref_opty<'mir, 'tcx>(
             // Special case for &[T]
             ty::TyKind::Slice(slice_ty) => {
                 let slice_len = mplace_ty_len(&d, icx).unwrap();
-                let mut elt_values = Vec::with_capacity(slice_len as usize);
-                for idx in 0..slice_len {
-                    let elt = icx.operand_index(&d.into(), idx).unwrap();
-                    elt_values.push(try_render_opty(mir, icx, &elt));
-                }
+                //let mut elt_values = Vec::with_capacity(slice_len as usize);
+                //for idx in 0..slice_len {
+                //    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                //    elt_values.push(try_render_opty(mir, icx, &elt));
+                //}
+                let def_id = get_def_id(mir, icx, op_ty, rty, d).unwrap();
 
                 return Some(json!({
                     "kind": "slice",
-                    "element_ty": slice_ty.to_json(mir),
-                    "elements": elt_values
+                    //"element_ty": slice_ty.to_json(mir),
+                    //"elements": elt_values
+                    "def_id": def_id,
+                    "len": slice_len.to_string()
                 }))
             },
             _ => ()
         }
     }
 
-    let (prov, _offset) = d.ptr.into_parts();
-    let alloc = tcx.try_get_global_alloc(prov?)?;
-    match alloc {
-        interpret::GlobalAlloc::Static(def_id) =>
-            return Some(json!({
-                "kind": "static_ref",
-                "def_id": def_id.to_json(mir),
-            })),
-        interpret::GlobalAlloc::Memory(ca) => {
-            let ty = op_ty.layout.ty;
-            let aid = match mir.allocs.get(ca, ty) {
-                Some(alloc_id) => alloc_id.to_owned(),
-                None => {
-                    let ma = tcx.create_memory_alloc(ca);
-                    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
-                    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
-
-                    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
-                    let rendered = try_render_opty(mir, icx, &mpty.into());
-
-                    let static_ref = json!({
-                        "kind": "constant",
-                        "mutable": false,
-                        "ty": rty.to_json(mir),
-                        "rendered": rendered,
-                    });
-
-                    mir.allocs.insert(tcx, ca, ty, static_ref)
-                }
-            };
-
-            return Some(json!({
-                "kind": "static_ref",
-                "def_id": aid,
-            }));
-        }
-        _ => return None
-    }
+    let def_id = get_def_id(mir, icx, op_ty, rty, d).unwrap();
+    return Some(json!({
+        "kind": "static_ref",
+        "def_id": def_id,
+    }))
 }
 
 // A copied version of MPlaceTy::len, which (sadly) isn't exported. See
