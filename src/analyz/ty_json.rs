@@ -1124,7 +1124,7 @@ pub fn try_render_opty<'mir, 'tcx>(
     })
 }
 
-fn make_static_ref<'mir, 'tcx>(
+fn make_allocation_body<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
     rty: ty::Ty<'tcx>,
@@ -1136,7 +1136,10 @@ fn make_static_ref<'mir, 'tcx>(
 
     if !is_mut {
         match *rty.kind() {
-            // Special case for &str
+            // Special cases for &str and &[T]
+            //
+            // These and the ones in try_render_ref_opty below should be
+            // kept in sync.
             ty::TyKind::Str => {
                 let len = mplace_ty_len(&d, icx).unwrap();
                 let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
@@ -1155,7 +1158,6 @@ fn make_static_ref<'mir, 'tcx>(
                     "rendered": rendered,
                 });
             },
-            // Special case for slices
             ty::TyKind::Slice(slice_ty) => {
                 let slice_len = mplace_ty_len(&d, icx).unwrap();
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
@@ -1222,23 +1224,24 @@ fn try_render_ref_opty<'mir, 'tcx>(
     let d = icx.deref_operand(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
-    let (prov, _offset) = d.ptr.into_parts();
+    let (prov, d_offset) = d.ptr.into_parts();
+    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
     let alloc = tcx.try_get_global_alloc(prov?)?;
 
-    let def_id = match alloc {
+    let def_id_json = match alloc {
         interpret::GlobalAlloc::Static(def_id) =>
             def_id.to_json(mir),
         interpret::GlobalAlloc::Memory(ca) => {
             let ty = op_ty.layout.ty;
-            let def_id = match mir.allocs.get(ca, ty) {
+            let def_id_str = match mir.allocs.get(ca, ty) {
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
                     // create the allocation
-                    let static_ref = make_static_ref(mir, icx, rty, d, is_mut, ca);
-                    mir.allocs.insert(tcx, ca, ty, static_ref)
+                    let body = make_allocation_body(mir, icx, rty, d, is_mut, ca);
+                    mir.allocs.insert(tcx, ca, ty, body)
                 }
             };
-            def_id.to_json(mir)
+            def_id_str.to_json(mir)
         }
         _ =>
             // Give up
@@ -1254,11 +1257,14 @@ fn try_render_ref_opty<'mir, 'tcx>(
             // seems like a bad idea to conflate string slices and
             // ordinary slices unless/until we're sure it won't create
             // complications, now or in the future.
+            //
+            // These and the ones in make_allocation_body above should be
+            // kept in sync.
             ty::TyKind::Str => {
                 let len = mplace_ty_len(&d, icx).unwrap();
                 return Some(json!({
                     "kind": "str",
-                    "def_id": def_id,
+                    "def_id": def_id_json,
                     "len": len
                 }))
             },
@@ -1266,7 +1272,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
                 let len = mplace_ty_len(&d, icx).unwrap();
                 return Some(json!({
                     "kind": "slice",
-                    "def_id": def_id,
+                    "def_id": def_id_json,
                     "len": len
                 }))
             },
@@ -1276,7 +1282,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
 
     return Some(json!({
         "kind": "static_ref",
-        "def_id": def_id,
+        "def_id": def_id_json,
     }));
 }
 
