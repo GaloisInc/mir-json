@@ -1249,23 +1249,9 @@ fn try_render_ref_opty<'mir, 'tcx>(
         match *rty.kind() {
             // Special cases for &str and &[T]
             //
-            // These cases are the same apart from the kind label, and
-            // it's possible they could be folded together. But it
-            // seems like a bad idea to conflate string slices and
-            // ordinary slices unless/until we're sure it won't create
-            // complications, now or in the future.
-            //
             // These and the ones in make_allocation_body above should be
             // kept in sync.
-            ty::TyKind::Str => {
-                let len = mplace_ty_len(&d, icx).unwrap();
-                return Some(json!({
-                    "kind": "str",
-                    "def_id": def_id_json,
-                    "len": len
-                }))
-            },
-            ty::TyKind::Slice(_slice_ty) => {
+            ty::TyKind::Str | ty::TyKind::Slice(_) => {
                 let len = mplace_ty_len(&d, icx).unwrap();
                 return Some(json!({
                     "kind": "slice",
