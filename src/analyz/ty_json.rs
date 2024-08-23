@@ -1166,7 +1166,8 @@ fn make_static_ref<'mir, 'tcx>(
                 // corresponding array type for contents
                 let aty = tcx.mk_array(slice_ty, slice_len);
                 let rendered = json!({
-                    "kind": "slicebody",
+                    // this can now be the same as an ordinary array
+                    "kind": "array",
                     "elements": elt_values,
                     "len": slice_len
                 });
