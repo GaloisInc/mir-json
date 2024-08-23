@@ -1247,7 +1247,13 @@ fn try_render_ref_opty<'mir, 'tcx>(
 
     if !is_mut {
         match *rty.kind() {
-            // Special case for &str
+            // Special cases for &str and &[T]
+            //
+            // These cases are the same apart from the kind label, and
+            // it's possible they could be folded together. But it
+            // seems like a bad idea to conflate string slices and
+            // ordinary slices unless/until we're sure it won't create
+            // complications, now or in the future.
             ty::TyKind::Str => {
                 let len = mplace_ty_len(&d, icx).unwrap();
                 return Some(json!({
@@ -1256,13 +1262,12 @@ fn try_render_ref_opty<'mir, 'tcx>(
                     "len": len
                 }))
             },
-            // Special case for &[T]
             ty::TyKind::Slice(_slice_ty) => {
-                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let len = mplace_ty_len(&d, icx).unwrap();
                 return Some(json!({
                     "kind": "slice",
                     "def_id": def_id,
-                    "len": slice_len
+                    "len": len
                 }))
             },
             _ => ()
