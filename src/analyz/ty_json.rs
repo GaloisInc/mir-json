@@ -1130,7 +1130,6 @@ fn make_allocation_body<'mir, 'tcx>(
     rty: ty::Ty<'tcx>,
     d: MPlaceTy<'tcx>,
     is_mut: bool,
-    ca: interpret::ConstAllocation<'tcx>
 ) -> serde_json::Value {
     let tcx = mir.state.tcx;
 
@@ -1185,10 +1184,8 @@ fn make_allocation_body<'mir, 'tcx>(
     }
 
     // Default case
-    let ma = tcx.create_memory_alloc(ca);
     let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
-    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
-    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
+    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr, rlayout, d.meta);
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
     return json!({
@@ -1237,7 +1234,7 @@ fn try_render_ref_opty<'mir, 'tcx>(
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
                     // create the allocation
-                    let body = make_allocation_body(mir, icx, rty, d, is_mut, ca);
+                    let body = make_allocation_body(mir, icx, rty, d, is_mut);
                     mir.allocs.insert(tcx, ca, ty, body)
                 }
             };
