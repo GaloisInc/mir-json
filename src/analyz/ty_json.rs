@@ -8,7 +8,7 @@ use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Proven
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
-use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeFoldable, TypeVisitable};
+use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitable};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_target::spec::abi;
@@ -184,20 +184,6 @@ pub fn get_fn_def_name<'tcx>(
     }
 }
 
-pub fn get_promoted_name<'tcx>(
-    mir: &mut MirState<'_, 'tcx>,
-    defid: DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
-    promoted: Option<mir::Promoted>,
-) -> String {
-    let parent = get_fn_def_name(mir, defid, substs);
-    let idx = match promoted {
-        Some(x) => x,
-        None => return parent,
-    };
-    format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize())
-}
-
 pub fn get_drop_fn_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ty: ty::Ty<'tcx>,
@@ -305,7 +291,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 let sub_tys = match *ty.kind() {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
-                    ty::TyKind::Closure(closure_did, substs) =>
+                    ty::TyKind::Closure(_closure_did, substs) =>
                         substs.as_closure().upvar_tys().collect(),
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
@@ -416,7 +402,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Param(..) => unreachable!(
                 "no TyKind::Param should remain after monomorphization"
             ),
-            &ty::TyKind::Closure(defid, ref substs) => {
+            &ty::TyKind::Closure(_defid, ref substs) => {
                 json!({
                     "kind": "Closure",
                     "upvar_tys": substs.as_closure().upvar_tys()
@@ -666,21 +652,6 @@ impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
     }
 }
 
-fn eval_array_len<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    c: ty::Const<'tcx>,
-) -> usize {
-    match c.kind() {
-        // ty::ConstKind::Unevaluated(un) => {
-        //     tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), un.expand(), None).unwrap()
-        // },
-        // NB: the type of "val" changed to valtree - try to get the size out of that
-        ty::ConstKind::Value(ty::ValTree::Leaf(val)) =>
-            val.try_to_machine_usize(tcx).expect("expecting usize value from constant") as usize,
-        ref val => panic!("don't know how to translate ConstKind::{:?}", val),
-    }
-}
-
 use self::machine::RenderConstMachine;
 mod machine {
     use std::borrow::Cow;
@@ -717,20 +688,20 @@ mod machine {
         const GLOBAL_KIND: Option<Self::MemoryKind> = None;
         const PANIC_ON_ALLOC_FAIL: bool = false;
 
-        fn enforce_alignment(ecx: &InterpCx<'mir, 'tcx, Self>) -> CheckAlignment {
+        fn enforce_alignment(_ecx: &InterpCx<'mir, 'tcx, Self>) -> CheckAlignment {
             CheckAlignment::No
         }
 
         fn alignment_check_failed(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            has: Align,
-            required: Align,
-            check: CheckAlignment,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _has: Align,
+            _required: Align,
+            _check: CheckAlignment,
         ) -> InterpResult<'tcx, ()> {
             panic!("not implemented: alignment_check_failed");
         }
 
-        fn use_addr_for_alignment_check(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn use_addr_for_alignment_check(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
@@ -739,18 +710,18 @@ mod machine {
             true
         }
 
-        fn enforce_validity(ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_validity(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
             false
         }
 
         fn find_mir_or_eval_fn(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            instance: ty::Instance<'tcx>,
-            abi: Abi,
-            args: &[OpTy<'tcx, Self::Provenance>],
-            destination: &PlaceTy<'tcx, Self::Provenance>,
-            target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _instance: ty::Instance<'tcx>,
+            _abi: Abi,
+            _args: &[OpTy<'tcx, Self::Provenance>],
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
+            _target: Option<mir::BasicBlock>,
+            _unwind: StackPopUnwind,
         ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -760,13 +731,13 @@ mod machine {
         }
 
         fn call_extra_fn(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            fn_val: Self::ExtraFnVal,
-            abi: Abi,
-            args: &[OpTy<'tcx, Self::Provenance>],
-            destination: &PlaceTy<'tcx, Self::Provenance>,
-            target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _fn_val: Self::ExtraFnVal,
+            _abi: Abi,
+            _args: &[OpTy<'tcx, Self::Provenance>],
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
+            _target: Option<mir::BasicBlock>,
+            _unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -776,12 +747,12 @@ mod machine {
         }
 
         fn call_intrinsic(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            instance: ty::Instance<'tcx>,
-            args: &[OpTy<'tcx, Self::Provenance>],
-            destination: &PlaceTy<'tcx, Self::Provenance>,
-            target: Option<mir::BasicBlock>,
-            unwind: StackPopUnwind,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _instance: ty::Instance<'tcx>,
+            _args: &[OpTy<'tcx, Self::Provenance>],
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
+            _target: Option<mir::BasicBlock>,
+            _unwind: StackPopUnwind,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -791,9 +762,9 @@ mod machine {
         }
 
         fn assert_panic(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            msg: &mir::AssertMessage<'tcx>,
-            unwind: Option<mir::BasicBlock>,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _msg: &mir::AssertMessage<'tcx>,
+            _unwind: Option<mir::BasicBlock>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -803,10 +774,10 @@ mod machine {
         }
 
         fn binary_ptr_op(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            bin_op: mir::BinOp,
-            left: &ImmTy<'tcx, Self::Provenance>,
-            right: &ImmTy<'tcx, Self::Provenance>,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _bin_op: mir::BinOp,
+            _left: &ImmTy<'tcx, Self::Provenance>,
+            _right: &ImmTy<'tcx, Self::Provenance>,
         ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool, Ty<'tcx>)> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -816,8 +787,8 @@ mod machine {
         }
 
         fn extern_static_base_pointer(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            def_id: DefId,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _def_id: DefId,
         ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -827,22 +798,22 @@ mod machine {
         }
 
         fn adjust_alloc_base_pointer(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer,
         ) -> Pointer<Self::Provenance> {
             ptr
         }
 
         fn ptr_from_addr_cast(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            addr: u64,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _addr: u64,
         ) -> InterpResult<'tcx, Pointer<Option<Self::Provenance>>> {
             unimplemented!("ptr_from_addr_cast")
         }
 
         fn expose_ptr(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            ptr: Pointer<Self::Provenance>,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ptr: Pointer<Self::Provenance>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -852,7 +823,7 @@ mod machine {
         }
 
         fn ptr_get_alloc(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
         ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
             let (prov, offset) = ptr.into_parts();
@@ -860,17 +831,17 @@ mod machine {
         }
 
         fn adjust_allocation<'b>(
-            ecx: &InterpCx<'mir, 'tcx, Self>,
-            id: AllocId,
+            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _id: AllocId,
             alloc: Cow<'b, Allocation>,
-            kind: Option<MemoryKind<Self::MemoryKind>>,
+            _kind: Option<MemoryKind<Self::MemoryKind>>,
         ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
             Ok(alloc)
         }
 
         fn init_frame_extra(
-            ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            frame: Frame<'mir, 'tcx, Self::Provenance>,
+            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _frame: Frame<'mir, 'tcx, Self::Provenance>,
         ) -> InterpResult<'tcx, Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -887,7 +858,7 @@ mod machine {
         }
 
         fn stack_mut<'a>(
-            ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
         ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
             unimplemented!("stack_mut")
         }
@@ -999,7 +970,7 @@ pub fn try_render_opty<'mir, 'tcx>(
                 "val": bits.to_string(),
             })
         }
-        ty::TyKind::Int(i) => {
+        ty::TyKind::Int(_i) => {
             let s = icx.read_immediate(op_ty).unwrap().to_scalar();
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
@@ -1153,6 +1124,78 @@ pub fn try_render_opty<'mir, 'tcx>(
     })
 }
 
+fn make_allocation_body<'mir, 'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    rty: ty::Ty<'tcx>,
+    d: MPlaceTy<'tcx>,
+    is_mut: bool,
+) -> serde_json::Value {
+    let tcx = mir.state.tcx;
+
+    if !is_mut {
+        match *rty.kind() {
+            // Special cases for &str and &[T]
+            //
+            // These and the ones in try_render_ref_opty below should be
+            // kept in sync.
+            ty::TyKind::Str => {
+                let len = mplace_ty_len(&d, icx).unwrap();
+                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                // corresponding array type for contents
+                let elem_ty = tcx.mk_ty(ty::TyKind::Uint(ty::UintTy::U8));
+                let aty = tcx.mk_array(elem_ty, len);
+                let rendered = json!({
+                    "kind": "strbody",
+                    "elements": mem,
+                    "len": len
+                });
+                return json!({
+                    "kind": "constant",
+                    "mutable": false,
+                    "ty": aty.to_json(mir),
+                    "rendered": rendered,
+                });
+            },
+            ty::TyKind::Slice(slice_ty) => {
+                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let mut elt_values = Vec::with_capacity(slice_len as usize);
+                for idx in 0..slice_len {
+                    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                    elt_values.push(try_render_opty(mir, icx, &elt));
+                }
+                // corresponding array type for contents
+                let aty = tcx.mk_array(slice_ty, slice_len);
+                let rendered = json!({
+                    // this can now be the same as an ordinary array
+                    "kind": "array",
+                    "elements": elt_values,
+                    "len": slice_len
+                });
+                return json!({
+                    "kind": "constant",
+                    "mutable": false,
+                    "ty": aty.to_json(mir),
+                    "rendered": rendered,
+                });
+            },
+            _ => ()
+        }
+    }
+
+    // Default case
+    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
+    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr, rlayout, d.meta);
+    let rendered = try_render_opty(mir, icx, &mpty.into());
+
+    return json!({
+        "kind": "constant",
+        "mutable": false,
+        "ty": rty.to_json(mir),
+        "rendered": rendered,
+    });
+}
+
 fn try_render_ref_opty<'mir, 'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
@@ -1178,86 +1221,52 @@ fn try_render_ref_opty<'mir, 'tcx>(
     let d = icx.deref_operand(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
+    let (prov, d_offset) = d.ptr.into_parts();
+    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
+    let alloc = tcx.try_get_global_alloc(prov?)?;
+
+    let def_id_json = match alloc {
+        interpret::GlobalAlloc::Static(def_id) =>
+            def_id.to_json(mir),
+        interpret::GlobalAlloc::Memory(ca) => {
+            let ty = op_ty.layout.ty;
+            let def_id_str = match mir.allocs.get(ca, ty) {
+                Some(alloc_id) => alloc_id.to_owned(),
+                None => {
+                    // create the allocation
+                    let body = make_allocation_body(mir, icx, rty, d, is_mut);
+                    mir.allocs.insert(tcx, ca, ty, body)
+                }
+            };
+            def_id_str.to_json(mir)
+        }
+        _ =>
+            // Give up
+            return None
+    };
+
     if !is_mut {
         match *rty.kind() {
-            // Special case for &str
-            ty::TyKind::Str => {
+            // Special cases for &str and &[T]
+            //
+            // These and the ones in make_allocation_body above should be
+            // kept in sync.
+            ty::TyKind::Str | ty::TyKind::Slice(_) => {
                 let len = mplace_ty_len(&d, icx).unwrap();
-                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
-                return Some(json!({
-                    "kind": "str",
-                    "val": mem
-                }))
-            },
-            // Special case for &[u8; N]
-            ty::TyKind::Array(elem_ty, _) => {
-                if let ty::TyKind::Uint(ty::UintTy::U8) = *elem_ty.kind() {
-                    let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, d.layout.size).unwrap();
-                    return Some(json!({
-                        "kind": "bstr",
-                        "val": mem,
-                    }))
-                } else {
-                    ()
-                }
-            },
-            // Special case for &[T]
-            ty::TyKind::Slice(slice_ty) => {
-                let slice_len = mplace_ty_len(&d, icx).unwrap();
-                let mut elt_values = Vec::with_capacity(slice_len as usize);
-                for idx in 0..slice_len {
-                    let elt = icx.operand_index(&d.into(), idx).unwrap();
-                    elt_values.push(try_render_opty(mir, icx, &elt));
-                }
-
                 return Some(json!({
                     "kind": "slice",
-                    "element_ty": slice_ty.to_json(mir),
-                    "elements": elt_values
+                    "def_id": def_id_json,
+                    "len": len
                 }))
             },
             _ => ()
         }
     }
 
-    let (prov, _offset) = d.ptr.into_parts();
-    let alloc = tcx.try_get_global_alloc(prov?)?;
-    match alloc {
-        interpret::GlobalAlloc::Static(def_id) =>
-            return Some(json!({
-                "kind": "static_ref",
-                "def_id": def_id.to_json(mir),
-            })),
-        interpret::GlobalAlloc::Memory(ca) => {
-            let ty = op_ty.layout.ty;
-            let aid = match mir.allocs.get(ca, ty) {
-                Some(alloc_id) => alloc_id.to_owned(),
-                None => {
-                    let ma = tcx.create_memory_alloc(ca);
-                    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
-                    let ptr = interpret::Pointer::new(Some(ma), Size::ZERO);
-
-                    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(ptr, rlayout, d.meta);
-                    let rendered = try_render_opty(mir, icx, &mpty.into());
-
-                    let static_ref = json!({
-                        "kind": "constant",
-                        "mutable": false,
-                        "ty": rty.to_json(mir),
-                        "rendered": rendered,
-                    });
-
-                    mir.allocs.insert(tcx, ca, ty, static_ref)
-                }
-            };
-
-            return Some(json!({
-                "kind": "static_ref",
-                "def_id": aid,
-            }));
-        }
-        _ => return None
-    }
+    return Some(json!({
+        "kind": "static_ref",
+        "def_id": def_id_json,
+    }));
 }
 
 // A copied version of MPlaceTy::len, which (sadly) isn't exported. See
@@ -1283,8 +1292,7 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
 pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
     -> interpret::OpTy<'tcx, interpret::AllocId>
 {
-    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, ConstValue, Immediate, Scalar, OpTy, ImmTy, MPlaceTy};
-    use rustc_target::abi::Size;
+    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, ConstValue, Immediate, Scalar, ImmTy};
     let op = match cv {
         ConstValue::ByRef { alloc, offset } => {
             let id = tcx.create_memory_alloc(alloc);
@@ -1491,15 +1499,6 @@ pub fn handle_adt_ag<'tcx>(
         }
         _ => unreachable!("bad"),
     }
-}
-
-pub fn eval_mir_constant2<'mir, 'tcx>(
-    icx: &InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
-    tcx: ty::TyCtxt<'tcx>,
-    constant: &mir::Constant<'tcx>,
-) -> interpret::OpTy<'tcx> {
-    let layout =  tcx.layout_of(ty::ParamEnv::reveal_all().and(constant.ty())).unwrap();
-    icx.eval_mir_constant(&constant.literal, Some(constant.span), Some(layout)).unwrap()
 }
 
 // Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
