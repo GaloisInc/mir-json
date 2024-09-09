@@ -62,6 +62,33 @@ fn collect_roots(
     roots
 }
 
+/// Ensure that all `CrateIndex`es have consistent schema versions. If all
+/// indexes have the same schema version, return the version number. Otherwise,
+/// return an error.
+///
+/// Precondition: there must be at least one `CrateIndex`. If this precondition
+/// is not met, this function will panic.
+fn check_equal_versions(
+    indexes: &[CrateIndex],
+) -> serde_cbor::Result<u64> {
+    match indexes.split_first() {
+        Some((first_index, last_indexes)) => {
+            let version = first_index.version;
+            for index in last_indexes {
+                if version != index.version {
+                    return Err(serde::ser::Error::custom(format!(
+                        "Mismatched schema version numbers ({:?} and {:?})",
+                        version,
+                        index.version,
+                    )));
+                }
+            }
+            Ok(version)
+        },
+        None =>
+            panic!("check_equal_versions: Empty list of crate indexes"),
+    }
+}
 
 /// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
 pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
@@ -69,6 +96,7 @@ where R: Read + Seek, W: Write {
     let (indexes, json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
     let roots = collect_roots(&indexes, &translate);
+    let version = check_equal_versions(&indexes)?;
 
 
     let mut seen_names = HashSet::new();
@@ -117,6 +145,7 @@ where R: Read + Seek, W: Write {
 
     // Write tables to the output, copying the serialized content of each entry.
     write!(output, "{{")?;
+    write!(output, "\"version\":{:?},", version)?;
     for (i, kind) in EntryKind::each().enumerate() {
         if i > 0 {
             write!(output, ",")?;

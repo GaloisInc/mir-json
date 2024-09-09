@@ -24,5 +24,6 @@ extern crate rustc_target;
 pub mod analyz;
 pub mod lib_util;
 pub mod link;
+pub mod schema_ver;
 
 mod tar_stream;

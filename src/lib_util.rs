@@ -28,6 +28,7 @@ use serde_cbor;
 use serde_json;
 use tar;
 
+use crate::schema_ver::SCHEMA_VER;
 use crate::tar_stream::{TarStream, TarEntryStream};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -39,6 +40,9 @@ pub struct CrateIndex {
     pub items: HashMap<StringId, ItemData>,
 
     pub roots: Vec<StringId>,
+
+    /// The schema version in use. (See also `SCHEMA_VER`.)
+    pub version: u64,
 }
 
 /// Metadata about a single item.
@@ -245,7 +249,9 @@ impl EmitterState {
         let mut roots = self.roots.into_iter().collect::<Vec<_>>();
         roots.sort();
 
-        CrateIndex { names, items, roots }
+        let version = SCHEMA_VER;
+
+        CrateIndex { names, items, roots, version }
     }
 }
 
@@ -296,6 +302,7 @@ impl<W: Write> Emitter<W> {
 
     pub fn emit_crate(&mut self, j: &JsonValue) -> io::Result<()> {
         write!(self.writer, "{{")?;
+        write!(self.writer, "\"version\":{:?},", SCHEMA_VER)?;
         self.emit_table_from(EntryKind::Fn, j)?;
         write!(self.writer, ",")?;
         self.emit_table_from(EntryKind::Adt, j)?;
