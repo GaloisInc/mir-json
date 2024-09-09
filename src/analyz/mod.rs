@@ -32,6 +32,7 @@ mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
+use schema_ver::SCHEMA_VER;
 
 basic_json_enum_impl!(mir::BinOp);
 
@@ -1168,6 +1169,7 @@ pub fn analyze_nonstreaming<'tcx>(
     let total_items = out.fns.len() + out.adts.len() + out.statics.len() + out.vtables.len() +
         out.traits.len() + out.intrinsics.len();
     let j = json!({
+        "version": SCHEMA_VER,
         "fns": out.fns,
         "adts": out.adts,
         "statics": out.statics,
