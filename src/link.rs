@@ -5,6 +5,7 @@ use serde_cbor;
 use serde_json;
 
 use crate::lib_util::{self, CrateIndex, InternTable, EntryKind, StringId};
+use crate::schema_ver::SCHEMA_VER;
 
 
 fn read_crates<R: Read + Seek>(
@@ -62,32 +63,22 @@ fn collect_roots(
     roots
 }
 
-/// Ensure that all `CrateIndex`es have consistent schema versions. If all
-/// indexes have the same schema version, return the version number. Otherwise,
+/// Ensure that all `CrateIndex`es have the same MIR JSON schema version as the
+/// version this build of `mir-json` is using (i.e., the same as `SCHEMA_VER`).
+/// If there is at least one `CrateIndex` that has a different schema version,
 /// return an error.
-///
-/// Precondition: there must be at least one `CrateIndex`. If this precondition
-/// is not met, this function will panic.
-fn check_equal_versions(
-    indexes: &[CrateIndex],
-) -> serde_cbor::Result<u64> {
-    match indexes.split_first() {
-        Some((first_index, last_indexes)) => {
-            let version = first_index.version;
-            for index in last_indexes {
-                if version != index.version {
-                    return Err(serde::ser::Error::custom(format!(
-                        "Mismatched schema version numbers ({:?} and {:?})",
-                        version,
-                        index.version,
-                    )));
-                }
-            }
-            Ok(version)
-        },
-        None =>
-            panic!("check_equal_versions: Empty list of crate indexes"),
+fn check_matching_versions(indexes: &[CrateIndex]) -> serde_cbor::Result<()> {
+    for index in indexes {
+        if SCHEMA_VER != index.version {
+            return Err(serde::ser::Error::custom(format!(
+                "Expected MIR JSON schema version {:?}, but found a crate using version {:?}",
+                SCHEMA_VER,
+                index.version,
+            )));
+        }
     }
+
+    Ok(())
 }
 
 /// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
@@ -96,7 +87,7 @@ where R: Read + Seek, W: Write {
     let (indexes, json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
     let roots = collect_roots(&indexes, &translate);
-    let version = check_equal_versions(&indexes)?;
+    check_matching_versions(&indexes)?;
 
 
     let mut seen_names = HashSet::new();
@@ -145,7 +136,7 @@ where R: Read + Seek, W: Write {
 
     // Write tables to the output, copying the serialized content of each entry.
     write!(output, "{{")?;
-    write!(output, "\"version\":{:?},", version)?;
+    write!(output, "\"version\":{:?},", SCHEMA_VER)?;
     for (i, kind) in EntryKind::each().enumerate() {
         if i > 0 {
             write!(output, ",")?;
