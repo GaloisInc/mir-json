@@ -5,4 +5,13 @@ versioned separately.)
 
 ## 1
 
-Initial schema version.
+Initial schema version, as of 20240910.
+
+## Unversioned files prior to version 1
+
+The schema used between 20240823 and 20240910 is the same as version
+1, except without the version tag. Output from before this point is
+different in various ways and no longer supported. In general any
+unversioned files one may encounter should be recompiled; however,
+any that came from a version of mir-json before 20240823 will not
+be readable by downstream tools and must be rebuilt.
