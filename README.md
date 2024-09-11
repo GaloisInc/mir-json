@@ -49,7 +49,7 @@ changed, we will also update the schema version number. The version number is
 represented as a single integer. Any changes to the schema are assumed to be
 backwards-incompatible with previous versions of the schema, so all version
 bumps should be treated as major version bumps. Each change to the schema is
-described in the [`SCHEMA_VERSIONING.md`](SCHEMA_VERSIONING.md) file.
+described in the [`SCHEMA_CHANGELOG.md`](SCHEMA_CHANGELOG.md) file.
 
 
 [crux-mir-repo]: https://github.com/GaloisInc/crucible/tree/master/crux-mir
