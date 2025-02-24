@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+env:
+  # The CACHE_VERSION environment variable can be updated to force the use of a
+  # new cache if the current cache contents become corrupted/invalid.  This can
+  # sometimes happen when (for example) the OS version is changed but older .so
+  # files are cached, which can have various unintended effects.
+  CACHE_VERSION: 1
+  RUST_TOOLCHAIN: "nightly-2023-01-23"
+
+jobs:
+  lint:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deps
+      run: |
+        rustup default ${{ env.RUST_TOOLCHAIN }}
+        rustup component add clippy rustc-dev
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+        prefix-key: "${{ env.CACHE_VERSION }}-${{ matrix.os }}"
+    # TODO (#80): Fix lints, use --deny warnings
+    - name: Lint
+      run: cargo clippy --locked
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deps
+      run: |
+        rustup default ${{ env.RUST_TOOLCHAIN }}
+        rustup component add rustc-dev
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+        prefix-key: "${{ env.CACHE_VERSION }}-${{ matrix.os }}"
+
+    # TODO (#81): Fix builds of examples, run tests
+    # - run: cargo test --locked --no-run
+    # - run: cargo test --locked
+    - run: cargo build --locked --release
+
+    # NB: These binary distributions will not work unless you have the
+    # appropriate Rust toolchain installed beforehand.
+    - name: Extract executables to binary distribution
+      shell: bash
+      run: .github/ci.sh setup_dist_bins
+    - name: Compress binary distribution
+      shell: bash
+      run: |
+        NAME="mir-json-${{ matrix.os }}-${{ runner.arch }}"
+        echo "NAME=$NAME" >> $GITHUB_ENV
+        .github/ci.sh zip_dist $NAME
+    - name: Upload binary distribution
+      uses: actions/upload-artifact@v4
+      if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'GaloisInc'
+      with:
+        name: ${{ env.NAME }}
+        path: "${{ env.NAME }}.tar.gz*"
+        if-no-files-found: error
