@@ -52,9 +52,7 @@ jobs:
         cache-on-failure: "true"
         prefix-key: "${{ env.CACHE_VERSION }}-${{ matrix.os }}"
 
-    # TODO (#81): Fix builds of examples, run tests
-    # - run: cargo test --locked --no-run
-    # - run: cargo test --locked
+    - run: cargo test --locked
     - run: cargo build --locked --release
 
     # NB: These binary distributions will not work unless you have the
