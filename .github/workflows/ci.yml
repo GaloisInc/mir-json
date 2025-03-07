@@ -53,7 +53,10 @@ jobs:
         prefix-key: "${{ env.CACHE_VERSION }}-${{ matrix.os }}"
 
     - run: cargo test --locked
-    - run: cargo build --locked --release
+    - name: Install mir-json binaries
+      run: cargo install --locked
+    - name: Translate modified Rust standard libraries
+      run: ./translate_libs.sh
 
     # NB: These binary distributions will not work unless you have the
     # appropriate Rust toolchain installed beforehand.
