@@ -189,9 +189,9 @@ fn go() -> ExitCode {
         args.push(s.clone());
     } else if env::var_os("MIR_JSON_USE_RUSTC_LIBRARY").is_none() {
         eprintln!("Missing path to modified standard libraries for Crucible.\n\
-                   Set CRUX_RUST_LIBRARY_PATH or SAW_RUST_LIBRARY_PATH to the modified standard \n\
+                   Set CRUX_RUST_LIBRARY_PATH or SAW_RUST_LIBRARY_PATH to the modified standard\n\
                    libraries path.\n\
-                   (For debugging mir-json, you can alternatively define \n\
+                   (For debugging mir-json, you can alternatively define\n\
                    MIR_JSON_USE_RUSTC_LIBRARY, but Crucible will not work.)");
         return ExitCode::FAILURE;
     }
