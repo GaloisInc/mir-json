@@ -181,6 +181,7 @@ fn go() -> ExitCode {
     args.push("--cfg".into());
     args.push("crux".into());
 
+    // Require either CRUX_RUST_LIBRARY_PATH, SAW_RUST_LIBRARY_PATH, or MIR_JSON_USE_RUSTC_LIBRARY.
     if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
         args.push("-L".into());
         args.push(s.clone());
