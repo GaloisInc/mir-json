@@ -31,7 +31,7 @@ use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitCode};
 
 
 /// Driver callbacks that get the output filename and then stop compilation.  This is used to get
@@ -156,7 +156,7 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn go() {
+fn go() -> ExitCode {
     // First arg is the name of the `rustc` binary that cargo means to invoke, which we ignore.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
 
@@ -181,12 +181,20 @@ fn go() {
     args.push("--cfg".into());
     args.push("crux".into());
 
+    // Require either CRUX_RUST_LIBRARY_PATH, SAW_RUST_LIBRARY_PATH, or MIR_JSON_USE_RUSTC_LIBRARY.
     if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
         args.push("-L".into());
         args.push(s.clone());
 
         args.push("--sysroot".into());
         args.push(s.clone());
+    } else if env::var_os("MIR_JSON_USE_RUSTC_LIBRARY").is_none() {
+        eprintln!("Missing path to modified standard libraries for Crucible.\n\
+                   Set CRUX_RUST_LIBRARY_PATH or SAW_RUST_LIBRARY_PATH to the modified standard\n\
+                   libraries path.\n\
+                   (For debugging mir-json, you can alternatively define\n\
+                   MIR_JSON_USE_RUSTC_LIBRARY, but Crucible will not work.)");
+        return ExitCode::FAILURE;
     }
 
     let mut use_override_crates = HashSet::new();
@@ -216,7 +224,7 @@ fn go() {
                     export_style,
                 },
             ).run().unwrap();
-            return;
+            return ExitCode::SUCCESS;
         },
         Some(x) => x,
     };
@@ -264,8 +272,9 @@ fn go() {
 
     write_test_script(&test_path, &json_path).unwrap();
     eprintln!("generated test script {}", test_path.display());
+    ExitCode::SUCCESS
 }
 
-fn main() {
-    go();
+fn main() -> ExitCode {
+    go()
 }
