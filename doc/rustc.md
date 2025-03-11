@@ -38,7 +38,7 @@ differences between `cargo-saw-build` and `cargo-crux-test`:
   `cargo-crux-test` will proceed to run `crux-mir` on the JSON afterwards. The
   former is more useful for SAW's needs.
 
-* `cargo-crux-build` expects users to annotate each function that they want to
+* `cargo-crux-test` expects users to annotate each function that they want to
   test with a `#[crux::test]` attribute (see the `mir-json-rustc-wrapper`
   section of this document). `cargo-saw-build`, on the other hand, assumes that
   all monomorphic, top-level functions should be reachable for SAW verification
