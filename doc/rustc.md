@@ -100,8 +100,8 @@ For the purposes of debugging `mir-json` itself, the environment variable
 `CRUX_RUST_LIBRARY_PATH` or `SAW_RUST_LIBRARY_PATH`, in which case
 `mir-json-rustc-wrapper` will use the vanilla standard library that comes with
 `rustc` instead of a modified version for the compilation process. Since the
-unmodified version is not supported by Crucible, `cargo-crux-test` and
-`cargo-saw-build` **will fail** when `MIR_JSON_USE_RUSTC_LIBRARY` is set.
+unmodified version is not supported by Crucible, the resulting JSON output
+**will not work** with SAW or Crux when `MIR_JSON_USE_RUSTC_LIBRARY` is set.
 
 ## Other binaries
 
