@@ -158,3 +158,22 @@ in the following ways:
   dependencies; `output_filenames` to get the path of the normal `rustc` output
   (`mir-json` stores the `.mir` files it generates alongside the normal `.rlib`
   library output).
+
+# Translating the Rust standard libraries
+
+`mir-json` requires slightly modified versions of the Rust standard libraries
+that are simpler to formally reason about. These modified standard libraries
+are located under the `libs/` subdirectory. After installing `mir-json`, you
+can run the `translate_libs.sh` script to compile the standard libraries using
+`mir-json`.
+
+By default, `translate_libs.sh` compiles the libraries for your host machine's
+architecture. If you want to cross-compile for a different target, you can
+optionally set the environment variable `TARGET` to a [target
+triple](https://doc.rust-lang.org/nightly/rustc/platform-support.html) when
+running `./translate_libs.sh`. This is experimental and we have only tested
+`wasm32-unknown-unknown` to work; you might get build errors for other targets.
+
+```
+$ TARGET=wasm32-unknown-unknown ./translate_libs.sh
+```

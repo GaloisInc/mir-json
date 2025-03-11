@@ -11,6 +11,7 @@ setup_dist_bins() {
 
 zip_dist() {
   name="$1"
+  cp -Lr rlibs dist/rlibs
   cp -r dist "$name"
   tar -czf "$name".tar.gz "$name"
 }

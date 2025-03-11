@@ -3,3 +3,7 @@
 **/*.rs.bk
 
 *.swp
+
+# Artifacts of running translate_libs.hs
+/rlibs
+/rlibs_real
