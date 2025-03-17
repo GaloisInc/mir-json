@@ -2,12 +2,12 @@
 //! main `mir-json` binary), and if this is a top-level build, it will also link in all libraries
 //! as specified by `--extern` and/or `#![no_std]` and run `crux-mir` on the result.
 #![feature(rustc_private)]
+#![feature(byte_slice_trim_ascii)]
 
 extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
 extern crate rustc_metadata;
-extern crate getopts;
 extern crate rustc_ast;
 extern crate rustc_errors;
 extern crate rustc_target;
@@ -17,7 +17,8 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
-use rustc_session::config::Externs;
+use rustc_session::config::{self, Externs};
+use rustc_session::getopts;
 use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
 use rustc_interface::Queries;
@@ -29,9 +30,10 @@ use std::fs::{File, OpenOptions, read_dir};
 use std::io::{self, Write};
 use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::prelude::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::Command;
 
 
 /// Driver callbacks that get the output filename and then stop compilation.  This is used to get
@@ -139,6 +141,56 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
     }
 }
 
+fn parse_rustc_args(rustc_args: &[String]) -> getopts::Matches {
+    let mut options = getopts::Options::new();
+    for option in config::rustc_optgroups() {
+        (option.apply)(&mut options);
+    }
+    options.parse(rustc_args).unwrap()
+}
+
+fn exec_host_build(rustc: &str, rustc_args: &[String]) -> ! {
+    eprintln!("this is a host build - exec {:?} {:?}", rustc, rustc_args);
+    let e = Command::new(rustc)
+        .args(rustc_args)
+        .exec();
+    panic!("exec failed: {:?}", e);
+}
+
+fn handle_std_crate(
+    wrapper_args: &mut [String],
+    rustc_opt_matches: &getopts::Matches,
+    crate_name: &str,
+) {
+    let Ok(custom_sources_dir) = env::var("CRUX_RUST_SOURCES_PATH")
+        .or(env::var("SAW_RUST_SOURCES_PATH"))
+    else {
+        if env::var_os("MIR_JSON_USE_RUSTC_SOURCES").is_some() {
+            return;
+        }
+        panic!("TODO error message");
+    };
+    let custom_sources_path = Path::new(&custom_sources_dir);
+    let orig_rs_path_str = &rustc_opt_matches.free[0];
+    let orig_rs_path = Path::new(orig_rs_path_str);
+    let orig_crate_dir = env::current_dir()
+        .expect("RUSTC_WRAPPER cwd should be accessible");
+    let rel_rs_path = orig_rs_path.strip_prefix(orig_crate_dir)
+        .expect("rust source file should be inside RUSTC_WRAPPER cwd");
+    let mut custom_rs_path = custom_sources_path.to_path_buf();
+    custom_rs_path.push(crate_name);
+    custom_rs_path.push(rel_rs_path);
+    let rs_path_arg = wrapper_args
+        .iter_mut()
+        .find(|arg| *arg == orig_rs_path_str)
+        .expect("parsed free string should be in arguments");
+    *rs_path_arg = custom_rs_path
+        .into_os_string()
+        .into_string()
+        .expect("custom source path should be UTF-8");
+    
+}
+
 fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
     let mut inputs = iter::once(&main_path).chain(extern_paths.iter())
         .map(File::open)
@@ -156,9 +208,16 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn go() -> ExitCode {
-    // First arg is the name of the `rustc` binary that cargo means to invoke, which we ignore.
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
+fn go() {
+    // First arg is the name of this program, which we ignore.
+    // Second arg is the name of the `rustc` binary that cargo means to invoke.
+    // The rest are the arguments that cargo is passing to `rustc`.
+    let mut wrapper_args: Vec<String> = std::env::args().skip(1).collect();
+    let rustc = &wrapper_args[0];
+    let rustc_args = &wrapper_args[1..];
+
+    let rustc_opt_matches = parse_rustc_args(rustc_args);
+    let crate_name = rustc_opt_matches.opt_str("crate-name");
 
     // XXX big hack: We need to use normal rustc (with its normal libs) for `build.rs` scripts,
     // since our custom libs aren't actually functional.  To distinguish `build.rs` and `build.rs`
@@ -167,35 +226,28 @@ fn go() -> ExitCode {
     // triples are the same.  In that mode, it passes the provided `--target` through to target
     // jobs, and omit `--target` for host jobs.  So if `--target` is missing, this is a `build.rs`
     // build, and we should `exec` the real Rust compiler instead of doing our normal thing.
-    if args.iter().position(|s| s == "--target").is_none() {
-        let rustc = &args[0];
-        let args = &args[1..];
-        eprintln!("this is a host build - exec {:?} {:?}", rustc, args);
-        let e = Command::new(rustc)
-            .args(args)
-            .exec();
-        unreachable!("exec failed: {:?}", e);
+    if !rustc_opt_matches.opt_present("target") {
+        exec_host_build(rustc, rustc_args);
+    }
+    if let Some(crate_name) = crate_name {
+        // TODO: talk about `___`
+        if crate_name == "___" {
+            exec_host_build(rustc, rustc_args);
+        }
+        if let Ok(std_crates) = env::var("MIR_JSON_STD_CRATES") {
+            if std_crates.split_ascii_whitespace().any(|c| c == crate_name) {
+                handle_std_crate(
+                    &mut wrapper_args,
+                    &rustc_opt_matches,
+                    &crate_name,
+                );
+            }
+        }
     }
 
     // All build steps need `--cfg crux` and library paths.
-    args.push("--cfg".into());
-    args.push("crux".into());
-
-    // Require either CRUX_RUST_LIBRARY_PATH, SAW_RUST_LIBRARY_PATH, or MIR_JSON_USE_RUSTC_LIBRARY.
-    if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
-        args.push("-L".into());
-        args.push(s.clone());
-
-        args.push("--sysroot".into());
-        args.push(s.clone());
-    } else if env::var_os("MIR_JSON_USE_RUSTC_LIBRARY").is_none() {
-        eprintln!("Missing path to modified standard libraries for Crucible.\n\
-                   Set CRUX_RUST_LIBRARY_PATH or SAW_RUST_LIBRARY_PATH to the modified standard\n\
-                   libraries path.\n\
-                   (For debugging mir-json, you can alternatively define\n\
-                   MIR_JSON_USE_RUSTC_LIBRARY, but Crucible will not work.)");
-        return ExitCode::FAILURE;
-    }
+    wrapper_args.push("--cfg".into());
+    wrapper_args.push("crux".into());
 
     let mut use_override_crates = HashSet::new();
     if let Ok(s) = env::var("CRUX_USE_OVERRIDE_CRATES") {
@@ -211,20 +263,20 @@ fn go() -> ExitCode {
     };
 
 
-    let test_idx = match args.iter().position(|s| s == "--test") {
+    let test_idx = match wrapper_args.iter().position(|s| s == "--test") {
         None => {
-            eprintln!("normal build - {:?}", args);
+            eprintln!("normal build - {:?}", wrapper_args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
             rustc_driver::RunCompiler::new(
-                &args,
+                &wrapper_args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
                     export_style,
                 },
             ).run().unwrap();
-            return ExitCode::SUCCESS;
+            return;
         },
         Some(x) => x,
     };
@@ -235,19 +287,19 @@ fn go() -> ExitCode {
 
     // We're still using the original args (with only a few modifications), so the output path
     // should be the path of the test binary.
-    eprintln!("test build - extract output path - {:?}", args);
-    let test_path = get_output_path(&args, &use_override_crates);
+    eprintln!("test build - extract output path - {:?}", wrapper_args);
+    let test_path = get_output_path(&wrapper_args, &use_override_crates);
 
-    args.remove(test_idx);
+    wrapper_args.remove(test_idx);
 
-    args.push("--cfg".into());
-    args.push("crux_top_level".into());
+    wrapper_args.push("--cfg".into());
+    wrapper_args.push("crux_top_level".into());
 
     // Cargo doesn't pass a crate type for `--test` builds.  We fill in a reasonable default.
-    args.push("--crate-type".into());
-    args.push("rlib".into());
+    wrapper_args.push("--crate-type".into());
+    wrapper_args.push("rlib".into());
 
-    eprintln!("test build - {:?}", args);
+    eprintln!("test build - {:?}", wrapper_args);
 
     // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
     // strings to prevent collisions between this build's `.mir` output and other builds of the
@@ -257,7 +309,7 @@ fn go() -> ExitCode {
         use_override_crates: use_override_crates.clone(),
         export_style,
     };
-    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
+    rustc_driver::RunCompiler::new(&wrapper_args, &mut callbacks).run().unwrap();
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 
@@ -272,9 +324,8 @@ fn go() -> ExitCode {
 
     write_test_script(&test_path, &json_path).unwrap();
     eprintln!("generated test script {}", test_path.display());
-    ExitCode::SUCCESS
 }
 
-fn main() -> ExitCode {
-    go()
+fn main() {
+    go();
 }

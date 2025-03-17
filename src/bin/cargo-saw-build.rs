@@ -17,6 +17,7 @@ extern crate cargo;
 extern crate clap;
 extern crate rustc_driver;
 extern crate rustc_session;
+extern crate serde;
 extern crate serde_json;
 extern crate toml_edit;
 

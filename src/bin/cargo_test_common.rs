@@ -1,10 +1,11 @@
 //! Common functionality shared between `cargo-crux-test` and `cargo-saw-build`.
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 use rustc_session::config::host_triple;
 use cargo::util::command_prelude::*;
+use serde::Deserialize;
 use toml_edit::easy::value::Value as TomlValue;
 
 fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> App {
@@ -139,6 +140,55 @@ fn get_package_override_crates_opt(v: Option<&TomlValue>) -> Option<String> {
     Some(overrides.join(" "))
 }
 
+#[derive(Deserialize)]
+struct UnitGraph<'a> {
+    #[serde(borrow)]
+    units: Vec<UnitGraphUnit<'a>>
+}
+
+#[derive(Deserialize)]
+struct UnitGraphUnit<'a> {
+    #[serde(default)]
+    is_std: bool,
+    #[serde(borrow)]
+    target: UnitGraphTarget<'a>
+}
+
+#[derive(Deserialize)]
+struct UnitGraphTarget<'a> {
+    #[serde(borrow)]
+    kind: Vec<&'a str>,
+    name: &'a str
+}
+
+fn get_std_crates(cargo: &str, args: &[String]) -> String {
+    let unit_graph = Command::new(cargo)
+        .args(args)
+        .arg("-Z")
+        .arg("unstable-options")
+        .arg("--unit-graph")
+        .output()
+        .expect("cargo --unit-graph should run")
+        .stdout;
+    let unit_graph: UnitGraph = serde_json::from_slice(&unit_graph)
+        .expect("cargo --unit-graph output should match JSON schema");
+    unit_graph
+        .units
+        .into_iter()
+        .filter(|u| {
+            u.is_std && u.target.kind.iter().any(|&k| k != "custom_build")
+        })
+        .map(|u| u.target.name)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn canonicalize_env_path(cmd: &mut Command, var: &str) {
+    let Ok(path) = env::var(var) else { return };
+    let Ok(canon) = Path::new(&path).canonicalize() else { return };
+    cmd.env(var, canon);
+}
+
 pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
                          extra_args: &Vec<String>, extra_env_vars: &Vec<(String, String)>) {
     let cargo = env::var("CARGO").unwrap();
@@ -160,6 +210,9 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     }
     args.extend(orig_args.into_iter());
 
+    args.push("-Z".into());
+    args.push("build-std".into());
+
     let my_path = PathBuf::from(env::args_os().nth(0).unwrap());
     let wrapper_path = if let Some(dir) = my_path.parent() {
         dir.join("mir-json-rustc-wrapper")
@@ -168,11 +221,15 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     };
 
     let override_crates = get_override_crates(subcmd_name, subcmd_descr);
+    let std_crates = get_std_crates(&cargo, &args);
 
     let mut cmd = Command::new(&cargo);
     cmd.args(&args)
        .env("RUSTC_WRAPPER", wrapper_path)
-       .env("CRUX_USE_OVERRIDE_CRATES", override_crates);
+       .env("CRUX_USE_OVERRIDE_CRATES", override_crates)
+       .env("MIR_JSON_STD_CRATES", std_crates);
+    canonicalize_env_path(&mut cmd, "CRUX_RUST_SOURCES_PATH");
+    canonicalize_env_path(&mut cmd, "SAW_RUST_SOURCES_PATH");
     for (extra_env_var_name, extra_env_var_val) in extra_env_vars {
         cmd.env(extra_env_var_name, extra_env_var_val);
     }
