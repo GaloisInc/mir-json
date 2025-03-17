@@ -38,7 +38,7 @@ differences between `cargo-saw-build` and `cargo-crux-test`:
   `cargo-crux-test` will proceed to run `crux-mir` on the JSON afterwards. The
   former is more useful for SAW's needs.
 
-* `cargo-crux-build` expects users to annotate each function that they want to
+* `cargo-crux-test` expects users to annotate each function that they want to
   test with a `#[crux::test]` attribute (see the `mir-json-rustc-wrapper`
   section of this document). `cargo-saw-build`, on the other hand, assumes that
   all monomorphic, top-level functions should be reachable for SAW verification
@@ -94,6 +94,14 @@ internal environment variables, which most users will not need to care about:
 * `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
   will export all top-level functions. Otherwise, it will only export those
   functions with a `#[crux::test]` attribute.
+
+For the purposes of debugging `mir-json` itself, the environment variable
+`MIR_JSON_USE_RUSTC_LIBRARY` can be defined (with any value) instead of
+`CRUX_RUST_LIBRARY_PATH` or `SAW_RUST_LIBRARY_PATH`, in which case
+`mir-json-rustc-wrapper` will use the vanilla standard library that comes with
+`rustc` instead of a modified version for the compilation process. Since the
+unmodified version is not supported by Crucible, the resulting JSON output
+**will not work** with SAW or Crux when `MIR_JSON_USE_RUSTC_LIBRARY` is set.
 
 ## Other binaries
 
