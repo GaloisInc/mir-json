@@ -157,27 +157,27 @@ fn exec_host_build(rustc: &str, rustc_args: &[String]) -> ! {
     panic!("exec failed: {:?}", e);
 }
 
-fn handle_std_crate(
-    wrapper_args: &mut [String],
+fn build_std_crate(
+    mut wrapper_args: Vec<String>,
     rustc_opt_matches: &getopts::Matches,
     crate_name: &str,
 ) {
-    let Ok(custom_sources_dir) = env::var("CRUX_RUST_SOURCES_PATH")
-        .or(env::var("SAW_RUST_SOURCES_PATH"))
+    let Some(custom_sources_dir) = env::var_os("CRUX_RUST_SOURCES_PATH")
+        .or(env::var_os("SAW_RUST_SOURCES_PATH"))
     else {
         if env::var_os("MIR_JSON_USE_RUSTC_SOURCES").is_some() {
             return;
         }
         panic!("TODO error message");
     };
-    let custom_sources_path = Path::new(&custom_sources_dir);
+    let custom_sources_dir = Path::new(&custom_sources_dir);
     let orig_rs_path_str = &rustc_opt_matches.free[0];
     let orig_rs_path = Path::new(orig_rs_path_str);
     let orig_crate_dir = env::current_dir()
         .expect("RUSTC_WRAPPER cwd should be accessible");
     let rel_rs_path = orig_rs_path.strip_prefix(orig_crate_dir)
         .expect("rust source file should be inside RUSTC_WRAPPER cwd");
-    let mut custom_rs_path = custom_sources_path.to_path_buf();
+    let mut custom_rs_path = custom_sources_dir.to_path_buf();
     custom_rs_path.push(crate_name);
     custom_rs_path.push(rel_rs_path);
     let rs_path_arg = wrapper_args
@@ -188,7 +188,34 @@ fn handle_std_crate(
         .into_os_string()
         .into_string()
         .expect("custom source path should be UTF-8");
-    
+    if crate_name == "compiler_builtins" {
+        let rustc = wrapper_args[0].clone();
+        run_custom_build(wrapper_args);
+        let mut crucible_rs_path = custom_sources_dir.to_path_buf();
+        crucible_rs_path.push("crucible");
+        crucible_rs_path.push("lib.rs");
+        let crucible_rs_path = crucible_rs_path
+            .into_os_string()
+            .into_string()
+            .expect("crucible source path should be UTF-8");
+        let compiler_builtins_out_dir = rustc_opt_matches
+            .opt_str("out-dir")
+            .expect("rustc should be passed --out-dir");
+        let compiler_builtins_rlib_path = Path::new(&compiler_builtins_out_dir)
+            .
+        run_wrapper(vec![
+            rustc,
+            "--crate-name".into(),
+            "crucible".into(),
+            "--edition".into(),
+            "2021".into(),
+            crucible_rs_path,
+            "--extern".into(),
+            // format!("compiler_builtins={}", )
+        ])
+    } else {
+        run_custom_build(wrapper_args);
+    }
 }
 
 fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
@@ -208,11 +235,92 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn go() {
-    // First arg is the name of this program, which we ignore.
-    // Second arg is the name of the `rustc` binary that cargo means to invoke.
+fn run_custom_build(mut driver_args: Vec<String>) {
+    // All build steps need `--cfg crux` and library paths.
+    driver_args.push("--cfg".into());
+    driver_args.push("crux".into());
+
+    let mut use_override_crates = HashSet::new();
+    if let Ok(s) = env::var("CRUX_USE_OVERRIDE_CRATES") {
+        for name in s.split(" ") {
+            use_override_crates.insert(name.to_owned());
+        }
+    }
+
+    let export_style = if env::var("EXPORT_ALL").is_ok() {
+        analyz::ExportStyle::ExportAll
+    } else {
+        analyz::ExportStyle::ExportCruxTests
+    };
+
+
+    let test_idx = match driver_args.iter().position(|s| s == "--test") {
+        None => {
+            eprintln!("normal build - {:?}", driver_args);
+            // This is a normal, non-test build.  Just run the build, generating a `.mir` file
+            // alongside the normal output.
+            rustc_driver::RunCompiler::new(
+                &driver_args,
+                &mut MirJsonCallbacks {
+                    analysis_data: None,
+                    use_override_crates: use_override_crates.clone(),
+                    export_style,
+                },
+            ).run().unwrap();
+            return;
+        },
+        Some(x) => x,
+    };
+
+    // This is a `--test` build.  We need to build the `.mir`s for this crate, link with `.mir`s
+    // for all its dependencies, and produce a test script (in place of the test binary expected by
+    // cargo) that will run `crux-mir` on the linked JSON file.
+
+    // We're still using the original args (with only a few modifications), so the output path
+    // should be the path of the test binary.
+    eprintln!("test build - extract output path - {:?}", driver_args);
+    let test_path = get_output_path(&driver_args, &use_override_crates);
+
+    driver_args.remove(test_idx);
+
+    driver_args.push("--cfg".into());
+    driver_args.push("crux_top_level".into());
+
+    // Cargo doesn't pass a crate type for `--test` builds.  We fill in a reasonable default.
+    driver_args.push("--crate-type".into());
+    driver_args.push("rlib".into());
+
+    eprintln!("test build - {:?}", driver_args);
+
+    // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
+    // strings to prevent collisions between this build's `.mir` output and other builds of the
+    // same crate.
+    let mut callbacks = MirJsonCallbacks {
+        analysis_data: None,
+        use_override_crates: use_override_crates.clone(),
+        export_style,
+    };
+    rustc_driver::RunCompiler::new(&driver_args, &mut callbacks).run().unwrap();
+    let data = callbacks.analysis_data
+        .expect("failed to find main MIR path");
+
+    let json_path = test_path.with_extension("linked-mir.json");
+    eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
+    eprintln!(
+        "  inputs: {}{}",
+        data.mir_path.display(),
+        data.extern_mir_paths.iter().map(|x| format!(" {}", x.display())).collect::<String>(),
+    );
+    link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
+
+    write_test_script(&test_path, &json_path).unwrap();
+    eprintln!("generated test script {}", test_path.display());
+}
+
+fn run_wrapper(wrapper_args: Vec<String>) {
+    // First argument to this program (second in env::args) is the name of the
+    // `rustc` binary that cargo means to invoke.
     // The rest are the arguments that cargo is passing to `rustc`.
-    let mut wrapper_args: Vec<String> = std::env::args().skip(1).collect();
     let rustc = &wrapper_args[0];
     let rustc_args = &wrapper_args[1..];
 
@@ -236,96 +344,16 @@ fn go() {
         }
         if let Ok(std_crates) = env::var("MIR_JSON_STD_CRATES") {
             if std_crates.split_ascii_whitespace().any(|c| c == crate_name) {
-                handle_std_crate(
-                    &mut wrapper_args,
-                    &rustc_opt_matches,
-                    &crate_name,
-                );
+                build_std_crate(wrapper_args, &rustc_opt_matches, &crate_name);
+                return;
             }
         }
     }
 
-    // All build steps need `--cfg crux` and library paths.
-    wrapper_args.push("--cfg".into());
-    wrapper_args.push("crux".into());
-
-    let mut use_override_crates = HashSet::new();
-    if let Ok(s) = env::var("CRUX_USE_OVERRIDE_CRATES") {
-        for name in s.split(" ") {
-            use_override_crates.insert(name.to_owned());
-        }
-    }
-
-    let export_style = if env::var("EXPORT_ALL").is_ok() {
-        analyz::ExportStyle::ExportAll
-    } else {
-        analyz::ExportStyle::ExportCruxTests
-    };
-
-
-    let test_idx = match wrapper_args.iter().position(|s| s == "--test") {
-        None => {
-            eprintln!("normal build - {:?}", wrapper_args);
-            // This is a normal, non-test build.  Just run the build, generating a `.mir` file
-            // alongside the normal output.
-            rustc_driver::RunCompiler::new(
-                &wrapper_args,
-                &mut MirJsonCallbacks {
-                    analysis_data: None,
-                    use_override_crates: use_override_crates.clone(),
-                    export_style,
-                },
-            ).run().unwrap();
-            return;
-        },
-        Some(x) => x,
-    };
-
-    // This is a `--test` build.  We need to build the `.mir`s for this crate, link with `.mir`s
-    // for all its dependencies, and produce a test script (in place of the test binary expected by
-    // cargo) that will run `crux-mir` on the linked JSON file.
-
-    // We're still using the original args (with only a few modifications), so the output path
-    // should be the path of the test binary.
-    eprintln!("test build - extract output path - {:?}", wrapper_args);
-    let test_path = get_output_path(&wrapper_args, &use_override_crates);
-
-    wrapper_args.remove(test_idx);
-
-    wrapper_args.push("--cfg".into());
-    wrapper_args.push("crux_top_level".into());
-
-    // Cargo doesn't pass a crate type for `--test` builds.  We fill in a reasonable default.
-    wrapper_args.push("--crate-type".into());
-    wrapper_args.push("rlib".into());
-
-    eprintln!("test build - {:?}", wrapper_args);
-
-    // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
-    // strings to prevent collisions between this build's `.mir` output and other builds of the
-    // same crate.
-    let mut callbacks = MirJsonCallbacks {
-        analysis_data: None,
-        use_override_crates: use_override_crates.clone(),
-        export_style,
-    };
-    rustc_driver::RunCompiler::new(&wrapper_args, &mut callbacks).run().unwrap();
-    let data = callbacks.analysis_data
-        .expect("failed to find main MIR path");
-
-    let json_path = test_path.with_extension("linked-mir.json");
-    eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
-    eprintln!(
-        "  inputs: {}{}",
-        data.mir_path.display(),
-        data.extern_mir_paths.iter().map(|x| format!(" {}", x.display())).collect::<String>(),
-    );
-    link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
-
-    write_test_script(&test_path, &json_path).unwrap();
-    eprintln!("generated test script {}", test_path.display());
+    run_custom_build(wrapper_args);
 }
 
 fn main() {
-    go();
+    // First arg is the name of this program, which we ignore.
+    run_wrapper(env::args().skip(1).collect());
 }

@@ -143,7 +143,7 @@ fn get_package_override_crates_opt(v: Option<&TomlValue>) -> Option<String> {
 #[derive(Deserialize)]
 struct UnitGraph<'a> {
     #[serde(borrow)]
-    units: Vec<UnitGraphUnit<'a>>
+    units: Vec<UnitGraphUnit<'a>>,
 }
 
 #[derive(Deserialize)]
@@ -151,14 +151,14 @@ struct UnitGraphUnit<'a> {
     #[serde(default)]
     is_std: bool,
     #[serde(borrow)]
-    target: UnitGraphTarget<'a>
+    target: UnitGraphTarget<'a>,
 }
 
 #[derive(Deserialize)]
 struct UnitGraphTarget<'a> {
     #[serde(borrow)]
     kind: Vec<&'a str>,
-    name: &'a str
+    name: &'a str,
 }
 
 fn get_std_crates(cargo: &str, args: &[String]) -> String {
@@ -227,7 +227,14 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     cmd.args(&args)
        .env("RUSTC_WRAPPER", wrapper_path)
        .env("CRUX_USE_OVERRIDE_CRATES", override_crates)
+    //    .env("__CARGO_TESTS_ONLY_SRC_ROOT", custom_sources_dir)
        .env("MIR_JSON_STD_CRATES", std_crates);
+    // if let Some(custom_sources_dir) = env::var_os("CRUX_RUST_SOURCES_PATH").or(env::var_os("SAW_RUST_SOURCES_PATH")) {
+    //     cmd.env("__CARGO_TESTS_ONLY_SRC_ROOT", custom_sources_dir);
+    // } else if env::var_os("MIR_JSON_USE_RUSTC_SOURCES").is_none() {
+    //     eprintln!("TODO error message");
+    //     process::exit(1);
+    // }
     canonicalize_env_path(&mut cmd, "CRUX_RUST_SOURCES_PATH");
     canonicalize_env_path(&mut cmd, "SAW_RUST_SOURCES_PATH");
     for (extra_env_var_name, extra_env_var_val) in extra_env_vars {
