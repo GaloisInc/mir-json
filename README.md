@@ -39,7 +39,7 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
    contains a more detailed description of different ways to run the
    `translate_libs.sh` script.
 
-6. Define at least one of the following environment variables:
+6. Define one of the following environment variables:
 
        CRUX_RUST_LIBRARY_PATH=$(pwd)/rlibs
        SAW_RUST_LIBRARY_PATH=$(pwd)/rlibs
