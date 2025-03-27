@@ -31,10 +31,30 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
    This should print a version string.
 
+5. Translate the `mir-json`–specific versions of the Rust standard libraries:
+
+       $ ./translate_libs.sh
+
+   This should create an `rlibs` directory. [The documentation](doc/rustc.md)
+   contains a more detailed description of different ways to run the
+   `translate_libs.sh` script.
+
+6. Define one of the following environment variables:
+
+       CRUX_RUST_LIBRARY_PATH=$(pwd)/rlibs
+       SAW_RUST_LIBRARY_PATH=$(pwd)/rlibs
+
+   These tell `mir-json` where to look for the standard libraries. See [the
+   documentation](doc/rustc.md) for more information on these environment
+   variables.
 
 ## Usage
 
-See the [crux-mir][crux-mir-repo] README for usage instructions.
+`mir-json` compiles Rust code into a stable on-disk representation that can be
+formally reasoned about by tools such as crux-mir and SAW. For more information
+on how these tools ingest `mir-json`, refer to the [crux-mir
+README][crux-mir-repo] or the [SAW Rust tutorial][saw-rust-tutorial] for usage
+instructions.
 
 ## JSON schema
 
@@ -53,3 +73,4 @@ described in the [`SCHEMA_CHANGELOG.md`](SCHEMA_CHANGELOG.md) file.
 
 
 [crux-mir-repo]: https://github.com/GaloisInc/crucible/tree/master/crux-mir
+[saw-rust-tutorial]: https://github.com/GaloisInc/saw-script/blob/master/doc/pdfs/rust-verification-with-saw.pdf
