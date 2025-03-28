@@ -24,8 +24,7 @@ use rustc_interface::Queries;
 use rustc_session::config::ExternLocation;
 use std::collections::HashSet;
 use std::env;
-use std::ffi::OsStr;
-use std::fs::{File, OpenOptions, read_dir};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
@@ -66,7 +65,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
             (crate_name, outputs)
         };
         // Advance the state slightly further, initializing crate_types()
-        queries.register_plugins();
+        queries.register_plugins().unwrap();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
             sess.crate_types().first().unwrap().clone(),
