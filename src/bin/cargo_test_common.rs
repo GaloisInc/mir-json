@@ -81,7 +81,7 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
     let app = App::new(format!("cargo-{}", subcmd_name)).subcommand(cli(subcmd_name, subcmd_descr));
     let args = app.get_matches();
     let args = args.subcommand_matches(subcmd_name)
-        .unwrap_or_else(|| panic!(format!("expected {} subcommand", subcmd_name)));
+        .unwrap_or_else(|| panic!("expected {} subcommand", subcmd_name));
     let ws = args.workspace(&config)
         .unwrap_or_else(|e| panic!("error building workspace: {}", e));
     let opts = args.compile_options(

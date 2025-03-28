@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Joshua Gancher <jrg358@cornell.edu>"]
 repository = "https://github.com/GaloisInc/mir-json.git"
 license = "MIT/Apache-2.0"
+autobins = false
 
 [package.metadata.rust-analyzer]
 rustc_private=true
