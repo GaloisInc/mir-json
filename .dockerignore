@@ -2,7 +2,7 @@ Dockerfile*
 .git
 .gitignore
 
-# Artifacts of running translate_libs.hs
+# Artifacts of running translate_libs.sh
 /rlibs
 /rlibs_real
 
