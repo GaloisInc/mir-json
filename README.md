@@ -3,9 +3,13 @@
 
 ## Installation instructions
 
-1. If you are starting from scratch, you need to first install the rust
-compiler via the `rustup` tool. (Instructions are from the [rust
-book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
+`mir-json` can either be built from source or accessed via a Docker image.
+
+### Building from source
+
+1. First install the rust compiler via the `rustup` tool. (Instructions are
+   from the [rust
+   book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
 
        $ curl https://sh.rustup.rs -sSf | sh
 
@@ -47,6 +51,23 @@ book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
    These tell `mir-json` where to look for the standard libraries. See [the
    documentation](doc/rustc.md) for more information on these environment
    variables.
+
+### Docker image
+
+To pull the Docker image, run:
+
+```
+$ docker pull ghcr.io/galoisinc/mir-json
+```
+
+This provides an installation of the `mir-json` tools and translated copies of
+the `mir-json`–specific Rust standard libraries. Different `mir-json` tools can
+be accessed by overriding the Docker entrypoint. For example, in order to run
+`crux-rustc`, invoke the following:
+
+```
+$ docker run --entrypoint /home/mir-json/.cargo/bin/crux-rustc ghcr.io/galoisinc/mir-json <ARGUMENTS>
+```
 
 ## Usage
 
