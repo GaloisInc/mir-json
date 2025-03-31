@@ -3,7 +3,7 @@ name: docker
 on:
   push:
     branches:
-    - main
+    - master
   pull_request:
 
 env:
@@ -12,7 +12,7 @@ env:
 jobs:
   build-image:
     runs-on: ${{ matrix.os }}
-    if: github.ref == 'refs/heads/main' &&
+    if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
     strategy:
@@ -70,7 +70,7 @@ jobs:
   push-image:
     runs-on: ubuntu-22.04
     needs: [build-image]
-    if: github.ref == 'refs/heads/main' &&
+    if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
     strategy:
@@ -103,7 +103,7 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
-            type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
 
