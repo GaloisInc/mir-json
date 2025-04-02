@@ -27,7 +27,7 @@ use shell_escape::escape;
 const EMPTY_PROJECT_NAME: &str = "mir-json-translate-libs-empty-project";
 
 /// Deserialized form of cargo --unit-graph JSON output.
-/// See https://doc.rust-lang.org/stable/cargo/reference/unstable.html#unit-graph
+/// See https://doc.rust-lang.org/cargo/reference/unstable.html#unit-graph
 #[derive(Deserialize)]
 struct UnitGraph {
     version: u32,
