@@ -672,9 +672,15 @@ fn cargo_test_cmd(cwd: &Utf8Path, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(cwd)
         .arg("test")
-        .arg("-Z")
-        .arg("build-std")
         .arg("--target")
-        .arg(target_triple);
+        .arg(target_triple)
+        .arg("-Z");
+    // For some reason we need to explicitly include panic_abort on
+    // wasm32-unknown-unknown.
+    if target_triple == "wasm32-unknown-unknown" {
+        cmd.arg("build-std=panic_abort,std");
+    } else {
+        cmd.arg("build-std");
+    }
     cmd
 }
