@@ -119,6 +119,9 @@ binaries for specialized purposes:
   runs dead-code elimination on them. It is unlikely that you will need to use
   this binary directly, as dead-code elimination is performed as an intermediate
   step in other binaries.
+* `mir-json-translate-libs`: `translate_libs.sh` is a thin wrapper around this
+  binary, which in turn calls `mir-json` to generate `.mir` files for our
+  modified versions of the Rust standard libraries.
 * `mir-json`: This produces a `.mir` file from a single `.rs` file and does not
   do anything else, such as testing with `crux-mir`. It is unlikely that you
   will need to use this binary directly, as producing `.mir` files is performed
