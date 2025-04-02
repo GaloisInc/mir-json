@@ -1,3 +1,6 @@
+//! Script which uses `cargo test -Z build-std` to generate or execute
+//! `mir-json` commands that build the modified standard libraries.
+
 #![feature(rustc_private)]
 
 extern crate cargo_metadata;
