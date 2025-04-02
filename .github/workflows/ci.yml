@@ -46,7 +46,7 @@ jobs:
     - name: Deps
       run: |
         rustup default ${{ env.RUST_TOOLCHAIN }}
-        rustup component add rustc-dev
+        rustup component add rustc-dev rust-src
     - uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: "true"

@@ -20,7 +20,7 @@
 2. Next, install a version of `rustc` that works with mir-json.
 
        $ rustup toolchain install nightly-2023-01-23 --force
-       $ rustup component add --toolchain nightly-2023-01-23 rustc-dev
+       $ rustup component add --toolchain nightly-2023-01-23 rustc-dev rust-src
        $ rustup default nightly-2023-01-23
 
    <!-- Note: when changing to a new nightly, also update `wrapper.rs` -->
