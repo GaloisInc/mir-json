@@ -22,8 +22,12 @@ use cargo_metadata::{
 use serde::Deserialize;
 use shell_escape::escape;
 
+/// Name of the new empty cargo project to be created to run `cargo test -Z
+/// build-std` in.
 const EMPTY_PROJECT_NAME: &str = "mir-json-translate-libs-empty-project";
 
+/// Deserialized form of cargo --unit-graph JSON output.
+/// See https://doc.rust-lang.org/stable/cargo/reference/unstable.html#unit-graph
 #[derive(Deserialize)]
 struct UnitGraph {
     version: u32,
@@ -44,11 +48,14 @@ struct UnitGraphDependency {
     extern_crate_name: CrateName,
 }
 
+/// Module to hide field of newtype [CrateName].
 mod crate_name {
     use std::fmt;
 
     use serde::Deserialize;
 
+    /// Newtype wrapper around [String] which enforces that all `-` are replaced
+    /// with `_`. Construct with [From<&str>].
     #[derive(Clone, Deserialize, PartialEq)]
     pub struct CrateName(String);
 
@@ -72,6 +79,8 @@ mod crate_name {
 }
 use crate_name::CrateName;
 
+/// Our version of the unit graph, which allows for adding our custom libraries
+/// and easily converting to mir-json commands.
 struct CustomUnitGraph {
     units: Vec<CustomUnit>,
     roots: Vec<usize>,
@@ -83,19 +92,35 @@ struct CustomUnit {
 }
 
 enum CustomTarget {
+    /// A library to be compiled for the target architecture. We really only
+    /// care about the target information for these, so only this variant has
+    /// fields.
     TargetLib(CustomTargetLib),
+    /// A dependency to be compiled for the host, like a build script or proc
+    /// macro.
     HostDep,
+    /// A binary that is not a [CustomTarget::HostDep].
     FinalBin,
 }
 
+/// The fields here are a combination of the fields we care about from [Target],
+/// [cargo_metadata::Artifact], and [cargo_metadata::BuildScript]. Each
+/// corresponds to some input to `rustc`.
 #[derive(Clone)]
 struct CustomTargetLib {
+    /// `--crate-name`
     crate_name: CrateName,
+    /// source file argument
     src_path: Utf8PathBuf,
+    /// `--edition`
     edition: Edition,
+    /// `-l`
     linked_libs: Vec<Utf8PathBuf>,
+    /// `-L`
     linked_paths: Vec<Utf8PathBuf>,
+    /// `--cfg`
     cfgs: Vec<String>,
+    /// environment variables
     env: Vec<(String, String)>,
 }
 
@@ -108,12 +133,16 @@ impl CustomTarget {
     }
 }
 
+/// A library that will be compiled by mir-json.
 struct MirJsonLib {
     target: CustomTargetLib,
+    /// The crate names that will be passed as `--extern`
     dependencies: Vec<CrateName>,
 }
 
 impl CustomUnitGraph {
+    /// Find an existing unit with the given crate name and return a
+    /// [UnitGraphDependency] referring to it.
     fn get_unit_as_dep(&self, crate_name: CrateName) -> UnitGraphDependency {
         UnitGraphDependency {
             index: self
@@ -129,6 +158,7 @@ impl CustomUnitGraph {
         }
     }
 
+    /// Get a mutable reference to an existing unit with the given crate name.
     fn get_unit_mut(&mut self, crate_name: &CrateName) -> &mut CustomUnit {
         self.units
             .iter_mut()
@@ -138,6 +168,7 @@ impl CustomUnitGraph {
             })
     }
 
+    /// Add a new unit and return a [UnitGraphDependency] referring to it.
     fn push_unit_as_dep(
         &mut self,
         lib: CustomTargetLib,
@@ -152,21 +183,28 @@ impl CustomUnitGraph {
         }
     }
 
+    /// Add a new unit and mark it as a root.
     fn push_unit_as_root(&mut self, unit: CustomUnit) {
         let index = self.push_unit(unit);
         self.roots.push(index);
     }
 
+    /// Add a new unit.
     fn push_unit(&mut self, unit: CustomUnit) -> usize {
         let index = self.units.len();
         self.units.push(unit);
         index
     }
 
+    /// Compute a topological sort of the unit graph, only including libraries
+    /// that should be compiled by mir-json.
     fn sequence_libs(&self) -> Vec<MirJsonLib> {
         let mut result = Vec::new();
+        // Cache for the result of the visit function.
         let mut visited: Vec<Option<bool>> = vec![None; self.units.len()];
 
+        /// Process the unit at index `i`. Return whether it should be included
+        /// as a dependency.
         fn visit(
             units: &[CustomUnit],
             result: &mut Vec<MirJsonLib>,
@@ -178,6 +216,8 @@ impl CustomUnitGraph {
                 None => {
                     let is_lib = match &units[i].target {
                         CustomTarget::TargetLib(lib) => {
+                            // Visit all dependencies and add this unit to
+                            // result.
                             let mut lib_deps = Vec::new();
                             for dep in &units[i].dependencies {
                                 if visit(units, result, visited, dep.index) {
@@ -191,8 +231,14 @@ impl CustomUnitGraph {
                             });
                             true
                         }
-                        CustomTarget::HostDep => false,
+                        CustomTarget::HostDep => {
+                            // Do not visit dependencies and do not add this
+                            // unit to result.
+                            false
+                        }
                         CustomTarget::FinalBin => {
+                            // Visit all dependencies but do not add this unit
+                            // to result.
                             for dep in &units[i].dependencies {
                                 visit(units, result, visited, dep.index);
                             }
@@ -213,6 +259,8 @@ impl CustomUnitGraph {
     }
 }
 
+/// A representation of a command that can be easily formatted as a shell
+/// command or turned into an actual [Command].
 struct CmdInvocation {
     program: String,
     args: Vec<String>,
@@ -257,6 +305,8 @@ fn main() {
     };
     let generate_only = env::args().skip(1).any(|arg| arg == "--generate");
 
+    // Compute the paths that we will use later to store the build artifacts,
+    // but don't actually create them yet.
     eprintln!("Querying paths...");
     let rlibs_sysroot = cwd.join("rlibs_real");
     let rlibs_symlink = cwd.join("rlibs");
@@ -275,8 +325,12 @@ fn main() {
         .trim_end()
         .into();
 
+    // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
     let empty_project_path = cwd.join(EMPTY_PROJECT_NAME);
+    // If this program failed the last time it was run, the project might exist
+    // already, which `cargo new` will complain about. Instead of checking for
+    // existence then deleting, we just try to delete it and ignore any errors.
     let _ = fs::remove_dir_all(&empty_project_path);
     let cargo_new_status = Command::new("cargo")
         .arg("new")
@@ -292,6 +346,8 @@ fn main() {
         );
     }
 
+    // Run `cargo test -Z build-std` to obtain compiler artifact and build
+    // script result messages.
     eprintln!("Running cargo test...");
     let mut cargo_test_child =
         cargo_test_cmd(&empty_project_path, &target_triple)
@@ -332,6 +388,7 @@ fn main() {
         panic!("cargo test exited with {}", cargo_test_child_status);
     }
 
+    // Run `cargo test -Z build-std --unit-graph` to obtain unit graph.
     eprintln!("Running cargo --unit-graph...");
     let unit_graph = cargo_test_cmd(&empty_project_path, &target_triple)
         .arg("-Z")
@@ -349,7 +406,10 @@ fn main() {
         );
     }
 
-    eprintln!("Modifying unit graph...");
+    // Process the unit graph, rewriting source file paths to point to our
+    // patched versions of the standard library sources, and incorporating
+    // information from artifact and build script result messages.
+    eprintln!("Processing unit graph...");
     let convert_unit = |unit: UnitGraphUnit| CustomUnit {
         target: {
             if unit.target.is_custom_build()
@@ -366,6 +426,9 @@ fn main() {
                             unit.pkg_id
                         )
                     });
+                // Compute the patched source file path by finding the original
+                // file's relative path to its Cargo.toml, then joining that
+                // with our patched sources directory.
                 let orig_pkg_dir = artifact
                     .manifest_path
                     .parent()
@@ -394,6 +457,13 @@ fn main() {
                     edition: unit.target.edition,
                     linked_libs,
                     linked_paths,
+                    // The build script's outputted cfgs does not include
+                    // features automatically computed by cargo, so we add them
+                    // in here. Technically we can get them either from the unit
+                    // graph or the artifact message, but we use the artifact
+                    // message version because it is closer to an actual
+                    // invocation of rustc. Not sure if there is actually a
+                    // difference.
                     cfgs: artifact
                         .features
                         .iter()
@@ -412,11 +482,14 @@ fn main() {
         roots: unit_graph.roots,
     };
 
+    // Add our extra libraries to the unit graph.
+
     let dep_core = custom_graph.get_unit_as_dep("core".into());
     let dep_compiler_builtins =
         custom_graph.get_unit_as_dep("compiler_builtins".into());
     let dep_std = custom_graph.get_unit_as_dep("std".into());
 
+    // Add crucible
     let dep_crucible = custom_graph.push_unit_as_dep(
         CustomTargetLib {
             crate_name: "crucible".into(),
@@ -436,11 +509,13 @@ fn main() {
         vec![dep_compiler_builtins.clone(), dep_core.clone()],
     );
 
+    // Add crucible as a dependency of alloc
     custom_graph
         .get_unit_mut(&"alloc".into())
         .dependencies
         .push(dep_crucible.clone());
 
+    // Add int512
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
             crate_name: "int512".into(),
@@ -454,6 +529,7 @@ fn main() {
         dependencies: vec![dep_core.clone(), dep_compiler_builtins.clone()],
     });
 
+    // Add bytes
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
             crate_name: "bytes".into(),
@@ -472,6 +548,7 @@ fn main() {
         ],
     });
 
+    // Add byteorder
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
             crate_name: "byteorder".into(),
@@ -492,6 +569,7 @@ fn main() {
         dependencies: vec![dep_core, dep_std, dep_compiler_builtins],
     });
 
+    // Create the necessary output directories.
     eprintln!("Setting up sysroot...");
     for subdir in ["bin", "etc", "lib", "libexec", "share"] {
         let new_dir = rlibs_sysroot.join(subdir);
@@ -567,6 +645,7 @@ fn main() {
                 env: lib.target.env,
             });
 
+    // Run mir-json.
     if generate_only {
         eprintln!("Generating translation steps...");
         for inv in mir_json_invocations {
@@ -583,10 +662,12 @@ fn main() {
         }
     }
 
+    // Remove the empty project. We don't really care if it actually succeeded.
     eprintln!("Removing empty cargo package...");
     let _ = fs::remove_dir_all(empty_project_path);
 }
 
+/// Build a `cargo test -Z build-std` command.
 fn cargo_test_cmd(cwd: &Utf8Path, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(cwd)
