@@ -136,8 +136,9 @@ impl CustomTarget {
 /// A library that will be compiled by mir-json.
 struct MirJsonLib {
     target: CustomTargetLib,
-    /// The crate names that will be passed as `--extern`
-    dependencies: Vec<CrateName>,
+    /// `(x, y)` is passed as `--extern x=liby.rlib`. Usually `x` is the same
+    /// as `y` but not always.
+    dependencies: Vec<(CrateName, CrateName)>,
 }
 
 impl CustomUnitGraph {
@@ -201,54 +202,56 @@ impl CustomUnitGraph {
     fn sequence_libs(&self) -> Vec<MirJsonLib> {
         let mut result = Vec::new();
         // Cache for the result of the visit function.
-        let mut visited: Vec<Option<bool>> = vec![None; self.units.len()];
+        let mut visited: Vec<Option<Option<&CrateName>>> =
+            vec![None; self.units.len()];
 
-        /// Process the unit at index `i`. Return whether it should be included
-        /// as a dependency.
-        fn visit(
-            units: &[CustomUnit],
+        /// Process the unit at index `i`. Return its crate name if it should be
+        /// included as a dependency, or [None] otherwise.
+        fn visit<'a>(
+            units: &'a [CustomUnit],
             result: &mut Vec<MirJsonLib>,
-            visited: &mut [Option<bool>],
+            visited: &mut [Option<Option<&'a CrateName>>],
             i: usize,
-        ) -> bool {
-            match visited[i] {
-                Some(is_lib) => is_lib,
-                None => {
-                    let is_lib = match &units[i].target {
-                        CustomTarget::TargetLib(lib) => {
-                            // Visit all dependencies and add this unit to
-                            // result.
-                            let mut lib_deps = Vec::new();
-                            for dep in &units[i].dependencies {
-                                if visit(units, result, visited, dep.index) {
-                                    lib_deps
-                                        .push(dep.extern_crate_name.clone());
-                                }
-                            }
-                            result.push(MirJsonLib {
-                                target: lib.clone(),
-                                dependencies: lib_deps,
-                            });
-                            true
-                        }
-                        CustomTarget::HostDep => {
-                            // Do not visit dependencies and do not add this
-                            // unit to result.
-                            false
-                        }
-                        CustomTarget::FinalBin => {
-                            // Visit all dependencies but do not add this unit
-                            // to result.
-                            for dep in &units[i].dependencies {
-                                visit(units, result, visited, dep.index);
-                            }
-                            false
-                        }
-                    };
-                    visited[i] = Some(is_lib);
-                    is_lib
-                }
+        ) -> Option<&'a CrateName> {
+            if let Some(r) = visited[i] {
+                return r;
             }
+            let r = match &units[i].target {
+                CustomTarget::TargetLib(lib) => {
+                    // Visit all dependencies and add this unit to result.
+                    let mut lib_deps = Vec::new();
+                    for dep in &units[i].dependencies {
+                        if let Some(real_crate_name) =
+                            visit(units, result, visited, dep.index)
+                        {
+                            lib_deps.push((
+                                dep.extern_crate_name.clone(),
+                                real_crate_name.clone(),
+                            ));
+                        }
+                    }
+                    result.push(MirJsonLib {
+                        target: lib.clone(),
+                        dependencies: lib_deps,
+                    });
+                    Some(&lib.crate_name)
+                }
+                CustomTarget::HostDep => {
+                    // Do not visit dependencies and do not add this unit to
+                    // result.
+                    None
+                }
+                CustomTarget::FinalBin => {
+                    // Visit all dependencies but do not add this unit to
+                    // result.
+                    for dep in &units[i].dependencies {
+                        visit(units, result, visited, dep.index);
+                    }
+                    None
+                }
+            };
+            visited[i] = Some(r);
+            r
         }
 
         for root in &self.roots {
@@ -614,12 +617,12 @@ fn main() {
                         args.push("--cfg".into());
                         args.push(cfg);
                     }
-                    for dep in lib.dependencies {
+                    for (extern_name, real_name) in lib.dependencies {
                         args.push("--extern".into());
                         args.push(format!(
                             "{}={}",
-                            dep,
-                            rlibs_dir.join(format!("lib{}.rlib", dep))
+                            extern_name,
+                            rlibs_dir.join(format!("lib{}.rlib", real_name))
                         ));
                     }
                     args.push("--target".into());
