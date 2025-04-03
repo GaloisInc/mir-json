@@ -788,6 +788,7 @@ dependencies = [
  "serde_json",
  "shell-escape",
  "tar",
+ "tempfile",
  "toml_edit",
 ]
 

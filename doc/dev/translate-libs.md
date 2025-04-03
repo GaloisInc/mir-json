@@ -43,7 +43,7 @@ Nightly `cargo` also has the [`--unit-graph`
 option](https://doc.rust-lang.org/cargo/reference/unstable.html#unit-graph),
 which outputs the dependency graph of the crates that it will build, including
 the standard libraries if `-Z build-std` is also passed. So we essentially
-create a new cargo project with `cargo new`, which will contain a simple binary
+create a new cargo project with `cargo init`, which will contain a simple binary
 with no dependencies other than the standard libraries, and do `cargo test -Z
 build-std --unit-graph` on that project to get the dependency graph of the
 standard library crates, then modify the source file paths in the graph to point

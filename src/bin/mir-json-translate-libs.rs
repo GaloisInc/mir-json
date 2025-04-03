@@ -8,6 +8,7 @@ extern crate rustc_driver;
 extern crate rustc_session;
 extern crate serde;
 extern crate shell_escape;
+extern crate tempfile;
 
 use std::{
     collections::HashMap,
@@ -24,6 +25,7 @@ use cargo_metadata::{
 };
 use serde::Deserialize;
 use shell_escape::escape;
+use tempfile::{tempdir, TempDir};
 
 mod extra_libs {
     pub const CRUCIBLE: &str = "crucible";
@@ -348,30 +350,26 @@ fn main() {
 
     // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
-    let empty_project_path = cwd.join(EMPTY_PROJECT_NAME);
-    // If this program failed the last time it was run, the project might exist
-    // already, which `cargo new` will complain about. Instead of checking for
-    // existence then deleting, we just try to delete it and ignore any errors.
-    let _ = fs::remove_dir_all(&empty_project_path);
-    let cargo_new_status = Command::new("cargo")
-        .arg("new")
-        .arg(&empty_project_path)
+    let empty_project_dir =
+        tempdir().expect("temporary directory should be able to be created");
+    let cargo_init_status = Command::new("cargo")
+        .current_dir(&empty_project_dir)
+        .arg("init")
+        .arg("--name")
+        .arg(EMPTY_PROJECT_NAME)
         .arg("--vcs")
         .arg("none")
         .status()
-        .expect("cargo new should run");
-    if !cargo_new_status.success() {
-        panic!(
-            "cargo new {} exited with {}",
-            empty_project_path, cargo_new_status
-        );
+        .expect("cargo init should run");
+    if !cargo_init_status.success() {
+        panic!("cargo init exited with {}", cargo_init_status);
     }
 
     // Run `cargo test -Z build-std` to obtain compiler artifact and build
     // script result messages.
     eprintln!("Running cargo test...");
     let mut cargo_test_child =
-        cargo_test_cmd(&empty_project_path, &target_triple)
+        cargo_test_cmd(&empty_project_dir, &target_triple)
             .arg("--message-format")
             .arg("json")
             .arg("--no-run")
@@ -411,7 +409,7 @@ fn main() {
 
     // Run `cargo test -Z build-std --unit-graph` to obtain unit graph.
     eprintln!("Running cargo --unit-graph...");
-    let unit_graph = cargo_test_cmd(&empty_project_path, &target_triple)
+    let unit_graph = cargo_test_cmd(&empty_project_dir, &target_triple)
         .arg("-Z")
         .arg("unstable-options")
         .arg("--unit-graph")
@@ -682,16 +680,12 @@ fn main() {
             }
         }
     }
-
-    // Remove the empty project. We don't really care if it actually succeeded.
-    eprintln!("Removing empty cargo package...");
-    let _ = fs::remove_dir_all(empty_project_path);
 }
 
 /// Build a `cargo test -Z build-std` command.
-fn cargo_test_cmd(cwd: &Utf8Path, target_triple: &str) -> Command {
+fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
-    cmd.current_dir(cwd)
+    cmd.current_dir(project_dir)
         .arg("test")
         .arg("--target")
         .arg(target_triple)

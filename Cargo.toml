@@ -20,6 +20,7 @@ cargo = { version = "0.62", features = [ "vendored-openssl" ] }
 toml_edit = { version = "0.13.4", features = [ "easy" ] }
 clap = "3.1.0"
 shell-escape = "0.1.5"
+tempfile = "3"
 
 [[bin]]
 name = "cargo-crux-test"
