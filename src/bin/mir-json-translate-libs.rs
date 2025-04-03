@@ -58,7 +58,13 @@ mod crate_name {
     use serde::Deserialize;
 
     /// Newtype wrapper around [String] which enforces that all `-` are replaced
-    /// with `_`. Construct with [From<&str>].
+    /// with `_`. Package names often contain `-`, but it is not a valid
+    /// character in Rust identifiers, and crate names must be valid Rust
+    /// identifiers since they are automatically exposed as module names in Rust
+    /// code. Therefore cargo converts `-` to `_` when deriving crate names from
+    /// package names.
+    ///
+    /// Construct with [From<&str>].
     #[derive(Clone, Deserialize, PartialEq)]
     pub struct CrateName(String);
 
