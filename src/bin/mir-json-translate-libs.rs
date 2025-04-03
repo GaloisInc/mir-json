@@ -283,6 +283,8 @@ impl CmdInvocation {
     fn as_command(&self) -> Command {
         let mut cmd = Command::new(&self.program);
         cmd.args(&self.args)
+            // convert iterator items from &(String, String) to
+            // (&String, &String)
             .envs(self.env.iter().map(|(k, v)| (k, v)));
         cmd
     }
