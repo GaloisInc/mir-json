@@ -319,20 +319,47 @@ fn main() {
         .expect("cwd should be accessible")
         .try_into()
         .expect("cwd should be UTF-8");
-    let custom_sources_dir = match env::var_os("MIR_JSON_RUST_SOURCES_PATH") {
+    let arg_matches = clap::Command::new("mir-json-translate-libs")
+        .bin_name("mir-json-translate-libs")
+        .about("Build the custom Rust standard libraries for mir-json")
+        .args([
+            clap::Arg::new("libs").help(
+                "Directory containing custom Rust standard libraries \
+                [default: ./libs]",
+            ),
+            clap::Arg::new("out-dir")
+                .short('o')
+                .long("out-dir")
+                .value_name("OUT_DIR")
+                .help(
+                    "Directory to place rlibs and rlibs_real in \
+                    [default: next to libs]",
+                ),
+            clap::Arg::new("generate").long("generate").help(
+                "Print a shell script instead of actually running the build",
+            ),
+        ])
+        .get_matches();
+    let custom_sources_dir = match arg_matches.value_of("libs") {
         Some(path) => fs::canonicalize(path)
-            .expect("MIR_JSON_RUST_SOURCES_PATH should be a valid path")
+            .expect("libs should be a valid path")
             .try_into()
-            .expect("MIR_JSON_RUST_SOURCES_PATH should be UTF-8"),
+            .expect("libs should be UTF-8"),
         None => cwd.join("libs"),
     };
-    let generate_only = env::args().skip(1).any(|arg| arg == "--generate");
+    let out_dir = match arg_matches.value_of("out-dir") {
+        Some(path) => path.into(),
+        None => custom_sources_dir
+            .parent()
+            .expect("libs should not be root"),
+    };
+    let generate_only = arg_matches.is_present("generate");
 
     // Compute the paths that we will use later to store the build artifacts,
     // but don't actually create them yet.
     eprintln!("Querying paths...");
-    let rlibs_sysroot = cwd.join("rlibs_real");
-    let rlibs_symlink = cwd.join("rlibs");
+    let rlibs_sysroot = out_dir.join("rlibs_real");
+    let rlibs_symlink = out_dir.join("rlibs");
     let rlibs_dir = Command::new("rustc")
         .arg("--target")
         .arg(&target_triple)
@@ -603,15 +630,19 @@ fn main() {
             });
         }
     }
+    // Use relative symlink
+    let rel_rlibs_dir = rlibs_dir
+        .strip_prefix(out_dir)
+        .expect("out_dir should be prefix of rlibs_dir");
     if generate_only {
         let rlibs_symlink = escape(rlibs_symlink.into_string().into());
-        let rlibs_dir = escape(rlibs_dir.as_str().into());
+        let rel_rlibs_dir = escape(rel_rlibs_dir.as_str().into());
         println!(
             "if [ ! -d {} ]; then ln -s {} {}; fi",
-            rlibs_symlink, rlibs_dir, rlibs_symlink
+            rlibs_symlink, rel_rlibs_dir, rlibs_symlink
         );
     } else if !rlibs_symlink.is_dir() {
-        unix::fs::symlink(rlibs_dir, rlibs_symlink)
+        unix::fs::symlink(rel_rlibs_dir, rlibs_symlink)
             .expect("creating rlibs symlink should succeed");
     }
 
