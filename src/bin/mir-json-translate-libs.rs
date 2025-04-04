@@ -292,7 +292,7 @@ impl CmdInvocation {
         cmd.args(&self.args)
             // convert iterator items from &(String, String) to
             // (&String, &String)
-            .envs(self.env.iter().map(|(k, v)| (k, v)));
+            .envs(self.env.iter().map(|&(ref k, ref v)| (k, v)));
         cmd
     }
 }
