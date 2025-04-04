@@ -17,7 +17,7 @@ ENV RUST_TOOLCHAIN="nightly-2023-01-23"
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --profile minimal --default-toolchain ${RUST_TOOLCHAIN}
 RUN rustup component add --toolchain ${RUST_TOOLCHAIN} rustc-dev
 RUN cargo install --locked && \
-    ./translate_libs.sh
+    mir-json-translate-libs
 
 FROM ubuntu:22.04
 

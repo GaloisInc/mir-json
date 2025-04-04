@@ -37,11 +37,11 @@
 
 5. Translate the `mir-json`–specific versions of the Rust standard libraries:
 
-       $ ./translate_libs.sh
+       $ mir-json-translate-libs
 
    This should create an `rlibs` directory. [The documentation](doc/rustc.md)
    contains a more detailed description of different ways to run the
-   `translate_libs.sh` script.
+   `mir-json-translate-libs` program.
 
 6. Define one of the following environment variables:
 

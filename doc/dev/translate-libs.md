@@ -1,27 +1,7 @@
-# Details of `translate_libs.sh`/`mir-json-translate-libs`
+# Implementation details of `mir-json-translate-libs`
 
 See [rustc.md](../rustc.md#translating-the-rust-standard-libraries) for basic
-usage of `translate_libs.sh`.
-
-`translate_libs.sh` is a thin wrapper around the `mir-json-translate-libs`
-binary.
-
-## `--generate`
-
-If the `--generate` flag is passed to
-`translate_libs.sh`/`mir-json-translate-libs`, it will not run `mir-json` or
-permanently create any new files or directories. Instead, it will output to
-stdout a series of shell commands which, when run, would do the same thing as
-what it would have done directly. This is useful for debugging or if you just
-want to see what `mir-json` commands would be run without actually running them.
-The output can be directly saved into a shell script and executed at a later
-point. Note that there will still be non-shell-script output on stderr.
-
-Even with `--generate`, `mir-json-translate-libs` **will still run various
-`cargo` commands, including builds**, and temporarily create files, in order to
-determine which `mir-json` commands it should generate.
-
-## Implementation
+usage of `mir-json-translate-libs`.
 
 The dependencies of the standard libraries, and the compiler flags required to
 build them, vary depending on the target and Rust version. Usually `cargo` uses

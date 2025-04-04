@@ -119,9 +119,8 @@ binaries for specialized purposes:
   runs dead-code elimination on them. It is unlikely that you will need to use
   this binary directly, as dead-code elimination is performed as an intermediate
   step in other binaries.
-* `mir-json-translate-libs`: `translate_libs.sh` is a thin wrapper around this
-  binary, which in turn calls `mir-json` to generate `.mir` files for our
-  modified versions of the Rust standard libraries.
+* `mir-json-translate-libs`: This calls `mir-json` to generate `.mir` files for
+  our modified versions of the Rust standard libraries.
 * `mir-json`: This produces a `.mir` file from a single `.rs` file and does not
   do anything else, such as testing with `crux-mir`. It is unlikely that you
   will need to use this binary directly, as producing `.mir` files is performed
@@ -165,18 +164,53 @@ in the following ways:
 # Translating the Rust standard libraries
 
 `mir-json` requires slightly modified versions of the Rust standard libraries
-that are simpler to formally reason about. These modified standard libraries
-are located under the `libs/` subdirectory. After installing `mir-json`, you
-can run the `translate_libs.sh` script to compile the standard libraries using
-`mir-json`.
+that are simpler to formally reason about. These modified standard libraries are
+located under the `libs/` subdirectory. After installing `mir-json`, you can run
+the `mir-json-translate-libs` program to compile the standard libraries using
+`mir-json`. It will create a directory called `rlibs_real` with a Rust sysroot
+structure and a symlink `rlibs` into the subdirectory of `rlibs_real` which
+contains the build artifacts. The path to `rlibs` can then be used as the value
+of `CRUX_RUST_LIBRARY_PATH` or `SAW_RUST_LIBRARY_PATH`.
 
-By default, `translate_libs.sh` compiles the libraries for your host machine's
-architecture. If you want to cross-compile for a different target, you can
-optionally set the environment variable `TARGET` to a [target
+`mir-json-translate-libs` can take some optional command line arguments:
+
+```
+mir-json-translate-libs
+Build the custom Rust standard libraries for mir-json
+
+USAGE:
+    mir-json-translate-libs [OPTIONS] [libs]
+
+ARGS:
+    <libs>    Directory containing custom Rust standard libraries [default: ./libs]
+
+OPTIONS:
+        --generate             Print a shell script instead of actually running the build
+    -h, --help                 Print help information
+    -o, --out-dir <OUT_DIR>    Directory to place rlibs and rlibs_real in [default: next to libs]
+        --target <TARGET>      Rust target triple to configure the libraries for
+```
+
+## `--target`
+
+By default, `mir-json-translate-libs` compiles the libraries for your host
+machine's architecture. If you want to cross-compile for a different target, you
+can optionally pass a [target
 triple](https://doc.rust-lang.org/nightly/rustc/platform-support.html) when
-running `./translate_libs.sh`. This is experimental and we have only tested
+running `mir-json-translate-libs`. This is experimental and we have only tested
 `wasm32-unknown-unknown` to work; you might get build errors for other targets.
 
-```
-$ TARGET=wasm32-unknown-unknown ./translate_libs.sh
-```
+## `--generate`
+
+If the `--generate` flag is passed to `mir-json-translate-libs`, it will not run
+`mir-json` or permanently create any new files or directories. Instead, it will
+output to stdout a series of shell commands which, when run, would do the same
+thing as what it would have done directly. This is useful for debugging or if
+you just want to see what `mir-json` commands would be run without actually
+running them. The output can be directly saved into a shell script and executed
+at a later point. Note that there will still be non-shell-script output on
+stderr.
+
+Even with `--generate`, `mir-json-translate-libs` **will still run various
+`cargo` commands, including builds**, and temporarily create files, in order to
+determine which `mir-json` commands it should generate.
