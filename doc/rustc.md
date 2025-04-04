@@ -188,7 +188,7 @@ OPTIONS:
         --generate             Print a shell script instead of actually running the build
     -h, --help                 Print help information
     -o, --out-dir <OUT_DIR>    Directory to place rlibs and rlibs_real in [default: next to libs]
-        --target <TARGET>      Rust target triple to configure the libraries for
+        --target <TARGET>      Rust target triple to configure the libraries for [default: host triple]
 ```
 
 ## `--target`

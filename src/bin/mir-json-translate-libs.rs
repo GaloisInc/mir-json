@@ -334,6 +334,7 @@ fn main() {
             clap::Arg::new("target")
                 .long("target")
                 .value_name("TARGET")
+                .default_value(rustc_session::config::host_triple())
                 .help("Rust target triple to configure the libraries for"),
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",
@@ -353,9 +354,7 @@ fn main() {
             .parent()
             .expect("libs should not be root"),
     };
-    let target_triple = arg_matches
-        .value_of("target")
-        .unwrap_or_else(|| rustc_session::config::host_triple());
+    let target_triple = arg_matches.value_of("target").unwrap();
     let generate_only = arg_matches.is_present("generate");
 
     // Compute the paths that we will use later to store the build artifacts,
