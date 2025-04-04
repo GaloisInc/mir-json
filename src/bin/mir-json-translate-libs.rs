@@ -27,12 +27,10 @@ use serde::Deserialize;
 use shell_escape::escape;
 use tempfile::{tempdir, TempDir};
 
-mod extra_libs {
-    pub const CRUCIBLE: &str = "crucible";
-    pub const INT512: &str = "int512";
-    pub const BYTES: &str = "bytes";
-    pub const BYTEORDER: &str = "byteorder";
-}
+const EXTRA_LIB_CRUCIBLE: &str = "crucible";
+const EXTRA_LIB_INT512: &str = "int512";
+const EXTRA_LIB_BYTES: &str = "bytes";
+const EXTRA_LIB_BYTEORDER: &str = "byteorder";
 
 /// Name of the new empty cargo project to be created to run `cargo test -Z
 /// build-std` in.
@@ -538,7 +536,7 @@ fn main() {
     // Add crucible
     let dep_crucible = custom_graph.push_unit_as_dep(
         CustomTargetLib {
-            crate_name: extra_libs::CRUCIBLE.into(),
+            crate_name: EXTRA_LIB_CRUCIBLE.into(),
             src_path: [
                 custom_sources_dir.as_path(),
                 "crucible".into(),
@@ -564,7 +562,7 @@ fn main() {
     // Add int512
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
-            crate_name: extra_libs::INT512.into(),
+            crate_name: EXTRA_LIB_INT512.into(),
             src_path: custom_sources_dir.join("int512.rs"),
             edition: Default::default(),
             linked_libs: vec![],
@@ -578,7 +576,7 @@ fn main() {
     // Add bytes
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
-            crate_name: extra_libs::BYTES.into(),
+            crate_name: EXTRA_LIB_BYTES.into(),
             src_path: custom_sources_dir.join("bytes.rs"),
             edition: Edition::E2021,
             linked_libs: vec![],
@@ -597,7 +595,7 @@ fn main() {
     // Add byteorder
     custom_graph.push_unit_as_root(CustomUnit {
         target: CustomTarget::TargetLib(CustomTargetLib {
-            crate_name: extra_libs::BYTEORDER.into(),
+            crate_name: EXTRA_LIB_BYTEORDER.into(),
             src_path: [
                 custom_sources_dir.as_path(),
                 "byteorder".into(),
