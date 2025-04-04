@@ -152,9 +152,9 @@ impl CustomTarget {
 /// A library that will be compiled by mir-json.
 struct MirJsonLib {
     target: CustomTargetLib,
-    /// `(x, y)` is passed as `--extern x=liby.rlib`. Usually `x` is the same
-    /// as `y` but not always.
-    dependencies: Vec<(CrateName, CrateName)>,
+    /// `(x, y)` is passed as `--extern x=liby.rlib`. For this program usually
+    /// `x` is the same as `y` but not always.
+    dependencies: Vec<(CrateName, String)>,
 }
 
 impl CustomUnitGraph {
@@ -242,7 +242,7 @@ impl CustomUnitGraph {
                         {
                             lib_deps.push((
                                 dep.extern_crate_name.clone(),
-                                real_crate_name.clone(),
+                                real_crate_name.to_string(),
                             ));
                         }
                     }
