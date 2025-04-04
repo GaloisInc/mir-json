@@ -311,8 +311,6 @@ impl fmt::Display for CmdInvocation {
 }
 
 fn main() {
-    let target_triple = env::var("TARGET")
-        .unwrap_or_else(|_| rustc_session::config::host_triple().into());
     let cwd: Utf8PathBuf = env::current_dir()
         .expect("cwd should be accessible")
         .try_into()
@@ -333,6 +331,10 @@ fn main() {
                     "Directory to place rlibs and rlibs_real in \
                     [default: next to libs]",
                 ),
+            clap::Arg::new("target")
+                .long("target")
+                .value_name("TARGET")
+                .help("Rust target triple to configure the libraries for"),
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",
             ),
@@ -351,6 +353,9 @@ fn main() {
             .parent()
             .expect("libs should not be root"),
     };
+    let target_triple = arg_matches
+        .value_of("target")
+        .unwrap_or_else(|| rustc_session::config::host_triple());
     let generate_only = arg_matches.is_present("generate");
 
     // Compute the paths that we will use later to store the build artifacts,
@@ -360,7 +365,7 @@ fn main() {
     let rlibs_symlink = out_dir.join("rlibs");
     let rlibs_dir = Command::new("rustc")
         .arg("--target")
-        .arg(&target_triple)
+        .arg(target_triple)
         .arg("--print")
         .arg("target-libdir")
         .arg("--sysroot")
@@ -394,7 +399,7 @@ fn main() {
     // script result messages.
     eprintln!("Running cargo test...");
     let mut cargo_test_child =
-        cargo_test_cmd(&empty_project_dir, &target_triple)
+        cargo_test_cmd(&empty_project_dir, target_triple)
             .arg("--message-format")
             .arg("json")
             .arg("--no-run")
@@ -434,7 +439,7 @@ fn main() {
 
     // Run `cargo test -Z build-std --unit-graph` to obtain unit graph.
     eprintln!("Running cargo --unit-graph...");
-    let unit_graph = cargo_test_cmd(&empty_project_dir, &target_triple)
+    let unit_graph = cargo_test_cmd(&empty_project_dir, target_triple)
         .arg("-Z")
         .arg("unstable-options")
         .arg("--unit-graph")
@@ -671,7 +676,7 @@ fn main() {
                         ));
                     }
                     args.push("--target".into());
-                    args.push(target_triple.clone());
+                    args.push(target_triple.into());
                     args.push("-L".into());
                     args.push(rlibs_dir.to_string());
                     args.push("--out-dir".into());
