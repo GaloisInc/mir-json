@@ -4,6 +4,6 @@
 
 *.swp
 
-# Artifacts of running translate_libs.hs
+# Artifacts of running mir-json-translate-libs
 /rlibs
 /rlibs_real

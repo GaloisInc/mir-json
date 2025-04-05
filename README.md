@@ -20,7 +20,7 @@
 2. Next, install a version of `rustc` that works with mir-json.
 
        $ rustup toolchain install nightly-2023-01-23 --force
-       $ rustup component add --toolchain nightly-2023-01-23 rustc-dev
+       $ rustup component add --toolchain nightly-2023-01-23 rustc-dev rust-src
        $ rustup default nightly-2023-01-23
 
    <!-- Note: when changing to a new nightly, also update `wrapper.rs` -->
@@ -37,11 +37,11 @@
 
 5. Translate the `mir-json`–specific versions of the Rust standard libraries:
 
-       $ ./translate_libs.sh
+       $ mir-json-translate-libs
 
    This should create an `rlibs` directory. [The documentation](doc/rustc.md)
    contains a more detailed description of different ways to run the
-   `translate_libs.sh` script.
+   `mir-json-translate-libs` program.
 
 6. Define one of the following environment variables:
 

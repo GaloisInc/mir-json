@@ -44,7 +44,9 @@ fn find_lib_dir() -> PathBuf {
             "note: this tool requires rustup toolchain `{}`; to install it, run:",
             TOOLCHAIN,
         );
-        eprintln!("    rustup toolchain install {} --force --component rustc-dev", TOOLCHAIN);
+        eprintln!(
+            "    rustup toolchain install {} --force --component rustc-dev,rust-src",
+            TOOLCHAIN);
         eprintln!("");
         eprintln!(
             "note: if you have configured PATH and {} manually, set {} to disable this check",
