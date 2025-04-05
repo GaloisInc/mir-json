@@ -15,7 +15,7 @@ ENV LANG=C.UTF-8 \
     PATH=/home/mir-json/.cargo/bin:$PATH
 ENV RUST_TOOLCHAIN="nightly-2023-01-23"
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --profile minimal --default-toolchain ${RUST_TOOLCHAIN}
-RUN rustup component add --toolchain ${RUST_TOOLCHAIN} rustc-dev
+RUN rustup component add --toolchain ${RUST_TOOLCHAIN} rustc-dev rust-src
 RUN cargo install --locked && \
     mir-json-translate-libs
 
