@@ -306,15 +306,11 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
     }
 }
 
-basic_json_impl!(mir::BasicBlock);
-
 impl ToJson<'_> for mir::Field {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
 }
-
-basic_json_impl!(mir::AssertMessage<'a>, 'a);
 
 impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {

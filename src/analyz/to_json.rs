@@ -1,7 +1,7 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
-use rustc_middle::mir::{BinOp, Body, CastKind, interpret, NullOp, UnOp};
+use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, interpret, NullOp, UnOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -10,6 +10,7 @@ use rustc_target::spec::abi::Abi;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, hash_map};
+use std::fmt::Write;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::mem;
@@ -400,28 +401,23 @@ impl<'tcx, K, V> ToJson<'tcx> for BTreeMap<K, V>
     }
 }
 
-#[macro_export]
-macro_rules! basic_json_impl {
-    ($n : path) => {
-        impl ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
-        let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
-        json!(s)
-    }
-}
-};
-    ($n : path, $lt : tt) => {
-        impl<$lt> ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
+impl<'a> ToJson<'_> for AssertMessage<'a> {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
         json!(s)
     }
 }
 
-};
+impl ToJson<'_> for BasicBlock {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        let mut s = String::new();
+        write!(&mut s, "{:?}", self).unwrap();
+        json!(s)
+    }
 }
+
+// enum handlers
 
 impl ToJson<'_> for Abi {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
@@ -561,6 +557,8 @@ impl ToJson<'_> for UintTy {
         }
     }
 }
+
+// end enum handlers
 
 impl ToJson<'_> for UnOp {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
