@@ -116,7 +116,7 @@ pub fn inst_id_str<'tcx>(
         inst.args,
     );
     assert!(!args.has_erasable_regions());
-    assert!(!args.needs_subst());
+    assert!(!args.has_param());
 
     match inst.def {
         ty::InstanceDef::Item(ty::WithOptConstParam { did: def_id, .. }) |
