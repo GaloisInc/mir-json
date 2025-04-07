@@ -226,7 +226,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
         match self.def {
             ty::InstanceKind::Item(did) => json!({
                 "kind": "Item",
-                "def_id": did.did.to_json(mir),
+                "def_id": did.to_json(mir),
                 "substs": args.to_json(mir),
             }),
             ty::InstanceKind::Intrinsic(did) => json!({
