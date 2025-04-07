@@ -13,7 +13,7 @@ WORKDIR /mir-json
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PATH=/home/mir-json/.cargo/bin:$PATH
-ENV RUST_TOOLCHAIN="nightly-2023-01-23"
+ENV RUST_TOOLCHAIN="nightly-2025-02-16"
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --profile minimal --default-toolchain ${RUST_TOOLCHAIN}
 RUN rustup component add --toolchain ${RUST_TOOLCHAIN} rustc-dev rust-src
 RUN cargo install --locked && \
