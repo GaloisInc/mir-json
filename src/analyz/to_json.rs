@@ -1,5 +1,5 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_middle::mir::{Body, interpret};
+use rustc_middle::mir::{Body, CastKind, interpret};
 use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -440,6 +440,23 @@ macro_rules! basic_json_enum_impl {
 }
 
 };
+}
+
+impl ToJson<'_> for CastKind {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            CastKind::PointerExposeAddress => json!({ "kind": "PointerExposeAddress" }),
+            CastKind::PointerFromExposedAddress => json!({ "kind": "PointerFromExposedAddress" }),
+            CastKind::DynStar => json!({ "kind": "DynStar" }),
+            CastKind::IntToInt => json!({ "kind": "IntToInt" }),
+            CastKind::FloatToInt => json!({ "kind": "FloatToInt" }),
+            CastKind::FloatToFloat => json!({ "kind": "FloatToFloat" }),
+            CastKind::IntToFloat => json!({ "kind": "IntToFloat" }),
+            CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
+            CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
+            CastKind::Pointer(_) => json!({ "kind": format!("{:?}", self) }),
+        }
+    }
 }
 
 impl<'tcx, A, B> ToJson<'tcx> for (A, B)

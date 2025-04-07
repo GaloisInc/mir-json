@@ -38,7 +38,6 @@ basic_json_enum_impl!(ty::IntTy);
 basic_json_enum_impl!(ty::UintTy);
 basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
-basic_json_enum_impl!(mir::CastKind);
 basic_json_enum_impl!(abi::Abi);
 
 impl ToJson<'_> for mir::BorrowKind {
