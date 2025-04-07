@@ -34,8 +34,6 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
-basic_json_enum_impl!(mir::UnOp);
-
 impl<'tcx> ToJson<'tcx> for abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()

@@ -1,7 +1,7 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
-use rustc_middle::mir::{BinOp, Body, CastKind, interpret, NullOp};
+use rustc_middle::mir::{BinOp, Body, CastKind, interpret, NullOp, UnOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -423,29 +423,6 @@ macro_rules! basic_json_impl {
 };
 }
 
-#[macro_export]
-macro_rules! basic_json_enum_impl {
-    ($n : path) => {
-        impl ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
-        let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
-        json!({"kind": s})
-    }
-}
-};
-    ($n : path, $lt : tt) => {
-        impl<$lt> ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
-        let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
-        json!({"kind": s})
-    }
-}
-
-};
-}
-
 impl ToJson<'_> for Abi {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
@@ -581,6 +558,15 @@ impl ToJson<'_> for UintTy {
             UintTy::U32 => json!({ "kind": "U32" }),
             UintTy::U64 => json!({ "kind": "U64" }),
             UintTy::U128 => json!({ "kind": "U128" }),
+        }
+    }
+}
+
+impl ToJson<'_> for UnOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            UnOp::Not => json!({ "kind": "Not" }),
+            UnOp::Neg => json!({ "kind": "Neg" }),
         }
     }
 }
