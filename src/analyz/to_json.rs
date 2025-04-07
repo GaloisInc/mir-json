@@ -1,5 +1,5 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_middle::mir::{Body, CastKind, interpret};
+use rustc_middle::mir::{BinOp, Body, CastKind, interpret};
 use rustc_middle::ty::{self, TyCtxt, DynKind};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -440,6 +440,30 @@ macro_rules! basic_json_enum_impl {
 }
 
 };
+}
+
+impl ToJson<'_> for BinOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            BinOp::Add => json!({ "kind": "Add" }),
+            BinOp::Sub => json!({ "kind": "Sub" }),
+            BinOp::Mul => json!({ "kind": "Mul" }),
+            BinOp::Div => json!({ "kind": "Div" }),
+            BinOp::Rem => json!({ "kind": "Rem" }),
+            BinOp::BitXor => json!({ "kind": "BitXor" }),
+            BinOp::BitAnd => json!({ "kind": "BitAnd" }),
+            BinOp::BitOr => json!({ "kind": "BitOr" }),
+            BinOp::Shl => json!({ "kind": "Shl" }),
+            BinOp::Shr => json!({ "kind": "Shr" }),
+            BinOp::Eq => json!({ "kind": "Eq" }),
+            BinOp::Lt => json!({ "kind": "Lt" }),
+            BinOp::Le => json!({ "kind": "Le" }),
+            BinOp::Ne => json!({ "kind": "Ne" }),
+            BinOp::Ge => json!({ "kind": "Ge" }),
+            BinOp::Gt => json!({ "kind": "Gt" }),
+            BinOp::Offset => json!({ "kind": "Offset" }),
+        }
+    }
 }
 
 impl ToJson<'_> for CastKind {

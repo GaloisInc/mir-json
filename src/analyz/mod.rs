@@ -34,8 +34,6 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
-basic_json_enum_impl!(mir::BinOp);
-
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
