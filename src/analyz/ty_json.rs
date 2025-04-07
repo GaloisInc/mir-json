@@ -8,7 +8,7 @@ use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Proven
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
-use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitable};
+use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_abi::{self, Align, FieldsShape, HasDataLayout, Size};
