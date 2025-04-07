@@ -89,7 +89,7 @@ fn vtable_descriptor_for_cast<'tcx>(
 ) -> Option<ty::PolyTraitRef<'tcx>> {
     let tcx = mir.state.tcx;
 
-    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCast::Unsize) {
+    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCoercion::Unsize) {
         return None;
     }
 
