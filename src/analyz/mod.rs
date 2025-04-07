@@ -12,7 +12,7 @@ use rustc_session::{self, Session};
 use rustc_session::config::OutputType;
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
-use rustc_target::abi;
+use rustc_abi;
 use rustc_target::spec;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -39,7 +39,7 @@ basic_json_enum_impl!(mir::BinOp);
 basic_json_enum_impl!(mir::NullOp);
 basic_json_enum_impl!(mir::UnOp);
 
-impl<'tcx> ToJson<'tcx> for abi::VariantIdx {
+impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()
     }
