@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_index::{IndexVec, Idx};
@@ -90,7 +90,7 @@ where T: for<'a> HashStable<StableHashingContext<'a>> {
     let base = def_id_str(tcx, def_id);
 
     // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
-    let hash: u64 = tcx.with_stable_hashing_context(|mut hcx| {
+    let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
         let mut hasher = StableHasher::new();
         extra.hash_stable(&mut hcx, &mut hasher);
         hasher.finish()
