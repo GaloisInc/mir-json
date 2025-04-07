@@ -161,7 +161,7 @@ pub fn trait_inst_id_str<'tcx>(
 pub fn get_fn_def_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     defid: DefId,
-    substs: ty::subst::SubstsRef<'tcx>,
+    substs: ty::GenericArgsRef<'tcx>,
 ) -> String {
     let inst = ty::Instance::resolve(
         mir.state.tcx,
