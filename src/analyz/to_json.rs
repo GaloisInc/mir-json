@@ -1,6 +1,6 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::mir::{BinOp, Body, CastKind, interpret};
-use rustc_middle::ty::{self, DynKind, FloatTy, TyCtxt};
+use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
@@ -489,6 +489,19 @@ impl ToJson<'_> for FloatTy {
         match self {
             FloatTy::F32 => json!({ "kind": "F32" }),
             FloatTy::F64 => json!({ "kind": "F64" }),
+        }
+    }
+}
+
+impl ToJson<'_> for IntTy {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            IntTy::Isize => json!({ "kind": "Isize" }),
+            IntTy::I8 => json!({ "kind": "I8" }),
+            IntTy::I16 => json!({ "kind": "I16" }),
+            IntTy::I32 => json!({ "kind": "I32" }),
+            IntTy::I64 => json!({ "kind": "I64" }),
+            IntTy::I128 => json!({ "kind": "I128" }),
         }
     }
 }
