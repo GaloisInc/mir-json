@@ -121,25 +121,25 @@ pub fn inst_id_str<'tcx>(
     match inst.def {
         ty::InstanceKind::Item(ty::WithOptConstParam { did: def_id, .. }) |
         ty::InstanceKind::Intrinsic(def_id) => {
-            if substs.len() == 0 {
+            if args.len() == 0 {
                 def_id_str(tcx, def_id)
             } else {
-                ext_def_id_str(tcx, def_id, "_inst", substs)
+                ext_def_id_str(tcx, def_id, "_inst", args)
             }
         },
         ty::InstanceKind::VTableShim(def_id) =>
-            ext_def_id_str(tcx, def_id, "_vtshim", substs),
+            ext_def_id_str(tcx, def_id, "_vtshim", args),
         ty::InstanceKind::ReifyShim(def_id) =>
-            ext_def_id_str(tcx, def_id, "_reify", substs),
+            ext_def_id_str(tcx, def_id, "_reify", args),
         ty::InstanceKind::Virtual(def_id, idx) =>
-            ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), substs),
+            ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
         ty::InstanceKind::DropGlue(def_id, _) =>
-            ext_def_id_str(tcx, def_id, "_drop", substs),
+            ext_def_id_str(tcx, def_id, "_drop", args),
         ty::InstanceKind::FnPtrShim(def_id, _) |
         ty::InstanceKind::ClosureOnceShim { call_once: def_id, .. } =>
-            ext_def_id_str(tcx, def_id, "_callonce", substs),
+            ext_def_id_str(tcx, def_id, "_callonce", args),
         ty::InstanceKind::CloneShim(def_id, _) =>
-            ext_def_id_str(tcx, def_id, "_shim", substs),
+            ext_def_id_str(tcx, def_id, "_shim", args),
     }
 }
 
