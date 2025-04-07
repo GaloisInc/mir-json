@@ -1,6 +1,6 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::mir::{BinOp, Body, CastKind, interpret};
-use rustc_middle::ty::{self, TyCtxt, DynKind};
+use rustc_middle::ty::{self, DynKind, FloatTy, TyCtxt};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet, hash_map};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::mem;
+
 
 pub struct CompileState<'a, 'tcx> {
     pub session: &'a Session,
@@ -479,6 +480,15 @@ impl ToJson<'_> for CastKind {
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
             CastKind::Pointer(_) => json!({ "kind": format!("{:?}", self) }),
+        }
+    }
+}
+
+impl ToJson<'_> for FloatTy {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            FloatTy::F32 => json!({ "kind": "F32" }),
+            FloatTy::F64 => json!({ "kind": "F64" }),
         }
     }
 }

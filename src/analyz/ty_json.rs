@@ -33,7 +33,6 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
     }
 }
 
-basic_json_enum_impl!(ty::FloatTy);
 basic_json_enum_impl!(ty::IntTy);
 basic_json_enum_impl!(ty::UintTy);
 basic_json_enum_impl!(hir::Mutability);
