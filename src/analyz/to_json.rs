@@ -1,4 +1,5 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
+use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
 use rustc_middle::mir::{BinOp, Body, CastKind, interpret};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
@@ -481,6 +482,15 @@ impl ToJson<'_> for CastKind {
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
             CastKind::Pointer(_) => json!({ "kind": format!("{:?}", self) }),
+        }
+    }
+}
+
+impl ToJson<'_> for CtorKind {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            CtorKind::Fn => json!({ "kind": "Fn" }),
+            CtorKind::Const => json!({ "kind": "Const" }),
         }
     }
 }

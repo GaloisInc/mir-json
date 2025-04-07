@@ -33,7 +33,6 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
     }
 }
 
-basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(abi::Abi);
 
 impl ToJson<'_> for mir::BorrowKind {
