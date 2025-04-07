@@ -263,7 +263,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 };
                 let tref = ex_tref.with_self_ty(mir.state.tcx, self_ty);
 
-                let erased_tref = mir.state.tcx.erase_late_bound_regions(tref);
+                let erased_tref = mir.state.tcx.instantiate_bound_regions_with_erased(tref);
                 let ti = TraitInst::from_trait_ref(mir.state.tcx, erased_tref);
                 let trait_name = trait_inst_id_str(mir.state.tcx, &ti);
                 mir.used.traits.insert(ti);
