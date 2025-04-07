@@ -210,7 +210,7 @@ fn adjust_method_index<'tcx>(
     tref: ty::Binder<'tcx, ty::TraitRef<'tcx>>,
     raw_idx: usize,
 ) -> usize {
-    let methods = tcx.vtable_entries(tref);
+    let methods = tcx.vtable_entries(tcx.instantiate_bound_regions_with_erased(tref));
     methods.iter().take(raw_idx)
         .filter(|m| matches!(m, ty::vtable::VtblEntry::Method(_)))
         .count()
