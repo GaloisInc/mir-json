@@ -160,7 +160,7 @@ impl<'tcx> TraitInst<'tcx> {
         preds.extend(
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
-        let preds = tcx.intern_poly_existential_predicates(&preds);
+        let preds = tcx.mk_poly_existential_predicates(&preds);
         // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
         Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
     }
