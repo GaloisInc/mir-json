@@ -137,11 +137,12 @@ impl<'tcx> TraitInst<'tcx> {
                 }
                 let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
                 let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
-                projs.push(ty::ExistentialProjection {
-                    def_id: ai.def_id,
-                    substs: ex_trait_ref.substs,
-                    term: actual_ty.into(),
-                });
+                projs.push(ty::ExistentialProjection::new(
+                    tcx,
+                    ai.def_id,
+                    ex_trait_ref.substs,
+                    actual_ty.into(),
+                ));
             }
         }
         projs.sort_by_key(|p| p.def_id);
