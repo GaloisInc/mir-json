@@ -11,8 +11,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitable};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
-use rustc_target::spec::abi;
-use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
+use rustc_abi::{self, Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::fmt::Write as FmtWrite;
@@ -39,7 +38,7 @@ basic_json_enum_impl!(ty::UintTy);
 basic_json_enum_impl!(hir::Mutability);
 basic_json_enum_impl!(hir::def::CtorKind);
 basic_json_enum_impl!(mir::CastKind);
-basic_json_enum_impl!(abi::Abi);
+basic_json_enum_impl!(rustc_abi::ExternAbi);
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
@@ -659,8 +658,7 @@ mod machine {
     use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
-    use rustc_target::abi::Size;
-    use rustc_target::spec::abi::Abi;
+    use rustc_abi::{Size, ExternAbi};
     pub struct RenderConstMachine<'mir, 'tcx> {
         stack: Vec<Frame<'mir, 'tcx, AllocId, ()>>,
     }
@@ -717,7 +715,7 @@ mod machine {
         fn find_mir_or_eval_fn(
             _ecx: &mut InterpCx<'mir, 'tcx, Self>,
             _instance: ty::Instance<'tcx>,
-            _abi: Abi,
+            _abi: ExternAbi,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
@@ -733,7 +731,7 @@ mod machine {
         fn call_extra_fn(
             _ecx: &mut InterpCx<'mir, 'tcx, Self>,
             _fn_val: Self::ExtraFnVal,
-            _abi: Abi,
+            _abi: ExternAbi,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
