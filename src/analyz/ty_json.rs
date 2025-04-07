@@ -163,7 +163,7 @@ pub fn get_fn_def_name<'tcx>(
     defid: DefId,
     substs: ty::GenericArgsRef<'tcx>,
 ) -> String {
-    let inst = ty::Instance::resolve(
+    let inst = ty::Instance::try_resolve(
         mir.state.tcx,
         ty::ParamEnv::reveal_all(),
         defid,
