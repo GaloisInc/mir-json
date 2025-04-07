@@ -111,12 +111,12 @@ pub fn inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     inst: ty::Instance<'tcx>,
 ) -> String {
-    let substs = tcx.normalize_erasing_regions(
+    let args = tcx.normalize_erasing_regions(
         ty::ParamEnv::reveal_all(),
-        inst.substs,
+        inst.args,
     );
-    assert!(!substs.has_erasable_regions());
-    assert!(!substs.needs_subst());
+    assert!(!args.has_erasable_regions());
+    assert!(!args.needs_subst());
 
     match inst.def {
         ty::InstanceDef::Item(ty::WithOptConstParam { did: def_id, .. }) |
