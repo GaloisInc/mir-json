@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc_index::vec::{IndexVec, Idx};
+use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
 use rustc_const_eval::const_eval::CheckAlignment;
