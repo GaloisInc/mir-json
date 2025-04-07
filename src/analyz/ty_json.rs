@@ -188,7 +188,7 @@ pub fn get_drop_fn_name<'tcx>(
     ty: ty::Ty<'tcx>,
 ) -> Option<String> {
     let inst = ty::Instance::resolve_drop_in_place(mir.state.tcx, ty);
-    if let ty::InstanceDef::DropGlue(_, None) = inst.def {
+    if let ty::InstanceKind::DropGlue(_, None) = inst.def {
         // `None` instead of a `Ty` indicates this drop glue is a no-op.
         return None;
     }
@@ -224,33 +224,33 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
         );
 
         match self.def {
-            ty::InstanceDef::Item(did) => json!({
+            ty::InstanceKind::Item(did) => json!({
                 "kind": "Item",
                 "def_id": did.did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::Intrinsic(did) => json!({
+            ty::InstanceKind::Intrinsic(did) => json!({
                 "kind": "Intrinsic",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::VTableShim(did) => json!({
+            ty::InstanceKind::VTableShim(did) => json!({
                 "kind": "VTableShim",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::ReifyShim(did) => json!({
+            ty::InstanceKind::ReifyShim(did) => json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::FnPtrShim(did, ty) => json!({
+            ty::InstanceKind::FnPtrShim(did, ty) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
-            ty::InstanceDef::Virtual(did, idx) => {
+            ty::InstanceKind::Virtual(did, idx) => {
                 let self_ty = substs.types().next()
                     .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
                 let preds = match *self_ty.kind() {
@@ -275,18 +275,18 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "index": adjust_method_index(mir.state.tcx, tref, idx),
                 })
             },
-            ty::InstanceDef::ClosureOnceShim { call_once, .. } => json!({
+            ty::InstanceKind::ClosureOnceShim { call_once, .. } => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
                 "substs": substs.to_json(mir),
             }),
-            ty::InstanceDef::DropGlue(did, ty) => json!({
+            ty::InstanceKind::DropGlue(did, ty) => json!({
                 "kind": "DropGlue",
                 "def_id": did.to_json(mir),
                 "substs": substs.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
-            ty::InstanceDef::CloneShim(did, ty) => {
+            ty::InstanceKind::CloneShim(did, ty) => {
                 let sub_tys = match *ty.kind() {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
