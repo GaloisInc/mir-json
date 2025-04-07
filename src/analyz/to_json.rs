@@ -1,7 +1,7 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
-use rustc_middle::mir::{BinOp, Body, CastKind, interpret};
+use rustc_middle::mir::{BinOp, Body, CastKind, interpret, NullOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
@@ -559,6 +559,15 @@ impl ToJson<'_> for Mutability {
         match self {
             Mutability::Not => json!({ "kind": "Not" }),
             Mutability::Mut => json!({ "kind": "Mut" }),
+        }
+    }
+}
+
+impl ToJson<'_> for NullOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            NullOp::SizeOf => json!({ "kind": "SizeOf" }),
+            NullOp::AlignOf => json!({ "kind": "AlignOf" }),
         }
     }
 }
