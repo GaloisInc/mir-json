@@ -3,7 +3,7 @@
 use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_index::vec::Idx;
+use rustc_index::Idx;
 use rustc_interface::Queries;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
