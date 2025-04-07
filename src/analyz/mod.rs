@@ -313,7 +313,7 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
 
 basic_json_impl!(mir::BasicBlock);
 
-impl ToJson<'_> for mir::Field {
+impl ToJson<'_> for rustc_abi::FieldIdx {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
