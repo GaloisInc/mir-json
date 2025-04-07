@@ -119,7 +119,7 @@ pub fn inst_id_str<'tcx>(
     assert!(!args.has_param());
 
     match inst.def {
-        ty::InstanceKind::Item(ty::WithOptConstParam { did: def_id, .. }) |
+        ty::InstanceKind::Item(def_id) |
         ty::InstanceKind::Intrinsic(def_id) => {
             if args.len() == 0 {
                 def_id_str(tcx, def_id)
