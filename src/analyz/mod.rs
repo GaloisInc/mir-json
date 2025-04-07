@@ -36,7 +36,7 @@ use schema_ver::SCHEMA_VER;
 
 basic_json_enum_impl!(mir::BinOp);
 
-basic_json_enum_impl!(mir::NullOp);
+basic_json_enum_impl!(mir::NullOp<'tcx>, 'tcx);
 basic_json_enum_impl!(mir::UnOp);
 
 impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
