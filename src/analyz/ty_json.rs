@@ -11,11 +11,9 @@ use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitable};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
-use rustc_target::spec::abi;
 use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
-use std::fmt::Write as FmtWrite;
 use std::usize;
 
 use analyz::to_json::*;
@@ -32,8 +30,6 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
         json!(j)
     }
 }
-
-basic_json_enum_impl!(abi::Abi);
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {

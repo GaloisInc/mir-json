@@ -6,6 +6,7 @@ use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
+use rustc_target::spec::abi::Abi;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, hash_map};
@@ -443,6 +444,42 @@ macro_rules! basic_json_enum_impl {
 }
 
 };
+}
+
+impl ToJson<'_> for Abi {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            Abi::Rust => json!({ "kind": "Rust" }),
+            Abi::PtxKernel => json!({ "kind": "PtxKernel" }),
+            Abi::Msp430Interrupt => json!({ "kind": "Msp430Interrupt" }),
+            Abi::X86Interrupt => json!({ "kind": "X86Interrupt" }),
+            Abi::AmdGpuKernel => json!({ "kind": "AmdGpuKernel" }),
+            Abi::EfiApi => json!({ "kind": "EfiApi" }),
+            Abi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
+            Abi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
+            Abi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
+            Abi::Wasm => json!({ "kind": "Wasm" }),
+            Abi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
+            Abi::RustCall => json!({ "kind": "RustCall" }),
+            Abi::PlatformIntrinsic => json!({ "kind": "PlatformIntrinsic" }),
+            Abi::Unadjusted => json!({ "kind": "Unadjusted" }),
+            Abi::RustCold => json!({ "kind": "RustCold" }),
+
+            // Data-carrying variants — use Debug formatting
+            Abi::C { .. }
+            | Abi::Cdecl { .. }
+            | Abi::Stdcall { .. }
+            | Abi::Fastcall { .. }
+            | Abi::Vectorcall { .. }
+            | Abi::Thiscall { .. }
+            | Abi::Aapcs { .. }
+            | Abi::Win64 { .. }
+            | Abi::SysV64 { .. }
+            | Abi::System { .. } => {
+                json!({ "kind": format!("{:?}", self) })
+            }
+        }
+    }
 }
 
 impl ToJson<'_> for BinOp {
