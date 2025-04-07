@@ -218,41 +218,41 @@ fn adjust_method_index<'tcx>(
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let substs = mir.state.tcx.normalize_erasing_regions(
+        let args = mir.state.tcx.normalize_erasing_regions(
             ty::ParamEnv::reveal_all(),
-            self.substs,
+            self.args,
         );
 
         match self.def {
             ty::InstanceKind::Item(did) => json!({
                 "kind": "Item",
                 "def_id": did.did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
             }),
             ty::InstanceKind::Intrinsic(did) => json!({
                 "kind": "Intrinsic",
                 "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
             }),
             ty::InstanceKind::VTableShim(did) => json!({
                 "kind": "VTableShim",
                 "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
             }),
             ty::InstanceKind::ReifyShim(did) => json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
             }),
             ty::InstanceKind::FnPtrShim(did, ty) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceKind::Virtual(did, idx) => {
-                let self_ty = substs.types().next()
-                    .unwrap_or_else(|| panic!("expected self type in substs for {:?}", self));
+                let self_ty = args.types().next()
+                    .unwrap_or_else(|| panic!("expected self type in args for {:?}", self));
                 let preds = match *self_ty.kind() {
                     ty::TyKind::Dynamic(ref preds, _region, _dynkind) => preds,
                     _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
@@ -278,12 +278,12 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceKind::ClosureOnceShim { call_once, .. } => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
             }),
             ty::InstanceKind::DropGlue(did, ty) => json!({
                 "kind": "DropGlue",
                 "def_id": did.to_json(mir),
-                "substs": substs.to_json(mir),
+                "substs": args.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceKind::CloneShim(did, ty) => {
@@ -319,7 +319,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 json!({
                     "kind": "CloneShim",
                     "def_id": did.to_json(mir),
-                    "substs": substs.to_json(mir),
+                    "substs": args.to_json(mir),
                     "ty": ty.to_json(mir),
                     "callees": callees.to_json(mir),
                 })
