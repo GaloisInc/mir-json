@@ -181,11 +181,11 @@ impl<'tcx> TraitInst<'tcx> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
     pub adt: ty::AdtDef<'tcx>,
-    pub substs: ty::subst::SubstsRef<'tcx>,
+    pub substs: ty::GenericArgsRef<'tcx>,
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
+    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::GenericArgsRef<'tcx>) -> AdtInst<'tcx> {
         AdtInst { adt, substs }
     }
 
