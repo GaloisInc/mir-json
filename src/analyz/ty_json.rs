@@ -772,7 +772,7 @@ mod machine {
             )).into()
         }
 
-        fn extern_static_base_pointer(
+        fn extern_static_pointer(
             _ecx: &InterpCx<'tcx, Self>,
             _def_id: DefId,
         ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
@@ -783,7 +783,7 @@ mod machine {
             )).into()
         }
 
-        fn adjust_alloc_base_pointer(
+        fn adjust_alloc_root_pointer(
             _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer,
         ) -> Pointer<Self::Provenance> {
