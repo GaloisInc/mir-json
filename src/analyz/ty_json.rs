@@ -689,10 +689,6 @@ mod machine {
             false
         }
 
-        fn use_addr_for_alignment_check(_ecx: &InterpCx<'tcx, Self>) -> bool {
-            false
-        }
-
         #[inline(always)]
         fn checked_binop_checks_overflow(_ecx: &InterpCx<'tcx, Self>) -> bool {
             true
