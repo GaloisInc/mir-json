@@ -657,6 +657,7 @@ mod machine {
     use rustc_const_eval::interpret::*;
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
+    use rustc_middle::ty::layout::TyAndLayout;
     use rustc_abi::{Size, ExternAbi};
     pub struct RenderConstMachine<'tcx> {
         stack: Vec<Frame<'tcx, AllocId, ()>>,
@@ -694,7 +695,7 @@ mod machine {
             true
         }
 
-        fn enforce_validity(_ecx: &InterpCx<'tcx, Self>) -> bool {
+        fn enforce_validity(_ecx: &InterpCx<'tcx, Self>, _layout: TyAndLayout<'tcx>) -> bool {
             false
         }
 
