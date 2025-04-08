@@ -658,7 +658,8 @@ mod machine {
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
     use rustc_middle::ty::layout::TyAndLayout;
-    use rustc_abi::{Size, ExternAbi};
+    use rustc_abi::Size;
+    use rustc_target::callconv::FnAbi;
     pub struct RenderConstMachine<'tcx> {
         stack: Vec<Frame<'tcx, AllocId, ()>>,
     }
@@ -702,7 +703,7 @@ mod machine {
         fn find_mir_or_eval_fn(
             _ecx: &mut InterpCx<'tcx, Self>,
             _instance: ty::Instance<'tcx>,
-            _abi: ExternAbi,
+            _abi: &FnAbi<'tcx, Ty<'tcx>>,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
@@ -718,7 +719,7 @@ mod machine {
         fn call_extra_fn(
             _ecx: &mut InterpCx<'tcx, Self>,
             _fn_val: Self::ExtraFnVal,
-            _abi: ExternAbi,
+            _abi: &FnAbi<'tcx, Ty<'tcx>>,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
