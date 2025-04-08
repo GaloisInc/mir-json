@@ -812,6 +812,7 @@ mod machine {
         fn ptr_get_alloc(
             _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
+            _size: i64
         ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
             let (prov, offset) = ptr.into_parts();
             Some((prov.alloc_id(), offset, ()))
