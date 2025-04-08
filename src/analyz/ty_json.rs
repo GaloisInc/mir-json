@@ -750,7 +750,7 @@ mod machine {
         fn assert_panic(
             _ecx: &mut InterpCx<'tcx, Self>,
             _msg: &mir::AssertMessage<'tcx>,
-            _unwind: Option<mir::BasicBlock>,
+            _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
