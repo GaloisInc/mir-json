@@ -404,8 +404,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Closure(_defid, ref substs) => {
                 json!({
                     "kind": "Closure",
-                    "upvar_tys": substs.as_closure().upvar_tys()
-                        .collect::<Vec<_>>().to_json(mir),
+                    "upvar_tys": substs.as_closure().upvar_tys().to_json(mir),
                     // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
@@ -1083,7 +1082,7 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
 
         ty::TyKind::Closure(_defid, substs) => {
-            let upvars_count = substs.as_closure().upvar_tys().count();
+            let upvars_count = substs.as_closure().upvar_tys().len();
             let mut upvar_vals = Vec::with_capacity(upvars_count);
             for idx in 0 .. upvars_count {
                 let upvar_opty = icx.operand_field(&op_ty, idx).unwrap();
