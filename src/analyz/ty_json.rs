@@ -685,17 +685,8 @@ mod machine {
         const GLOBAL_KIND: Option<Self::MemoryKind> = None;
         const PANIC_ON_ALLOC_FAIL: bool = false;
 
-        fn enforce_alignment(_ecx: &InterpCx<'tcx, Self>) -> CheckAlignment {
-            CheckAlignment::No
-        }
-
-        fn alignment_check_failed(
-            _ecx: &InterpCx<'tcx, Self>,
-            _has: Align,
-            _required: Align,
-            _check: CheckAlignment,
-        ) -> InterpResult<'tcx, ()> {
-            panic!("not implemented: alignment_check_failed");
+        fn enforce_alignment(_ecx: &InterpCx<'tcx, Self>) -> bool {
+            false
         }
 
         fn use_addr_for_alignment_check(_ecx: &InterpCx<'tcx, Self>) -> bool {
