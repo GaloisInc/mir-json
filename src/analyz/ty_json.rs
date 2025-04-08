@@ -818,16 +818,15 @@ mod machine {
             Some((prov.alloc_id(), offset, ()))
         }
 
-        fn adjust_allocation<'b>(
+        fn adjust_global_allocation<'b>(
             _ecx: &InterpCx<'tcx, Self>,
             _id: AllocId,
-            alloc: Cow<'b, Allocation>,
-            _kind: Option<MemoryKind<Self::MemoryKind>>,
+            alloc: &'b Allocation,
         ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
-            Ok(alloc)
+            Ok(Cow::Borrowed(alloc))
         }
 
-        fn init_frame_extra(
+        fn init_frame(
             _ecx: &mut InterpCx<'tcx, Self>,
             _frame: Frame<'tcx, Self::Provenance>,
         ) -> InterpResult<'tcx, Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
