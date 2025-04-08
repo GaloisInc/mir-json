@@ -525,12 +525,12 @@ impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
 impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.kind().skip_binder() {
-            ty::PredicateKind::Clause(ty::Clause::Trait(tp)) => {
+            ty::PredicateKind::Clause(ty::ClauseKind::Trait(tp)) => {
                 json!({
                     "trait_pred": tp.trait_ref.to_json(ms)
                 })
             }
-            ty::PredicateKind::Clause(ty::Clause::Projection(pp)) => match pp.term.unpack() {
+            ty::PredicateKind::Clause(ty::ClauseKind::Projection(pp)) => match pp.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
                     "projection_ty": pp.projection_ty.to_json(ms),
                     "ty": ty.to_json(ms),
