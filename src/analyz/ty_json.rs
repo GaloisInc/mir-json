@@ -430,8 +430,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                         }),
                 }
             }
-            &ty::TyKind::Alias(ty::AliasKind::Projection, _) => unreachable!(
-                "no TyKind::Alias with AliasKind Projection should remain after monomorphization"
+            &ty::TyKind::Alias(ty::AliasTyKind::Projection, _) => unreachable!(
+                "no TyKind::Alias with AliasTyKind Projection should remain after monomorphization"
             ),
             &ty::TyKind::FnPtr(ref sig) => {
                 json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
@@ -466,7 +466,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "GeneratorWitness"})
             }
-            &ty::TyKind::Alias(ty::AliasKind::Opaque, _) => {
+            &ty::TyKind::Alias(ty::AliasTyKind::Opaque, _) => {
                 // TODO
                 json!({"kind": "Alias"})
             }
