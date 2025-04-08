@@ -823,7 +823,7 @@ mod machine {
             _id: AllocId,
             alloc: &'b Allocation,
         ) -> InterpResult<'tcx, Cow<'b, Allocation<Self::Provenance, Self::AllocExtra>>> {
-            Ok(Cow::Borrowed(alloc))
+            interp_ok(Cow::Borrowed(alloc))
         }
 
         fn init_frame(
