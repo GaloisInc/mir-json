@@ -786,6 +786,7 @@ mod machine {
         fn adjust_alloc_root_pointer(
             _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer,
+            _kind: Option<MemoryKind<Self::MemoryKind>>,
         ) -> Pointer<Self::Provenance> {
             ptr
         }
