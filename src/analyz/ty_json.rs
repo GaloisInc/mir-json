@@ -690,7 +690,7 @@ mod machine {
         }
 
         #[inline(always)]
-        fn checked_binop_checks_overflow(_ecx: &InterpCx<'tcx, Self>) -> bool {
+        fn ignore_optional_overflow_checks(_ecx: &InterpCx<'tcx, Self>) -> bool {
             true
         }
 
