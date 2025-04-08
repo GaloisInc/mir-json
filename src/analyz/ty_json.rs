@@ -706,7 +706,7 @@ mod machine {
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
-            _unwind: StackPopUnwind,
+            _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx, Option<(&'tcx mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -722,7 +722,7 @@ mod machine {
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
-            _unwind: StackPopUnwind,
+            _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
@@ -737,7 +737,7 @@ mod machine {
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
-            _unwind: StackPopUnwind,
+            _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
