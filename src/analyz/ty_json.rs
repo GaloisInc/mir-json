@@ -713,7 +713,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "find_mir_or_eval_fn".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn call_extra_fn(
@@ -729,7 +729,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "call_extra_fn".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn call_intrinsic(
@@ -744,7 +744,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "call_intrinsic".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn assert_panic(
@@ -756,7 +756,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "assert_panic".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn binary_ptr_op(
@@ -769,7 +769,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "binary_ptr_op".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn extern_static_base_pointer(
@@ -780,7 +780,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "extern_static_base_pointer".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn adjust_alloc_base_pointer(
@@ -805,7 +805,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "expose_ptr".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn ptr_get_alloc(
@@ -833,7 +833,7 @@ mod machine {
                 UnsupportedOpInfo::Unsupported(
                     "init_frame_extra".into(),
                 ),
-            ).into())
+            )).into()
         }
 
         fn stack<'a>(
