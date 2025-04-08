@@ -520,17 +520,17 @@ impl<'tcx> ToJson<'tcx> for ty::AliasTerm<'tcx> {
     }
 }
 
-// Predicate (static / `where` clause)
+// Clause (static / `where` clause)
 
-impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::Clause<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.kind().skip_binder() {
-            ty::PredicateKind::Clause(ty::ClauseKind::Trait(tp)) => {
+            ty::ClauseKind::Trait(tp) => {
                 json!({
                     "trait_pred": tp.trait_ref.to_json(ms)
                 })
             }
-            ty::PredicateKind::Clause(ty::ClauseKind::Projection(pp)) => match pp.term.unpack() {
+            ty::ClauseKind::Projection(pp) => match pp.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
                     "projection_term": pp.projection_term.to_json(ms),
                     "ty": ty.to_json(ms),
@@ -538,7 +538,7 @@ impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
                 ty::TermKind::Const(_) => json!("unknown_const_projection"),
             }
             _ => {
-                json!("unknown_pred")
+                json!("unknown_clause")
             }
         }
     }
