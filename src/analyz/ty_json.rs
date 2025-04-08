@@ -44,9 +44,10 @@ impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::BorrowKind::Shared => json!("Shared"),
-            &mir::BorrowKind::Shallow => json!("Shallow"),
-            &mir::BorrowKind::Unique => json!("Unique"),
-            &mir::BorrowKind::Mut{..} => json!("Mut"),
+            // &mir::BorrowKind::Shallow => json!("Shallow"),
+            &mir::BorrowKind::Fake(k) => todo!("RUSTUP_TODO: Shallow was renamed to Fake, then a non-shallow Fake kind was added. What should JSON output be? https://github.com/rust-lang/rust/commit/992d93f687c75f8f5ee69e0fb43bff509c7c9cb8 https://github.com/rust-lang/rust/commit/50531806ee4c77be601ecf2fbdac371288770e17"),
+            // &mir::BorrowKind::Unique => json!("Unique"),
+            &mir::BorrowKind::Mut{..} => { todo!("RUSTUP_TODO: Unique was merged into Mut, should we distinguish it in the JSON? https://github.com/rust-lang/rust/commit/8fb4c41f35fee3b224ea87148cb2ae31a9ed4675#diff-3a6077a453e9ef35b5b85b4419025066cc7a0f3bad1207ae98860902c817a252"); json!("Mut") },
         }
     }
 }
@@ -112,7 +113,8 @@ pub fn inst_id_str<'tcx>(
     inst: ty::Instance<'tcx>,
 ) -> String {
     let args = tcx.normalize_erasing_regions(
-        ty::ParamEnv::reveal_all(),
+        // ty::ParamEnv::reveal_all(),
+        todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
         inst.args,
     );
     assert!(!args.has_erasable_regions());
@@ -129,8 +131,8 @@ pub fn inst_id_str<'tcx>(
         },
         ty::InstanceKind::VTableShim(def_id) =>
             ext_def_id_str(tcx, def_id, "_vtshim", args),
-        ty::InstanceKind::ReifyShim(def_id) =>
-            ext_def_id_str(tcx, def_id, "_reify", args),
+        ty::InstanceKind::ReifyShim(def_id, reason) =>
+            { todo!("RUSTUP_TODO: reason was added. do we care about it? https://github.com/rust-lang/rust/commit/6aa89f684e4427a9d08e35b572f9071705105140"); ext_def_id_str(tcx, def_id, "_reify", args) },
         ty::InstanceKind::Virtual(def_id, idx) =>
             ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
         ty::InstanceKind::DropGlue(def_id, _) =>
@@ -140,6 +142,10 @@ pub fn inst_id_str<'tcx>(
             ext_def_id_str(tcx, def_id, "_callonce", args),
         ty::InstanceKind::CloneShim(def_id, _) =>
             ext_def_id_str(tcx, def_id, "_shim", args),
+        ty::InstanceKind::ConstructCoroutineInClosureShim { coroutine_closure_def_id, receiver_by_ref } => todo!("RUSTUP_TODO: newly added variant"),
+        ty::InstanceKind::ThreadLocalShim(def_id) => todo!("RUSTUP_TODO: newly added variant"),
+        ty::InstanceKind::FnPtrAddrShim(def_id, ty) => todo!("RUSTUP_TODO: newly added variant"),
+        ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) => todo!("RUSTUP_TODO: newly added variant"),
     }
 }
 
@@ -165,7 +171,8 @@ pub fn get_fn_def_name<'tcx>(
 ) -> String {
     let inst = ty::Instance::try_resolve(
         mir.state.tcx,
-        ty::ParamEnv::reveal_all(),
+        // ty::ParamEnv::reveal_all(),
+        todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
         defid,
         args,
     );
@@ -219,7 +226,8 @@ fn adjust_method_index<'tcx>(
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let args = mir.state.tcx.normalize_erasing_regions(
-            ty::ParamEnv::reveal_all(),
+            // ty::ParamEnv::reveal_all(),
+            todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
             self.args,
         );
 
@@ -239,11 +247,11 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::ReifyShim(did) => json!({
+            ty::InstanceKind::ReifyShim(did, reason) => { todo!("RUSTUP_TODO: reason was added. do we care about it? https://github.com/rust-lang/rust/commit/6aa89f684e4427a9d08e35b572f9071705105140"); json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
-            }),
+            }) },
             ty::InstanceKind::FnPtrShim(did, ty) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
@@ -301,7 +309,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     .map(|ty| {
                         let inst = ty::Instance::try_resolve(
                             mir.state.tcx,
-                            ty::ParamEnv::reveal_all(),
+                            // ty::ParamEnv::reveal_all(),
+                            todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
                             did,
                             mir.state.tcx.mk_args(&[ty.into()]),
                         ).unwrap_or_else(|_| {
@@ -849,13 +858,63 @@ mod machine {
         ) -> &'a mut Vec<Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
             unimplemented!("stack_mut")
         }
+
+        // RUSTUP_TODO: these things were newly added to the trait so they are all at the bottom
+        // after implementing we can put them in the right places in this impl block
+
+        // RUSTUP_TODO: Newly added associated type (I put the Box<[u8]> to get it to compile, idk what it's actually supposed to be)
+        type Bytes = Box<[u8]>;
+
+        fn check_fn_target_features(
+            _ecx: &InterpCx<'tcx, Self>,
+            _instance: ty::Instance<'tcx>,
+        ) -> InterpResult<'tcx> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn panic_nounwind(_ecx: &mut InterpCx<'tcx, Self>, msg: &str) -> InterpResult<'tcx> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn unwind_terminate(
+            ecx: &mut InterpCx<'tcx, Self>,
+            reason: mir::UnwindTerminateReason,
+        ) -> InterpResult<'tcx> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn ub_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn contract_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn init_alloc_extra(
+            ecx: &InterpCx<'tcx, Self>,
+            id: AllocId,
+            kind: MemoryKind<Self::MemoryKind>,
+            size: Size,
+            align: Align,
+        ) -> InterpResult<'tcx, Self::AllocExtra> {
+            todo!("RUSTUP_TODO: newly added method")
+        }
+
+        fn get_global_alloc_salt(
+            ecx: &InterpCx<'tcx, Self>,
+            instance: Option<ty::Instance<'tcx>>,
+        ) -> usize {
+            todo!("RUSTUP_TODO: newly added method")
+        }
     }
 }
 
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
-        map.insert("ty".to_owned(), self.ty().to_json(mir));
+        // map.insert("ty".to_owned(), self.ty().to_json(mir));
+        todo!("RUSTUP_TODO: ty() was removed, but the type is still saved in ty::ConstKind::Value if self.kind() returns it. Should we record the type in that case? Or never record it? https://github.com/rust-lang/rust/pull/125958");
 
         match self.kind() {
             // remove? should probably not show up?
