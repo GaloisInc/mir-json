@@ -419,7 +419,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                             "kind": "Dynamic",
                             "trait_id": trait_name,
                             "predicates": preds.iter().map(|p|{
-                                let p = tcx.erase_late_bound_regions(p);
+                                let p = tcx.instantiate_bound_regions_with_erased(p);
                                 p.to_json(mir)
                             }).collect::<Vec<_>>(),
                         })
@@ -485,7 +485,7 @@ impl ToJson<'_> for ty::ParamTy {
 
 impl<'tcx> ToJson<'tcx> for ty::PolyFnSig<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let sig = ms.state.tcx.erase_late_bound_regions(*self);
+        let sig = ms.state.tcx.instantiate_bound_regions_with_erased(*self);
         sig.to_json(ms)
     }
 }
