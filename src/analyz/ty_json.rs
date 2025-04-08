@@ -709,7 +709,7 @@ mod machine {
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx, Option<(&'tcx mir::Body<'tcx>, ty::Instance<'tcx>)>> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "find_mir_or_eval_fn".into(),
                 ),
@@ -725,7 +725,7 @@ mod machine {
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "call_extra_fn".into(),
                 ),
@@ -740,7 +740,7 @@ mod machine {
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "call_intrinsic".into(),
                 ),
@@ -752,7 +752,7 @@ mod machine {
             _msg: &mir::AssertMessage<'tcx>,
             _unwind: Option<mir::BasicBlock>,
         ) -> InterpResult<'tcx> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "assert_panic".into(),
                 ),
@@ -765,7 +765,7 @@ mod machine {
             _left: &ImmTy<'tcx, Self::Provenance>,
             _right: &ImmTy<'tcx, Self::Provenance>,
         ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool, Ty<'tcx>)> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "binary_ptr_op".into(),
                 ),
@@ -776,7 +776,7 @@ mod machine {
             _ecx: &InterpCx<'tcx, Self>,
             _def_id: DefId,
         ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "extern_static_base_pointer".into(),
                 ),
@@ -801,7 +801,7 @@ mod machine {
             _ecx: &mut InterpCx<'tcx, Self>,
             _ptr: Pointer<Self::Provenance>,
         ) -> InterpResult<'tcx> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "expose_ptr".into(),
                 ),
@@ -829,7 +829,7 @@ mod machine {
             _ecx: &mut InterpCx<'tcx, Self>,
             _frame: Frame<'tcx, Self::Provenance>,
         ) -> InterpResult<'tcx, Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
-            Err(InterpError::Unsupported(
+            Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "init_frame_extra".into(),
                 ),
