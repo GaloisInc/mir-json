@@ -433,8 +433,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Alias(ty::AliasTyKind::Projection, _) => unreachable!(
                 "no TyKind::Alias with AliasTyKind Projection should remain after monomorphization"
             ),
-            &ty::TyKind::FnPtr(ref sig) => {
-                json!({"kind": "FnPtr", "signature": sig.to_json(mir)})
+            &ty::TyKind::FnPtr(ref sig_tys, ref hdr) => {
+                json!({"kind": "FnPtr", "signature": sig_tys.with(*hdr).to_json(mir)})
             }
             &ty::TyKind::Never => {
                 json!({"kind": "Never"})
@@ -1063,7 +1063,7 @@ pub fn try_render_opty<'mir, 'tcx>(
             try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
 
         ty::TyKind::FnDef(_, _) => json!({"kind": "zst"}),
-        ty::TyKind::FnPtr(_sig) => {
+        ty::TyKind::FnPtr(_sig_tys, _hdr) => {
             let ptr = icx.read_pointer(op_ty).unwrap();
             let (prov, _offset) = ptr.into_parts();
             let alloc = tcx.try_get_global_alloc(prov?)?;
