@@ -374,11 +374,11 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "mutability": mtbl.to_json(mir)
                 })
             }
-            &ty::TyKind::RawPtr(ref tm) => {
+            &ty::TyKind::RawPtr(ref ty, ref mtbl) => {
                 json!({
                     "kind": "RawPtr",
-                    "ty": tm.ty.to_json(mir),
-                    "mutability": tm.mutbl.to_json(mir)
+                    "ty": ty.to_json(mir),
+                    "mutability": mtbl.to_json(mir)
                 })
             }
             &ty::TyKind::Adt(adtdef, substs) => {
@@ -1057,8 +1057,8 @@ pub fn try_render_opty<'mir, 'tcx>(
         ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
 
         // similar to ref in some ways
-        ty::TyKind::RawPtr(m_ty) =>
-            try_render_ref_opty(mir, icx, op_ty, m_ty.ty, m_ty.mutbl)?,
+        ty::TyKind::RawPtr(pty, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, pty, mutability)?,
 
         ty::TyKind::Ref(_, rty, mutability) =>
             try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
