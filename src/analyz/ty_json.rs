@@ -814,7 +814,7 @@ mod machine {
             ptr: Pointer<Self::Provenance>,
         ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
             let (prov, offset) = ptr.into_parts();
-            Some((prov, offset, ()))
+            Some((prov.alloc_id(), offset, ()))
         }
 
         fn adjust_allocation<'b>(
