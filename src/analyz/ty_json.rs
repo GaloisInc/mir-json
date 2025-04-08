@@ -787,8 +787,8 @@ mod machine {
             _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer,
             _kind: Option<MemoryKind<Self::MemoryKind>>,
-        ) -> Pointer<Self::Provenance> {
-            ptr
+        ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
+            interp_ok(ptr)
         }
 
         fn ptr_from_addr_cast(
