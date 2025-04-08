@@ -674,7 +674,7 @@ mod machine {
 
     impl<'tcx> Machine<'tcx> for RenderConstMachine<'tcx> {
         type MemoryKind = !;
-        type Provenance = AllocId;
+        type Provenance = CtfeProvenance;
         type ProvenanceExtra = ();
         type ExtraFnVal = !;
         type FrameExtra = ();
