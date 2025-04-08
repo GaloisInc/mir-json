@@ -511,7 +511,7 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::AliasTerm<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "args": self.args.to_json(ms),
@@ -532,7 +532,7 @@ impl<'tcx> ToJson<'tcx> for ty::Predicate<'tcx> {
             }
             ty::PredicateKind::Clause(ty::ClauseKind::Projection(pp)) => match pp.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
-                    "projection_ty": pp.projection_ty.to_json(ms),
+                    "projection_term": pp.projection_term.to_json(ms),
                     "ty": ty.to_json(ms),
                 }),
                 ty::TermKind::Const(_) => json!("unknown_const_projection"),
