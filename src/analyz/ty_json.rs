@@ -798,9 +798,9 @@ mod machine {
             unimplemented!("ptr_from_addr_cast")
         }
 
-        fn expose_ptr(
-            _ecx: &mut InterpCx<'tcx, Self>,
-            _ptr: Pointer<Self::Provenance>,
+        fn expose_provenance(
+            _ecx: &InterpCx<'tcx, Self>,
+            _ptr: Self::Provenance,
         ) -> InterpResult<'tcx> {
             Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
