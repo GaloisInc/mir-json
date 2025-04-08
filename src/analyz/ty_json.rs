@@ -739,7 +739,7 @@ mod machine {
             _destination: &MPlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
-        ) -> InterpResult<'tcx> {
+        ) -> InterpResult<'tcx, Option<Instance<'tcx>>> {
             Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "call_intrinsic".into(),
