@@ -764,7 +764,7 @@ mod machine {
             _bin_op: mir::BinOp,
             _left: &ImmTy<'tcx, Self::Provenance>,
             _right: &ImmTy<'tcx, Self::Provenance>,
-        ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool, Ty<'tcx>)> {
+        ) -> InterpResult<'tcx, ImmTy<'tcx, Self::Provenance>> {
             Err(InterpErrorKind::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "binary_ptr_op".into(),
