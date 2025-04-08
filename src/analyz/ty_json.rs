@@ -658,19 +658,19 @@ mod machine {
     use rustc_data_structures::fx::FxIndexMap;
     use rustc_middle::ty::*;
     use rustc_abi::{Size, ExternAbi};
-    pub struct RenderConstMachine<'mir, 'tcx> {
-        stack: Vec<Frame<'mir, 'tcx, AllocId, ()>>,
+    pub struct RenderConstMachine<'tcx> {
+        stack: Vec<Frame<'tcx, AllocId, ()>>,
     }
 
-    impl<'mir, 'tcx> RenderConstMachine<'mir, 'tcx> {
-        pub fn new() -> RenderConstMachine<'mir, 'tcx> {
+    impl<'tcx> RenderConstMachine<'tcx> {
+        pub fn new() -> RenderConstMachine<'tcx> {
             RenderConstMachine {
                 stack: Vec::new()
             }
         }
     }
 
-    impl<'mir, 'tcx> Machine<'mir, 'tcx> for RenderConstMachine<'mir, 'tcx> {
+    impl<'tcx> Machine<'tcx> for RenderConstMachine<'tcx> {
         type MemoryKind = !;
         type Provenance = AllocId;
         type ProvenanceExtra = ();
@@ -685,12 +685,12 @@ mod machine {
         const GLOBAL_KIND: Option<Self::MemoryKind> = None;
         const PANIC_ON_ALLOC_FAIL: bool = false;
 
-        fn enforce_alignment(_ecx: &InterpCx<'mir, 'tcx, Self>) -> CheckAlignment {
+        fn enforce_alignment(_ecx: &InterpCx<'tcx, Self>) -> CheckAlignment {
             CheckAlignment::No
         }
 
         fn alignment_check_failed(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             _has: Align,
             _required: Align,
             _check: CheckAlignment,
@@ -698,28 +698,28 @@ mod machine {
             panic!("not implemented: alignment_check_failed");
         }
 
-        fn use_addr_for_alignment_check(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn use_addr_for_alignment_check(_ecx: &InterpCx<'tcx, Self>) -> bool {
             false
         }
 
         #[inline(always)]
-        fn checked_binop_checks_overflow(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn checked_binop_checks_overflow(_ecx: &InterpCx<'tcx, Self>) -> bool {
             true
         }
 
-        fn enforce_validity(_ecx: &InterpCx<'mir, 'tcx, Self>) -> bool {
+        fn enforce_validity(_ecx: &InterpCx<'tcx, Self>) -> bool {
             false
         }
 
         fn find_mir_or_eval_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &mut InterpCx<'tcx, Self>,
             _instance: ty::Instance<'tcx>,
             _abi: ExternAbi,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
             _unwind: StackPopUnwind,
-        ) -> InterpResult<'tcx, Option<(&'mir mir::Body<'tcx>, ty::Instance<'tcx>)>> {
+        ) -> InterpResult<'tcx, Option<(&'tcx mir::Body<'tcx>, ty::Instance<'tcx>)>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "find_mir_or_eval_fn".into(),
@@ -728,7 +728,7 @@ mod machine {
         }
 
         fn call_extra_fn(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &mut InterpCx<'tcx, Self>,
             _fn_val: Self::ExtraFnVal,
             _abi: ExternAbi,
             _args: &[OpTy<'tcx, Self::Provenance>],
@@ -744,7 +744,7 @@ mod machine {
         }
 
         fn call_intrinsic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &mut InterpCx<'tcx, Self>,
             _instance: ty::Instance<'tcx>,
             _args: &[OpTy<'tcx, Self::Provenance>],
             _destination: &PlaceTy<'tcx, Self::Provenance>,
@@ -759,7 +759,7 @@ mod machine {
         }
 
         fn assert_panic(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &mut InterpCx<'tcx, Self>,
             _msg: &mir::AssertMessage<'tcx>,
             _unwind: Option<mir::BasicBlock>,
         ) -> InterpResult<'tcx> {
@@ -771,7 +771,7 @@ mod machine {
         }
 
         fn binary_ptr_op(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             _bin_op: mir::BinOp,
             _left: &ImmTy<'tcx, Self::Provenance>,
             _right: &ImmTy<'tcx, Self::Provenance>,
@@ -784,7 +784,7 @@ mod machine {
         }
 
         fn extern_static_base_pointer(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             _def_id: DefId,
         ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
             Err(InterpError::Unsupported(
@@ -795,21 +795,21 @@ mod machine {
         }
 
         fn adjust_alloc_base_pointer(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer,
         ) -> Pointer<Self::Provenance> {
             ptr
         }
 
         fn ptr_from_addr_cast(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             _addr: u64,
         ) -> InterpResult<'tcx, Pointer<Option<Self::Provenance>>> {
             unimplemented!("ptr_from_addr_cast")
         }
 
         fn expose_ptr(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+            _ecx: &mut InterpCx<'tcx, Self>,
             _ptr: Pointer<Self::Provenance>,
         ) -> InterpResult<'tcx> {
             Err(InterpError::Unsupported(
@@ -820,7 +820,7 @@ mod machine {
         }
 
         fn ptr_get_alloc(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             ptr: Pointer<Self::Provenance>,
         ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
             let (prov, offset) = ptr.into_parts();
@@ -828,7 +828,7 @@ mod machine {
         }
 
         fn adjust_allocation<'b>(
-            _ecx: &InterpCx<'mir, 'tcx, Self>,
+            _ecx: &InterpCx<'tcx, Self>,
             _id: AllocId,
             alloc: Cow<'b, Allocation>,
             _kind: Option<MemoryKind<Self::MemoryKind>>,
@@ -837,9 +837,9 @@ mod machine {
         }
 
         fn init_frame_extra(
-            _ecx: &mut InterpCx<'mir, 'tcx, Self>,
-            _frame: Frame<'mir, 'tcx, Self::Provenance>,
-        ) -> InterpResult<'tcx, Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _frame: Frame<'tcx, Self::Provenance>,
+        ) -> InterpResult<'tcx, Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
             Err(InterpError::Unsupported(
                 UnsupportedOpInfo::Unsupported(
                     "init_frame_extra".into(),
@@ -848,15 +848,15 @@ mod machine {
         }
 
         fn stack<'a>(
-            ecx: &'a InterpCx<'mir, 'tcx, Self>,
-        ) -> &'a [Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>] {
+            ecx: &'a InterpCx<'tcx, Self>,
+        ) -> &'a [Frame<'tcx, Self::Provenance, Self::FrameExtra>] {
             &ecx.machine.stack
             // unimplemented!("stack")
         }
 
         fn stack_mut<'a>(
-            _ecx: &'a mut InterpCx<'mir, 'tcx, Self>,
-        ) -> &'a mut Vec<Frame<'mir, 'tcx, Self::Provenance, Self::FrameExtra>> {
+            _ecx: &'a mut InterpCx<'tcx, Self>,
+        ) -> &'a mut Vec<Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
             unimplemented!("stack_mut")
         }
     }
@@ -924,9 +924,9 @@ pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize
     }
 }
 
-pub fn render_opty<'mir, 'tcx>(
+pub fn render_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
-    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
 ) -> serde_json::Value {
     try_render_opty(mir, icx, op_ty).unwrap_or_else(|| {
@@ -937,9 +937,9 @@ pub fn render_opty<'mir, 'tcx>(
     })
 }
 
-pub fn try_render_opty<'mir, 'tcx>(
+pub fn try_render_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
-    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
 ) -> Option<serde_json::Value> {
     let ty = op_ty.layout.ty;
@@ -1121,9 +1121,9 @@ pub fn try_render_opty<'mir, 'tcx>(
     })
 }
 
-fn make_allocation_body<'mir, 'tcx>(
+fn make_allocation_body<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
-    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     rty: ty::Ty<'tcx>,
     d: MPlaceTy<'tcx>,
     is_mut: bool,
@@ -1193,9 +1193,9 @@ fn make_allocation_body<'mir, 'tcx>(
     });
 }
 
-fn try_render_ref_opty<'mir, 'tcx>(
+fn try_render_ref_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
-    icx: &mut interpret::InterpCx<'mir, 'tcx, RenderConstMachine<'mir, 'tcx>>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
     rty: ty::Ty<'tcx>,
     mutability: hir::Mutability,
