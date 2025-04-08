@@ -618,13 +618,13 @@ impl ToJson<'_> for ty::Generics {
                 let parent_generics = ms.state.tcx.generics_of(parent_id);
                 gather_params(ms, &parent_generics, dest);
             }
-            dest.extend(generics.params.iter().map(|p| p.to_json(ms)));
+            dest.extend(generics.own_params.iter().map(|p| p.to_json(ms)));
         }
 
         let mut json_params: Vec<serde_json::Value> = Vec::new();
         gather_params(ms, self, &mut json_params);
         json!({
-            "params": json_params
+            "own_params": json_params
         }) // TODO
     }
 }
