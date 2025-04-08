@@ -291,7 +291,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(_closure_did, substs) =>
-                        substs.as_closure().upvar_tys().collect(),
+                        substs.as_closure().upvar_tys()[..].to_owned(),
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]
