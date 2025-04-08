@@ -299,7 +299,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 };
                 let callees = sub_tys.into_iter()
                     .map(|ty| {
-                        let inst = ty::Instance::resolve(
+                        let inst = ty::Instance::try_resolve(
                             mir.state.tcx,
                             ty::ParamEnv::reveal_all(),
                             did,
