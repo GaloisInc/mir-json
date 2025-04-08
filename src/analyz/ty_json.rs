@@ -303,7 +303,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                             mir.state.tcx,
                             ty::ParamEnv::reveal_all(),
                             did,
-                            mir.state.tcx.intern_substs(&[ty.into()]),
+                            mir.state.tcx.mk_args(&[ty.into()]),
                         ).unwrap_or_else(|_| {
                             panic!("failed to resolve instance: {:?}, {:?}", did, ty);
                         });
