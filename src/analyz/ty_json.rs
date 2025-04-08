@@ -103,8 +103,8 @@ pub fn adt_inst_id_str<'tcx>(
     ai: AdtInst<'tcx>,
 ) -> String {
     // Erase all early-bound regions.
-    let substs = tcx.erase_regions(ai.substs);
-    ext_def_id_str(tcx, ai.def_id(), "_adt", substs)
+    let args = tcx.erase_regions(ai.args);
+    ext_def_id_str(tcx, ai.def_id(), "_adt", args)
 }
 
 pub fn inst_id_str<'tcx>(
@@ -161,13 +161,13 @@ pub fn trait_inst_id_str<'tcx>(
 pub fn get_fn_def_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     defid: DefId,
-    substs: ty::GenericArgsRef<'tcx>,
+    args: ty::GenericArgsRef<'tcx>,
 ) -> String {
     let inst = ty::Instance::try_resolve(
         mir.state.tcx,
         ty::ParamEnv::reveal_all(),
         defid,
-        substs,
+        args,
     );
 
     // Compute the mangled name of the monomorphized instance being called.
@@ -177,7 +177,7 @@ pub fn get_fn_def_name<'tcx>(
     } else {
         eprintln!(
             "error: failed to resolve FnDef Instance: {:?}, {:?}",
-            defid, substs,
+            defid, args,
         );
         def_id_str(mir.state.tcx, defid)
     }
@@ -227,27 +227,27 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceKind::Item(did) => json!({
                 "kind": "Item",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
             }),
             ty::InstanceKind::Intrinsic(did) => json!({
                 "kind": "Intrinsic",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
             }),
             ty::InstanceKind::VTableShim(did) => json!({
                 "kind": "VTableShim",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
             }),
             ty::InstanceKind::ReifyShim(did) => json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
             }),
             ty::InstanceKind::FnPtrShim(did, ty) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceKind::Virtual(did, idx) => {
@@ -278,20 +278,20 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceKind::ClosureOnceShim { call_once, .. } => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
             }),
             ty::InstanceKind::DropGlue(did, ty) => json!({
                 "kind": "DropGlue",
                 "def_id": did.to_json(mir),
-                "substs": args.to_json(mir),
+                "args": args.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceKind::CloneShim(did, ty) => {
                 let sub_tys = match *ty.kind() {
                     ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
-                    ty::TyKind::Closure(_closure_did, substs) =>
-                        substs.as_closure().upvar_tys()[..].to_owned(),
+                    ty::TyKind::Closure(_closure_did, args) =>
+                        args.as_closure().upvar_tys()[..].to_owned(),
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]
@@ -319,7 +319,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 json!({
                     "kind": "CloneShim",
                     "def_id": did.to_json(mir),
-                    "substs": args.to_json(mir),
+                    "args": args.to_json(mir),
                     "ty": ty.to_json(mir),
                     "callees": callees.to_json(mir),
                 })
@@ -381,18 +381,18 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     "mutability": mtbl.to_json(mir)
                 })
             }
-            &ty::TyKind::Adt(adtdef, substs) => {
-                let ai = AdtInst::new(adtdef, substs);
+            &ty::TyKind::Adt(adtdef, args) => {
+                let ai = AdtInst::new(adtdef, args);
                 mir.used.types.insert(ai);
                 json!({
                     "kind": "Adt",
                     "name": adt_inst_id_str(mir.state.tcx, ai),
                     "orig_def_id": adtdef.did().to_json(mir),
-                    "substs": substs.to_json(mir),
+                    "args": args.to_json(mir),
                 })
             }
-            &ty::TyKind::FnDef(defid, ref substs) => {
-                let name = get_fn_def_name(mir, defid, substs);
+            &ty::TyKind::FnDef(defid, ref args) => {
+                let name = get_fn_def_name(mir, defid, args);
                 json!({
                     "kind": "FnDef",
                     "defid": name,
@@ -401,10 +401,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::Param(..) => unreachable!(
                 "no TyKind::Param should remain after monomorphization"
             ),
-            &ty::TyKind::Closure(_defid, ref substs) => {
+            &ty::TyKind::Closure(_defid, ref args) => {
                 json!({
                     "kind": "Closure",
-                    "upvar_tys": substs.as_closure().upvar_tys().to_json(mir),
+                    "upvar_tys": args.as_closure().upvar_tys().to_json(mir),
                     // crucible-mir uses the same representation for closures as it does for
                     // tuples, so no additional information is needed.
                 })
@@ -506,7 +506,7 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "trait":  self.def_id.to_json(ms),
-            "substs":  self.substs.to_json(ms)
+            "args":  self.args.to_json(ms)
         })
     }
 }
@@ -514,7 +514,7 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
 impl<'tcx> ToJson<'tcx> for ty::AliasTy<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
-            "substs": self.substs.to_json(ms),
+            "args": self.args.to_json(ms),
             "def_id": self.def_id.to_json(ms)
         })
     }
@@ -553,14 +553,14 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
                 json!({
                     "kind": "Trait",
                     "trait": trait_ref.def_id.to_json(ms),
-                    "substs": trait_ref.substs.to_json(ms),
+                    "args": trait_ref.args.to_json(ms),
                 })
             },
             &ty::ExistentialPredicate::Projection(ref proj) => match proj.term.unpack() {
                 ty::TermKind::Ty(ty) => json!({
                     "kind": "Projection",
                     "proj": proj.def_id.to_json(ms),
-                    "substs": proj.substs.to_json(ms),
+                    "args": proj.args.to_json(ms),
                     "rhs_ty": ty.to_json(ms),
                 }),
                 ty::TermKind::Const(_) => json!({
@@ -633,19 +633,19 @@ pub trait ToJsonAg {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value;
 }
 
-impl<'tcx> ToJson<'tcx> for ty::subst::GenericArg<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
-            ty::subst::GenericArgKind::Type(ref ty) => ty.to_json(mir),
-            // In crucible-mir, all substs entries are considered "types", and there are dummy
+            ty::GenericArgKind::Type(ref ty) => ty.to_json(mir),
+            // In crucible-mir, all args entries are considered "types", and there are dummy
             // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
             // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
-            ty::subst::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
-            ty::subst::GenericArgKind::Const(_) => json!("nonty::Const"),
+            ty::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
+            ty::GenericArgKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
@@ -871,7 +871,7 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
             // remove? should probably not show up?
             ty::ConstKind::Unevaluated(un) => {
                 map.insert("initializer".to_owned(), json!({
-                    "def_id": get_fn_def_name(mir, un.def.did, un.substs),
+                    "def_id": get_fn_def_name(mir, un.def.did, un.args),
                 }));
             },
             _ => {},
@@ -1001,7 +1001,7 @@ pub fn try_render_opty<'mir, 'tcx>(
                 "val": val_str,
             })
         }
-        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_struct() => {
+        ty::TyKind::Adt(adt_def, _args) if adt_def.is_struct() => {
             let variant = adt_def.non_enum_variant();
             let mut field_vals = Vec::new();
             for field_idx in 0..variant.fields.len() {
@@ -1016,7 +1016,7 @@ pub fn try_render_opty<'mir, 'tcx>(
                 "fields": val,
             })
         },
-        ty::TyKind::Adt(adt_def, _substs) if adt_def.is_enum() => {
+        ty::TyKind::Adt(adt_def, _args) if adt_def.is_enum() => {
             let (_, variant_idx) = icx.read_discriminant(&op_ty).unwrap();
             let val = icx.operand_downcast(op_ty, variant_idx).unwrap();
             let mut field_vals = Vec::with_capacity(val.layout.fields.count());
@@ -1081,8 +1081,8 @@ pub fn try_render_opty<'mir, 'tcx>(
         }
         ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
 
-        ty::TyKind::Closure(_defid, substs) => {
-            let upvars_count = substs.as_closure().upvar_tys().len();
+        ty::TyKind::Closure(_defid, args) => {
+            let upvars_count = args.as_closure().upvar_tys().len();
             let mut upvar_vals = Vec::with_capacity(upvars_count);
             for idx in 0 .. upvars_count {
                 let upvar_opty = icx.operand_field(&op_ty, idx).unwrap();
@@ -1326,12 +1326,12 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty:
 fn iter_tojson<'a, 'tcx, I, V: 'a>(
     it: I,
     mir: &mut MirState<'_, 'tcx>,
-    substs: ty::subst::SubstsRef<'tcx>,
+    args: ty::GenericArgsRef<'tcx>,
 ) -> serde_json::Value
 where I: Iterator<Item = &'a V>, V: ToJsonAg {
     let mut j = Vec::with_capacity(it.size_hint().0);
     for v in it {
-        j.push(v.tojson(mir, substs));
+        j.push(v.tojson(mir, args));
     }
     json!(j)
 }
@@ -1343,9 +1343,9 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
-        iter_tojson(self.iter(), mir, substs)
+        iter_tojson(self.iter(), mir, args)
     }
 }
 
@@ -1356,9 +1356,9 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
-        <[T] as ToJsonAg>::tojson(self, mir, substs)
+        <[T] as ToJsonAg>::tojson(self, mir, args)
     }
 }
 
@@ -1370,9 +1370,9 @@ where
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
-        iter_tojson(self.iter(), mir, substs)
+        iter_tojson(self.iter(), mir, args)
     }
 }
 
@@ -1388,7 +1388,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         &self,
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
-        let ty = mir.state.tcx.mk_adt(self.adt, self.substs);
+        let ty = mir.state.tcx.mk_adt(self.adt, self.args);
         let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
@@ -1424,7 +1424,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
             "size": tyl.size.bytes(),
             "repr_transparent": self.adt.repr().transparent(),
             "orig_def_id": self.adt.did().to_json(mir),
-            "orig_substs": self.substs.to_json(mir),
+            "orig_args": self.args.to_json(mir),
         })
     }
 }
@@ -1451,13 +1451,13 @@ fn render_variant<'tcx>(
 ) -> serde_json::Value {
     let tcx = mir.state.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
-                     .subst(tcx, adt.substs)
+                     .instantiate(tcx, adt.args)
                      .apply_ignore_module(tcx, ty::ParamEnv::reveal_all());
 
     json!({
         "name": v.def_id.to_json(mir),
         "discr": v.discr.to_json(mir),
-        "fields": v.fields.tojson(mir, adt.substs),
+        "fields": v.fields.tojson(mir, adt.args),
         "ctor_kind": v.ctor_kind().to_json(mir),
         "discr_value": mb_discr,
         "inhabited": inhabited,
@@ -1468,11 +1468,11 @@ impl ToJsonAg for ty::FieldDef {
     fn tojson<'tcx>(
         &self,
         mir: &mut MirState<'_, 'tcx>,
-        substs: ty::subst::SubstsRef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> serde_json::Value {
         let unsubst_ty = mir.state.tcx.type_of(self.did);
-        let ty = mir.state.tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), unsubst_ty);
+        let ty = mir.state.tcx.instantiate_and_normalize_erasing_regions(
+            args, ty::ParamEnv::reveal_all(), unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
@@ -1486,10 +1486,10 @@ pub fn handle_adt_ag<'tcx>(
     opv: &Vec<mir::Operand<'tcx>>,
 ) -> serde_json::Value {
     match ak {
-        &mir::AggregateKind::Adt(adt_did, variant, substs, _, _) => {
+        &mir::AggregateKind::Adt(adt_did, variant, args, _, _) => {
             let adt = mir.state.tcx.adt_def(adt_did);
             json!({
-                "adt": AdtInst::new(adt, substs).to_json(mir),
+                "adt": AdtInst::new(adt, args).to_json(mir),
                 "variant": variant.to_json(mir),
                 "ops": opv.to_json(mir)
             })

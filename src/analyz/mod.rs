@@ -656,12 +656,12 @@ fn emit_trait<'tcx>(
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
         // adjust `InstanceDef::Virtual` indices accordingly.
-        let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+        let (def_id, args) = match m {
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
         let sig = tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), tcx.fn_sig(def_id));
+            args, ty::ParamEnv::reveal_all(), tcx.fn_sig(def_id));
         let sig = tcx.erase_late_bound_regions(sig);
 
         items.push(json!({
@@ -871,7 +871,7 @@ fn emit_instance<'tcx>(
                 // Items with upstream monomorphizations have already been translated into an upstream
                 // crate, so we can skip them.
                 if tcx.upstream_monomorphizations_for(def_id)
-                        .map_or(false, |monos| monos.contains_key(&inst.substs)) {
+                        .map_or(false, |monos| monos.contains_key(&inst.args)) {
                     return Ok(());
                 }
             }
@@ -885,7 +885,7 @@ fn emit_instance<'tcx>(
     // Look up and monomorphize the MIR for this instance.
     let mir = tcx.instance_mir(inst.def);
     let mir: Body = tcx.subst_and_normalize_erasing_regions(
-        inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+        inst.args, ty::ParamEnv::reveal_all(), mir.clone());
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
@@ -893,7 +893,7 @@ fn emit_instance<'tcx>(
         let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
             let mir = tcx.subst_and_normalize_erasing_regions(
-                inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+                inst.args, ty::ParamEnv::reveal_all(), mir.clone());
             let mir = tcx.arena.alloc(mir);
             emit_promoted(ms, out, &name, idx, mir)?;
         }
@@ -949,14 +949,14 @@ fn build_vtable_items<'tcx>(
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
         // adjust `InstanceDef::Virtual` indices accordingly.
-        let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+        let (def_id, args) = match m {
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
         parts.push(json!({
             "item_id": def_id.to_json(mir),
             // `def_id` is the name of the concrete function.
-            "def_id": get_fn_def_name(mir, def_id, substs),
+            "def_id": get_fn_def_name(mir, def_id, args),
         }));
     }
     parts.into()

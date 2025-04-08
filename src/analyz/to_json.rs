@@ -135,12 +135,12 @@ impl<'tcx> TraitInst<'tcx> {
                     ty::AssocKind::Type => {},
                     _ => continue,
                 }
-                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
+                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.args);
                 let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
                 projs.push(ty::ExistentialProjection::new(
                     tcx,
                     ai.def_id,
-                    ex_trait_ref.substs,
+                    ex_trait_ref.args,
                     actual_ty.into(),
                 ));
             }
@@ -181,12 +181,12 @@ impl<'tcx> TraitInst<'tcx> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
     pub adt: ty::AdtDef<'tcx>,
-    pub substs: ty::GenericArgsRef<'tcx>,
+    pub args: ty::GenericArgsRef<'tcx>,
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::GenericArgsRef<'tcx>) -> AdtInst<'tcx> {
-        AdtInst { adt, substs }
+    pub fn new(adt: ty::AdtDef<'tcx>, args: ty::GenericArgsRef<'tcx>) -> AdtInst<'tcx> {
+        AdtInst { adt, args }
     }
 
     pub fn def_id(&self) -> DefId {
