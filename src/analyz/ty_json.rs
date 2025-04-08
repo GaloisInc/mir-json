@@ -458,13 +458,13 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Foreign"})
             }
-            &ty::TyKind::Generator(_, _, _) => {
+            &ty::TyKind::Coroutine(_, _) => {
                 // TODO
-                json!({"kind": "Generator"})
+                json!({"kind": "Coroutine"})
             }
-            &ty::TyKind::GeneratorWitness(_) => {
+            &ty::TyKind::CoroutineWitness(_, _) => {
                 // TODO
-                json!({"kind": "GeneratorWitness"})
+                json!({"kind": "CoroutineWitness"})
             }
             &ty::TyKind::Alias(ty::AliasTyKind::Opaque, _) => {
                 // TODO
@@ -1094,8 +1094,8 @@ pub fn try_render_opty<'mir, 'tcx>(
                 "upvars": upvar_vals,
             })
         }
-        ty::TyKind::Generator(_, _, _) => todo!("generator not supported yet"), // not supported in haskell
-        ty::TyKind::GeneratorWitness(_) => todo!("generatorwitness not supported yet"), // not supported in haskell
+        ty::TyKind::Coroutine(_, _) => todo!("coroutine not supported yet"), // not supported in haskell
+        ty::TyKind::CoroutineWitness(_, _) => todo!("coroutinewitness not supported yet"), // not supported in haskell
         ty::TyKind::Never => unreachable!("never type should be uninhabited"),
 
         ty::TyKind::Tuple(elts) => {
