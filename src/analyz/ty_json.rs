@@ -661,7 +661,7 @@ mod machine {
     use rustc_abi::Size;
     use rustc_target::callconv::FnAbi;
     pub struct RenderConstMachine<'tcx> {
-        stack: Vec<Frame<'tcx, AllocId, ()>>,
+        stack: Vec<Frame<'tcx, CtfeProvenance, ()>>,
     }
 
     impl<'tcx> RenderConstMachine<'tcx> {
