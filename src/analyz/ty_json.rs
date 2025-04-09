@@ -14,7 +14,6 @@ use rustc_query_system::ich::StableHashingContext;
 use rustc_abi::{self, Align, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
-use std::fmt::Write as FmtWrite;
 use std::usize;
 
 use analyz::to_json::*;
@@ -31,14 +30,6 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
         json!(j)
     }
 }
-
-basic_json_enum_impl!(ty::FloatTy);
-basic_json_enum_impl!(ty::IntTy);
-basic_json_enum_impl!(ty::UintTy);
-basic_json_enum_impl!(hir::Mutability);
-basic_json_enum_impl!(hir::def::CtorKind);
-basic_json_enum_impl!(mir::CastKind);
-basic_json_enum_impl!(rustc_abi::ExternAbi);
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {

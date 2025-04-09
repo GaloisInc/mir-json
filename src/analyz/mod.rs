@@ -34,11 +34,6 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
-basic_json_enum_impl!(mir::BinOp);
-
-basic_json_enum_impl!(mir::NullOp<'tcx>, 'tcx);
-basic_json_enum_impl!(mir::UnOp);
-
 impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()
@@ -311,15 +306,11 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
     }
 }
 
-basic_json_impl!(mir::BasicBlock);
-
 impl ToJson<'_> for rustc_abi::FieldIdx {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
 }
-
-basic_json_impl!(mir::AssertMessage<'a>, 'a);
 
 impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
