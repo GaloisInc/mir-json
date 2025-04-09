@@ -4,7 +4,6 @@ use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
-use rustc_interface::Queries;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
 use rustc_middle::mir::mono::MonoItem;
@@ -1051,107 +1050,102 @@ pub struct AnalysisData<O> {
 /// the crate MIR, returns `Ok(None)` when there is no need to write out MIR (namely, when `comp`
 /// is not producing an `Exe` output), and returns `Err(e)` on I/O or serialization errors.
 fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
+    // RUSTUP_TODO: sess is probably unneeded now (accessible through tcx)
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
     mk_output: F,
 ) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
     let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
 
-    let output = queries.global_ctxt().unwrap().enter(|tcx| -> io::Result<_> {
-        let outputs = tcx.output_filenames(());
-        if !outputs.outputs.contains_key(&OutputType::Exe) {
-            return Ok(None);
-        }
-        let mir_path_ = rustc_session::output::out_filename(
-            sess,
-            sess.crate_types().first().unwrap().clone(),
-            &outputs,
-            tcx.crate_name(LOCAL_CRATE),
-        ).with_extension("mir");
-        let mut out = mk_output(&mir_path_)?;
-        mir_path = Some(mir_path_);
+    let outputs = tcx.output_filenames(());
+    if !outputs.outputs.contains_key(&OutputType::Exe) {
+        return Ok(None);
+    }
+    let mir_path_ = rustc_session::output::out_filename(
+        sess,
+        sess.crate_types().first().unwrap().clone(),
+        &outputs,
+        tcx.crate_name(LOCAL_CRATE),
+    ).with_extension("mir");
+    let mut out = mk_output(&mir_path_)?;
+    mir_path = Some(mir_path_);
 
-        for &cnum in tcx.crates(()) {
-            let src = tcx.used_crate_source(cnum);
-            let it = src.dylib.iter()
-                .chain(src.rlib.iter())
-                .chain(src.rmeta.iter());
-            for &(ref path, _) in it {
-                let mir_path = path.with_extension("mir");
-                if mir_path.exists() {
-                    extern_mir_paths.push(mir_path);
-                    // Add only one copy of the MIR for a crate, even when we have multiple
-                    // versions of the crate (such as `.so` and `.rlib`).
-                    break;
-                }
+    for &cnum in tcx.crates(()) {
+        let src = tcx.used_crate_source(cnum);
+        let it = src.dylib.iter()
+            .chain(src.rlib.iter())
+            .chain(src.rmeta.iter());
+        for &(ref path, _) in it {
+            let mir_path = path.with_extension("mir");
+            if mir_path.exists() {
+                extern_mir_paths.push(mir_path);
+                // Add only one copy of the MIR for a crate, even when we have multiple
+                // versions of the crate (such as `.so` and `.rlib`).
+                break;
             }
         }
+    }
 
 
-        let mut used = Used::default();
-        let mut tys = TyIntern::default();
-        let mut allocs = AllocIntern::default();
-        let state = CompileState {
-            session: sess,
-            tcx,
-        };
-        let mut ms = MirState {
-            mir: None,
-            used: &mut used,
-            state: &state,
-            tys: &mut tys,
-            match_span_map: &get_match_spans(),
-            allocs: &mut allocs,
-            export_style: export_style,
-        };
+    let mut used = Used::default();
+    let mut tys = TyIntern::default();
+    let mut allocs = AllocIntern::default();
+    let state = CompileState {
+        session: sess,
+        tcx,
+    };
+    let mut ms = MirState {
+        mir: None,
+        used: &mut used,
+        state: &state,
+        tys: &mut tys,
+        match_span_map: &get_match_spans(),
+        allocs: &mut allocs,
+        export_style: export_style,
+    };
 
-        // Traits and top-level statics can be enumerated directly.
-        emit_statics(&mut ms, &mut out)?;
+    // Traits and top-level statics can be enumerated directly.
+    emit_statics(&mut ms, &mut out)?;
 
-        // Everything else is demand-driven, to handle monomorphization.  We start with all
-        // #[test] functions, then keep looping until there are no more nodes to process.
-        init_instances(&mut ms, &mut out)?;
+    // Everything else is demand-driven, to handle monomorphization.  We start with all
+    // #[test] functions, then keep looping until there are no more nodes to process.
+    init_instances(&mut ms, &mut out)?;
 
-        while ms.used.has_new() {
-            for inst in ms.used.instances.take_new() {
-                emit_instance(&mut ms, &mut out, inst)?;
-            }
-            for vtable in ms.used.vtables.take_new() {
-                emit_vtable(&mut ms, &mut out, vtable)?;
-            }
-            for adt in ms.used.types.take_new() {
-                emit_adt(&mut ms, &mut out, adt)?;
-            }
-            for ti in ms.used.traits.take_new() {
-                emit_trait(&mut ms, &mut out, ti)?;
-            }
+    while ms.used.has_new() {
+        for inst in ms.used.instances.take_new() {
+            emit_instance(&mut ms, &mut out, inst)?;
         }
+        for vtable in ms.used.vtables.take_new() {
+            emit_vtable(&mut ms, &mut out, vtable)?;
+        }
+        for adt in ms.used.types.take_new() {
+            emit_adt(&mut ms, &mut out, adt)?;
+        }
+        for ti in ms.used.traits.take_new() {
+            emit_trait(&mut ms, &mut out, ti)?;
+        }
+    }
 
-        // Any referenced types should normally be emitted immediately after the entry that
-        // references them, but we check again here just in case.
-        emit_new_defs(&mut ms, &mut out)?;
-
-        Ok(Some(out))
-    })?;
+    // Any referenced types should normally be emitted immediately after the entry that
+    // references them, but we check again here just in case.
+    emit_new_defs(&mut ms, &mut out)?;
 
     let mir_path = match mir_path {
         Some(x) => x,
         None => return Ok(None),
     };
-    // `output` should be `Some` if `mir_path` was `Some`.
-    let output = output.unwrap();
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out }))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, export_style, |_| { Ok(lib_util::Output::default()) })?;
+    let opt_ad = analyze_inner(sess, tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
     let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1180,10 +1174,10 @@ pub fn analyze_nonstreaming<'tcx>(
 
 pub fn analyze_streaming<'tcx>(
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, export_style, lib_util::start_streaming)?;
+    let opt_ad = analyze_inner(sess, tcx, export_style, lib_util::start_streaming)?;
     let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1222,9 +1216,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
     }
 }
 
-pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let mut k = queries.parse().unwrap();
-    let krate: &mut Crate = k.get_mut();
+pub fn inject_attrs<'tcx>(krate: &mut Crate) {
     krate.attrs.push(make_attr("feature", "register_tool"));
     krate.attrs.push(make_attr("register_tool", "crux"));
 }
@@ -1293,14 +1285,12 @@ thread_local! {
     static MATCH_SPAN_MAP: RefCell<Option<Rc<HashMap<Span, Span>>>> = RefCell::default()
 }
 
-pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
-    queries.global_ctxt().unwrap().enter(|tcx| {
-        let resolver = tcx.resolver_for_lowering(());
-        let krate = &resolver.borrow().1;
-        let mut v = GatherMatchSpans::default();
-        visit::walk_crate(&mut v, krate);
-        MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
-    });
+pub fn gather_match_spans<'tcx>(tcx: TyCtxt<'tcx>) {
+    let resolver = tcx.resolver_for_lowering(());
+    let krate = &resolver.borrow().1;
+    let mut v = GatherMatchSpans::default();
+    visit::walk_crate(&mut v, krate);
+    MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
 }
 
 fn get_match_spans() -> Rc<HashMap<Span, Span>> {
