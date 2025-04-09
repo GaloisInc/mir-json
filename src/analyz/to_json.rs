@@ -1,15 +1,20 @@
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_middle::mir::{Body, interpret};
-use rustc_middle::ty::{self, TyCtxt, DynKind};
+use rustc_hir::def::CtorKind;
+use rustc_hir::Mutability;
+use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, interpret, NullOp, UnOp};
+use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
+use rustc_target::spec::abi::Abi;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, hash_map};
+use std::fmt::Write;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::mem;
+
 
 pub struct CompileState<'a, 'tcx> {
     pub session: &'a Session,
@@ -396,50 +401,172 @@ impl<'tcx, K, V> ToJson<'tcx> for BTreeMap<K, V>
     }
 }
 
-#[macro_export]
-macro_rules! basic_json_impl {
-    ($n : path) => {
-        impl ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
-        let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
-        json!(s)
-    }
-}
-};
-    ($n : path, $lt : tt) => {
-        impl<$lt> ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
+impl<'a> ToJson<'_> for AssertMessage<'a> {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
         json!(s)
     }
 }
 
-};
-}
-
-#[macro_export]
-macro_rules! basic_json_enum_impl {
-    ($n : path) => {
-        impl ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
+impl ToJson<'_> for BasicBlock {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         write!(&mut s, "{:?}", self).unwrap();
-        json!({"kind": s})
-    }
-}
-};
-    ($n : path, $lt : tt) => {
-        impl<$lt> ToJson<'_> for $n {
-    fn to_json(&self, _ : &mut MirState) -> serde_json::Value {
-        let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
-        json!({"kind": s})
+        json!(s)
     }
 }
 
-};
+// enum handlers
+
+impl ToJson<'_> for Abi {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            Abi::Rust => json!({ "kind": "Rust" }),
+            Abi::PtxKernel => json!({ "kind": "PtxKernel" }),
+            Abi::Msp430Interrupt => json!({ "kind": "Msp430Interrupt" }),
+            Abi::X86Interrupt => json!({ "kind": "X86Interrupt" }),
+            Abi::AmdGpuKernel => json!({ "kind": "AmdGpuKernel" }),
+            Abi::EfiApi => json!({ "kind": "EfiApi" }),
+            Abi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
+            Abi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
+            Abi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
+            Abi::Wasm => json!({ "kind": "Wasm" }),
+            Abi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
+            Abi::RustCall => json!({ "kind": "RustCall" }),
+            Abi::PlatformIntrinsic => json!({ "kind": "PlatformIntrinsic" }),
+            Abi::Unadjusted => json!({ "kind": "Unadjusted" }),
+            Abi::RustCold => json!({ "kind": "RustCold" }),
+
+            // Data-carrying variants — use Debug formatting
+            Abi::C { .. }
+            | Abi::Cdecl { .. }
+            | Abi::Stdcall { .. }
+            | Abi::Fastcall { .. }
+            | Abi::Vectorcall { .. }
+            | Abi::Thiscall { .. }
+            | Abi::Aapcs { .. }
+            | Abi::Win64 { .. }
+            | Abi::SysV64 { .. }
+            | Abi::System { .. } => {
+                json!({ "kind": format!("{:?}", self) })
+            }
+        }
+    }
+}
+
+impl ToJson<'_> for BinOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            BinOp::Add => json!({ "kind": "Add" }),
+            BinOp::Sub => json!({ "kind": "Sub" }),
+            BinOp::Mul => json!({ "kind": "Mul" }),
+            BinOp::Div => json!({ "kind": "Div" }),
+            BinOp::Rem => json!({ "kind": "Rem" }),
+            BinOp::BitXor => json!({ "kind": "BitXor" }),
+            BinOp::BitAnd => json!({ "kind": "BitAnd" }),
+            BinOp::BitOr => json!({ "kind": "BitOr" }),
+            BinOp::Shl => json!({ "kind": "Shl" }),
+            BinOp::Shr => json!({ "kind": "Shr" }),
+            BinOp::Eq => json!({ "kind": "Eq" }),
+            BinOp::Lt => json!({ "kind": "Lt" }),
+            BinOp::Le => json!({ "kind": "Le" }),
+            BinOp::Ne => json!({ "kind": "Ne" }),
+            BinOp::Ge => json!({ "kind": "Ge" }),
+            BinOp::Gt => json!({ "kind": "Gt" }),
+            BinOp::Offset => json!({ "kind": "Offset" }),
+        }
+    }
+}
+
+impl ToJson<'_> for CastKind {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            CastKind::PointerExposeAddress => json!({ "kind": "PointerExposeAddress" }),
+            CastKind::PointerFromExposedAddress => json!({ "kind": "PointerFromExposedAddress" }),
+            CastKind::DynStar => json!({ "kind": "DynStar" }),
+            CastKind::IntToInt => json!({ "kind": "IntToInt" }),
+            CastKind::FloatToInt => json!({ "kind": "FloatToInt" }),
+            CastKind::FloatToFloat => json!({ "kind": "FloatToFloat" }),
+            CastKind::IntToFloat => json!({ "kind": "IntToFloat" }),
+            CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
+            CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
+            CastKind::Pointer(_) => json!({ "kind": format!("{:?}", self) }),
+        }
+    }
+}
+
+impl ToJson<'_> for CtorKind {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            CtorKind::Fn => json!({ "kind": "Fn" }),
+            CtorKind::Const => json!({ "kind": "Const" }),
+        }
+    }
+}
+
+impl ToJson<'_> for FloatTy {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            FloatTy::F32 => json!({ "kind": "F32" }),
+            FloatTy::F64 => json!({ "kind": "F64" }),
+        }
+    }
+}
+
+impl ToJson<'_> for IntTy {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            IntTy::Isize => json!({ "kind": "Isize" }),
+            IntTy::I8 => json!({ "kind": "I8" }),
+            IntTy::I16 => json!({ "kind": "I16" }),
+            IntTy::I32 => json!({ "kind": "I32" }),
+            IntTy::I64 => json!({ "kind": "I64" }),
+            IntTy::I128 => json!({ "kind": "I128" }),
+        }
+    }
+}
+
+impl ToJson<'_> for Mutability {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            Mutability::Not => json!({ "kind": "Not" }),
+            Mutability::Mut => json!({ "kind": "Mut" }),
+        }
+    }
+}
+
+impl ToJson<'_> for NullOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            NullOp::SizeOf => json!({ "kind": "SizeOf" }),
+            NullOp::AlignOf => json!({ "kind": "AlignOf" }),
+        }
+    }
+}
+
+impl ToJson<'_> for UintTy {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            UintTy::Usize => json!({ "kind": "Usize" }),
+            UintTy::U8 => json!({ "kind": "U8" }),
+            UintTy::U16 => json!({ "kind": "U16" }),
+            UintTy::U32 => json!({ "kind": "U32" }),
+            UintTy::U64 => json!({ "kind": "U64" }),
+            UintTy::U128 => json!({ "kind": "U128" }),
+        }
+    }
+}
+
+// end enum handlers
+
+impl ToJson<'_> for UnOp {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            UnOp::Not => json!({ "kind": "Not" }),
+            UnOp::Neg => json!({ "kind": "Neg" }),
+        }
+    }
 }
 
 impl<'tcx, A, B> ToJson<'tcx> for (A, B)
