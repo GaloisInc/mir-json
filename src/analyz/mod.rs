@@ -1083,7 +1083,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     }
     let out_path = rustc_session::output::out_filename(
         sess,
-        sess.crate_types().first().unwrap().clone(),
+        tcx.crate_types().first().unwrap().clone(),
         &outputs,
         tcx.crate_name(LOCAL_CRATE),
     );
