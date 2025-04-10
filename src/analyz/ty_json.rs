@@ -1048,7 +1048,7 @@ pub fn try_render_opty<'tcx>(
             })
         },
         ty::TyKind::Adt(adt_def, _args) if adt_def.is_enum() => {
-            let (_, variant_idx) = icx.read_discriminant(op_ty).unwrap();
+            let variant_idx = icx.read_discriminant(op_ty).unwrap();
             let val = icx.operand_downcast(op_ty, variant_idx).unwrap();
             let mut field_vals = Vec::with_capacity(val.layout.fields.count());
             for idx in 0 .. val.layout.fields.count() {
