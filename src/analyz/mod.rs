@@ -8,7 +8,7 @@ use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
 use rustc_middle::mir::mono::MonoItem;
 use rustc_session::{self, Session};
-use rustc_session::config::OutputType;
+use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
@@ -1081,12 +1081,18 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     if !outputs.outputs.contains_key(&OutputType::Exe) {
         return Ok(None);
     }
-    let mir_path_ = rustc_session::output::out_filename(
+    let out_path = rustc_session::output::out_filename(
         sess,
         sess.crate_types().first().unwrap().clone(),
         &outputs,
         tcx.crate_name(LOCAL_CRATE),
-    ).with_extension("mir");
+    );
+    let mir_path_ = match out_path {
+        OutFileName::Real(path) => path,
+        OutFileName::Stdout => {
+            sess.dcx().fatal("writing output to stdout is not supported");
+        },
+    };
     let mut out = mk_output(&mir_path_)?;
     mir_path = Some(mir_path_);
 
