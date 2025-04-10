@@ -100,7 +100,7 @@ impl<'tcx> TraitInst<'tcx> {
         let mut projs = preds.projection_bounds()
             .map(|proj| tcx.erase_late_bound_regions(proj))
             .collect::<Vec<_>>();
-        projs.sort_by_key(|p| p.def_id);
+        projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
         TraitInst { trait_ref, projs }
     }
 
@@ -131,7 +131,7 @@ impl<'tcx> TraitInst<'tcx> {
             }
         }
         let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
-        all_super_traits.sort();
+        all_super_traits.sort_by_key(|def_id| (def_id.krate, def_id.index));
 
         let mut projs = Vec::new();
         for super_trait_def_id in all_super_traits {
@@ -153,7 +153,7 @@ impl<'tcx> TraitInst<'tcx> {
                 ));
             }
         }
-        projs.sort_by_key(|p| p.def_id);
+        projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
 
         TraitInst {
             trait_ref: Some(ex_trait_ref),
