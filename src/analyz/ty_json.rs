@@ -320,6 +320,10 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "callees": callees.to_json(mir),
                 })
             },
+            ty::InstanceKind::ConstructCoroutineInClosureShim { coroutine_closure_def_id, receiver_by_ref } => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::ThreadLocalShim(def_id) => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::FnPtrAddrShim(def_id, ty) => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) => todo!("RUSTUP_TODO: new variant added"),
         }
     }
 }
