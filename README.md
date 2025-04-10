@@ -7,35 +7,33 @@
 
 ### Building from source
 
-1. First install the rust compiler via the `rustup` tool. (Instructions are
-   from the [rust
-   book](https://doc.rust-lang.org/book/2018-edition/ch01-01-installation.html)).
+1. First install the Rust compiler by following the instructions here:
 
-       $ curl https://sh.rustup.rs -sSf | sh
+       https://rustup.rs/
 
-   To finish the compiler installation you need to add the tools to your path:
+   To finish the compiler installation, add the tools to your path:
 
        $ source $HOME/.cargo/env
 
-2. Next, install a version of `rustc` that works with mir-json.
+2. Next, install a version of the Rust toolchain that works with `mir-json`:
 
-       $ rustup toolchain install nightly-2023-01-23 --force
-       $ rustup component add --toolchain nightly-2023-01-23 rustc-dev rust-src
-       $ rustup default nightly-2023-01-23
+       $ rustup toolchain install nightly-2023-01-23 --force --component rustc-dev,rust-src
 
-   <!-- Note: when changing to a new nightly, also update `wrapper.rs` -->
+3. You will need basic build tools like `cc` to compile `mir-json`. On Ubuntu this is sufficient:
 
-3. Now compile `mir-json` and install its executables to your path.
+       $ sudo apt install build-essential
 
-       $ cargo install --locked
+4. Install `mir-json`:
 
-4. Check that `mir-json` was installed correctly
+       $ cargo +nightly-2023-01-23 install --path . --locked
+
+5. Check that `mir-json` was installed correctly:
 
        $ mir-json --version
 
    This should print a version string.
 
-5. Translate the `mir-json`–specific versions of the Rust standard libraries:
+6. Translate the `mir-json`–specific versions of the Rust standard libraries:
 
        $ mir-json-translate-libs
 
@@ -43,7 +41,7 @@
    contains a more detailed description of different ways to run the
    `mir-json-translate-libs` program.
 
-6. Define one of the following environment variables:
+7. Define one of the following environment variables:
 
        CRUX_RUST_LIBRARY_PATH=$(pwd)/rlibs
        SAW_RUST_LIBRARY_PATH=$(pwd)/rlibs
@@ -51,6 +49,7 @@
    These tell `mir-json` where to look for the standard libraries. See [the
    documentation](doc/rustc.md) for more information on these environment
    variables.
+
 
 ### Docker image
 
@@ -95,3 +94,4 @@ described in the [`SCHEMA_CHANGELOG.md`](SCHEMA_CHANGELOG.md) file.
 
 [crux-mir-repo]: https://github.com/GaloisInc/crucible/tree/master/crux-mir
 [saw-rust-tutorial]: https://github.com/GaloisInc/saw-script/blob/master/doc/pdfs/rust-verification-with-saw.pdf
+
