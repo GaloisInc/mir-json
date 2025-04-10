@@ -944,13 +944,13 @@ impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
 }
 
 pub fn get_const_usize<'tcx>(tcx: ty::TyCtxt<'tcx>, c: ty::Const<'tcx>) -> usize {
-    match c.kind() {
-        ty::ConstKind::Value(ty::ValTree::Leaf(val)) => {
+    if let ty::ConstKind::Value(cv) = c.kind() {
+        if let ty::ValTreeKind::Leaf(val) = *cv.valtree {
             let v = val.try_to_machine_usize(tcx).unwrap();
             v as usize
         }
-        _ => panic!("don't know how to translate ConstKind::{:?}", c.kind())
     }
+    panic!("don't know how to translate ConstKind::{:?}", c.kind())
 }
 
 pub fn render_opty<'tcx>(
