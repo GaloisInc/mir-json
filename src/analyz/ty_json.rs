@@ -932,7 +932,7 @@ impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
         let mut icx = interpret::InterpCx::new(
             mir.state.tcx,
             DUMMY_SP,
-            ty::ParamEnv::empty(),
+            ty::TypingEnv::fully_monomorphized(),
             RenderConstMachine::new(),
         );
 
