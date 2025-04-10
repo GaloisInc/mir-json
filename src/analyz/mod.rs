@@ -148,7 +148,9 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({
                     "kind": "ThreadLocalRef",
                     "def_id": did.to_json(mir),
-                    "ty": mir.state.tcx.static_ptr_ty(did, todo!("RUSTUP_TODO: get ahold of a TypingEnv https://github.com/rust-lang/rust/commit/9cba14b95bb07a5b31ed1aac2bf4eadd248232da#diff-69ebec59f7d38331dd1be84ede7957977dcaa39e30ed2869b04aa8c99b2079cc")).to_json(mir),
+                    "ty": mir.state.tcx
+                        .static_ptr_ty(did, ty::TypingEnv::fully_monomorphized())
+                        .to_json(mir),
                 })
             }
             &mir::Rvalue::AddressOf(mutbl, ref l) => {
