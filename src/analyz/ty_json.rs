@@ -470,6 +470,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Alias"})
             }
+            &ty::TyKind::Pat(_, _) => todo!("RUSTUP_TODO: new variant added"),
+            &ty::TyKind::UnsafeBinder(unsafe_binder_inner) => todo!("RUSTUP_TODO: new variant added"),
+            &ty::TyKind::CoroutineClosure(_, _) => todo!("RUSTUP_TODO: new variant added"),
+            &ty::TyKind::Alias(alias_ty_kind, alias_ty) => todo!("RUSTUP_TODO: new variant added"),
         };
 
         let id = mir.tys.insert(*self, j);
