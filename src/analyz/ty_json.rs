@@ -1097,7 +1097,7 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::FnPtr(_sig_tys, _hdr) => {
             let ptr = icx.read_pointer(op_ty).unwrap();
             let (prov, _offset) = ptr.into_parts();
-            let alloc = tcx.try_get_global_alloc(prov?)?;
+            let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
             match alloc {
                 interpret::GlobalAlloc::Function(i) => {
                     mir.used.instances.insert(i);
