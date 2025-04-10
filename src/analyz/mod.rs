@@ -11,8 +11,7 @@ use rustc_session::{self, Session};
 use rustc_session::config::OutputType;
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
-use rustc_abi;
-use rustc_target::spec;
+use rustc_abi::{self, ExternAbi};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
@@ -992,7 +991,7 @@ fn emit_fn<'tcx>(
     };
     let ms = &mut ms;
 
-    let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(spec::abi::Abi::Rust);
+    let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(ExternAbi::Rust);
 
     out.emit(EntryKind::Fn, json!({
         "name": &name,
@@ -1022,7 +1021,7 @@ fn emit_new_defs(
 fn inst_abi<'tcx>(
     tcx: TyCtxt<'tcx>,
     inst: ty::Instance<'tcx>,
-) -> spec::abi::Abi {
+) -> ExternAbi {
     match inst.def {
         ty::InstanceKind::Item(def_id) => {
             let def_id = def_id.did;
@@ -1030,13 +1029,13 @@ fn inst_abi<'tcx>(
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
                     ty.fn_sig(tcx).skip_binder().abi,
-                ty::TyKind::Closure(_, _) => spec::abi::Abi::RustCall,
-                _ => spec::abi::Abi::Rust,
+                ty::TyKind::Closure(_, _) => ExternAbi::RustCall,
+                _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceKind::Intrinsic(_) => spec::abi::Abi::RustIntrinsic,
-        ty::InstanceKind::ClosureOnceShim { .. } => spec::abi::Abi::RustCall,
-        _ => spec::abi::Abi::Rust,
+        ty::InstanceKind::Intrinsic(_) => ExternAbi::RustIntrinsic,
+        ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
+        _ => ExternAbi::Rust,
     }
 }
 
