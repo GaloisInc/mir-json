@@ -1020,8 +1020,10 @@ pub fn try_render_opty<'tcx>(
             let s = icx.read_immediate(op_ty).unwrap().to_scalar();
             let size = layout.size();
             let val_str = match fty {
+                ty::FloatTy::F16 => s.to_f16().unwrap().to_string(),
                 ty::FloatTy::F32 => s.to_f32().unwrap().to_string(),
                 ty::FloatTy::F64 => s.to_f64().unwrap().to_string(),
+                ty::FloatTy::F128 => s.to_f128().unwrap().to_string(),
             };
 
             json!({
