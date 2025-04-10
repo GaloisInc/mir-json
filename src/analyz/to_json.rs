@@ -96,9 +96,9 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
-        let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        let trait_ref = preds.principal().map(|tr| tcx.instantiate_bound_regions_with_erased(tr));
         let mut projs = preds.projection_bounds()
-            .map(|proj| tcx.erase_late_bound_regions(proj))
+            .map(|proj| tcx.instantiate_bound_regions_with_erased(proj))
             .collect::<Vec<_>>();
         projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
         TraitInst { trait_ref, projs }
@@ -119,7 +119,7 @@ impl<'tcx> TraitInst<'tcx> {
         while let Some(def_id) = pending.pop() {
             let super_preds = tcx.super_predicates_of(def_id);
             for &(ref pred, _) in super_preds.predicates {
-                let tpred = match tcx.erase_late_bound_regions(pred.kind()) {
+                let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
                     ty::PredicateKind::Clause(ty::Clause::Trait(x)) => x,
                     ty::PredicateKind::Clause(ty::Clause::TypeOutlives(..)) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
