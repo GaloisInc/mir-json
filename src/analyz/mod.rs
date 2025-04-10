@@ -668,7 +668,7 @@ fn emit_trait<'tcx>(
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
     let methods = if let Some(tref) = ti.concrete_trait_ref(tcx) {
-        tcx.vtable_entries(ty::Binder::dummy(tref))
+        tcx.vtable_entries(tref)
     } else {
         &[]
     };
@@ -705,8 +705,8 @@ fn emit_trait<'tcx>(
 
 /// Emit all statics defined in the current crate.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
-    for cgu in cgus {
+    let parts = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
                 MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
@@ -762,9 +762,9 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
     let test = Symbol::intern("test");
     for attr in tcx.get_attrs_unchecked(def_id) {
         match &attr.kind {
-            rustc_ast::AttrKind::Normal(na) => {
-                let segs = &na.item.path.segments;
-                if segs.len() == 2 && segs[0].ident.name == crux && segs[1].ident.name == test {
+            rustc_hir::AttrKind::Normal(ref na) => {
+                let segs = &na.path.segments;
+                if segs.len() == 2 && segs[0].name == crux && segs[1].name == test {
                     return true;
                 }
             }
@@ -777,7 +777,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
 /// may also call `out.add_root` if this is a top-level crate.
 fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let is_top_level = ms.state.session.parse_sess.config.iter()
+    let is_top_level = ms.state.session.psess.config.iter()
         .any(|&(key, _)| key.as_str() == "crux_top_level");
 
     if is_top_level {
@@ -789,8 +789,8 @@ fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()
 
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
 fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
-    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
-    for cgu in cgus {
+    let parts = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
                 MonoItem::Fn(inst) => ms.used.instances.insert(inst),
@@ -820,7 +820,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             // likely other functions elsewhere in the code that will instead
             // be marked as roots. See #55.
             if ms.export_style == ExportStyle::ExportCruxTests {
-                tcx.sess.span_err(
+                tcx.sess.dcx().span_err(
                     tcx.def_span(def_id),
                     "#[test] can only be applied to functions",
                 );
@@ -835,7 +835,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             // is likely other monomorphic code that the user _actually_ wants
             // to verify next to the polymorphic code. See #52.
             if ms.export_style == ExportStyle::ExportCruxTests {
-                tcx.sess.span_err(
+                tcx.sess.dcx().span_err(
                     tcx.def_span(def_id),
                     "#[test] cannot be applied to generic functions",
                 );
@@ -843,7 +843,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        let inst = ty::Instance::resolve(tcx, ty::ParamEnv::empty(), def_id, List::empty())
+        let inst = ty::Instance::try_resolve(tcx, ty::TypingEnv::fully_monomorphized(), def_id, List::empty())
             .unwrap_or_else(|_| {
                 panic!("Instance::resolve failed to find test function {:?}?", def_id);
             })
@@ -880,7 +880,6 @@ fn emit_instance<'tcx>(
     match inst.def {
         ty::InstanceKind::Item(def_id) => {
             // Foreign items and non-generics have no MIR available.
-            let def_id = def_id.did;
             if tcx.is_foreign_item(def_id) {
                 return Ok(());
             }
@@ -914,7 +913,6 @@ fn emit_instance<'tcx>(
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
     if let ty::InstanceKind::Item(def_id) = inst.def {
-        let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
             let mir = inst.instantiate_mir_and_normalize_erasing_regions(
                 tcx,
