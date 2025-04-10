@@ -488,8 +488,11 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "switch_ty": discr.ty(mir.mir.unwrap(), mir.state.tcx).to_json(mir)
                 })
             }
-            &mir::TerminatorKind::Resume => {
+            &mir::TerminatorKind::UnwindResume => {
                 json!({"kind": "Resume"})
+            }
+            &mir::TerminatorKind::UnwindTerminate(_) => {
+                json!({ "kind": "Abort" })
             }
             &mir::TerminatorKind::Return => {
                 json!({"kind": "Return"})
@@ -501,39 +504,27 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 place: ref location,
                 ref target,
                 ref unwind,
+                replace: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "Drop",
                     "location": location.to_json(mir),
                     "target" : target.to_json(mir),
-                    "unwind": unwind.to_json(mir),
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "unwind": (), //unwind.to_json(mir),
                     "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
-            &mir::TerminatorKind::DropAndReplace {
-                place: ref location,
-                ref value,
-                ref target,
-                ref unwind,
-            } => {
-                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
-                json!({
-                    "kind": "DropAndReplace",
-                    "location": location.to_json(mir),
-                    "value": value.to_json(mir),
-                    "target": target.to_json(mir),
-                    "unwind": unwind.to_json(mir),
-                    "drop_fn": get_drop_fn_name(mir, ty),
-                })
-            }
+            // RUSTUP_TODO: remove support for DropAndReplace from crucible-mir
             &mir::TerminatorKind::Call {
                 ref func,
                 ref args,
                 destination: ref dest_place,
                 target: ref dest_block,
-                ref cleanup,
-                ref from_hir_call,
+                ref unwind,
+                ref call_source,
                 fn_span: _,
             } => {
                 let destination = dest_block.as_ref().map(|dest_block| {
@@ -545,10 +536,31 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 json!({
                     "kind": "Call",
                     "func": func.to_json(mir),
-                    "args": args.to_json(mir),
+                    // RUSTUP_TODO: support to_json on `&Box<[Spanned<Operand>]>` for this
+                    "args": (), //args.to_json(mir),
                     "destination": destination,
-                    "cleanup": cleanup.to_json(mir),
-                    "from_hir_call": from_hir_call
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "cleanup": (), //unwind.to_json(mir),
+                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
+                    "from_hir_call": (), //from_hir_call
+                })
+            }
+            &mir::TerminatorKind::TailCall {
+                ref func,
+                ref args,
+                fn_span: _,
+            } => {
+                // RUSTUP_TODO: decide whether we need to support TailCall in crucible-mir.  Check
+                // whether it can appear in normal code or only through the unstable `become`
+                // expression.  Or, implement by treating as `Call` + `Return` (see rustc docs)
+                json!({
+                    "kind": "TailCall",
+                    "func": func.to_json(mir),
+                    // RUSTUP_TODO: support to_json on `&Box<[Spanned<Operand>]>` for this
+                    "args": (), //args.to_json(mir),
+                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
+                    "from_hir_call": (), //from_hir_call
                 })
             }
             &mir::TerminatorKind::Assert {
@@ -556,7 +568,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref expected,
                 ref msg,
                 ref target,
-                ref cleanup,
+                ref unwind,
             } => {
                 json!({
                     "kind": "Assert",
@@ -564,11 +576,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "expected": expected,
                     "msg": msg.to_json(mir),
                     "target": target.to_json(mir),
-                    "cleanup": cleanup.to_json(mir)
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "cleanup": (), //unwind.to_json(mir)
                 })
-            }
-            &mir::TerminatorKind::Abort => {
-                json!({ "kind": "Abort" })
             }
             &mir::TerminatorKind::Yield { .. } => {
                 // TODO
@@ -588,8 +599,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "kind": "FalseUnwind"
                 })
             }
-            &mir::TerminatorKind::GeneratorDrop => {
-                json!({ "kind": "GeneratorDrop" })
+            &mir::TerminatorKind::CoroutineDrop => {
+                json!({ "kind": "CoroutineDrop" })
             }
             &mir::TerminatorKind::InlineAsm { .. } => {
                 // TODO
