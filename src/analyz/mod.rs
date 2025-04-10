@@ -680,7 +680,7 @@ fn emit_trait<'tcx>(
         }));
     }
 
-    ms.state.session.note_without_error(&format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
+    ms.state.session.dcx().note(format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
 
     out.emit(EntryKind::Trait, json!({
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
@@ -980,8 +980,7 @@ fn emit_adt<'tcx>(
     let tcx = ms.state.tcx;
 
     let adt_name = adt_inst_id_str(tcx, ai);
-    tcx.sess.note_without_error(
-        format!("Emitting ADT definition for {}", adt_name).as_str());
+    tcx.sess.dcx().note(format!("Emitting ADT definition for {}", adt_name));
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
     emit_new_defs(ms, out)?;
     Ok(())
@@ -996,7 +995,7 @@ fn emit_fn<'tcx>(
     inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
 ) -> io::Result<()> {
-    ms.state.session.note_without_error(&format!("Emitting MIR for {}", name));
+    ms.state.session.dcx().note(format!("Emitting MIR for {}", name));
 
     let mut ms = MirState {
         mir: Some(mir),
@@ -1183,8 +1182,8 @@ pub fn analyze_nonstreaming<'tcx>(
         "tys": out.tys,
         "roots": out.roots,
     });
-    sess.note_without_error(
-        &format!("Indexing MIR ({} items)...", total_items));
+    sess.dcx().note(
+        format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
     lib_util::write_indexed_crate(file, &j)?;
 
