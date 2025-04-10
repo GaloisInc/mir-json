@@ -1316,7 +1316,7 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
 }
 
 pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
-    -> interpret::OpTy<'tcx, interpret::AllocId>
+    -> interpret::OpTy<'tcx, interpret::CtfeProvenance>
 {
     use rustc_middle::mir::ConstValue;
     use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, Scalar, ImmTy};
