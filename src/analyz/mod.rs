@@ -1213,6 +1213,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
         kind: ast::AttrKind::Normal(
             ptr::P(ast::NormalAttr {
                 item: ast::AttrItem {
+                    unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),
                     args: ast::AttrArgs::Delimited(
                         ast::DelimArgs {
@@ -1220,7 +1221,10 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                             delim: token::Delimiter::Parenthesis,
                             tokens: iter::once(
                                 tokenstream::TokenTree::token_alone(
-                                    token::TokenKind::Ident(Symbol::intern(value), false),
+                                    token::TokenKind::Ident(
+                                        Symbol::intern(value),
+                                        token::IdentIsRaw::No,
+                                    ),
                                     Span::default(),
                                 ),
                             ).collect(),
@@ -1257,7 +1261,7 @@ impl GatherMatchSpans {
 impl<'a> visit::Visitor<'a> for GatherMatchSpans {
     fn visit_expr(&mut self, e: &ast::Expr) {
         match e.kind {
-            ast::ExprKind::Match(ref discr, ref arms) => {
+            ast::ExprKind::Match(ref discr, ref arms, _kind) => {
                 self.visit_expr(discr);
 
                 self.with_cur_match_discr_span(Some(discr.span), |self_| {
@@ -1278,7 +1282,9 @@ impl<'a> visit::Visitor<'a> for GatherMatchSpans {
             if let Some(ref e) = a.guard {
                 self_.visit_expr(e);
             }
-            self_.visit_expr(&a.body);
+            if let Some(ref e) = a.body {
+                self_.visit_expr(e);
+            }
         });
     }
 
@@ -1305,7 +1311,7 @@ thread_local! {
 }
 
 pub fn gather_match_spans<'tcx>(tcx: TyCtxt<'tcx>) {
-    let resolver = tcx.resolver_for_lowering(());
+    let resolver = tcx.resolver_for_lowering();
     let krate = &resolver.borrow().1;
     let mut v = GatherMatchSpans::default();
     visit::walk_crate(&mut v, krate);
