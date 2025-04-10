@@ -921,7 +921,7 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for (interpret::ConstValue<'tcx>, ty::Ty<'tcx>) {
+impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
         let op_ty = as_opty(mir.state.tcx, val, ty);
@@ -1311,10 +1311,11 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
     }
 }
 
-pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: interpret::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
+pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
     -> interpret::OpTy<'tcx, interpret::AllocId>
 {
-    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, ConstValue, Immediate, Scalar, ImmTy};
+    use rustc_middle::mir::ConstValue;
+    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, Scalar, ImmTy};
     let op = match cv {
         ConstValue::ByRef { alloc, offset } => {
             let id = tcx.create_memory_alloc(alloc);
@@ -1527,7 +1528,7 @@ pub fn handle_adt_ag<'tcx>(
 pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
     constant: &mir::Constant<'tcx>,
-) -> interpret::ConstValue<'tcx> {
+) -> mir::ConstValue<'tcx> {
     let uv = match constant.literal {
         mir::ConstantKind::Ty(ct) => match ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv.expand(),
