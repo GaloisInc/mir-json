@@ -63,9 +63,20 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &mir::AggregateKind::Generator(_, _, _,) => {
+            &mir::AggregateKind::Coroutine(_, _,) => {
                 // TODO
-                json!({"kind": "Generator"})
+                json!({"kind": "Coroutine"})
+            }
+            &mir::AggregateKind::CoroutineClosure(_, _,) => {
+                // TODO
+                json!({"kind": "CoroutineClosure"})
+            }
+            &mir::AggregateKind::RawPtr(ty, mutbl) => {
+                json!({
+                    "kind": "RawPtr",
+                    "ty": ty.to_json(mir),
+                    "mutbl": mutbl.to_json(mir),
+                })
             }
         }
     }
@@ -82,23 +93,29 @@ fn vtable_descriptor_for_cast<'tcx>(
 ) -> Option<ty::PolyTraitRef<'tcx>> {
     let tcx = mir.state.tcx;
 
-    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCoercion::Unsize) {
+    let is_unsize_cast = matches!(
+        kind, mir::CastKind::PointerCoercion(ty::adjustment::PointerCoercion::Unsize, _));
+    if !is_unsize_cast {
         return None;
     }
 
     // Relevant code: rustc_codegen_ssa::base::unsized_info, and other functions in that file.
     let old_pointee = match *old_ty.kind() {
         ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        ty::TyKind::RawPtr(ty, _) => ty,
         _ => return None,
     };
     let new_pointee = match *new_ty.kind() {
         ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        ty::TyKind::RawPtr(ty, _) => ty,
         _ => return None,
     };
 
-    if !tcx.is_sized_raw(ty::ParamEnv::empty().and(old_pointee)) {
+    let old_pointee_pci = ty::PseudoCanonicalInput {
+        typing_env: ty::TypingEnv::fully_monomorphized(),
+        value: old_pointee,
+    };
+    if !tcx.is_sized_raw(old_pointee_pci) {
         // We produce a vtable only for sized -> TyDynamic casts.
         return None;
     }
@@ -152,10 +169,10 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                         .to_json(mir),
                 })
             }
-            &mir::Rvalue::AddressOf(mutbl, ref l) => {
+            &mir::Rvalue::RawPtr(kind, ref l) => {
                 json!({
                     "kind": "AddressOf",
-                    "mutbl": mutbl.to_json(mir),
+                    "mutbl": kind.to_mutbl_lossy().to_json(mir),
                     "place": l.to_json(mir)
                 })
             }
@@ -188,14 +205,8 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "R": ops.1.to_json(mir)
                 })
             }
-            &mir::Rvalue::CheckedBinaryOp(ref binop, ref ops) => {
-                json!({
-                    "kind": "CheckedBinaryOp",
-                    "op": binop.to_json(mir),
-                    "L": ops.0.to_json(mir),
-                    "R": ops.1.to_json(mir)
-                })
-            }
+            // RUSTUP_TODO: remove support for CheckedBinaryOp from crucible-mir (checked arith is
+            // now implemented with Rvalue::BinaryOp(BinOp::AddWithOvereflow) etc.)
             &mir::Rvalue::NullaryOp(ref no, ref t) => {
                 json!({
                     "kind": "NullaryOp",
@@ -224,13 +235,15 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 if ty_json::is_adt_ak(ak) {
                     json!({
                         "kind": "AdtAg",
-                        "ag": ty_json::handle_adt_ag (mir, ak, opv)
+                        // RUSTUP_TODO: make this take &IndexVec instead of &Vec, and remove .raw
+                        "ag": ty_json::handle_adt_ag (mir, ak, &opv.raw)
                     })
                 } else {
                     json!({
                         "kind": "Aggregate",
                         "akind": ak.to_json(mir),
-                        "ops": opv.to_json(mir)
+                        // RUSTUP_TODO: implement to_json() for IndexVec, and remove .raw here
+                        "ops": opv.raw.to_json(mir)
                     })
                 }
             }
@@ -245,6 +258,13 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({
                     "kind": "CopyForDeref",
                     "place": l.to_json(mir)
+                })
+            }
+            &mir::Rvalue::WrapUnsafeBinder(ref op, ty) => {
+                json!({
+                    "kind": "WrapUnsafeBinder",
+                    "op": op.to_json(mir),
+                    "ty": ty.to_json(mir),
                 })
             }
         }
@@ -347,8 +367,10 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             "ty": self.ty.to_json(mir),
             // We specifically record whether the variable's type is zero-sized, because rustc
             // allows reading and taking refs of uninitialized zero-sized locals.
-            "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::empty().and(self.ty))
-                .expect("failed to get layout").is_zst(),
+            "is_zst": mir.state.tcx.layout_of(ty::PseudoCanonicalInput {
+                typing_env: ty::TypingEnv::fully_monomorphized(),
+                value: self.ty,
+            }).expect("failed to get layout").is_zst(),
         })
     }
 }
