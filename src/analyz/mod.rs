@@ -302,6 +302,12 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
             &mir::ProjectionElem::OpaqueCast(ref ty) => {
                 json!({"kind": "OpaqueCast", "variant": ty.to_json(mir) })
             }
+            &mir::ProjectionElem::UnwrapUnsafeBinder(ref ty) => {
+                json!({"kind": "UnwrapUnsafeBinder", "ty": ty.to_json(mir) })
+            }
+            &mir::ProjectionElem::Subtype(ref ty) => {
+                json!({"kind": "Subtype", "ty": ty.to_json(mir) })
+            }
         }
     }
 }
