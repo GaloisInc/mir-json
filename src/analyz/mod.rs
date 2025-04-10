@@ -99,7 +99,7 @@ fn vtable_descriptor_for_cast<'tcx>(
         _ => return None,
     };
 
-    if !tcx.is_sized_raw(ty::ParamEnv::reveal_all().and(old_pointee)) {
+    if !tcx.is_sized_raw(ty::ParamEnv::empty().and(old_pointee)) {
         // We produce a vtable only for sized -> TyDynamic casts.
         return None;
     }
@@ -340,7 +340,7 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             "ty": self.ty.to_json(mir),
             // We specifically record whether the variable's type is zero-sized, because rustc
             // allows reading and taking refs of uninitialized zero-sized locals.
-            "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(self.ty))
+            "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::empty().and(self.ty))
                 .expect("failed to get layout").is_zst(),
         })
     }
@@ -651,7 +651,7 @@ fn emit_trait<'tcx>(
             _ => continue,
         };
         let sig = tcx.subst_and_normalize_erasing_regions(
-            args, ty::ParamEnv::reveal_all(), tcx.fn_sig(def_id));
+            args, ty::ParamEnv::empty(), tcx.fn_sig(def_id));
         let sig = tcx.erase_late_bound_regions(sig);
 
         items.push(json!({
@@ -813,7 +813,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        let inst = ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, List::empty())
+        let inst = ty::Instance::resolve(tcx, ty::ParamEnv::empty(), def_id, List::empty())
             .unwrap_or_else(|_| {
                 panic!("Instance::resolve failed to find test function {:?}?", def_id);
             })
@@ -875,7 +875,7 @@ fn emit_instance<'tcx>(
     // Look up and monomorphize the MIR for this instance.
     let mir = tcx.instance_mir(inst.def);
     let mir: Body = tcx.subst_and_normalize_erasing_regions(
-        inst.args, ty::ParamEnv::reveal_all(), mir.clone());
+        inst.args, ty::ParamEnv::empty(), mir.clone());
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
@@ -883,7 +883,7 @@ fn emit_instance<'tcx>(
         let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
             let mir = tcx.subst_and_normalize_erasing_regions(
-                inst.args, ty::ParamEnv::reveal_all(), mir.clone());
+                inst.args, ty::ParamEnv::empty(), mir.clone());
             let mir = tcx.arena.alloc(mir);
             emit_promoted(ms, out, &name, idx, mir)?;
         }

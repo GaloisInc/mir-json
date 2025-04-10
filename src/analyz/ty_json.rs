@@ -104,8 +104,7 @@ pub fn inst_id_str<'tcx>(
     inst: ty::Instance<'tcx>,
 ) -> String {
     let args = tcx.normalize_erasing_regions(
-        // ty::ParamEnv::reveal_all(),
-        todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
+        ty::ParamEnv::empty(),
         inst.args,
     );
     assert!(!args.has_erasable_regions());
@@ -162,8 +161,7 @@ pub fn get_fn_def_name<'tcx>(
 ) -> String {
     let inst = ty::Instance::try_resolve(
         mir.state.tcx,
-        // ty::ParamEnv::reveal_all(),
-        todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
+        ty::ParamEnv::empty(),
         defid,
         args,
     );
@@ -217,8 +215,7 @@ fn adjust_method_index<'tcx>(
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let args = mir.state.tcx.normalize_erasing_regions(
-            // ty::ParamEnv::reveal_all(),
-            todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
+            ty::ParamEnv::empty(),
             self.args,
         );
 
@@ -300,8 +297,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     .map(|ty| {
                         let inst = ty::Instance::try_resolve(
                             mir.state.tcx,
-                            // ty::ParamEnv::reveal_all(),
-                            todo!("RUSTUP_TODO: [reveal_all] reveal_all is gone https://github.com/rust-lang/rust/commit/319843d8cd84ee1ec753f836ce3773d44fe0764b"),
+                            ty::ParamEnv::empty(),
                             did,
                             mir.state.tcx.mk_args(&[ty.into()]),
                         ).unwrap_or_else(|_| {
@@ -928,7 +924,7 @@ impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
         let mut icx = interpret::InterpCx::new(
             mir.state.tcx,
             DUMMY_SP,
-            ty::ParamEnv::reveal_all(),
+            ty::ParamEnv::empty(),
             RenderConstMachine::new(),
         );
 
@@ -1206,7 +1202,7 @@ fn make_allocation_body<'tcx>(
     }
 
     // Default case
-    let rlayout = tcx.layout_of(ty::ParamEnv::reveal_all().and(rty)).unwrap();
+    let rlayout = tcx.layout_of(ty::ParamEnv::empty().and(rty)).unwrap();
     let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr, rlayout, d.meta);
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
@@ -1341,7 +1337,7 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
         }
     };
 
-    let layout = tcx.layout_of(ty::ParamEnv::reveal_all().and(ty)).unwrap();
+    let layout = tcx.layout_of(ty::ParamEnv::empty().and(ty)).unwrap();
 
     match op {
         Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
@@ -1415,7 +1411,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
         let ty = mir.state.tcx.mk_adt(self.adt, self.args);
-        let tyl = mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(ty))
+        let tyl = mir.state.tcx.layout_of(ty::ParamEnv::empty().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
         let kind = match self.adt.adt_kind() {
@@ -1478,7 +1474,7 @@ fn render_variant<'tcx>(
     let tcx = mir.state.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
                      .instantiate(tcx, adt.args)
-                     .apply_ignore_module(tcx, ty::ParamEnv::reveal_all());
+                     .apply_ignore_module(tcx, ty::ParamEnv::empty());
 
     json!({
         "name": v.def_id.to_json(mir),
@@ -1498,7 +1494,7 @@ impl ToJsonAg for ty::FieldDef {
     ) -> serde_json::Value {
         let unsubst_ty = mir.state.tcx.type_of(self.did);
         let ty = mir.state.tcx.instantiate_and_normalize_erasing_regions(
-            args, ty::ParamEnv::reveal_all(), unsubst_ty);
+            args, ty::ParamEnv::empty(), unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
@@ -1544,5 +1540,5 @@ pub fn eval_mir_constant<'tcx>(
         mir::ConstantKind::Val(val, _) => return val,
     };
 
-    tcx.const_eval_resolve(ty::ParamEnv::reveal_all(), uv, None).unwrap()
+    tcx.const_eval_resolve(ty::ParamEnv::empty(), uv, None).unwrap()
 }

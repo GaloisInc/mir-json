@@ -141,7 +141,7 @@ impl<'tcx> TraitInst<'tcx> {
                     _ => continue,
                 }
                 let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.args);
-                let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
+                let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::empty(), proj_ty);
                 projs.push(ty::ExistentialProjection::new(
                     tcx,
                     ai.def_id,
