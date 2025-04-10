@@ -117,14 +117,14 @@ impl<'tcx> TraitInst<'tcx> {
         let mut pending = vec![trait_ref.def_id];
         all_super_traits.insert(trait_ref.def_id);
         while let Some(def_id) = pending.pop() {
-            let super_preds = tcx.super_predicates_of(def_id);
-            for &(ref pred, _) in super_preds.predicates {
+            let super_preds = tcx.explicit_super_predicates_of(def_id);
+            for &(ref pred, _) in super_preds.skip_binder() {
                 let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
-                    ty::PredicateKind::Clause(ty::Clause::Trait(x)) => x,
-                    ty::PredicateKind::Clause(ty::Clause::TypeOutlives(..)) => continue,
+                    ty::ClauseKind::Trait(x) => x,
+                    ty::ClauseKind::TypeOutlives(..) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
-                assert_eq!(tpred.polarity, ty::ImplPolarity::Positive);
+                assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
                 if all_super_traits.insert(tpred.trait_ref.def_id) {
                     pending.push(tpred.trait_ref.def_id);
                 }
