@@ -385,6 +385,12 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 // TODO
                 json!({"kind": "Retag"})
             }
+            &mir::StatementKind::PlaceMention(ref pl) => {
+                json!({
+                    "kind": "PlaceMention",
+                    "lvalue": pl.to_json(mir),
+                })
+            }
             &mir::StatementKind::AscribeUserType { .. } => {
                 // TODO
                 json!({"kind": "AscribeUserType"})
@@ -415,6 +421,12 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 }
                 // TODO
                 //json!({"kind": "Intrinsic" })
+            }
+            &mir::StatementKind::ConstEvalCounter => {
+                json!({"kind": "ConstEvalCounter"})
+            }
+            &mir::StatementKind::BackwardIncompatibleDropHint { .. }=> {
+                json!({"kind": "BackwardIncompatibleDropHint"})
             }
         };
         j["pos"] = self.source_info.span.to_json(mir);
