@@ -104,7 +104,7 @@ pub fn inst_id_str<'tcx>(
     inst: ty::Instance<'tcx>,
 ) -> String {
     let args = tcx.normalize_erasing_regions(
-        ty::ParamEnv::empty(),
+        ty::TypingEnv::fully_monomorphized(),
         inst.args,
     );
     assert!(!args.has_erasable_regions());
@@ -215,7 +215,7 @@ fn adjust_method_index<'tcx>(
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let args = mir.state.tcx.normalize_erasing_regions(
-            ty::ParamEnv::empty(),
+            ty::TypingEnv::fully_monomorphized(),
             self.args,
         );
 
@@ -1494,7 +1494,7 @@ impl ToJsonAg for ty::FieldDef {
     ) -> serde_json::Value {
         let unsubst_ty = mir.state.tcx.type_of(self.did);
         let ty = mir.state.tcx.instantiate_and_normalize_erasing_regions(
-            args, ty::ParamEnv::empty(), unsubst_ty);
+            args, ty::TypingEnv::fully_monomorphized(), unsubst_ty);
         json!({
             "name": self.did.to_json(mir),
             "ty": ty.to_json(mir),
