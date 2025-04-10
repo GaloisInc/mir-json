@@ -647,7 +647,7 @@ fn emit_trait<'tcx>(
     let mut items = Vec::with_capacity(methods.len());
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceDef::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
@@ -840,7 +840,7 @@ fn emit_instance<'tcx>(
 
     let name = inst_id_str(tcx, inst);
 
-    // We actually record every instance in `intrinsics`, not just `InstanceDef::Intrinsic` and
+    // We actually record every instance in `intrinsics`, not just `InstanceKind::Intrinsic` and
     // other special functions, because the intrinsics table is used to look up CustomOps.
     // (CustomOps are keyed on the pre-monomorphization name of the function.)
     out.emit(EntryKind::Intrinsic, json!({
@@ -850,7 +850,7 @@ fn emit_instance<'tcx>(
     emit_new_defs(ms, out)?;
 
     match inst.def {
-        ty::InstanceDef::Item(def_id) => {
+        ty::InstanceKind::Item(def_id) => {
             // Foreign items and non-generics have no MIR available.
             let def_id = def_id.did;
             if tcx.is_foreign_item(def_id) {
@@ -869,8 +869,8 @@ fn emit_instance<'tcx>(
             }
         },
         // These variants are unsupported by the `mir_shims` query, which backs `instance_mir`.
-        ty::InstanceDef::Virtual(..) |
-        ty::InstanceDef::Intrinsic(..) => return Ok(()),
+        ty::InstanceKind::Virtual(..) |
+        ty::InstanceKind::Intrinsic(..) => return Ok(()),
         _ => {},
     }
 
@@ -881,7 +881,7 @@ fn emit_instance<'tcx>(
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
-    if let ty::InstanceDef::Item(def_id) = inst.def {
+    if let ty::InstanceKind::Item(def_id) = inst.def {
         let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
             let mir = tcx.subst_and_normalize_erasing_regions(
@@ -940,7 +940,7 @@ fn build_vtable_items<'tcx>(
     let mut parts = Vec::with_capacity(methods.len());
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceDef::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
@@ -1024,7 +1024,7 @@ fn inst_abi<'tcx>(
     inst: ty::Instance<'tcx>,
 ) -> spec::abi::Abi {
     match inst.def {
-        ty::InstanceDef::Item(def_id) => {
+        ty::InstanceKind::Item(def_id) => {
             let def_id = def_id.did;
             let ty = tcx.type_of(def_id);
             match *ty.kind() {
@@ -1034,8 +1034,8 @@ fn inst_abi<'tcx>(
                 _ => spec::abi::Abi::Rust,
             }
         },
-        ty::InstanceDef::Intrinsic(_) => spec::abi::Abi::RustIntrinsic,
-        ty::InstanceDef::ClosureOnceShim { .. } => spec::abi::Abi::RustCall,
+        ty::InstanceKind::Intrinsic(_) => spec::abi::Abi::RustIntrinsic,
+        ty::InstanceKind::ClosureOnceShim { .. } => spec::abi::Abi::RustCall,
         _ => spec::abi::Abi::Rust,
     }
 }
