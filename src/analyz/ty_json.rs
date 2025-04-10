@@ -161,7 +161,7 @@ pub fn get_fn_def_name<'tcx>(
 ) -> String {
     let inst = ty::Instance::try_resolve(
         mir.state.tcx,
-        ty::ParamEnv::empty(),
+        ty::TypingEnv::fully_monomorphized(),
         defid,
         args,
     );
@@ -297,7 +297,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     .map(|ty| {
                         let inst = ty::Instance::try_resolve(
                             mir.state.tcx,
-                            ty::ParamEnv::empty(),
+                            ty::TypingEnv::fully_monomorphized(),
                             did,
                             mir.state.tcx.mk_args(&[ty.into()]),
                         ).unwrap_or_else(|_| {
