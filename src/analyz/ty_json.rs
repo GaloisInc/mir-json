@@ -904,35 +904,20 @@ mod machine {
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
-        // map.insert("ty".to_owned(), self.ty().to_json(mir));
-        todo!("RUSTUP_TODO: ty() was removed, but the type is still saved in ty::ConstKind::Value if self.kind() returns it. Should we record the type in that case? Or never record it? https://github.com/rust-lang/rust/pull/125958");
-
-        match self.kind() {
-            // remove? should probably not show up?
-            ty::ConstKind::Unevaluated(un) => {
-                map.insert("initializer".to_owned(), json!({
-                    "def_id": get_fn_def_name(mir, un.def.did, un.args),
-                }));
-            },
-            _ => {},
-        }
-
-        let rendered = match self.kind() {
-            ty::ConstKind::Value(ty::ValTree::Leaf(val)) => {
+        if let ty::ConstKind::Value(cv) = self.kind() {
+            if let ty::ValTreeKind::Leaf(val) = *cv.valtree {
+                map.insert("ty".to_owned(), cv.ty.to_json(mir));
                 let sz = val.size();
-                Some(json!({
+                let rendered = json!({
                     "kind": "usize",
                     "size": sz.bytes(),
                     "val": get_const_usize(mir.state.tcx, *self).to_string(),
-                }))
+                });
+                map.insert("rendered".to_owned(), rendered);
+                return map.into()
             }
-            _ => panic!("don't know how to translate ConstKind::{:?}", self.kind())
-        };
-        if let Some(rendered) = rendered {
-            map.insert("rendered".to_owned(), rendered);
         }
-
-        map.into()
+        panic!("don't know how to translate ConstKind::{:?}", self.kind())
     }
 }
 
