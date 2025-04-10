@@ -140,7 +140,7 @@ impl<'tcx> TraitInst<'tcx> {
                     ty::AssocKind::Type => {},
                     _ => continue,
                 }
-                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.args);
+                let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
                 let actual_ty = tcx.normalize_erasing_regions(
                     ty::TypingEnv::fully_monomorphized(),
                     proj_ty,
@@ -170,7 +170,7 @@ impl<'tcx> TraitInst<'tcx> {
         );
         let preds = tcx.mk_poly_existential_predicates(&preds);
         // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
-        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
+        Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased, DynKind::Dyn))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
