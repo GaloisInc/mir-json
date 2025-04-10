@@ -1199,7 +1199,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                     args: ast::AttrArgs::Delimited(
                         ast::DelimArgs {
                             dspan: tokenstream::DelimSpan::dummy(),
-                            delim: ast::MacDelimiter::Parenthesis,
+                            delim: token::Delimiter::Parenthesis,
                             tokens: iter::once(
                                 tokenstream::TokenTree::token_alone(
                                     token::TokenKind::Ident(Symbol::intern(value), false),
