@@ -669,9 +669,9 @@ fn emit_trait<'tcx>(
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
-        let sig = tcx.subst_and_normalize_erasing_regions(
-            args, ty::ParamEnv::empty(), tcx.fn_sig(def_id));
-        let sig = tcx.erase_late_bound_regions(sig);
+        let sig = tcx.instantiate_and_normalize_erasing_regions(
+            args, ty::TypingEnv::fully_monomorphized(), tcx.fn_sig(def_id));
+        let sig = tcx.instantiate_bound_regions_with_erased(sig);
 
         items.push(json!({
             "kind": "Method",
@@ -892,17 +892,24 @@ fn emit_instance<'tcx>(
     }
 
     // Look up and monomorphize the MIR for this instance.
-    let mir = tcx.instance_mir(inst.def);
-    let mir: Body = tcx.subst_and_normalize_erasing_regions(
-        inst.args, ty::ParamEnv::empty(), mir.clone());
+    // RUSTUP_TODO: check whether this is correct.  It's based on the implementation of
+    // rustc_smir's BodyBuilder::build, which has a separate case for non-polymorphic functions.
+    let mir: Body = inst.instantiate_mir_and_normalize_erasing_regions(
+        tcx,
+        ty::TypingEnv::fully_monomorphized(),
+        ty::EarlyBinder::bind(tcx.instance_mir(inst.def).clone()),
+    );
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
     if let ty::InstanceKind::Item(def_id) = inst.def {
         let def_id = def_id.did;
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = tcx.subst_and_normalize_erasing_regions(
-                inst.args, ty::ParamEnv::empty(), mir.clone());
+            let mir = inst.instantiate_mir_and_normalize_erasing_regions(
+                tcx,
+                ty::TypingEnv::fully_monomorphized(),
+                ty::EarlyBinder::bind(mir.clone()),
+            );
             let mir = tcx.arena.alloc(mir);
             emit_promoted(ms, out, &name, idx, mir)?;
         }
@@ -930,7 +937,7 @@ fn emit_vtable<'tcx>(
     out: &mut impl JsonOutput,
     poly_trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
-    let trait_ref = ms.state.tcx.erase_late_bound_regions(poly_trait_ref);
+    let trait_ref = ms.state.tcx.instantiate_bound_regions_with_erased(poly_trait_ref);
     let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref);
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
@@ -952,6 +959,7 @@ fn build_vtable_items<'tcx>(
     trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> serde_json::Value {
     let tcx = mir.state.tcx;
+    let trait_ref = tcx.instantiate_bound_regions_with_erased(trait_ref);
     let methods = tcx.vtable_entries(trait_ref);
 
     let mut parts = Vec::with_capacity(methods.len());
@@ -1041,8 +1049,8 @@ fn inst_abi<'tcx>(
 ) -> ExternAbi {
     match inst.def {
         ty::InstanceKind::Item(def_id) => {
-            let def_id = def_id.did;
-            let ty = tcx.type_of(def_id);
+            // OK to ignore binders, since we're only looking at the function's ABI.
+            let ty = tcx.type_of(def_id).skip_binder();
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
                     ty.fn_sig(tcx).skip_binder().abi,
