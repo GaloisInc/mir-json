@@ -4,7 +4,7 @@ use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
-use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Provenance};
+use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Projectable, Provenance};
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
@@ -1174,7 +1174,9 @@ fn make_allocation_body<'tcx>(
             // kept in sync.
             ty::TyKind::Str => {
                 let len = mplace_ty_len(&d, icx).unwrap();
-                let mem = icx.read_bytes_ptr_strip_provenance(d.ptr, Size::from_bytes(len)).unwrap();
+                let mem = icx
+                    .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
+                    .unwrap();
                 // corresponding array type for contents
                 let elem_ty = tcx.mk_ty(ty::TyKind::Uint(ty::UintTy::U8));
                 let aty = tcx.mk_array(elem_ty, len);
@@ -1218,7 +1220,7 @@ fn make_allocation_body<'tcx>(
 
     // Default case
     let rlayout = tcx.layout_of(ty::ParamEnv::empty().and(rty)).unwrap();
-    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr, rlayout, d.meta);
+    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr(), rlayout, d.meta());
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
     return json!({
@@ -1241,9 +1243,9 @@ fn try_render_ref_opty<'tcx>(
     // Special case for nullptr
     let val = icx.read_immediate(op_ty).unwrap();
     let mplace = icx.ref_to_mplace(&val).unwrap();
-    let (prov, offset) = mplace.ptr.into_parts();
+    let (prov, offset) = mplace.ptr().into_parts();
     if prov.is_none() {
-        assert!(!mplace.meta.has_meta(), "not expecting meta for nullptr");
+        assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
 
         return Some(json!({
             "kind": "raw_ptr",
@@ -1309,7 +1311,7 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
     if mplace_ty.layout.is_unsized() {
         // We need to consult `meta` metadata
         match mplace_ty.layout.ty.kind() {
-            ty::Slice(..) | ty::Str => mplace_ty.meta.unwrap_meta().to_machine_usize(cx),
+            ty::Slice(..) | ty::Str => mplace_ty.meta().unwrap_meta().to_machine_usize(cx),
             _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
         }
     } else {
