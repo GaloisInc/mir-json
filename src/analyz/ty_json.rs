@@ -1523,10 +1523,10 @@ pub fn handle_adt_ag<'tcx>(
 // Based on `rustc_codegen_ssa::mir::FunctionCx::eval_mir_constant`
 pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
-    constant: &mir::Constant<'tcx>,
+    constant: &mir::ConstOperand<'tcx>,
 ) -> mir::ConstValue<'tcx> {
-    let uv = match constant.literal {
-        mir::ConstantKind::Ty(ct) => match ct.kind() {
+    let uv = match constant.const_ {
+        mir::Const::Ty(ct) => match ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv.expand(),
             ty::ConstKind::Value(val) => {
                 return tcx.valtree_to_const_val((ct.ty(), val));
@@ -1536,8 +1536,8 @@ pub fn eval_mir_constant<'tcx>(
                 err, constant.span
             ),
         },
-        mir::ConstantKind::Unevaluated(uv, _) => uv,
-        mir::ConstantKind::Val(val, _) => return val,
+        mir::Const::Unevaluated(uv, _) => uv,
+        mir::Const::Val(val, _) => return val,
     };
 
     tcx.const_eval_resolve(ty::ParamEnv::empty(), uv, None).unwrap()
