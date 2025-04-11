@@ -1309,33 +1309,37 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
     -> interpret::OpTy<'tcx, interpret::CtfeProvenance>
 {
     use rustc_middle::mir::ConstValue;
-    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, ImmTy};
+    use rustc_const_eval::interpret::{CtfeProvenance, Pointer, Immediate, ImmTy};
+    enum ImmediateOrIndirect {
+        Immediate(Immediate),
+        Indirect(Pointer<Option<CtfeProvenance>>),
+    }
     let op = match cv {
         ConstValue::Indirect { alloc_id, offset } => {
             // We rely on mutability being set correctly in that allocation to prevent writes
             // where none should happen.
-            let ptr = Pointer::new(alloc_id, offset);
-            Operand::Indirect(MemPlace::from_ptr(ptr.into()))
+            let ptr = Pointer::new(CtfeProvenance::from(alloc_id), offset);
+            ImmediateOrIndirect::Indirect(ptr.into())
         }
-        ConstValue::Scalar(x) => Operand::Immediate(x.into()),
-        ConstValue::ZeroSized => Operand::Immediate(Immediate::Uninit),
+        ConstValue::Scalar(x) => ImmediateOrIndirect::Immediate(x.into()),
+        ConstValue::ZeroSized => ImmediateOrIndirect::Immediate(Immediate::Uninit),
         ConstValue::Slice { data, meta } => {
             // We rely on mutability being set correctly in `data` to prevent writes
             // where none should happen.
             let ptr = Pointer::new(
-                tcx.reserve_and_set_memory_alloc(data),
+                CtfeProvenance::from(tcx.reserve_and_set_memory_alloc(data)),
                 Size::ZERO,
             );
-            Operand::Immediate(Immediate::new_slice(ptr.into(), meta, &tcx))
+            ImmediateOrIndirect::Immediate(Immediate::new_slice(ptr.into(), meta, &tcx))
         }
     };
 
     let layout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
 
     match op {
-        Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
-        Operand::Indirect(ind) => {
-            // MPlaceTy::from_aligned_ptr(ind.ptr, layout).into()
+        ImmediateOrIndirect::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
+        ImmediateOrIndirect::Indirect(ptr) => {
+            // MPlaceTy::from_aligned_ptr(ptr, layout).into()
             todo!("RUSTUP_TODO: from_aligned_ptr was renamed ptr_to_mplace and moved to InterpCx, so we need to get ahold of an InterpCx https://github.com/rust-lang/rust/commit/f3f9b795bdaccd8284baba295810e87646754c28")
         }
     }
