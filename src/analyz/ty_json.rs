@@ -1072,8 +1072,9 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Array(ety, sz) => {
             let sz = get_const_usize(tcx, sz);
             let mut vals = Vec::with_capacity(sz);
-            for field in icx.operand_array_fields(op_ty).unwrap() {
-                let f_json = try_render_opty(mir, icx, &field.unwrap());
+            let mut iter = icx.project_array_fields(op_ty).unwrap();
+            while let Some((_, field)) = iter.next(icx).unwrap() {
+                let f_json = try_render_opty(mir, icx, &field);
                 vals.push(f_json);
             }
 
