@@ -105,6 +105,9 @@ fn main() {
         cmd.env(ALREADY_SET_VAR, "1");
     }
 
+    // Ensure the correct Rust toolchain is used at runtime
+    cmd.env("RUSTUP_TOOLCHAIN", TOOLCHAIN);
+
     let e = cmd.exec();
     die!("error executing {:?}: {}", real_arg0, e);
 }
