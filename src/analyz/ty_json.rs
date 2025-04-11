@@ -1312,7 +1312,7 @@ pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx:
     if mplace_ty.layout.is_unsized() {
         // We need to consult `meta` metadata
         match mplace_ty.layout.ty.kind() {
-            ty::Slice(..) | ty::Str => mplace_ty.meta().unwrap_meta().to_machine_usize(cx),
+            ty::Slice(..) | ty::Str => mplace_ty.meta().unwrap_meta().to_target_usize(cx),
             _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
         }
     } else {
