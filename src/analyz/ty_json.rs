@@ -1173,7 +1173,7 @@ fn make_allocation_body<'tcx>(
             // These and the ones in try_render_ref_opty below should be
             // kept in sync.
             ty::TyKind::Str => {
-                let len = mplace_ty_len(&d, icx).unwrap();
+                let len = d.len(icx).unwrap();
                 let mem = icx
                     .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
                     .unwrap();
@@ -1193,7 +1193,7 @@ fn make_allocation_body<'tcx>(
                 });
             },
             ty::TyKind::Slice(slice_ty) => {
-                let slice_len = mplace_ty_len(&d, icx).unwrap();
+                let slice_len = d.len(icx).unwrap();
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
                 for idx in 0..slice_len {
                     let elt = icx.project_index(&d.clone().into(), idx).unwrap();
