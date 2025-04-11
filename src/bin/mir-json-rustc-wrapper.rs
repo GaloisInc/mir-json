@@ -10,6 +10,7 @@ extern crate rustc_metadata;
 extern crate getopts;
 extern crate rustc_ast;
 extern crate rustc_errors;
+extern crate rustc_middle;
 extern crate rustc_target;
 extern crate rustc_session;
 
@@ -17,10 +18,11 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
+use rustc_ast::Crate;
+use rustc_middle::ty::TyCtxt;
 use rustc_session::config::Externs;
 use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
-use rustc_interface::Queries;
 use rustc_session::config::ExternLocation;
 use std::collections::HashSet;
 use std::env;
@@ -47,20 +49,18 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     }
 
     // RUSTUP_TODO: see mir-json.rs (already updated to fix some issues with Callbacks)
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing<'tcx>(
         &mut self,
         compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        krate: &mut Crate,
     ) -> Compilation {
         // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may be visible.  Even
         // the limited amount of compilation we do will fail without the injected `register_attr`.
-        analyz::inject_attrs(queries);
+        analyz::inject_attrs(krate);
 
-        let sess = compiler.session();
+        let sess = compiler.sess;
         let (crate_name, outputs) = {
             // rustc_session::find_crate_name - get the crate with queries.expansion?
-            let krate = queries.parse().unwrap();
-            let krate = krate.borrow();
             let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
             let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
             (crate_name, outputs)
@@ -111,31 +111,30 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    // RUSTUP_TODO: see mir-json.rs (already updated to fix some issues with Callbacks)
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing<'tcx>(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        krate: &mut Crate,
     ) -> Compilation {
-        analyz::inject_attrs(queries);
+        analyz::inject_attrs(krate);
         Compilation::Continue
     }
 
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        analyz::gather_match_spans(queries);
+        analyz::gather_match_spans(tcx);
         Compilation::Continue
     }
 
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
+        self.analysis_data = analyz::analyze(&compiler.sess, tcx, self.export_style).unwrap();
         Compilation::Continue
     }
 }
