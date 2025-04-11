@@ -1525,20 +1525,7 @@ pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
     constant: &mir::ConstOperand<'tcx>,
 ) -> mir::ConstValue<'tcx> {
-    let uv = match constant.const_ {
-        mir::Const::Ty(_, ct) => match ct.kind() {
-            ty::ConstKind::Unevaluated(uv) => uv.expand(),
-            ty::ConstKind::Value(val) => {
-                return tcx.valtree_to_const_val(val);
-            }
-            err => panic!(
-                "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
-                err, constant.span
-            ),
-        },
-        mir::Const::Unevaluated(uv, _) => uv,
-        mir::Const::Val(val, _) => return val,
-    };
-
-    tcx.const_eval_resolve(ty::ParamEnv::empty(), uv, None).unwrap()
+    constant.const_
+        .eval(tcx, ty::TypingEnv::fully_monomorphized(), constant.span)
+        .unwrap()
 }
