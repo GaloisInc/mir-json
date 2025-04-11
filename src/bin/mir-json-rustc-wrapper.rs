@@ -13,6 +13,7 @@ extern crate rustc_errors;
 extern crate rustc_middle;
 extern crate rustc_target;
 extern crate rustc_session;
+extern crate rustc_span;
 
 extern crate mir_json;
 
@@ -20,10 +21,10 @@ use mir_json::analyz;
 use mir_json::link;
 use rustc_ast::Crate;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::config::Externs;
 use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
-use rustc_session::config::{ExternLocation, OutFileName};
+use rustc_session::config::{Externs, ExternLocation, OutFileName, OutputFilenames};
+use rustc_span::Symbol;
 use std::collections::HashSet;
 use std::env;
 use std::fs::{File, OpenOptions};
@@ -39,6 +40,8 @@ use std::process::{Command, ExitCode};
 /// the path of the test executable when compiling in `--test` mode.
 #[derive(Default)]
 struct GetOutputPathCallbacks {
+    crate_name: Option<Symbol>,
+    outputs: Option<OutputFilenames>,
     output_path: Option<PathBuf>,
     use_override_crates: HashSet<String>,
 }
@@ -58,15 +61,23 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         analyz::inject_attrs(krate);
 
         let sess = &compiler.sess;
-        let (crate_name, outputs) = {
-            let crate_name = rustc_session::output::find_crate_name(sess, &krate.attrs);
-            let outputs = rustc_interface::util::build_output_filenames(&krate.attrs, sess);
-            (crate_name, outputs)
-        };
+        self.crate_name = Some(rustc_session::output::find_crate_name(sess, &krate.attrs));
+        self.outputs = Some(rustc_interface::util::build_output_filenames(&krate.attrs, sess));
+
+        Compilation::Continue
+    }
+
+    fn after_expansion<'tcx>(
+        &mut self,
+        compiler: &Compiler,
+        tcx: TyCtxt<'tcx>,
+    ) -> Compilation {
+        let crate_name = self.crate_name.unwrap();
+        let outputs = self.outputs.as_ref().unwrap();
+        let sess = &compiler.sess;
         let out_filename = rustc_session::output::out_filename(
             sess,
-            // sess.crate_types().first().unwrap().clone(),
-            todo!("RUSTUP_TODO: crate_types moved to GlobalCtxt https://github.com/rust-lang/rust/commit/0b89aac08d7190961544ced9e868cc20ce24d786"),
+            tcx.crate_types().first().unwrap().clone(),
             &outputs,
             crate_name,
         );
@@ -80,6 +91,8 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
 
 fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> PathBuf {
     let mut callbacks = GetOutputPathCallbacks {
+        crate_name: None,
+        outputs: None,
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
