@@ -1259,7 +1259,7 @@ fn try_render_ref_opty<'tcx>(
 
     let (prov, d_offset) = d.ptr().into_parts();
     assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
-    let alloc = tcx.try_get_global_alloc(prov?)?;
+    let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
 
     let def_id_json = match alloc {
         interpret::GlobalAlloc::Static(def_id) =>
