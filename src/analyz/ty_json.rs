@@ -1254,7 +1254,7 @@ fn try_render_ref_opty<'tcx>(
         }));
     }
 
-    let d = icx.deref_operand(op_ty).unwrap();
+    let d = icx.deref_pointer(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
     let (prov, d_offset) = d.ptr.into_parts();
