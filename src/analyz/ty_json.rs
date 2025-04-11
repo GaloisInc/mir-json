@@ -1150,6 +1150,10 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Placeholder(_) => unreachable!("placeholder is not a real type?"),
         ty::TyKind::Infer(_) => unreachable!("infer is not a real type?"),
         ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
+
+        ty::TyKind::Pat(_, _) => todo!("RUSTUP_TODO: new variant added"),
+        ty::TyKind::UnsafeBinder(unsafe_binder_inner) => todo!("RUSTUP_TODO: new variant added"),
+        ty::TyKind::CoroutineClosure(_, _) => todo!("RUSTUP_TODO: new variant added"),
     })
 }
 
