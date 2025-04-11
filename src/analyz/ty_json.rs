@@ -1179,7 +1179,7 @@ fn make_allocation_body<'tcx>(
                     .unwrap();
                 // corresponding array type for contents
                 let elem_ty = tcx.mk_ty_from_kind(ty::TyKind::Uint(ty::UintTy::U8));
-                let aty = tcx.mk_array(elem_ty, len);
+                let aty = ty::Ty::new_array(tcx, elem_ty, len);
                 let rendered = json!({
                     "kind": "strbody",
                     "elements": mem,
@@ -1200,7 +1200,7 @@ fn make_allocation_body<'tcx>(
                     elt_values.push(try_render_opty(mir, icx, &elt));
                 }
                 // corresponding array type for contents
-                let aty = tcx.mk_array(slice_ty, slice_len);
+                let aty = ty::Ty::new_array(tcx, slice_ty, slice_len);
                 let rendered = json!({
                     // this can now be the same as an ordinary array
                     "kind": "array",
