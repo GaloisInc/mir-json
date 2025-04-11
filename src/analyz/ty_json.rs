@@ -1309,7 +1309,7 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
     -> interpret::OpTy<'tcx, interpret::CtfeProvenance>
 {
     use rustc_middle::mir::ConstValue;
-    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, Scalar, ImmTy};
+    use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, ImmTy};
     let op = match cv {
         ConstValue::Indirect { alloc_id, offset } => {
             // We rely on mutability being set correctly in that allocation to prevent writes
@@ -1319,18 +1319,14 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
         }
         ConstValue::Scalar(x) => Operand::Immediate(x.into()),
         ConstValue::ZeroSized => Operand::Immediate(Immediate::Uninit),
-        ConstValue::Slice { data, start, end } => {
+        ConstValue::Slice { data, meta } => {
             // We rely on mutability being set correctly in `data` to prevent writes
             // where none should happen.
             let ptr = Pointer::new(
-                tcx.create_memory_alloc(data),
-                Size::from_bytes(start), // offset: `start`
+                tcx.reserve_and_set_memory_alloc(data),
+                Size::ZERO,
             );
-            Operand::Immediate(Immediate::new_slice(
-                Scalar::from_pointer(ptr, &tcx),
-                u64::try_from(end.checked_sub(start).unwrap()).unwrap(), // len: `end - start`
-                &tcx,
-            ))
+            Operand::Immediate(Immediate::new_slice(ptr.into(), meta, &tcx))
         }
     };
 
