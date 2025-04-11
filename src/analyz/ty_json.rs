@@ -11,7 +11,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
-use rustc_abi::{self, Align, FieldsShape, HasDataLayout, Size};
+use rustc_abi::{self, Align, FieldIdx, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::usize;
@@ -1504,7 +1504,7 @@ impl ToJsonAg for ty::FieldDef {
 pub fn handle_adt_ag<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ak: &mir::AggregateKind<'tcx>,
-    opv: &Vec<mir::Operand<'tcx>>,
+    opv: &IndexVec<FieldIdx, mir::Operand<'tcx>>,
 ) -> serde_json::Value {
     match ak {
         &mir::AggregateKind::Adt(adt_did, variant, args, _, _) => {

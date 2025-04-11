@@ -231,15 +231,13 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 if ty_json::is_adt_ak(ak) {
                     json!({
                         "kind": "AdtAg",
-                        // RUSTUP_TODO: make this take &IndexVec instead of &Vec, and remove .raw
-                        "ag": ty_json::handle_adt_ag (mir, ak, &opv.raw)
+                        "ag": ty_json::handle_adt_ag(mir, ak, opv)
                     })
                 } else {
                     json!({
                         "kind": "Aggregate",
                         "akind": ak.to_json(mir),
-                        // RUSTUP_TODO: implement to_json() for IndexVec, and remove .raw here
-                        "ops": opv.raw.to_json(mir)
+                        "ops": opv.to_json(mir)
                     })
                 }
             }

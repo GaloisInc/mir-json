@@ -2,6 +2,7 @@ use rustc_abi::ExternAbi;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
+use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, interpret, NullOp, UnOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
@@ -617,5 +618,15 @@ where
             j.push(v.to_json(mir));
         }
         json!(j)
+    }
+}
+
+impl<'tcx, I, T> ToJson<'tcx> for IndexVec<I, T>
+where
+    I: Idx,
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        self.raw.to_json(mir)
     }
 }
