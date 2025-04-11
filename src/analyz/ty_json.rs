@@ -1411,7 +1411,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
         let ty = ty::Ty::new_adt(mir.state.tcx, self.adt, self.args);
-        let tyl = mir.state.tcx.layout_of(ty::ParamEnv::empty().and(ty))
+        let tyl = mir.state.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
         let kind = match self.adt.adt_kind() {
@@ -1474,7 +1474,7 @@ fn render_variant<'tcx>(
     let tcx = mir.state.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
                      .instantiate(tcx, adt.args)
-                     .apply_ignore_module(tcx, ty::ParamEnv::empty());
+                     .apply_ignore_module(tcx, ty::TypingEnv::fully_monomorphized());
 
     json!({
         "name": v.def_id.to_json(mir),
