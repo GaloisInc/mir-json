@@ -1410,7 +1410,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
         &self,
         mir: &mut MirState<'_, 'tcx>,
     ) -> serde_json::Value {
-        let ty = mir.state.tcx.mk_adt(self.adt, self.args);
+        let ty = ty::Ty::new_adt(mir.state.tcx, self.adt, self.args);
         let tyl = mir.state.tcx.layout_of(ty::ParamEnv::empty().and(ty))
             .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
 
