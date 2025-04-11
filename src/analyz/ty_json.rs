@@ -1196,7 +1196,7 @@ fn make_allocation_body<'tcx>(
                 let slice_len = mplace_ty_len(&d, icx).unwrap();
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
                 for idx in 0..slice_len {
-                    let elt = icx.operand_index(&d.into(), idx).unwrap();
+                    let elt = icx.project_index(&d.into(), idx).unwrap();
                     elt_values.push(try_render_opty(mir, icx, &elt));
                 }
                 // corresponding array type for contents
