@@ -1099,11 +1099,11 @@ pub fn try_render_opty<'tcx>(
             let (prov, _offset) = ptr.into_parts();
             let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
             match alloc {
-                interpret::GlobalAlloc::Function(i) => {
-                    mir.used.instances.insert(i);
+                interpret::GlobalAlloc::Function { instance } => {
+                    mir.used.instances.insert(instance);
                     json!({
                         "kind": "fn_ptr",
-                        "instance": i.to_json(mir),
+                        "instance": instance.to_json(mir),
 
                     })
                 },
