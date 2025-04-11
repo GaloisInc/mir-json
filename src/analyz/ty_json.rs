@@ -1257,7 +1257,7 @@ fn try_render_ref_opty<'tcx>(
     let d = icx.deref_pointer(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
-    let (prov, d_offset) = d.ptr.into_parts();
+    let (prov, d_offset) = d.ptr().into_parts();
     assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
     let alloc = tcx.try_get_global_alloc(prov?)?;
 
