@@ -23,7 +23,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_session::config::Externs;
 use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
-use rustc_session::config::ExternLocation;
+use rustc_session::config::{ExternLocation, OutFileName};
 use std::collections::HashSet;
 use std::env;
 use std::fs::{File, OpenOptions};
@@ -57,19 +57,23 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         // the limited amount of compilation we do will fail without the injected `register_attr`.
         analyz::inject_attrs(krate);
 
-        let sess = compiler.sess;
+        let sess = &compiler.sess;
         let (crate_name, outputs) = {
-            // rustc_session::find_crate_name - get the crate with queries.expansion?
-            let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-            let outputs = rustc_interface::util::build_output_filenames(&krate.attrs, &sess);
+            let crate_name = rustc_session::output::find_crate_name(sess, &krate.attrs);
+            let outputs = rustc_interface::util::build_output_filenames(&krate.attrs, sess);
             (crate_name, outputs)
         };
-        self.output_path = Some(rustc_session::output::out_filename(
+        let out_filename = rustc_session::output::out_filename(
             sess,
-            sess.crate_types().first().unwrap().clone(),
+            // sess.crate_types().first().unwrap().clone(),
+            todo!("RUSTUP_TODO: crate_types moved to GlobalCtxt https://github.com/rust-lang/rust/commit/0b89aac08d7190961544ced9e868cc20ce24d786"),
             &outputs,
             crate_name,
-        ));
+        );
+        self.output_path = match out_filename {
+            OutFileName::Real(p) => Some(p),
+            OutFileName::Stdout => panic!("out_filename is stdout"),
+        };
         Compilation::Stop
     }
 }
