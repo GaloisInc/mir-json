@@ -1178,7 +1178,7 @@ fn make_allocation_body<'tcx>(
                     .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
                     .unwrap();
                 // corresponding array type for contents
-                let elem_ty = tcx.mk_ty(ty::TyKind::Uint(ty::UintTy::U8));
+                let elem_ty = tcx.mk_ty_from_kind(ty::TyKind::Uint(ty::UintTy::U8));
                 let aty = tcx.mk_array(elem_ty, len);
                 let rendered = json!({
                     "kind": "strbody",
