@@ -82,7 +82,7 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Pa
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
+    rustc_driver::run_compiler(&args, &mut callbacks);
     callbacks.output_path.unwrap()
 }
 
@@ -216,14 +216,14 @@ fn go() -> ExitCode {
             eprintln!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
-            rustc_driver::RunCompiler::new(
+            rustc_driver::run_compiler(
                 &args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
                     export_style,
                 },
-            ).run().unwrap();
+            );
             return ExitCode::SUCCESS;
         },
         Some(x) => x,
@@ -257,7 +257,7 @@ fn go() -> ExitCode {
         use_override_crates: use_override_crates.clone(),
         export_style,
     };
-    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
+    rustc_driver::run_compiler(&args, &mut callbacks);
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 
