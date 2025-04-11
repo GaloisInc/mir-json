@@ -50,7 +50,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         compiler: &Compiler,
         tcx: TyCtxt<'tcx>
     ) -> Compilation {
-        analyz::analyze(compiler.session(), tcx, self.export_style).unwrap();
+        analyz::analyze(&compiler.sess, tcx, self.export_style).unwrap();
         Compilation::Continue
     }
 }
