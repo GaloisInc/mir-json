@@ -1220,8 +1220,7 @@ fn make_allocation_body<'tcx>(
 
     // Default case
     let rlayout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
-    // let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr(), rlayout, d.meta());
-    let mpty: MPlaceTy = todo!("RUSTUP_TODO: from_aligned_ptr_with_meta was changed to ptr_with_meta_to_mplace, then made private. https://github.com/rust-lang/rust/commit/f3f9b795bdaccd8284baba295810e87646754c28 https://github.com/rust-lang/rust/commit/e2bc16c101e76532420e3af7e7805071f445b2f7");
+    let mpty: MPlaceTy = d.transmute(rlayout, icx).unwrap();
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
     return json!({
