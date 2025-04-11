@@ -1288,7 +1288,7 @@ fn try_render_ref_opty<'tcx>(
             // These and the ones in make_allocation_body above should be
             // kept in sync.
             ty::TyKind::Str | ty::TyKind::Slice(_) => {
-                let len = mplace_ty_len(&d, icx).unwrap();
+                let len = d.len(icx).unwrap();
                 return Some(json!({
                     "kind": "slice",
                     "def_id": def_id_json,
@@ -1303,26 +1303,6 @@ fn try_render_ref_opty<'tcx>(
         "kind": "static_ref",
         "def_id": def_id_json,
     }));
-}
-
-// A copied version of MPlaceTy::len, which (sadly) isn't exported. See
-// https://github.com/rust-lang/rust/blob/56ee85274e5a3a4dda92f3bf73d1664c74ff9c15/compiler/rustc_const_eval/src/interpret/place.rs#L227C5-L243
-#[inline]
-pub fn mplace_ty_len<'tcx, Tag: Provenance>(mplace_ty: &MPlaceTy<'tcx, Tag>, cx: &impl HasDataLayout) -> InterpResult<'tcx, u64> {
-    if mplace_ty.layout.is_unsized() {
-        // We need to consult `meta` metadata
-        match mplace_ty.layout.ty.kind() {
-            ty::Slice(..) | ty::Str => mplace_ty.meta().unwrap_meta().to_target_usize(cx),
-            _ => bug!("len not supported on unsized type {:?}", mplace_ty.layout.ty),
-        }
-    } else {
-        // Go through the layout.  There are lots of types that support a length,
-        // e.g., SIMD types. (But not all repr(simd) types even have FieldsShape::Array!)
-        match mplace_ty.layout.fields {
-            FieldsShape::Array { count, .. } => Ok(count),
-            _ => bug!("len not supported on sized type {:?}", mplace_ty.layout.ty),
-        }
-    }
 }
 
 pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
