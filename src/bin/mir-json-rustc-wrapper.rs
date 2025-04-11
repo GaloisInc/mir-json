@@ -62,7 +62,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         let (crate_name, outputs) = {
             // rustc_session::find_crate_name - get the crate with queries.expansion?
             let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
+            let outputs = rustc_interface::util::build_output_filenames(&krate.attrs, &sess);
             (crate_name, outputs)
         };
         self.output_path = Some(rustc_session::output::out_filename(
