@@ -65,8 +65,6 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
             let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
             (crate_name, outputs)
         };
-        // Advance the state slightly further, initializing crate_types()
-        queries.register_plugins().unwrap();
         self.output_path = Some(rustc_session::output::out_filename(
             sess,
             sess.crate_types().first().unwrap().clone(),
