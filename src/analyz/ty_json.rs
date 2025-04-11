@@ -1526,10 +1526,10 @@ pub fn eval_mir_constant<'tcx>(
     constant: &mir::ConstOperand<'tcx>,
 ) -> mir::ConstValue<'tcx> {
     let uv = match constant.const_ {
-        mir::Const::Ty(ct) => match ct.kind() {
+        mir::Const::Ty(_, ct) => match ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv.expand(),
             ty::ConstKind::Value(val) => {
-                return tcx.valtree_to_const_val((ct.ty(), val));
+                return tcx.valtree_to_const_val(val);
             }
             err => panic!(
                 "encountered bad ConstKind after monomorphizing: {:?} span:{:?}",
