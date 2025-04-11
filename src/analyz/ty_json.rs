@@ -1219,7 +1219,7 @@ fn make_allocation_body<'tcx>(
     }
 
     // Default case
-    let rlayout = tcx.layout_of(ty::ParamEnv::empty().and(rty)).unwrap();
+    let rlayout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
     let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr(), rlayout, d.meta());
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
@@ -1354,7 +1354,7 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
         }
     };
 
-    let layout = tcx.layout_of(ty::ParamEnv::empty().and(ty)).unwrap();
+    let layout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
 
     match op {
         Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
