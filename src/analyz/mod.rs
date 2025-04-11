@@ -111,11 +111,7 @@ fn vtable_descriptor_for_cast<'tcx>(
         _ => return None,
     };
 
-    let old_pointee_pci = ty::PseudoCanonicalInput {
-        typing_env: ty::TypingEnv::fully_monomorphized(),
-        value: old_pointee,
-    };
-    if !tcx.is_sized_raw(old_pointee_pci) {
+    if !tcx.is_sized_raw(ty::TypingEnv::fully_monomorphized().as_query_input(old_pointee)) {
         // We produce a vtable only for sized -> TyDynamic casts.
         return None;
     }
@@ -367,10 +363,9 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             "ty": self.ty.to_json(mir),
             // We specifically record whether the variable's type is zero-sized, because rustc
             // allows reading and taking refs of uninitialized zero-sized locals.
-            "is_zst": mir.state.tcx.layout_of(ty::PseudoCanonicalInput {
-                typing_env: ty::TypingEnv::fully_monomorphized(),
-                value: self.ty,
-            }).expect("failed to get layout").is_zst(),
+            "is_zst": mir.state.tcx.layout_of(
+                ty::TypingEnv::fully_monomorphized().as_query_input(self.ty),
+            ).expect("failed to get layout").is_zst(),
         })
     }
 }
