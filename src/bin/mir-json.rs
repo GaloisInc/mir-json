@@ -25,7 +25,7 @@ struct MirJsonCallbacks {
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    fn after_crate_root_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         _compiler: &Compiler,
         krate: &mut Crate,

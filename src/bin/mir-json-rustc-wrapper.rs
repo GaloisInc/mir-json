@@ -48,8 +48,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    // RUSTUP_TODO: see mir-json.rs (already updated to fix some issues with Callbacks)
-    fn after_crate_root_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         compiler: &Compiler,
         krate: &mut Crate,
@@ -109,7 +108,7 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_crate_root_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         _compiler: &Compiler,
         krate: &mut Crate,
