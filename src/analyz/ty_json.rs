@@ -1270,7 +1270,7 @@ fn try_render_ref_opty<'tcx>(
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
                     // create the allocation
-                    let body = make_allocation_body(mir, icx, rty, d, is_mut);
+                    let body = make_allocation_body(mir, icx, rty, d.clone(), is_mut);
                     mir.allocs.insert(tcx, ca, ty, body)
                 }
             };
