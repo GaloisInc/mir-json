@@ -9,13 +9,15 @@ extern crate getopts;
 extern crate rustc_errors;
 extern crate rustc_target;
 extern crate rustc_ast;
+extern crate rustc_middle;
 
 extern crate mir_json;
 
 use mir_json::analyz;
+use rustc_ast::Crate;
 use rustc_driver::Compilation;
-use rustc_interface::Queries;
 use rustc_interface::interface::Compiler;
+use rustc_middle::ty::TyCtxt;
 use std::env;
 
 struct MirJsonCallbacks {
@@ -23,21 +25,21 @@ struct MirJsonCallbacks {
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        krate: &mut Crate,
     ) -> Compilation {
-        analyz::inject_attrs(queries);
+        analyz::inject_attrs(krate);
         Compilation::Continue
     }
 
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>
     ) -> Compilation {
-        analyz::gather_match_spans(queries);
+        analyz::gather_match_spans(tcx);
         Compilation::Continue
     }
 
@@ -46,9 +48,9 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>
     ) -> Compilation {
-        analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
+        analyz::analyze(&compiler.sess, tcx, self.export_style).unwrap();
         Compilation::Continue
     }
 }
@@ -62,7 +64,7 @@ fn go() {
         analyz::ExportStyle::ExportCruxTests
     };
 
-    rustc_driver::RunCompiler::new(&args, &mut MirJsonCallbacks { export_style }).run().unwrap();
+    rustc_driver::run_compiler(&args, &mut MirJsonCallbacks { export_style });
 }
 
 fn main() {

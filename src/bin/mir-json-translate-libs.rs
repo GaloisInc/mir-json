@@ -334,7 +334,7 @@ fn main() {
             clap::Arg::new("target")
                 .long("target")
                 .value_name("TARGET")
-                .default_value(rustc_session::config::host_triple())
+                .default_value(rustc_session::config::host_tuple())
                 .help("Rust target triple to configure the libraries for"),
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",

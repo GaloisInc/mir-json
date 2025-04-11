@@ -1,3 +1,4 @@
+use rustc_abi::ExternAbi;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::Mutability;
@@ -6,7 +7,6 @@ use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::symbol::Symbol;
-use rustc_target::spec::abi::Abi;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, hash_map};
@@ -96,11 +96,11 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         preds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
     ) -> TraitInst<'tcx> {
-        let trait_ref = preds.principal().map(|tr| tcx.erase_late_bound_regions(tr));
+        let trait_ref = preds.principal().map(|tr| tcx.instantiate_bound_regions_with_erased(tr));
         let mut projs = preds.projection_bounds()
-            .map(|proj| tcx.erase_late_bound_regions(proj))
+            .map(|proj| tcx.instantiate_bound_regions_with_erased(proj))
             .collect::<Vec<_>>();
-        projs.sort_by_key(|p| p.def_id);
+        projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
         TraitInst { trait_ref, projs }
     }
 
@@ -117,21 +117,21 @@ impl<'tcx> TraitInst<'tcx> {
         let mut pending = vec![trait_ref.def_id];
         all_super_traits.insert(trait_ref.def_id);
         while let Some(def_id) = pending.pop() {
-            let super_preds = tcx.super_predicates_of(def_id);
-            for &(ref pred, _) in super_preds.predicates {
-                let tpred = match tcx.erase_late_bound_regions(pred.kind()) {
-                    ty::PredicateKind::Clause(ty::Clause::Trait(x)) => x,
-                    ty::PredicateKind::Clause(ty::Clause::TypeOutlives(..)) => continue,
+            let super_preds = tcx.explicit_super_predicates_of(def_id);
+            for &(ref pred, _) in super_preds.skip_binder() {
+                let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
+                    ty::ClauseKind::Trait(x) => x,
+                    ty::ClauseKind::TypeOutlives(..) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
-                assert_eq!(tpred.polarity, ty::ImplPolarity::Positive);
+                assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
                 if all_super_traits.insert(tpred.trait_ref.def_id) {
                     pending.push(tpred.trait_ref.def_id);
                 }
             }
         }
         let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
-        all_super_traits.sort();
+        all_super_traits.sort_by_key(|def_id| (def_id.krate, def_id.index));
 
         let mut projs = Vec::new();
         for super_trait_def_id in all_super_traits {
@@ -140,16 +140,20 @@ impl<'tcx> TraitInst<'tcx> {
                     ty::AssocKind::Type => {},
                     _ => continue,
                 }
-                let proj_ty = tcx.mk_projection(ai.def_id, trait_ref.substs);
-                let actual_ty = tcx.normalize_erasing_regions(ty::ParamEnv::reveal_all(), proj_ty);
-                projs.push(ty::ExistentialProjection {
-                    def_id: ai.def_id,
-                    substs: ex_trait_ref.substs,
-                    term: actual_ty.into(),
-                });
+                let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
+                let actual_ty = tcx.normalize_erasing_regions(
+                    ty::TypingEnv::fully_monomorphized(),
+                    proj_ty,
+                );
+                projs.push(ty::ExistentialProjection::new(
+                    tcx,
+                    ai.def_id,
+                    ex_trait_ref.args,
+                    actual_ty.into(),
+                ));
             }
         }
-        projs.sort_by_key(|p| p.def_id);
+        projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
 
         TraitInst {
             trait_ref: Some(ex_trait_ref),
@@ -164,9 +168,9 @@ impl<'tcx> TraitInst<'tcx> {
         preds.extend(
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
-        let preds = tcx.intern_poly_existential_predicates(&preds);
+        let preds = tcx.mk_poly_existential_predicates(&preds);
         // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
-        Some(tcx.mk_dynamic(preds, tcx.mk_region(ty::RegionKind::ReErased), DynKind::Dyn))
+        Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased, DynKind::Dyn))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -185,12 +189,12 @@ impl<'tcx> TraitInst<'tcx> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct AdtInst<'tcx> {
     pub adt: ty::AdtDef<'tcx>,
-    pub substs: ty::subst::SubstsRef<'tcx>,
+    pub args: ty::GenericArgsRef<'tcx>,
 }
 
 impl<'tcx> AdtInst<'tcx> {
-    pub fn new(adt: ty::AdtDef<'tcx>, substs: ty::subst::SubstsRef<'tcx>) -> AdtInst<'tcx> {
-        AdtInst { adt, substs }
+    pub fn new(adt: ty::AdtDef<'tcx>, args: ty::GenericArgsRef<'tcx>) -> AdtInst<'tcx> {
+        AdtInst { adt, args }
     }
 
     pub fn def_id(&self) -> DefId {
@@ -220,15 +224,18 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::Adt(..) => "Adt",
         ty::TyKind::Foreign(..) => "Foreign",
         ty::TyKind::Array(..) => "Array",
+        ty::TyKind::Pat(..) => "Pat",
         ty::TyKind::Slice(..) => "Slice",
         ty::TyKind::RawPtr(..) => "RawPtr",
         ty::TyKind::Ref(..) => "Ref",
         ty::TyKind::FnDef(..) => "FnDef",
         ty::TyKind::FnPtr(..) => "FnPtr",
+        ty::TyKind::UnsafeBinder(..) => "UnsafeBinder",
         ty::TyKind::Dynamic(..) => "Dynamic",
         ty::TyKind::Closure(..) => "Closure",
-        ty::TyKind::Generator(..) => "Generator",
-        ty::TyKind::GeneratorWitness(..) => "GeneratorWitness",
+        ty::TyKind::CoroutineClosure(..) => "Coroutine",
+        ty::TyKind::Coroutine(..) => "Coroutine",
+        ty::TyKind::CoroutineWitness(..) => "CoroutineWitness",
         ty::TyKind::Never => "Never",
         ty::TyKind::Tuple(..) => "Tuple",
         ty::TyKind::Alias(..) => "Alias",
@@ -419,36 +426,37 @@ impl ToJson<'_> for BasicBlock {
 
 // enum handlers
 
-impl ToJson<'_> for Abi {
+impl ToJson<'_> for ExternAbi {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
-            Abi::Rust => json!({ "kind": "Rust" }),
-            Abi::PtxKernel => json!({ "kind": "PtxKernel" }),
-            Abi::Msp430Interrupt => json!({ "kind": "Msp430Interrupt" }),
-            Abi::X86Interrupt => json!({ "kind": "X86Interrupt" }),
-            Abi::AmdGpuKernel => json!({ "kind": "AmdGpuKernel" }),
-            Abi::EfiApi => json!({ "kind": "EfiApi" }),
-            Abi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
-            Abi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
-            Abi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
-            Abi::Wasm => json!({ "kind": "Wasm" }),
-            Abi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
-            Abi::RustCall => json!({ "kind": "RustCall" }),
-            Abi::PlatformIntrinsic => json!({ "kind": "PlatformIntrinsic" }),
-            Abi::Unadjusted => json!({ "kind": "Unadjusted" }),
-            Abi::RustCold => json!({ "kind": "RustCold" }),
+            ExternAbi::Rust => json!({ "kind": "Rust" }),
+            ExternAbi::PtxKernel => json!({ "kind": "PtxKernel" }),
+            ExternAbi::Msp430Interrupt => json!({ "kind": "Msp430Interrupt" }),
+            ExternAbi::X86Interrupt => json!({ "kind": "X86Interrupt" }),
+            ExternAbi::GpuKernel => json!({ "kind": "GpuKernel" }),
+            ExternAbi::EfiApi => json!({ "kind": "EfiApi" }),
+            ExternAbi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
+            ExternAbi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
+            ExternAbi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
+            ExternAbi::CCmseNonSecureEntry => json!({ "kind": "CCmseNonSecureEntry" }),
+            ExternAbi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
+            ExternAbi::RustCall => json!({ "kind": "RustCall" }),
+            ExternAbi::Unadjusted => json!({ "kind": "Unadjusted" }),
+            ExternAbi::RustCold => json!({ "kind": "RustCold" }),
+            ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
+            ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
 
             // Data-carrying variants — use Debug formatting
-            Abi::C { .. }
-            | Abi::Cdecl { .. }
-            | Abi::Stdcall { .. }
-            | Abi::Fastcall { .. }
-            | Abi::Vectorcall { .. }
-            | Abi::Thiscall { .. }
-            | Abi::Aapcs { .. }
-            | Abi::Win64 { .. }
-            | Abi::SysV64 { .. }
-            | Abi::System { .. } => {
+            ExternAbi::C { .. }
+            | ExternAbi::Cdecl { .. }
+            | ExternAbi::Stdcall { .. }
+            | ExternAbi::Fastcall { .. }
+            | ExternAbi::Vectorcall { .. }
+            | ExternAbi::Thiscall { .. }
+            | ExternAbi::Aapcs { .. }
+            | ExternAbi::Win64 { .. }
+            | ExternAbi::SysV64 { .. }
+            | ExternAbi::System { .. } => {
                 json!({ "kind": format!("{:?}", self) })
             }
         }
@@ -459,21 +467,30 @@ impl ToJson<'_> for BinOp {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
             BinOp::Add => json!({ "kind": "Add" }),
+            BinOp::AddUnchecked => json!({ "kind": "AddUnchecked" }),
+            BinOp::AddWithOverflow => json!({ "kind": "AddWithOverflow" }),
             BinOp::Sub => json!({ "kind": "Sub" }),
+            BinOp::SubUnchecked => json!({ "kind": "SubUnchecked" }),
+            BinOp::SubWithOverflow => json!({ "kind": "SubWithOverflow" }),
             BinOp::Mul => json!({ "kind": "Mul" }),
+            BinOp::MulUnchecked => json!({ "kind": "MulUnchecked" }),
+            BinOp::MulWithOverflow => json!({ "kind": "MulWithOverflow" }),
             BinOp::Div => json!({ "kind": "Div" }),
             BinOp::Rem => json!({ "kind": "Rem" }),
             BinOp::BitXor => json!({ "kind": "BitXor" }),
             BinOp::BitAnd => json!({ "kind": "BitAnd" }),
             BinOp::BitOr => json!({ "kind": "BitOr" }),
             BinOp::Shl => json!({ "kind": "Shl" }),
+            BinOp::ShlUnchecked => json!({ "kind": "ShlUnchecked" }),
             BinOp::Shr => json!({ "kind": "Shr" }),
+            BinOp::ShrUnchecked => json!({ "kind": "ShrUnchecked" }),
             BinOp::Eq => json!({ "kind": "Eq" }),
             BinOp::Lt => json!({ "kind": "Lt" }),
             BinOp::Le => json!({ "kind": "Le" }),
             BinOp::Ne => json!({ "kind": "Ne" }),
             BinOp::Ge => json!({ "kind": "Ge" }),
             BinOp::Gt => json!({ "kind": "Gt" }),
+            BinOp::Cmp => json!({ "kind": "Cmp" }),
             BinOp::Offset => json!({ "kind": "Offset" }),
         }
     }
@@ -482,16 +499,18 @@ impl ToJson<'_> for BinOp {
 impl ToJson<'_> for CastKind {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
-            CastKind::PointerExposeAddress => json!({ "kind": "PointerExposeAddress" }),
-            CastKind::PointerFromExposedAddress => json!({ "kind": "PointerFromExposedAddress" }),
-            CastKind::DynStar => json!({ "kind": "DynStar" }),
+            CastKind::PointerExposeProvenance => json!({ "kind": "PointerExposeProvenance" }),
+            CastKind::PointerWithExposedProvenance => json!({ "kind": "PointerWithExposedProvenance" }),
             CastKind::IntToInt => json!({ "kind": "IntToInt" }),
             CastKind::FloatToInt => json!({ "kind": "FloatToInt" }),
             CastKind::FloatToFloat => json!({ "kind": "FloatToFloat" }),
             CastKind::IntToFloat => json!({ "kind": "IntToFloat" }),
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
-            CastKind::Pointer(_) => json!({ "kind": format!("{:?}", self) }),
+            CastKind::Transmute => json!({ "kind": "Transmute" }),
+
+            // Data-carrying variants — use Debug formatting
+            CastKind::PointerCoercion { .. } => json!({ "kind": format!("{:?}", self) }),
         }
     }
 }
@@ -508,8 +527,10 @@ impl ToJson<'_> for CtorKind {
 impl ToJson<'_> for FloatTy {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
+            FloatTy::F16 => json!({ "kind": "F16" }),
             FloatTy::F32 => json!({ "kind": "F32" }),
             FloatTy::F64 => json!({ "kind": "F64" }),
+            FloatTy::F128 => json!({ "kind": "F128" }),
         }
     }
 }
@@ -536,11 +557,16 @@ impl ToJson<'_> for Mutability {
     }
 }
 
-impl ToJson<'_> for NullOp {
+impl<'tcx> ToJson<'tcx> for NullOp<'tcx> {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
             NullOp::SizeOf => json!({ "kind": "SizeOf" }),
             NullOp::AlignOf => json!({ "kind": "AlignOf" }),
+            NullOp::UbChecks => json!({ "kind": "UbChecks" }),
+            NullOp::ContractChecks => json!({ "kind": "ContractChecks" }),
+
+            // Data-carrying variants — use Debug formatting
+            NullOp::OffsetOf { .. } => json!({ "kind": format!("{:?}", self) }),
         }
     }
 }
@@ -565,6 +591,7 @@ impl ToJson<'_> for UnOp {
         match self {
             UnOp::Not => json!({ "kind": "Not" }),
             UnOp::Neg => json!({ "kind": "Neg" }),
+            UnOp::PtrMetadata => json!({ "kind": "PtrMetadata" }),
         }
     }
 }
