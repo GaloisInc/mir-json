@@ -1311,7 +1311,7 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
     use rustc_middle::mir::ConstValue;
     use rustc_const_eval::interpret::{Operand, Pointer, MemPlace, Immediate, Scalar, ImmTy};
     let op = match cv {
-        ConstValue::ByRef { alloc, offset } => {
+        ConstValue::Indirect { alloc_id, offset } => {
             let id = tcx.create_memory_alloc(alloc);
             // We rely on mutability being set correctly in that allocation to prevent writes
             // where none should happen.
