@@ -1220,7 +1220,8 @@ fn make_allocation_body<'tcx>(
 
     // Default case
     let rlayout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
-    let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr(), rlayout, d.meta());
+    // let mpty = interpret::MPlaceTy::from_aligned_ptr_with_meta(d.ptr(), rlayout, d.meta());
+    let mpty: MPlaceTy = todo!("RUSTUP_TODO: from_aligned_ptr_with_meta was changed to ptr_with_meta_to_mplace, then made private. https://github.com/rust-lang/rust/commit/f3f9b795bdaccd8284baba295810e87646754c28 https://github.com/rust-lang/rust/commit/e2bc16c101e76532420e3af7e7805071f445b2f7");
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
     return json!({
@@ -1358,7 +1359,10 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
 
     match op {
         Operand::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
-        Operand::Indirect(ind) => MPlaceTy::from_aligned_ptr(ind.ptr, layout).into(),
+        Operand::Indirect(ind) => {
+            // MPlaceTy::from_aligned_ptr(ind.ptr, layout).into()
+            todo!("RUSTUP_TODO: from_aligned_ptr was renamed ptr_to_mplace and moved to InterpCx, so we need to get ahold of an InterpCx https://github.com/rust-lang/rust/commit/f3f9b795bdaccd8284baba295810e87646754c28")
+        }
     }
 }
 
