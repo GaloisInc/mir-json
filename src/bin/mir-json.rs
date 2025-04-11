@@ -9,6 +9,7 @@ extern crate getopts;
 extern crate rustc_errors;
 extern crate rustc_target;
 extern crate rustc_ast;
+extern crate rustc_middle;
 
 extern crate mir_json;
 
@@ -16,6 +17,7 @@ use mir_json::analyz;
 use rustc_ast::Crate;
 use rustc_driver::Compilation;
 use rustc_interface::interface::Compiler;
+use rustc_middle::ty::TyCtxt;
 use std::env;
 
 struct MirJsonCallbacks {
