@@ -900,7 +900,7 @@ mod machine {
             ecx: &InterpCx<'tcx, Self>,
             instance: Option<ty::Instance<'tcx>>,
         ) -> usize {
-            todo!("RUSTUP_TODO: newly added method")
+            mir::interpret::CTFE_ALLOC_SALT
         }
     }
 }
