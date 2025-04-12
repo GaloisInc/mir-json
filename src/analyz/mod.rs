@@ -551,8 +551,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 json!({
                     "kind": "Call",
                     "func": func.to_json(mir),
-                    // RUSTUP_TODO: support to_json on `&Box<[Spanned<Operand>]>` for this
-                    "args": (), //args.to_json(mir),
+                    "args": args.to_json(mir),
                     "destination": destination,
                     // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
                     // remove this field (we probably don't use it for anything in crucible-mir)
@@ -572,8 +571,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 json!({
                     "kind": "TailCall",
                     "func": func.to_json(mir),
-                    // RUSTUP_TODO: support to_json on `&Box<[Spanned<Operand>]>` for this
-                    "args": (), //args.to_json(mir),
+                    "args": args.to_json(mir),
                     // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
                     "from_hir_call": (), //from_hir_call
                 })

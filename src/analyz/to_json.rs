@@ -7,6 +7,7 @@ use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, interp
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_session::Session;
 use rustc_span::Span;
+use rustc_span::source_map::Spanned;
 use rustc_span::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
@@ -608,7 +609,7 @@ where
     }
 }
 
-impl<'tcx, T> ToJson<'tcx> for Vec<T>
+impl<'tcx, T> ToJson<'tcx> for [T]
 where
     T: ToJson<'tcx>,
 {
@@ -621,6 +622,15 @@ where
     }
 }
 
+impl<'tcx, T> ToJson<'tcx> for Vec<T>
+where
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        <[T]>::to_json(self, mir)
+    }
+}
+
 impl<'tcx, I, T> ToJson<'tcx> for IndexVec<I, T>
 where
     I: Idx,
@@ -628,5 +638,14 @@ where
 {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         self.raw.to_json(mir)
+    }
+}
+
+impl<'tcx, T> ToJson<'tcx> for Spanned<T>
+where
+    T: ToJson<'tcx>,
+{
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        self.node.to_json(mir)
     }
 }
