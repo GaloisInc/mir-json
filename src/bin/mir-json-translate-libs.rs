@@ -717,6 +717,8 @@ fn main() {
                     args.push("rlib".into());
                     args.push("--remap-path-prefix".into());
                     args.push(format!("{}=.", cwd));
+                    args.push("-Z".into());
+                    args.push("force-unstable-if-unmarked".into());
                     for linked_path in lib.target.linked_paths {
                         args.push("-L".into());
                         args.push(linked_path.into());
