@@ -35,10 +35,11 @@ impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         match self {
             &mir::BorrowKind::Shared => json!("Shared"),
-            // &mir::BorrowKind::Shallow => json!("Shallow"),
-            &mir::BorrowKind::Fake(k) => todo!("RUSTUP_TODO: Shallow was renamed to Fake, then a non-shallow Fake kind was added. What should JSON output be? https://github.com/rust-lang/rust/commit/992d93f687c75f8f5ee69e0fb43bff509c7c9cb8 https://github.com/rust-lang/rust/commit/50531806ee4c77be601ecf2fbdac371288770e17"),
-            // &mir::BorrowKind::Unique => json!("Unique"),
-            &mir::BorrowKind::Mut{..} => { todo!("RUSTUP_TODO: Unique was merged into Mut, should we distinguish it in the JSON? https://github.com/rust-lang/rust/commit/8fb4c41f35fee3b224ea87148cb2ae31a9ed4675#diff-3a6077a453e9ef35b5b85b4419025066cc7a0f3bad1207ae98860902c817a252"); json!("Mut") },
+            // "An immutable, aliasable borrow that is discarded after borrow-checking. Can behave
+            // either like a normal shared borrow or like a special shallow borrow (see
+            // `FakeBorrowKind`)."  We thus treat it like `Shared`.
+            &mir::BorrowKind::Fake(_) => json!("Shared"),
+            &mir::BorrowKind::Mut { kind: _ } => json!("Mut"),
         }
     }
 }
