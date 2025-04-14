@@ -1033,39 +1033,40 @@ pub fn try_render_opty<'tcx>(
                 "val": val_str,
             })
         }
-        ty::TyKind::Adt(adt_def, _args) if adt_def.is_struct() => {
-            let variant = adt_def.non_enum_variant();
-            let mut field_vals = Vec::new();
-            for field_idx in 0..variant.fields.len() {
-                let field = icx.project_field(op_ty, field_idx).unwrap();
-                field_vals.push(try_render_opty(mir, icx, &field)?)
-            }
+        ty::TyKind::Adt(adt_def, _args) => match adt_def.adt_kind() {
+            ty::AdtKind::Struct => {
+                let variant = adt_def.non_enum_variant();
+                let mut field_vals = Vec::new();
+                for field_idx in 0..variant.fields.len() {
+                    let field = icx.project_field(op_ty, field_idx).unwrap();
+                    field_vals.push(try_render_opty(mir, icx, &field)?)
+                }
 
-            let val: serde_json::Value = field_vals.into();
+                let val: serde_json::Value = field_vals.into();
 
-            json!({
-                "kind": "struct",
-                "fields": val,
-            })
-        },
-        ty::TyKind::Adt(adt_def, _args) if adt_def.is_enum() => {
-            let variant_idx = icx.read_discriminant(op_ty).unwrap();
-            let val = icx.project_downcast(op_ty, variant_idx).unwrap();
-            let mut field_vals = Vec::with_capacity(val.layout.fields.count());
-            for idx in 0 .. val.layout.fields.count() {
-                let field_opty = icx.project_field(&val, idx).unwrap();
-                field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
-            }
+                json!({
+                    "kind": "struct",
+                    "fields": val,
+                })
+            },
+            ty::AdtKind::Enum => {
+                let variant_idx = icx.read_discriminant(op_ty).unwrap();
+                let val = icx.project_downcast(op_ty, variant_idx).unwrap();
+                let mut field_vals = Vec::with_capacity(val.layout.fields.count());
+                for idx in 0 .. val.layout.fields.count() {
+                    let field_opty = icx.project_field(&val, idx).unwrap();
+                    field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
+                }
 
-            json!({
-                "kind": "enum",
-                "variant": variant_idx.as_u32(),
-                "fields": field_vals,
-            })
-        },
-
-        ty::TyKind::Adt(_, _) => {
-            panic!("Adt is not enum or struct!")
+                json!({
+                    "kind": "enum",
+                    "variant": variant_idx.as_u32(),
+                    "fields": field_vals,
+                })
+            },
+            ty::AdtKind::Union => {
+                json!({"kind": "union"})
+            },
         },
 
         ty::TyKind::Foreign(_) => todo!("foreign is unimplemented"), // can't do this
