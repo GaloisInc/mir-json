@@ -417,14 +417,16 @@ fn main() {
     // Run `cargo test -Z build-std` to obtain compiler artifact and build
     // script result messages.
     eprintln!("Running cargo test...");
-    let mut cargo_test_child =
-        cargo_test_cmd(&empty_project_dir, target_triple)
-            .arg("--message-format")
-            .arg("json")
-            .arg("--no-run")
-            .stdout(Stdio::piped())
+    let mut cargo_test_child = {
+        let mut cmd = cargo_test_cmd(&empty_project_dir, target_triple);
+        cmd.arg("--message-format").arg("json").arg("--no-run");
+        if debug_enabled {
+            cmd.arg("--verbose");
+        }
+        cmd.stdout(Stdio::piped())
             .spawn()
-            .expect("cargo test should run");
+            .expect("cargo test should run")
+    };
     let cargo_test_child_stdout = cargo_test_child
         .stdout
         .take()
