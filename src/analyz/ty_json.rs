@@ -929,13 +929,13 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
 impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
-        let op_ty = as_opty(mir.state.tcx, val, ty);
         let mut icx = interpret::InterpCx::new(
             mir.state.tcx,
             DUMMY_SP,
             ty::TypingEnv::fully_monomorphized(),
             RenderConstMachine::new(),
         );
+        let op_ty = as_opty(mir.state.tcx, &mut icx, val, ty);
 
         json!({
             "ty": ty.to_json(mir),
@@ -1305,9 +1305,12 @@ fn try_render_ref_opty<'tcx>(
     }));
 }
 
-pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'tcx>)
-    -> interpret::OpTy<'tcx, interpret::CtfeProvenance>
-{
+pub fn as_opty<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    cv: mir::ConstValue<'tcx>,
+    ty: ty::Ty<'tcx>,
+) -> interpret::OpTy<'tcx, interpret::CtfeProvenance> {
     use rustc_middle::mir::ConstValue;
     use rustc_const_eval::interpret::{CtfeProvenance, Pointer, Immediate, ImmTy};
     enum ImmediateOrIndirect {
@@ -1337,11 +1340,8 @@ pub fn as_opty<'tcx>(tcx: TyCtxt<'tcx>, cv: mir::ConstValue<'tcx>, ty: ty::Ty<'t
     let layout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
 
     match op {
-        ImmediateOrIndirect::Immediate(imm) => ImmTy::from_immediate(imm, layout).into() ,
-        ImmediateOrIndirect::Indirect(ptr) => {
-            // MPlaceTy::from_aligned_ptr(ptr, layout).into()
-            todo!("RUSTUP_TODO: from_aligned_ptr was renamed ptr_to_mplace and moved to InterpCx, so we need to get ahold of an InterpCx https://github.com/rust-lang/rust/commit/f3f9b795bdaccd8284baba295810e87646754c28")
-        }
+        ImmediateOrIndirect::Immediate(imm) => ImmTy::from_immediate(imm, layout).into(),
+        ImmediateOrIndirect::Indirect(ptr) => icx.ptr_to_mplace(ptr, layout).into(),
     }
 }
 
