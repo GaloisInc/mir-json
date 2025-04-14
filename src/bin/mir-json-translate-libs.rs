@@ -445,7 +445,7 @@ fn main() {
                     .iter()
                     .all(|t| t != "bin" && t != "proc-macro")
                 {
-                    artifact_outputs.insert(art.package_id.clone(), art);
+                    artifact_outputs.insert(art.target.src_path.clone(), art);
                 }
             }
             Message::BuildScriptExecuted(bs) => {
@@ -498,11 +498,13 @@ fn main() {
             } else if unit.target.crate_types.iter().any(|t| t == "bin") {
                 CustomTarget::FinalBin
             } else {
-                let artifact =
-                    artifact_outputs.get(&unit.pkg_id).unwrap_or_else(|| {
+                let artifact = artifact_outputs
+                    .get(&unit.target.src_path)
+                    .unwrap_or_else(|| {
                         panic!(
-                            "library {} should have a compiler artifact",
-                            unit.pkg_id
+                            "library {} (src_path {}) \
+                            should have a compiler artifact",
+                            unit.pkg_id, unit.target.src_path
                         )
                     });
                 // Compute the patched source file path by finding the original
@@ -524,7 +526,7 @@ fn main() {
                 .iter()
                 .collect();
                 let (linked_libs, linked_paths, cfgs, env) =
-                    match build_script_outputs.remove(&unit.pkg_id) {
+                    match build_script_outputs.remove(&artifact.package_id) {
                         Some(bs) => {
                             (bs.linked_libs, bs.linked_paths, bs.cfgs, bs.env)
                         }
