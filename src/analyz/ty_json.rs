@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
+use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{
@@ -1171,30 +1172,49 @@ fn make_allocation_body<'tcx>(
     let tcx = mir.state.tcx;
 
     if !is_mut {
+        /// Common logic for emitting `"kind": "strbody"` constants, shared by the `str` and `CStr`
+        /// cases.
+        fn do_strbody<'tcx>(
+            mir: &mut MirState<'_, 'tcx>,
+            icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+            d: &MPlaceTy<'tcx>,
+            len: u64,
+        ) -> serde_json::Value {
+            let tcx = mir.state.tcx;
+            let mem = icx
+                .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
+                .unwrap();
+            // corresponding array type for contents
+            let elem_ty = tcx.mk_ty_from_kind(ty::TyKind::Uint(ty::UintTy::U8));
+            let aty = ty::Ty::new_array(tcx, elem_ty, len);
+            let rendered = json!({
+                "kind": "strbody",
+                "elements": mem,
+                "len": len
+            });
+            json!({
+                "kind": "constant",
+                "mutable": false,
+                "ty": aty.to_json(mir),
+                "rendered": rendered,
+            })
+        };
+
         match *rty.kind() {
-            // Special cases for &str and &[T]
+            // Special cases for &str, &CStr, and &[T]
             //
             // These and the ones in try_render_ref_opty below should be
             // kept in sync.
             ty::TyKind::Str => {
                 let len = d.len(icx).unwrap();
-                let mem = icx
-                    .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
-                    .unwrap();
-                // corresponding array type for contents
-                let elem_ty = tcx.mk_ty_from_kind(ty::TyKind::Uint(ty::UintTy::U8));
-                let aty = ty::Ty::new_array(tcx, elem_ty, len);
-                let rendered = json!({
-                    "kind": "strbody",
-                    "elements": mem,
-                    "len": len
-                });
-                return json!({
-                    "kind": "constant",
-                    "mutable": false,
-                    "ty": aty.to_json(mir),
-                    "rendered": rendered,
-                });
+                return do_strbody(mir, icx, d, len);
+            },
+            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => {
+                // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
+                // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
+                // copy-paste the code here.
+                let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
+                return do_strbody(mir, icx, d, len);
             },
             ty::TyKind::Slice(slice_ty) => {
                 let slice_len = d.len(icx).unwrap();
@@ -1285,20 +1305,24 @@ fn try_render_ref_opty<'tcx>(
     };
 
     if !is_mut {
-        match *rty.kind() {
-            // Special cases for &str and &[T]
-            //
-            // These and the ones in make_allocation_body above should be
-            // kept in sync.
-            ty::TyKind::Str | ty::TyKind::Slice(_) => {
-                let len = d.len(icx).unwrap();
-                return Some(json!({
-                    "kind": "slice",
-                    "def_id": def_id_json,
-                    "len": len
-                }))
-            },
-            _ => ()
+        // Special cases for &str, &CStr, and &[T]
+        //
+        // These and the ones in make_allocation_body above should be kept in sync.
+        let do_slice_special_case = match *rty.kind() {
+            ty::TyKind::Str | ty::TyKind::Slice(_) => true,
+            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => true,
+            _ => false,
+        };
+        if do_slice_special_case {
+            // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
+            // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
+            // copy-paste the code here.
+            let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
+            return Some(json!({
+                "kind": "slice",
+                "def_id": def_id_json,
+                "len": len
+            }))
         }
     }
 
