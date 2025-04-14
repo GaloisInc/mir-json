@@ -1118,7 +1118,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         tcx.crate_name(LOCAL_CRATE),
     );
     let mir_path_ = match out_path {
-        OutFileName::Real(path) => path,
+        OutFileName::Real(path) => path.with_extension("mir"),
         OutFileName::Stdout => {
             sess.dcx().fatal("writing output to stdout is not supported");
         },
