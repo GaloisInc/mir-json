@@ -124,8 +124,8 @@ pub fn inst_id_str<'tcx>(
         },
         ty::InstanceKind::VTableShim(def_id) =>
             ext_def_id_str(tcx, def_id, "_vtshim", args),
-        ty::InstanceKind::ReifyShim(def_id, reason) =>
-            { todo!("RUSTUP_TODO: reason was added. do we care about it? https://github.com/rust-lang/rust/commit/6aa89f684e4427a9d08e35b572f9071705105140"); ext_def_id_str(tcx, def_id, "_reify", args) },
+        ty::InstanceKind::ReifyShim(def_id, _reason) =>
+            ext_def_id_str(tcx, def_id, "_reify", args),
         ty::InstanceKind::Virtual(def_id, idx) =>
             ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
         ty::InstanceKind::DropGlue(def_id, _) =>
@@ -238,11 +238,11 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::ReifyShim(did, reason) => { todo!("RUSTUP_TODO: reason was added. do we care about it? https://github.com/rust-lang/rust/commit/6aa89f684e4427a9d08e35b572f9071705105140"); json!({
+            ty::InstanceKind::ReifyShim(did, _reason) => json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
-            }) },
+            }),
             ty::InstanceKind::FnPtrShim(did, ty) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
