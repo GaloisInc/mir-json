@@ -4,7 +4,9 @@ use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
-use rustc_const_eval::interpret::{self, InterpCx, InterpResult, MPlaceTy, Projectable, Provenance};
+use rustc_const_eval::interpret::{
+    self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable, Provenance,
+};
 use rustc_const_eval::const_eval::CheckAlignment;
 use rustc_middle::bug;
 use rustc_middle::ty;
@@ -1222,7 +1224,7 @@ fn make_allocation_body<'tcx>(
 
     // Default case
     let rlayout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
-    let mpty: MPlaceTy = d.transmute(rlayout, icx).unwrap();
+    let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
     let rendered = try_render_opty(mir, icx, &mpty.into());
 
     return json!({
