@@ -16,6 +16,7 @@ use std::{
     env, fmt, fs,
     io::BufReader,
     os::unix,
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -25,7 +26,7 @@ use cargo_metadata::{
 };
 use serde::Deserialize;
 use shell_escape::escape;
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 
 const EXTRA_LIB_CRUCIBLE: &str = "crucible";
 const EXTRA_LIB_INT512: &str = "int512";
@@ -38,21 +39,21 @@ const EMPTY_PROJECT_NAME: &str = "mir-json-translate-libs-empty-project";
 
 /// Deserialized form of cargo --unit-graph JSON output.
 /// See https://doc.rust-lang.org/cargo/reference/unstable.html#unit-graph
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct UnitGraph {
     version: u32,
     units: Vec<UnitGraphUnit>,
     roots: Vec<usize>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct UnitGraphUnit {
     pkg_id: PackageId,
     target: Target,
     dependencies: Vec<UnitGraphDependency>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct UnitGraphDependency {
     index: usize,
     extern_crate_name: CrateName,
@@ -72,7 +73,7 @@ mod crate_name {
     /// package names.
     ///
     /// Construct with [From<&str>].
-    #[derive(Clone, Deserialize, PartialEq)]
+    #[derive(Clone, Debug, Deserialize, PartialEq)]
     pub struct CrateName(String);
 
     impl From<&str> for CrateName {
@@ -339,6 +340,15 @@ fn main() {
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",
             ),
+            clap::Arg::new("debug")
+                .long("debug")
+                .help("Emit debug output on stderr"),
+            clap::Arg::new("keep-temp-build")
+                .long("keep-temp-build")
+                .help(
+                    "Persist the temporary cargo package created to run \
+                    `cargo test -Z build-std`",
+                ),
         ])
         .get_matches();
     let custom_sources_dir = match arg_matches.value_of("libs") {
@@ -356,6 +366,8 @@ fn main() {
     };
     let target_triple = arg_matches.value_of("target").unwrap();
     let generate_only = arg_matches.is_present("generate");
+    let debug_enabled = arg_matches.is_present("debug");
+    let keep_temp_build = arg_matches.is_present("keep-temp-build");
 
     // Compute the paths that we will use later to store the build artifacts,
     // but don't actually create them yet.
@@ -379,8 +391,16 @@ fn main() {
 
     // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
-    let empty_project_dir =
-        tempdir().expect("temporary directory should be able to be created");
+    let temp_dir =
+        TempDir::with_prefix_in(EMPTY_PROJECT_NAME.to_owned() + "-", out_dir)
+            .expect("temporary directory should be able to be created");
+    let empty_project_dir = if keep_temp_build {
+        let path = temp_dir.into_path();
+        eprintln!("Empty cargo package path: {}", path.display());
+        path
+    } else {
+        temp_dir.path().to_path_buf()
+    };
     let cargo_init_status = Command::new("cargo")
         .current_dir(&empty_project_dir)
         .arg("init")
@@ -413,7 +433,11 @@ fn main() {
     let mut artifact_outputs = HashMap::new();
     let mut build_script_outputs = HashMap::new();
     for msg in Message::parse_stream(cargo_test_child_stdout) {
-        match msg.expect("reading cargo test output should succeed") {
+        let msg = msg.expect("reading cargo test output should succeed");
+        if debug_enabled {
+            eprintln!("Received cargo test message:\n{:#?}", msg);
+        }
+        match msg {
             Message::CompilerArtifact(art) => {
                 if art
                     .target
@@ -435,6 +459,10 @@ fn main() {
     if !cargo_test_child_status.success() {
         panic!("cargo test exited with {}", cargo_test_child_status);
     }
+    if debug_enabled {
+        eprintln!("artifact outputs:\n{:#?}", artifact_outputs);
+        eprintln!("build script outputs:\n{:#?}", build_script_outputs);
+    }
 
     // Run `cargo test -Z build-std --unit-graph` to obtain unit graph.
     eprintln!("Running cargo --unit-graph...");
@@ -452,6 +480,9 @@ fn main() {
             "expecting version 1, got version {} of cargo --unit-graph output",
             unit_graph.version
         );
+    }
+    if debug_enabled {
+        eprintln!("cargo unit graph:\n{:#?}", unit_graph);
     }
 
     // Process the unit graph, rewriting source file paths to point to our
@@ -716,7 +747,7 @@ fn main() {
 }
 
 /// Build a `cargo test -Z build-std` command.
-fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
+fn cargo_test_cmd(project_dir: &Path, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(project_dir)
         .arg("test")
