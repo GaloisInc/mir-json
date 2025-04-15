@@ -1,10 +1,11 @@
 use rustc_abi::ExternAbi;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
-use rustc_hir::Mutability;
+use rustc_hir::{Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
-use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, interpret, NullOp, UnOp};
+use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, NullOp, UnOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
+use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
@@ -432,6 +433,60 @@ impl ToJson<'_> for ExternAbi {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
             ExternAbi::Rust => json!({ "kind": "Rust" }),
+            ExternAbi::C { unwind } => {
+                json!({
+                    "kind": "C",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Cdecl { unwind } => {
+                json!({
+                    "kind": "Cdecl",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Stdcall { unwind } => {
+                json!({
+                    "kind": "Stdcall",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Fastcall { unwind } => {
+                json!({
+                    "kind": "Fastcall",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Vectorcall { unwind } => {
+                json!({
+                    "kind": "Vectorcall",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Thiscall { unwind } => {
+                json!({
+                    "kind": "Thiscall",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Aapcs { unwind } => {
+                json!({
+                    "kind": "Aapcs",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::Win64 { unwind } => {
+                json!({
+                    "kind": "Win64",
+                    "unwind": unwind,
+                })
+            },
+            ExternAbi::SysV64 { unwind } => {
+                json!({
+                    "kind": "SysV64",
+                    "unwind": unwind,
+                })
+            },
             ExternAbi::PtxKernel => json!({ "kind": "PtxKernel" }),
             ExternAbi::Msp430Interrupt => json!({ "kind": "Msp430Interrupt" }),
             ExternAbi::X86Interrupt => json!({ "kind": "X86Interrupt" }),
@@ -441,26 +496,18 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
             ExternAbi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
             ExternAbi::CCmseNonSecureEntry => json!({ "kind": "CCmseNonSecureEntry" }),
+            ExternAbi::System { unwind } => {
+                json!({
+                    "kind": "System",
+                    "unwind": unwind,
+                })
+            },
             ExternAbi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
             ExternAbi::RustCall => json!({ "kind": "RustCall" }),
             ExternAbi::Unadjusted => json!({ "kind": "Unadjusted" }),
             ExternAbi::RustCold => json!({ "kind": "RustCold" }),
             ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
             ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
-
-            // Data-carrying variants — use Debug formatting
-            ExternAbi::C { .. }
-            | ExternAbi::Cdecl { .. }
-            | ExternAbi::Stdcall { .. }
-            | ExternAbi::Fastcall { .. }
-            | ExternAbi::Vectorcall { .. }
-            | ExternAbi::Thiscall { .. }
-            | ExternAbi::Aapcs { .. }
-            | ExternAbi::Win64 { .. }
-            | ExternAbi::SysV64 { .. }
-            | ExternAbi::System { .. } => {
-                json!({ "kind": format!("{:?}", self) })
-            }
         }
     }
 }
@@ -498,11 +545,55 @@ impl ToJson<'_> for BinOp {
     }
 }
 
-impl ToJson<'_> for CastKind {
+impl ToJson<'_> for Safety {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            Safety::Unsafe => json!({ "kind": "Unsafe" }),
+            Safety::Safe => json!({ "kind": "Safe" }),
+        }
+    }
+}
+
+impl ToJson<'_> for PointerCoercion {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
+        match self {
+            PointerCoercion::ReifyFnPointer => json!({ "kind": "ReifyFnPointer" }),
+            PointerCoercion::UnsafeFnPointer => json!({ "kind": "UnsafeFnPointer" }),
+            PointerCoercion::ClosureFnPointer(safety) => {
+                json!({
+                    "kind": "ClosureFnPointer",
+                    "safety": safety.to_json(mir),
+                })
+            },
+            PointerCoercion::MutToConstPointer => json!({ "kind": "MutToConstPointer" }),
+            PointerCoercion::ArrayToPointer => json!({ "kind": "ArrayToPointer" }),
+            PointerCoercion::Unsize => json!({ "kind": "Unsize" }),
+            PointerCoercion::DynStar => json!({ "kind": "DynStar" }),
+        }
+    }
+}
+
+impl ToJson<'_> for CoercionSource {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            CoercionSource::AsCast => json!({ "kind": "AsCast" }),
+            CoercionSource::Implicit => json!({ "kind": "Implicit" }),
+        }
+    }
+}
+
+impl ToJson<'_> for CastKind {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             CastKind::PointerExposeProvenance => json!({ "kind": "PointerExposeProvenance" }),
             CastKind::PointerWithExposedProvenance => json!({ "kind": "PointerWithExposedProvenance" }),
+            CastKind::PointerCoercion(cast, origin) => {
+                json!({
+                    "kind": "PointerCoercion",
+                    "cast": cast.to_json(mir),
+                    "origin": origin.to_json(mir),
+                })
+            },
             CastKind::IntToInt => json!({ "kind": "IntToInt" }),
             CastKind::FloatToInt => json!({ "kind": "FloatToInt" }),
             CastKind::FloatToFloat => json!({ "kind": "FloatToFloat" }),
@@ -510,9 +601,6 @@ impl ToJson<'_> for CastKind {
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
             CastKind::Transmute => json!({ "kind": "Transmute" }),
-
-            // Data-carrying variants — use Debug formatting
-            CastKind::PointerCoercion { .. } => json!({ "kind": format!("{:?}", self) }),
         }
     }
 }
@@ -560,15 +648,18 @@ impl ToJson<'_> for Mutability {
 }
 
 impl<'tcx> ToJson<'tcx> for NullOp<'tcx> {
-    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
             NullOp::SizeOf => json!({ "kind": "SizeOf" }),
             NullOp::AlignOf => json!({ "kind": "AlignOf" }),
+            NullOp::OffsetOf(fields) => {
+                json!({
+                    "kind": "OffsetOf",
+                    "fields": fields.to_json(mir),
+                })
+            },
             NullOp::UbChecks => json!({ "kind": "UbChecks" }),
             NullOp::ContractChecks => json!({ "kind": "ContractChecks" }),
-
-            // Data-carrying variants — use Debug formatting
-            NullOp::OffsetOf { .. } => json!({ "kind": format!("{:?}", self) }),
         }
     }
 }
