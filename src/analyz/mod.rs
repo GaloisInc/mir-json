@@ -229,9 +229,10 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
             }
             &mir::Rvalue::Aggregate(ref ak, ref opv) => {
                 if ty_json::is_adt_ak(ak) {
+                    let ty = self.ty(mir.mir.unwrap(), mir.state.tcx);
                     json!({
                         "kind": "AdtAg",
-                        "ag": ty_json::handle_adt_ag(mir, ak, opv)
+                        "ag": ty_json::handle_adt_ag(mir, ak, opv, ty)
                     })
                 } else {
                     json!({

@@ -1533,6 +1533,7 @@ pub fn handle_adt_ag<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ak: &mir::AggregateKind<'tcx>,
     opv: &IndexVec<FieldIdx, mir::Operand<'tcx>>,
+    ty: ty::Ty<'tcx>,
 ) -> serde_json::Value {
     match ak {
         &mir::AggregateKind::Adt(adt_did, variant, args, _, _) => {
@@ -1540,7 +1541,8 @@ pub fn handle_adt_ag<'tcx>(
             json!({
                 "adt": AdtInst::new(adt, args).to_json(mir),
                 "variant": variant.to_json(mir),
-                "ops": opv.to_json(mir)
+                "ops": opv.to_json(mir),
+                "ty": ty.to_json(mir),
             })
         }
         _ => unreachable!("bad"),
