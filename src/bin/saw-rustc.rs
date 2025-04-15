@@ -34,7 +34,7 @@ fn main() {
 
     let e = Command::new(&wrapper_path)
         .args(&args)
-        .env("EXPORT_ALL", "true")
+        //.env("EXPORT_ALL", "true")
         .exec();
     unreachable!("exec failed: {:?}", e);
 }
