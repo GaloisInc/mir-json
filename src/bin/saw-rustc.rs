@@ -25,6 +25,13 @@ fn main() {
         args.push(host_triple().into());
     }
 
+    // This makes saw rustc behavior match the behavior of cargo
+    // without it the json output is much larger than that of cargo
+    if args.iter().all(|a| !a.starts_with("--edition")) {
+        args.push("--edition".into());
+        args.push("2021".into());
+    }
+
     let my_path = PathBuf::from(env::args_os().nth(0).unwrap());
     let wrapper_path = if let Some(dir) = my_path.parent() {
         dir.join("mir-json-rustc-wrapper")
