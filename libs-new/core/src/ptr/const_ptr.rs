@@ -1,5 +1,6 @@
 use super::*;
 use crate::cmp::Ordering::{Equal, Greater, Less};
+use crate::crucible;
 use crate::intrinsics::const_eval_select;
 use crate::mem::SizedTypeProperties;
 use crate::slice::{self, SliceIndex};
@@ -37,24 +38,7 @@ impl<T: ?Sized> *const T {
     #[inline]
     #[rustc_allow_const_fn_unstable(const_eval_select)]
     pub const fn is_null(self) -> bool {
-        // Compare via a cast to a thin pointer, so fat pointers are only
-        // considering their "data" part for null-ness.
-        let ptr = self as *const u8;
-        const_eval_select!(
-            @capture { ptr: *const u8 } -> bool:
-            // This use of `const_raw_ptr_comparison` has been explicitly blessed by t-lang.
-            if const #[rustc_allow_const_fn_unstable(const_raw_ptr_comparison)] {
-                match (ptr).guaranteed_eq(null_mut()) {
-                    Some(res) => res,
-                    // To remain maximally convervative, we stop execution when we don't
-                    // know whether the pointer is null or not.
-                    // We can *not* return `false` here, that would be unsound in `NonNull::new`!
-                    None => panic!("null-ness of this pointer cannot be determined in const context"),
-                }
-            } else {
-                ptr.addr() == 0
-            }
-        )
+        crucible::ptr::compare_usize(self, 0)
     }
 
     /// Casts to a pointer of another type.
