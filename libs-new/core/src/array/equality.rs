@@ -142,6 +142,7 @@ impl<T: PartialEq<Other>, Other, const N: usize> SpecArrayEq<Other, N> for T {
     }
 }
 
+/*
 impl<T: BytewiseEq<U>, U, const N: usize> SpecArrayEq<U, N> for T {
     fn spec_eq(a: &[T; N], b: &[U; N]) -> bool {
         // SAFETY: Arrays are compared element-wise, and don't add any padding
@@ -153,3 +154,4 @@ impl<T: BytewiseEq<U>, U, const N: usize> SpecArrayEq<U, N> for T {
         !Self::spec_eq(a, b)
     }
 }
+*/

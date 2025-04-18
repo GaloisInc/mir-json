@@ -23,3 +23,9 @@ identify all of the code that was changed in each patch.
 
   The internal function `alloc::rc::is_dangling` is implemented similarly to
   `is_null`, so we reimplement it in terms of `compare_usize` as well.
+
+* Disable `IsRawEqComparable`-based `SpecArrayEq` instances (last applied: April 18, 2025)
+
+  These require pointer casts that Crucible can't support. We instead fall back
+  on the other `SpecArrayEq` instances that are slower (but easier to
+  translate).
