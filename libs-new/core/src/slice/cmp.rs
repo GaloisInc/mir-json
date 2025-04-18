@@ -73,6 +73,7 @@ where
     }
 }
 
+/*
 // When each element can be compared byte-wise, we can compare all the bytes
 // from the whole size in one call to the intrinsics.
 impl<A, B> SlicePartialEq<B> for [A]
@@ -92,6 +93,7 @@ where
         }
     }
 }
+*/
 
 #[doc(hidden)]
 // intermediate trait for specialization of slice's PartialOrd
@@ -199,6 +201,7 @@ unsafe impl UnsignedBytewiseOrd for NonZero<u8> {}
 unsafe impl UnsignedBytewiseOrd for Option<NonZero<u8>> {}
 unsafe impl UnsignedBytewiseOrd for ascii::Char {}
 
+/*
 // `compare_bytes` compares a sequence of unsigned bytes lexicographically, so
 // use it if the requirements for `UnsignedBytewiseOrd` are fulfilled.
 impl<A: Ord + UnsignedBytewiseOrd> SliceOrd for A {
@@ -224,6 +227,7 @@ impl<A: Ord + UnsignedBytewiseOrd> SliceOrd for A {
         order.cmp(&0)
     }
 }
+*/
 
 pub(super) trait SliceContains: Sized {
     fn slice_contains(&self, x: &[Self]) -> bool;
