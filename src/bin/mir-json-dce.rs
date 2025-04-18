@@ -22,7 +22,7 @@ use mir_json::link;
 
 
 fn main() {
-    rustc_log::init_env_logger("RUST_LOG").unwrap();
+    rustc_log::init_logger(rustc_log::LoggerConfig::from_env("RUST_LOG")).unwrap();
 
     let mut last_time = Instant::now();
     let mut measure = || {

@@ -10,18 +10,21 @@ extern crate rustc_metadata;
 extern crate getopts;
 extern crate rustc_ast;
 extern crate rustc_errors;
+extern crate rustc_middle;
 extern crate rustc_target;
 extern crate rustc_session;
+extern crate rustc_span;
 
 extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
-use rustc_session::config::Externs;
+use rustc_ast::Crate;
+use rustc_middle::ty::TyCtxt;
 use rustc_driver::Compilation;
 use rustc_interface::interface::{Compiler, Config};
-use rustc_interface::Queries;
-use rustc_session::config::ExternLocation;
+use rustc_session::config::{Externs, ExternLocation, OutFileName, OutputFilenames};
+use rustc_span::Symbol;
 use std::collections::HashSet;
 use std::env;
 use std::fs::{File, OpenOptions};
@@ -37,6 +40,8 @@ use std::process::{Command, ExitCode};
 /// the path of the test executable when compiling in `--test` mode.
 #[derive(Default)]
 struct GetOutputPathCallbacks {
+    crate_name: Option<Symbol>,
+    outputs: Option<OutputFilenames>,
     output_path: Option<PathBuf>,
     use_override_crates: HashSet<String>,
 }
@@ -46,42 +51,52 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        krate: &mut Crate,
     ) -> Compilation {
         // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may be visible.  Even
         // the limited amount of compilation we do will fail without the injected `register_attr`.
-        analyz::inject_attrs(queries);
+        analyz::inject_attrs(krate);
 
-        let sess = compiler.session();
-        let (crate_name, outputs) = {
-            // rustc_session::find_crate_name - get the crate with queries.expansion?
-            let krate = queries.parse().unwrap();
-            let krate = krate.borrow();
-            let crate_name = rustc_session::output::find_crate_name(&sess, &krate.attrs);
-            let outputs = compiler.build_output_filenames(&sess, &krate.attrs);
-            (crate_name, outputs)
-        };
-        // Advance the state slightly further, initializing crate_types()
-        queries.register_plugins().unwrap();
-        self.output_path = Some(rustc_session::output::out_filename(
+        let sess = &compiler.sess;
+        self.crate_name = Some(rustc_session::output::find_crate_name(sess, &krate.attrs));
+        self.outputs = Some(rustc_interface::util::build_output_filenames(&krate.attrs, sess));
+
+        Compilation::Continue
+    }
+
+    fn after_expansion<'tcx>(
+        &mut self,
+        compiler: &Compiler,
+        tcx: TyCtxt<'tcx>,
+    ) -> Compilation {
+        let crate_name = self.crate_name.unwrap();
+        let outputs = self.outputs.as_ref().unwrap();
+        let sess = &compiler.sess;
+        let out_filename = rustc_session::output::out_filename(
             sess,
-            sess.crate_types().first().unwrap().clone(),
+            tcx.crate_types().first().unwrap().clone(),
             &outputs,
             crate_name,
-        ));
+        );
+        self.output_path = match out_filename {
+            OutFileName::Real(p) => Some(p),
+            OutFileName::Stdout => panic!("out_filename is stdout"),
+        };
         Compilation::Stop
     }
 }
 
 fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> PathBuf {
     let mut callbacks = GetOutputPathCallbacks {
+        crate_name: None,
+        outputs: None,
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
+    rustc_driver::run_compiler(&args, &mut callbacks);
     callbacks.output_path.unwrap()
 }
 
@@ -110,30 +125,30 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
     }
 
-    fn after_parsing<'tcx>(
+    fn after_crate_root_parsing(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        krate: &mut Crate,
     ) -> Compilation {
-        analyz::inject_attrs(queries);
+        analyz::inject_attrs(krate);
         Compilation::Continue
     }
 
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        analyz::gather_match_spans(queries);
+        analyz::gather_match_spans(tcx);
         Compilation::Continue
     }
 
     fn after_analysis<'tcx>(
         &mut self,
         compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
+        tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        self.analysis_data = analyz::analyze(compiler.session(), queries, self.export_style).unwrap();
+        self.analysis_data = analyz::analyze(&compiler.sess, tcx, self.export_style).unwrap();
         Compilation::Continue
     }
 }
@@ -215,14 +230,14 @@ fn go() -> ExitCode {
             eprintln!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
-            rustc_driver::RunCompiler::new(
+            rustc_driver::run_compiler(
                 &args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
                     use_override_crates: use_override_crates.clone(),
                     export_style,
                 },
-            ).run().unwrap();
+            );
             return ExitCode::SUCCESS;
         },
         Some(x) => x,
@@ -256,7 +271,7 @@ fn go() -> ExitCode {
         use_override_crates: use_override_crates.clone(),
         export_style,
     };
-    rustc_driver::RunCompiler::new(&args, &mut callbacks).run().unwrap();
+    rustc_driver::run_compiler(&args, &mut callbacks);
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 

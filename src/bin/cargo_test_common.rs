@@ -3,7 +3,7 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::{self, Command};
-use rustc_session::config::host_triple;
+use rustc_session::config::host_tuple;
 use cargo::util::command_prelude::*;
 use toml_edit::easy::value::Value as TomlValue;
 
@@ -153,7 +153,7 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     // explicitly to its default value.
     if !orig_args.iter().any(|a| a == "--target") {
         args.push("--target".into());
-        args.push(host_triple().into());
+        args.push(host_tuple().into());
     }
     for extra_arg in extra_args {
         args.push(extra_arg.into());

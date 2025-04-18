@@ -3,17 +3,15 @@
 use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_index::vec::Idx;
-use rustc_interface::Queries;
+use rustc_index::Idx;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
 use rustc_middle::mir::mono::MonoItem;
 use rustc_session::{self, Session};
-use rustc_session::config::OutputType;
+use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
-use rustc_target::abi;
-use rustc_target::spec;
+use rustc_abi::{self, ExternAbi};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
@@ -34,7 +32,7 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
-impl<'tcx> ToJson<'tcx> for abi::VariantIdx {
+impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()
     }
@@ -65,9 +63,20 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &mir::AggregateKind::Generator(_, _, _,) => {
+            &mir::AggregateKind::Coroutine(_, _,) => {
                 // TODO
-                json!({"kind": "Generator"})
+                json!({"kind": "Coroutine"})
+            }
+            &mir::AggregateKind::CoroutineClosure(_, _,) => {
+                // TODO
+                json!({"kind": "CoroutineClosure"})
+            }
+            &mir::AggregateKind::RawPtr(ty, mutbl) => {
+                json!({
+                    "kind": "RawPtr",
+                    "ty": ty.to_json(mir),
+                    "mutbl": mutbl.to_json(mir),
+                })
             }
         }
     }
@@ -84,23 +93,25 @@ fn vtable_descriptor_for_cast<'tcx>(
 ) -> Option<ty::PolyTraitRef<'tcx>> {
     let tcx = mir.state.tcx;
 
-    if kind != mir::CastKind::Pointer(ty::adjustment::PointerCast::Unsize) {
+    let is_unsize_cast = matches!(
+        kind, mir::CastKind::PointerCoercion(ty::adjustment::PointerCoercion::Unsize, _));
+    if !is_unsize_cast {
         return None;
     }
 
     // Relevant code: rustc_codegen_ssa::base::unsized_info, and other functions in that file.
     let old_pointee = match *old_ty.kind() {
         ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        ty::TyKind::RawPtr(ty, _) => ty,
         _ => return None,
     };
     let new_pointee = match *new_ty.kind() {
         ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ref tm) => tm.ty,
+        ty::TyKind::RawPtr(ty, _) => ty,
         _ => return None,
     };
 
-    if !tcx.is_sized_raw(ty::ParamEnv::reveal_all().and(old_pointee)) {
+    if !tcx.is_sized_raw(ty::TypingEnv::fully_monomorphized().as_query_input(old_pointee)) {
         // We produce a vtable only for sized -> TyDynamic casts.
         return None;
     }
@@ -149,13 +160,15 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({
                     "kind": "ThreadLocalRef",
                     "def_id": did.to_json(mir),
-                    "ty": mir.state.tcx.static_ptr_ty(did).to_json(mir),
+                    "ty": mir.state.tcx
+                        .static_ptr_ty(did, ty::TypingEnv::fully_monomorphized())
+                        .to_json(mir),
                 })
             }
-            &mir::Rvalue::AddressOf(mutbl, ref l) => {
+            &mir::Rvalue::RawPtr(kind, ref l) => {
                 json!({
                     "kind": "AddressOf",
-                    "mutbl": mutbl.to_json(mir),
+                    "mutbl": kind.to_mutbl_lossy().to_json(mir),
                     "place": l.to_json(mir)
                 })
             }
@@ -188,14 +201,8 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "R": ops.1.to_json(mir)
                 })
             }
-            &mir::Rvalue::CheckedBinaryOp(ref binop, ref ops) => {
-                json!({
-                    "kind": "CheckedBinaryOp",
-                    "op": binop.to_json(mir),
-                    "L": ops.0.to_json(mir),
-                    "R": ops.1.to_json(mir)
-                })
-            }
+            // RUSTUP_TODO: remove support for CheckedBinaryOp from crucible-mir (checked arith is
+            // now implemented with Rvalue::BinaryOp(BinOp::AddWithOvereflow) etc.)
             &mir::Rvalue::NullaryOp(ref no, ref t) => {
                 json!({
                     "kind": "NullaryOp",
@@ -222,9 +229,10 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
             }
             &mir::Rvalue::Aggregate(ref ak, ref opv) => {
                 if ty_json::is_adt_ak(ak) {
+                    let ty = self.ty(mir.mir.unwrap(), mir.state.tcx);
                     json!({
                         "kind": "AdtAg",
-                        "ag": ty_json::handle_adt_ag (mir, ak, opv)
+                        "ag": ty_json::handle_adt_ag(mir, ak, opv, ty)
                     })
                 } else {
                     json!({
@@ -245,6 +253,13 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                 json!({
                     "kind": "CopyForDeref",
                     "place": l.to_json(mir)
+                })
+            }
+            &mir::Rvalue::WrapUnsafeBinder(ref op, ty) => {
+                json!({
+                    "kind": "WrapUnsafeBinder",
+                    "op": op.to_json(mir),
+                    "ty": ty.to_json(mir),
                 })
             }
         }
@@ -302,11 +317,17 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
             &mir::ProjectionElem::OpaqueCast(ref ty) => {
                 json!({"kind": "OpaqueCast", "variant": ty.to_json(mir) })
             }
+            &mir::ProjectionElem::UnwrapUnsafeBinder(ref ty) => {
+                json!({"kind": "UnwrapUnsafeBinder", "ty": ty.to_json(mir) })
+            }
+            &mir::ProjectionElem::Subtype(ref ty) => {
+                json!({"kind": "Subtype", "ty": ty.to_json(mir) })
+            }
         }
     }
 }
 
-impl ToJson<'_> for mir::Field {
+impl ToJson<'_> for rustc_abi::FieldIdx {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
         json!(self.index())
     }
@@ -328,7 +349,7 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for mir::Constant<'tcx> {
+impl<'tcx> ToJson<'tcx> for mir::ConstOperand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         (eval_mir_constant(mir.state.tcx, self), self.ty()).to_json(mir)
     }
@@ -341,8 +362,9 @@ impl<'tcx> ToJson<'tcx> for mir::LocalDecl<'tcx> {
             "ty": self.ty.to_json(mir),
             // We specifically record whether the variable's type is zero-sized, because rustc
             // allows reading and taking refs of uninitialized zero-sized locals.
-            "is_zst": mir.state.tcx.layout_of(ty::ParamEnv::reveal_all().and(self.ty))
-                .expect("failed to get layout").is_zst(),
+            "is_zst": mir.state.tcx.layout_of(
+                ty::TypingEnv::fully_monomorphized().as_query_input(self.ty),
+            ).expect("failed to get layout").is_zst(),
         })
     }
 }
@@ -385,6 +407,12 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 // TODO
                 json!({"kind": "Retag"})
             }
+            &mir::StatementKind::PlaceMention(ref pl) => {
+                json!({
+                    "kind": "PlaceMention",
+                    "lvalue": pl.to_json(mir),
+                })
+            }
             &mir::StatementKind::AscribeUserType { .. } => {
                 // TODO
                 json!({"kind": "AscribeUserType"})
@@ -415,6 +443,12 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
                 }
                 // TODO
                 //json!({"kind": "Intrinsic" })
+            }
+            &mir::StatementKind::ConstEvalCounter => {
+                json!({"kind": "ConstEvalCounter"})
+            }
+            &mir::StatementKind::BackwardIncompatibleDropHint { .. }=> {
+                json!({"kind": "BackwardIncompatibleDropHint"})
             }
         };
         j["pos"] = self.source_info.span.to_json(mir);
@@ -470,8 +504,11 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "switch_ty": discr.ty(mir.mir.unwrap(), mir.state.tcx).to_json(mir)
                 })
             }
-            &mir::TerminatorKind::Resume => {
+            &mir::TerminatorKind::UnwindResume => {
                 json!({"kind": "Resume"})
+            }
+            &mir::TerminatorKind::UnwindTerminate(_) => {
+                json!({ "kind": "Abort" })
             }
             &mir::TerminatorKind::Return => {
                 json!({"kind": "Return"})
@@ -483,39 +520,27 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 place: ref location,
                 ref target,
                 ref unwind,
+                replace: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
                 json!({
                     "kind": "Drop",
                     "location": location.to_json(mir),
                     "target" : target.to_json(mir),
-                    "unwind": unwind.to_json(mir),
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "unwind": (), //unwind.to_json(mir),
                     "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
-            &mir::TerminatorKind::DropAndReplace {
-                place: ref location,
-                ref value,
-                ref target,
-                ref unwind,
-            } => {
-                let ty = location.ty(mir.mir.unwrap(), mir.state.tcx).ty;
-                json!({
-                    "kind": "DropAndReplace",
-                    "location": location.to_json(mir),
-                    "value": value.to_json(mir),
-                    "target": target.to_json(mir),
-                    "unwind": unwind.to_json(mir),
-                    "drop_fn": get_drop_fn_name(mir, ty),
-                })
-            }
+            // RUSTUP_TODO: remove support for DropAndReplace from crucible-mir
             &mir::TerminatorKind::Call {
                 ref func,
                 ref args,
                 destination: ref dest_place,
                 target: ref dest_block,
-                ref cleanup,
-                ref from_hir_call,
+                ref unwind,
+                ref call_source,
                 fn_span: _,
             } => {
                 let destination = dest_block.as_ref().map(|dest_block| {
@@ -529,8 +554,27 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "func": func.to_json(mir),
                     "args": args.to_json(mir),
                     "destination": destination,
-                    "cleanup": cleanup.to_json(mir),
-                    "from_hir_call": from_hir_call
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "cleanup": (), //unwind.to_json(mir),
+                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
+                    "from_hir_call": (), //from_hir_call
+                })
+            }
+            &mir::TerminatorKind::TailCall {
+                ref func,
+                ref args,
+                fn_span: _,
+            } => {
+                // RUSTUP_TODO: decide whether we need to support TailCall in crucible-mir.  Check
+                // whether it can appear in normal code or only through the unstable `become`
+                // expression.  Or, implement by treating as `Call` + `Return` (see rustc docs)
+                json!({
+                    "kind": "TailCall",
+                    "func": func.to_json(mir),
+                    "args": args.to_json(mir),
+                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
+                    "from_hir_call": (), //from_hir_call
                 })
             }
             &mir::TerminatorKind::Assert {
@@ -538,7 +582,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref expected,
                 ref msg,
                 ref target,
-                ref cleanup,
+                ref unwind,
             } => {
                 json!({
                     "kind": "Assert",
@@ -546,11 +590,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "expected": expected,
                     "msg": msg.to_json(mir),
                     "target": target.to_json(mir),
-                    "cleanup": cleanup.to_json(mir)
+                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
+                    // remove this field (we probably don't use it for anything in crucible-mir)
+                    "cleanup": (), //unwind.to_json(mir)
                 })
-            }
-            &mir::TerminatorKind::Abort => {
-                json!({ "kind": "Abort" })
             }
             &mir::TerminatorKind::Yield { .. } => {
                 // TODO
@@ -570,8 +613,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "kind": "FalseUnwind"
                 })
             }
-            &mir::TerminatorKind::GeneratorDrop => {
-                json!({ "kind": "GeneratorDrop" })
+            &mir::TerminatorKind::CoroutineDrop => {
+                json!({ "kind": "CoroutineDrop" })
             }
             &mir::TerminatorKind::InlineAsm { .. } => {
                 // TODO
@@ -639,21 +682,21 @@ fn emit_trait<'tcx>(
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
     let methods = if let Some(tref) = ti.concrete_trait_ref(tcx) {
-        tcx.vtable_entries(ty::Binder::dummy(tref))
+        tcx.vtable_entries(tref)
     } else {
         &[]
     };
     let mut items = Vec::with_capacity(methods.len());
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceDef::Virtual` indices accordingly.
-        let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+        // adjust `InstanceKind::Virtual` indices accordingly.
+        let (def_id, args) = match m {
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
-        let sig = tcx.subst_and_normalize_erasing_regions(
-            substs, ty::ParamEnv::reveal_all(), tcx.fn_sig(def_id));
-        let sig = tcx.erase_late_bound_regions(sig);
+        let sig = tcx.instantiate_and_normalize_erasing_regions(
+            args, ty::TypingEnv::fully_monomorphized(), tcx.fn_sig(def_id));
+        let sig = tcx.instantiate_bound_regions_with_erased(sig);
 
         items.push(json!({
             "kind": "Method",
@@ -662,7 +705,7 @@ fn emit_trait<'tcx>(
         }));
     }
 
-    ms.state.session.note_without_error(&format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
+    ms.state.session.dcx().note(format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
 
     out.emit(EntryKind::Trait, json!({
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
@@ -676,8 +719,8 @@ fn emit_trait<'tcx>(
 
 /// Emit all statics defined in the current crate.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
-    for cgu in cgus {
+    let parts = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
                 MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
@@ -733,9 +776,9 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
     let test = Symbol::intern("test");
     for attr in tcx.get_attrs_unchecked(def_id) {
         match &attr.kind {
-            rustc_ast::AttrKind::Normal(na) => {
-                let segs = &na.item.path.segments;
-                if segs.len() == 2 && segs[0].ident.name == crux && segs[1].ident.name == test {
+            rustc_hir::AttrKind::Normal(ref na) => {
+                let segs = &na.path.segments;
+                if segs.len() == 2 && segs[0].name == crux && segs[1].name == test {
                     return true;
                 }
             }
@@ -748,7 +791,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
 /// may also call `out.add_root` if this is a top-level crate.
 fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let is_top_level = ms.state.session.parse_sess.config.iter()
+    let is_top_level = ms.state.session.psess.config.iter()
         .any(|&(key, _)| key.as_str() == "crux_top_level");
 
     if is_top_level {
@@ -760,8 +803,8 @@ fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()
 
 /// Add every `MonoItem::Fn` to `ms.used.instances`.
 fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
-    let (_, cgus) = ms.state.tcx.collect_and_partition_mono_items(());
-    for cgu in cgus {
+    let parts = ms.state.tcx.collect_and_partition_mono_items(());
+    for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
                 MonoItem::Fn(inst) => ms.used.instances.insert(inst),
@@ -791,7 +834,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             // likely other functions elsewhere in the code that will instead
             // be marked as roots. See #55.
             if ms.export_style == ExportStyle::ExportCruxTests {
-                tcx.sess.span_err(
+                tcx.sess.dcx().span_err(
                     tcx.def_span(def_id),
                     "#[test] can only be applied to functions",
                 );
@@ -806,7 +849,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             // is likely other monomorphic code that the user _actually_ wants
             // to verify next to the polymorphic code. See #52.
             if ms.export_style == ExportStyle::ExportCruxTests {
-                tcx.sess.span_err(
+                tcx.sess.dcx().span_err(
                     tcx.def_span(def_id),
                     "#[test] cannot be applied to generic functions",
                 );
@@ -814,7 +857,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             continue;
         }
 
-        let inst = ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, List::empty())
+        let inst = ty::Instance::try_resolve(tcx, ty::TypingEnv::fully_monomorphized(), def_id, List::empty())
             .unwrap_or_else(|_| {
                 panic!("Instance::resolve failed to find test function {:?}?", def_id);
             })
@@ -839,7 +882,7 @@ fn emit_instance<'tcx>(
 
     let name = inst_id_str(tcx, inst);
 
-    // We actually record every instance in `intrinsics`, not just `InstanceDef::Intrinsic` and
+    // We actually record every instance in `intrinsics`, not just `InstanceKind::Intrinsic` and
     // other special functions, because the intrinsics table is used to look up CustomOps.
     // (CustomOps are keyed on the pre-monomorphization name of the function.)
     out.emit(EntryKind::Intrinsic, json!({
@@ -849,9 +892,8 @@ fn emit_instance<'tcx>(
     emit_new_defs(ms, out)?;
 
     match inst.def {
-        ty::InstanceDef::Item(def_id) => {
+        ty::InstanceKind::Item(def_id) => {
             // Foreign items and non-generics have no MIR available.
-            let def_id = def_id.did;
             if tcx.is_foreign_item(def_id) {
                 return Ok(());
             }
@@ -862,29 +904,35 @@ fn emit_instance<'tcx>(
                 // Items with upstream monomorphizations have already been translated into an upstream
                 // crate, so we can skip them.
                 if tcx.upstream_monomorphizations_for(def_id)
-                        .map_or(false, |monos| monos.contains_key(&inst.substs)) {
+                        .map_or(false, |monos| monos.contains_key(&inst.args)) {
                     return Ok(());
                 }
             }
         },
         // These variants are unsupported by the `mir_shims` query, which backs `instance_mir`.
-        ty::InstanceDef::Virtual(..) |
-        ty::InstanceDef::Intrinsic(..) => return Ok(()),
+        ty::InstanceKind::Virtual(..) |
+        ty::InstanceKind::Intrinsic(..) => return Ok(()),
         _ => {},
     }
 
     // Look up and monomorphize the MIR for this instance.
-    let mir = tcx.instance_mir(inst.def);
-    let mir: Body = tcx.subst_and_normalize_erasing_regions(
-        inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+    // RUSTUP_TODO: check whether this is correct.  It's based on the implementation of
+    // rustc_smir's BodyBuilder::build, which has a separate case for non-polymorphic functions.
+    let mir: Body = inst.instantiate_mir_and_normalize_erasing_regions(
+        tcx,
+        ty::TypingEnv::fully_monomorphized(),
+        ty::EarlyBinder::bind(tcx.instance_mir(inst.def).clone()),
+    );
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(inst), mir)?;
 
-    if let ty::InstanceDef::Item(def_id) = inst.def {
-        let def_id = def_id.did;
+    if let ty::InstanceKind::Item(def_id) = inst.def {
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = tcx.subst_and_normalize_erasing_regions(
-                inst.substs, ty::ParamEnv::reveal_all(), mir.clone());
+            let mir = inst.instantiate_mir_and_normalize_erasing_regions(
+                tcx,
+                ty::TypingEnv::fully_monomorphized(),
+                ty::EarlyBinder::bind(mir.clone()),
+            );
             let mir = tcx.arena.alloc(mir);
             emit_promoted(ms, out, &name, idx, mir)?;
         }
@@ -912,7 +960,7 @@ fn emit_vtable<'tcx>(
     out: &mut impl JsonOutput,
     poly_trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> io::Result<()> {
-    let trait_ref = ms.state.tcx.erase_late_bound_regions(poly_trait_ref);
+    let trait_ref = ms.state.tcx.instantiate_bound_regions_with_erased(poly_trait_ref);
     let ti = TraitInst::from_trait_ref(ms.state.tcx, trait_ref);
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.state.tcx, &ti),
@@ -934,20 +982,21 @@ fn build_vtable_items<'tcx>(
     trait_ref: ty::PolyTraitRef<'tcx>,
 ) -> serde_json::Value {
     let tcx = mir.state.tcx;
+    let trait_ref = tcx.instantiate_bound_regions_with_erased(trait_ref);
     let methods = tcx.vtable_entries(trait_ref);
 
     let mut parts = Vec::with_capacity(methods.len());
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceDef::Virtual` indices accordingly.
-        let (def_id, substs) = match m {
-            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.substs),
+        // adjust `InstanceKind::Virtual` indices accordingly.
+        let (def_id, args) = match m {
+            ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
         };
         parts.push(json!({
             "item_id": def_id.to_json(mir),
             // `def_id` is the name of the concrete function.
-            "def_id": get_fn_def_name(mir, def_id, substs),
+            "def_id": get_fn_def_name(mir, def_id, args),
         }));
     }
     parts.into()
@@ -962,8 +1011,7 @@ fn emit_adt<'tcx>(
     let tcx = ms.state.tcx;
 
     let adt_name = adt_inst_id_str(tcx, ai);
-    tcx.sess.note_without_error(
-        format!("Emitting ADT definition for {}", adt_name).as_str());
+    tcx.sess.dcx().note(format!("Emitting ADT definition for {}", adt_name));
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
     emit_new_defs(ms, out)?;
     Ok(())
@@ -978,7 +1026,7 @@ fn emit_fn<'tcx>(
     inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
 ) -> io::Result<()> {
-    ms.state.session.note_without_error(&format!("Emitting MIR for {}", name));
+    ms.state.session.dcx().note(format!("Emitting MIR for {}", name));
 
     let mut ms = MirState {
         mir: Some(mir),
@@ -991,7 +1039,7 @@ fn emit_fn<'tcx>(
     };
     let ms = &mut ms;
 
-    let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(spec::abi::Abi::Rust);
+    let abi = inst.map(|i| inst_abi(ms.state.tcx, i)).unwrap_or(ExternAbi::Rust);
 
     out.emit(EntryKind::Fn, json!({
         "name": &name,
@@ -1021,21 +1069,21 @@ fn emit_new_defs(
 fn inst_abi<'tcx>(
     tcx: TyCtxt<'tcx>,
     inst: ty::Instance<'tcx>,
-) -> spec::abi::Abi {
+) -> ExternAbi {
     match inst.def {
-        ty::InstanceDef::Item(def_id) => {
-            let def_id = def_id.did;
-            let ty = tcx.type_of(def_id);
+        ty::InstanceKind::Item(def_id) => {
+            // OK to ignore binders, since we're only looking at the function's ABI.
+            let ty = tcx.type_of(def_id).skip_binder();
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
                     ty.fn_sig(tcx).skip_binder().abi,
-                ty::TyKind::Closure(_, _) => spec::abi::Abi::RustCall,
-                _ => spec::abi::Abi::Rust,
+                ty::TyKind::Closure(_, _) => ExternAbi::RustCall,
+                _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceDef::Intrinsic(_) => spec::abi::Abi::RustIntrinsic,
-        ty::InstanceDef::ClosureOnceShim { .. } => spec::abi::Abi::RustCall,
-        _ => spec::abi::Abi::Rust,
+        ty::InstanceKind::Intrinsic(_) => ExternAbi::RustIntrinsic,
+        ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
+        _ => ExternAbi::Rust,
     }
 }
 
@@ -1051,107 +1099,108 @@ pub struct AnalysisData<O> {
 /// the crate MIR, returns `Ok(None)` when there is no need to write out MIR (namely, when `comp`
 /// is not producing an `Exe` output), and returns `Err(e)` on I/O or serialization errors.
 fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
+    // RUSTUP_TODO: sess is probably unneeded now (accessible through tcx)
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
     mk_output: F,
 ) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
     let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
 
-    let output = queries.global_ctxt().unwrap().enter(|tcx| -> io::Result<_> {
-        let outputs = tcx.output_filenames(());
-        if !outputs.outputs.contains_key(&OutputType::Exe) {
-            return Ok(None);
-        }
-        let mir_path_ = rustc_session::output::out_filename(
-            sess,
-            sess.crate_types().first().unwrap().clone(),
-            &outputs,
-            tcx.crate_name(LOCAL_CRATE),
-        ).with_extension("mir");
-        let mut out = mk_output(&mir_path_)?;
-        mir_path = Some(mir_path_);
+    let outputs = tcx.output_filenames(());
+    if !outputs.outputs.contains_key(&OutputType::Exe) {
+        return Ok(None);
+    }
+    let out_path = rustc_session::output::out_filename(
+        sess,
+        tcx.crate_types().first().unwrap().clone(),
+        &outputs,
+        tcx.crate_name(LOCAL_CRATE),
+    );
+    let mir_path_ = match out_path {
+        OutFileName::Real(path) => path.with_extension("mir"),
+        OutFileName::Stdout => {
+            sess.dcx().fatal("writing output to stdout is not supported");
+        },
+    };
+    let mut out = mk_output(&mir_path_)?;
+    mir_path = Some(mir_path_);
 
-        for &cnum in tcx.crates(()) {
-            let src = tcx.used_crate_source(cnum);
-            let it = src.dylib.iter()
-                .chain(src.rlib.iter())
-                .chain(src.rmeta.iter());
-            for &(ref path, _) in it {
-                let mir_path = path.with_extension("mir");
-                if mir_path.exists() {
-                    extern_mir_paths.push(mir_path);
-                    // Add only one copy of the MIR for a crate, even when we have multiple
-                    // versions of the crate (such as `.so` and `.rlib`).
-                    break;
-                }
+    for &cnum in tcx.crates(()) {
+        let src = tcx.used_crate_source(cnum);
+        let it = src.dylib.iter()
+            .chain(src.rlib.iter())
+            .chain(src.rmeta.iter());
+        for &(ref path, _) in it {
+            let mir_path = path.with_extension("mir");
+            if mir_path.exists() {
+                extern_mir_paths.push(mir_path);
+                // Add only one copy of the MIR for a crate, even when we have multiple
+                // versions of the crate (such as `.so` and `.rlib`).
+                break;
             }
         }
+    }
 
 
-        let mut used = Used::default();
-        let mut tys = TyIntern::default();
-        let mut allocs = AllocIntern::default();
-        let state = CompileState {
-            session: sess,
-            tcx,
-        };
-        let mut ms = MirState {
-            mir: None,
-            used: &mut used,
-            state: &state,
-            tys: &mut tys,
-            match_span_map: &get_match_spans(),
-            allocs: &mut allocs,
-            export_style: export_style,
-        };
+    let mut used = Used::default();
+    let mut tys = TyIntern::default();
+    let mut allocs = AllocIntern::default();
+    let state = CompileState {
+        session: sess,
+        tcx,
+    };
+    let mut ms = MirState {
+        mir: None,
+        used: &mut used,
+        state: &state,
+        tys: &mut tys,
+        match_span_map: &get_match_spans(),
+        allocs: &mut allocs,
+        export_style: export_style,
+    };
 
-        // Traits and top-level statics can be enumerated directly.
-        emit_statics(&mut ms, &mut out)?;
+    // Traits and top-level statics can be enumerated directly.
+    emit_statics(&mut ms, &mut out)?;
 
-        // Everything else is demand-driven, to handle monomorphization.  We start with all
-        // #[test] functions, then keep looping until there are no more nodes to process.
-        init_instances(&mut ms, &mut out)?;
+    // Everything else is demand-driven, to handle monomorphization.  We start with all
+    // #[test] functions, then keep looping until there are no more nodes to process.
+    init_instances(&mut ms, &mut out)?;
 
-        while ms.used.has_new() {
-            for inst in ms.used.instances.take_new() {
-                emit_instance(&mut ms, &mut out, inst)?;
-            }
-            for vtable in ms.used.vtables.take_new() {
-                emit_vtable(&mut ms, &mut out, vtable)?;
-            }
-            for adt in ms.used.types.take_new() {
-                emit_adt(&mut ms, &mut out, adt)?;
-            }
-            for ti in ms.used.traits.take_new() {
-                emit_trait(&mut ms, &mut out, ti)?;
-            }
+    while ms.used.has_new() {
+        for inst in ms.used.instances.take_new() {
+            emit_instance(&mut ms, &mut out, inst)?;
         }
+        for vtable in ms.used.vtables.take_new() {
+            emit_vtable(&mut ms, &mut out, vtable)?;
+        }
+        for adt in ms.used.types.take_new() {
+            emit_adt(&mut ms, &mut out, adt)?;
+        }
+        for ti in ms.used.traits.take_new() {
+            emit_trait(&mut ms, &mut out, ti)?;
+        }
+    }
 
-        // Any referenced types should normally be emitted immediately after the entry that
-        // references them, but we check again here just in case.
-        emit_new_defs(&mut ms, &mut out)?;
-
-        Ok(Some(out))
-    })?;
+    // Any referenced types should normally be emitted immediately after the entry that
+    // references them, but we check again here just in case.
+    emit_new_defs(&mut ms, &mut out)?;
 
     let mir_path = match mir_path {
         Some(x) => x,
         None => return Ok(None),
     };
-    // `output` should be `Some` if `mir_path` was `Some`.
-    let output = output.unwrap();
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out }))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, export_style, |_| { Ok(lib_util::Output::default()) })?;
+    let opt_ad = analyze_inner(sess, tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
     let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1170,8 +1219,8 @@ pub fn analyze_nonstreaming<'tcx>(
         "tys": out.tys,
         "roots": out.roots,
     });
-    sess.note_without_error(
-        &format!("Indexing MIR ({} items)...", total_items));
+    sess.dcx().note(
+        format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
     lib_util::write_indexed_crate(file, &j)?;
 
@@ -1180,10 +1229,10 @@ pub fn analyze_nonstreaming<'tcx>(
 
 pub fn analyze_streaming<'tcx>(
     sess: &Session,
-    queries: &'tcx Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(sess, queries, export_style, lib_util::start_streaming)?;
+    let opt_ad = analyze_inner(sess, tcx, export_style, lib_util::start_streaming)?;
     let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
@@ -1200,14 +1249,18 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
         kind: ast::AttrKind::Normal(
             ptr::P(ast::NormalAttr {
                 item: ast::AttrItem {
+                    unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),
                     args: ast::AttrArgs::Delimited(
                         ast::DelimArgs {
                             dspan: tokenstream::DelimSpan::dummy(),
-                            delim: ast::MacDelimiter::Parenthesis,
+                            delim: token::Delimiter::Parenthesis,
                             tokens: iter::once(
                                 tokenstream::TokenTree::token_alone(
-                                    token::TokenKind::Ident(Symbol::intern(value), false),
+                                    token::TokenKind::Ident(
+                                        Symbol::intern(value),
+                                        token::IdentIsRaw::No,
+                                    ),
                                     Span::default(),
                                 ),
                             ).collect(),
@@ -1222,9 +1275,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
     }
 }
 
-pub fn inject_attrs<'tcx>(queries: &'tcx Queries<'tcx>) {
-    let mut k = queries.parse().unwrap();
-    let krate: &mut Crate = k.get_mut();
+pub fn inject_attrs<'tcx>(krate: &mut Crate) {
     krate.attrs.push(make_attr("feature", "register_tool"));
     krate.attrs.push(make_attr("register_tool", "crux"));
 }
@@ -1246,7 +1297,7 @@ impl GatherMatchSpans {
 impl<'a> visit::Visitor<'a> for GatherMatchSpans {
     fn visit_expr(&mut self, e: &ast::Expr) {
         match e.kind {
-            ast::ExprKind::Match(ref discr, ref arms) => {
+            ast::ExprKind::Match(ref discr, ref arms, _kind) => {
                 self.visit_expr(discr);
 
                 self.with_cur_match_discr_span(Some(discr.span), |self_| {
@@ -1267,7 +1318,9 @@ impl<'a> visit::Visitor<'a> for GatherMatchSpans {
             if let Some(ref e) = a.guard {
                 self_.visit_expr(e);
             }
-            self_.visit_expr(&a.body);
+            if let Some(ref e) = a.body {
+                self_.visit_expr(e);
+            }
         });
     }
 
@@ -1293,14 +1346,12 @@ thread_local! {
     static MATCH_SPAN_MAP: RefCell<Option<Rc<HashMap<Span, Span>>>> = RefCell::default()
 }
 
-pub fn gather_match_spans<'tcx>(queries: &'tcx Queries<'tcx>) {
-    queries.global_ctxt().unwrap().enter(|tcx| {
-        let resolver = tcx.resolver_for_lowering(());
-        let krate = &resolver.borrow().1;
-        let mut v = GatherMatchSpans::default();
-        visit::walk_crate(&mut v, krate);
-        MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
-    });
+pub fn gather_match_spans<'tcx>(tcx: TyCtxt<'tcx>) {
+    let resolver = tcx.resolver_for_lowering();
+    let krate = &resolver.borrow().1;
+    let mut v = GatherMatchSpans::default();
+    visit::walk_crate(&mut v, krate);
+    MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
 }
 
 fn get_match_spans() -> Rc<HashMap<Span, Span>> {

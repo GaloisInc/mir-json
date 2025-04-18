@@ -9,7 +9,7 @@ use std::env;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
-use rustc_session::config::host_triple;
+use rustc_session::config::host_tuple;
 
 fn main() {
     let mut args = Vec::new();
@@ -22,7 +22,7 @@ fn main() {
     // explicitly to its default value.
     if args.iter().position(|s| s == "--target").is_none() {
         args.push("--target".into());
-        args.push(host_triple().into());
+        args.push(host_tuple().into());
     }
 
     let my_path = PathBuf::from(env::args_os().nth(0).unwrap());
