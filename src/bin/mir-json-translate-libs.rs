@@ -736,6 +736,10 @@ fn main() {
                         args.push("-Z".into());
                         args.push("force-unstable-if-unmarked".into());
                     }
+                    // `-Z ub-checks` generates code that uses unsupported casts, such as
+                    // pointer-to-integer casts in alignment checks.
+                    args.push("-Z".into());
+                    args.push("ub-checks=false".into());
                     for linked_path in lib.target.linked_paths {
                         args.push("-L".into());
                         args.push(linked_path.into());
