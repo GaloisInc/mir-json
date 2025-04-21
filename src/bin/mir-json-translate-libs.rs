@@ -62,6 +62,7 @@ struct UnitGraphDependency {
 /// Module to hide field of newtype [CrateName].
 mod crate_name {
     use std::fmt;
+    use std::ops::Deref;
 
     use serde::Deserialize;
 
@@ -91,6 +92,13 @@ mod crate_name {
     impl fmt::Display for CrateName {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             self.0.fmt(f)
+        }
+    }
+
+    impl Deref for CrateName {
+        type Target = str;
+        fn deref(&self) -> &str {
+            &self.0
         }
     }
 }
@@ -690,6 +698,11 @@ fn main() {
             .map(|lib| CmdInvocation {
                 program: "mir-json".into(),
                 args: {
+                    // Stdlib crates need `-Z force-unstable-if-unmarked` to make stability
+                    // attributes work properly.  But `crucible` must not be built with this flag,
+                    // since the flag makes everything unstable by default, requiring users to use
+                    // `#[feature(rustc_private)]`.
+                    let enable_stability_attrs = &*lib.target.crate_name != "crucible";
                     let mut args = vec![
                         lib.target.src_path.into(),
                         "--edition".into(),
@@ -719,8 +732,10 @@ fn main() {
                     args.push("rlib".into());
                     args.push("--remap-path-prefix".into());
                     args.push(format!("{}=.", cwd));
-                    args.push("-Z".into());
-                    args.push("force-unstable-if-unmarked".into());
+                    if enable_stability_attrs {
+                        args.push("-Z".into());
+                        args.push("force-unstable-if-unmarked".into());
+                    }
                     for linked_path in lib.target.linked_paths {
                         args.push("-L".into());
                         args.push(linked_path.into());
