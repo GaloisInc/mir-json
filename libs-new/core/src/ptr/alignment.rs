@@ -80,9 +80,122 @@ impl Alignment {
             (align: usize = align) => align.is_power_of_two()
         );
 
-        // SAFETY: By precondition, this must be a power of two, and
-        // our variants encompass all possible powers of two.
-        unsafe { mem::transmute::<usize, Alignment>(align) }
+        match align {
+            const { 1 << 0 } => Alignment(AlignmentEnum::_Align1Shl0),
+            const { 1 << 1 } => Alignment(AlignmentEnum::_Align1Shl1),
+            const { 1 << 2 } => Alignment(AlignmentEnum::_Align1Shl2),
+            const { 1 << 3 } => Alignment(AlignmentEnum::_Align1Shl3),
+            const { 1 << 4 } => Alignment(AlignmentEnum::_Align1Shl4),
+            const { 1 << 5 } => Alignment(AlignmentEnum::_Align1Shl5),
+            const { 1 << 6 } => Alignment(AlignmentEnum::_Align1Shl6),
+            const { 1 << 7 } => Alignment(AlignmentEnum::_Align1Shl7),
+            const { 1 << 8 } => Alignment(AlignmentEnum::_Align1Shl8),
+            const { 1 << 9 } => Alignment(AlignmentEnum::_Align1Shl9),
+            const { 1 << 10 } => Alignment(AlignmentEnum::_Align1Shl10),
+            const { 1 << 11 } => Alignment(AlignmentEnum::_Align1Shl11),
+            const { 1 << 12 } => Alignment(AlignmentEnum::_Align1Shl12),
+            const { 1 << 13 } => Alignment(AlignmentEnum::_Align1Shl13),
+            const { 1 << 14 } => Alignment(AlignmentEnum::_Align1Shl14),
+            const { 1 << 15 } => Alignment(AlignmentEnum::_Align1Shl15),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 16 } => Alignment(AlignmentEnum::_Align1Shl16),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 17 } => Alignment(AlignmentEnum::_Align1Shl17),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 18 } => Alignment(AlignmentEnum::_Align1Shl18),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 19 } => Alignment(AlignmentEnum::_Align1Shl19),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 20 } => Alignment(AlignmentEnum::_Align1Shl20),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 21 } => Alignment(AlignmentEnum::_Align1Shl21),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 22 } => Alignment(AlignmentEnum::_Align1Shl22),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 23 } => Alignment(AlignmentEnum::_Align1Shl23),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 24 } => Alignment(AlignmentEnum::_Align1Shl24),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 25 } => Alignment(AlignmentEnum::_Align1Shl25),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 26 } => Alignment(AlignmentEnum::_Align1Shl26),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 27 } => Alignment(AlignmentEnum::_Align1Shl27),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 28 } => Alignment(AlignmentEnum::_Align1Shl28),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 29 } => Alignment(AlignmentEnum::_Align1Shl29),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 30 } => Alignment(AlignmentEnum::_Align1Shl30),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 31 } => Alignment(AlignmentEnum::_Align1Shl31),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 32 } => Alignment(AlignmentEnum::_Align1Shl32),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 33 } => Alignment(AlignmentEnum::_Align1Shl33),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 34 } => Alignment(AlignmentEnum::_Align1Shl34),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 35 } => Alignment(AlignmentEnum::_Align1Shl35),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 36 } => Alignment(AlignmentEnum::_Align1Shl36),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 37 } => Alignment(AlignmentEnum::_Align1Shl37),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 38 } => Alignment(AlignmentEnum::_Align1Shl38),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 39 } => Alignment(AlignmentEnum::_Align1Shl39),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 40 } => Alignment(AlignmentEnum::_Align1Shl40),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 41 } => Alignment(AlignmentEnum::_Align1Shl41),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 42 } => Alignment(AlignmentEnum::_Align1Shl42),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 43 } => Alignment(AlignmentEnum::_Align1Shl43),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 44 } => Alignment(AlignmentEnum::_Align1Shl44),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 45 } => Alignment(AlignmentEnum::_Align1Shl45),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 46 } => Alignment(AlignmentEnum::_Align1Shl46),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 47 } => Alignment(AlignmentEnum::_Align1Shl47),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 48 } => Alignment(AlignmentEnum::_Align1Shl48),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 49 } => Alignment(AlignmentEnum::_Align1Shl49),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 50 } => Alignment(AlignmentEnum::_Align1Shl50),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 51 } => Alignment(AlignmentEnum::_Align1Shl51),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 52 } => Alignment(AlignmentEnum::_Align1Shl52),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 53 } => Alignment(AlignmentEnum::_Align1Shl53),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 54 } => Alignment(AlignmentEnum::_Align1Shl54),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 55 } => Alignment(AlignmentEnum::_Align1Shl55),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 56 } => Alignment(AlignmentEnum::_Align1Shl56),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 57 } => Alignment(AlignmentEnum::_Align1Shl57),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 58 } => Alignment(AlignmentEnum::_Align1Shl58),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 59 } => Alignment(AlignmentEnum::_Align1Shl59),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 60 } => Alignment(AlignmentEnum::_Align1Shl60),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 61 } => Alignment(AlignmentEnum::_Align1Shl61),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 62 } => Alignment(AlignmentEnum::_Align1Shl62),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 63 } => Alignment(AlignmentEnum::_Align1Shl63),
+            _ => panic!("invalid alignment (not a power of two)"),
+        }
     }
 
     /// Returns the alignment as a [`usize`].
@@ -101,8 +214,15 @@ impl Alignment {
         // validity invariant of the type would have to have been broken earlier --
         // and emitting it in an otherwise simple method is bad for compile time.
 
+        #[cfg(target_pointer_width = "16")]
+        let x = self.0 as u16;
+        #[cfg(target_pointer_width = "32")]
+        let x = self.0 as u32;
+        #[cfg(target_pointer_width = "64")]
+        let x = self.0 as u64;
+
         // SAFETY: All the discriminants are non-zero.
-        unsafe { mem::transmute::<Alignment, NonZero<usize>>(self) }
+        unsafe { NonZero::new_unchecked(self.0 as usize) }
     }
 
     /// Returns the base-2 logarithm of the alignment.

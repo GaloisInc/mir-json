@@ -46,3 +46,13 @@ identify all of the code that was changed in each patch.
 * Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: April 22, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
+
+* Avoid `transmute` in `Layout` and `Alignment` (last applied: April 22, 2025)
+
+  `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
+  value, assuming that the integer is a valid discriminant for the enum.
+  `Layout::from_size_align` performs the same `transmute` operation directly,
+  bypassing `Alignment::new_unchecked`.  This patch reimplements
+  `Alignment::new_unchecked` without `transmute` and modifies `Layout` to call
+  it.  Finally, this patch removes a `transmute` in the opposite direction from
+  `Alignment::as_usize`.

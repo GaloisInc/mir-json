@@ -119,6 +119,7 @@
 #![feature(core_intrinsics)]
 #![feature(coverage_attribute)]
 #![feature(disjoint_bitor)]
+#![feature(inline_const_pat)]
 #![feature(internal_impls_macro)]
 #![feature(ip)]
 #![feature(is_ascii_octdigit)]
