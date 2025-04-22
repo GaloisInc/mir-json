@@ -33,3 +33,12 @@ identify all of the code that was changed in each patch.
 * Disable bytewise equality comparisons for `[T]` (last applied: April 18, 2025)
 
   These require the `size_of_val` intrinsic, which isn't current supported.
+
+* Remove the most common uses of `ptr::from_raw_parts` (last applied: April 22, 2025)
+
+  The `ptr::from_raw_parts` function implicitly performs a pointer cast through
+  the `AggregateKind::RawPtr` intrinsic, which is difficult for crucible-mir to
+  support due to [crucible#1385](https://github.com/GaloisInc/crucible/issues/1385).
+  This patch removes direct calls to `ptr::from_raw_parts` from `ptr::null`,
+  `ptr::slice_from_raw_parts`, and `slice::from_raw_parts`, and removes an
+  indirect use through `byte_add` from `Option::as_slice`.
