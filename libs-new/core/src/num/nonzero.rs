@@ -370,9 +370,12 @@ where
     #[must_use]
     #[inline]
     pub const fn new(n: T) -> Option<Self> {
-        // SAFETY: Memory layout optimization guarantees that `Option<NonZero<T>>` has
-        //         the same layout and size as `T`, with `0` representing `None`.
-        unsafe { intrinsics::transmute_unchecked(n) }
+        const fn crucible_non_zero_new_hook<T: ZeroablePrimitive>(n: T) -> Option<NonZero<T>> {
+            // SAFETY: Memory layout optimization guarantees that `Option<NonZero<T>>` has
+            //         the same layout and size as `T`, with `0` representing `None`.
+            unsafe { intrinsics::transmute_unchecked(n) }
+        }
+        crucible_non_zero_new_hook(n)
     }
 
     /// Creates a non-zero without checking whether the value is non-zero.

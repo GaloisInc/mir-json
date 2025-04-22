@@ -56,3 +56,10 @@ identify all of the code that was changed in each patch.
   `Alignment::new_unchecked` without `transmute` and modifies `Layout` to call
   it.  Finally, this patch removes a `transmute` in the opposite direction from
   `Alignment::as_usize`.
+
+* Add a hook in `NonZero::new` (last applied: April 22, 2025)
+
+  The new generic `NonZero::new` relies on transmute to convert `u32` to
+  `Option<NonZero<u32>>` in a const context.  Removing this transmute is
+  difficult due to limited ability to use generics in a const context.
+  Instead, we wrap it in a hook that we can override in crucible-mir.
