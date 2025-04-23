@@ -22,7 +22,7 @@ use std::{
 
 use cargo_metadata::{
     camino::{Utf8Path, Utf8PathBuf},
-    Artifact, Edition, Message, PackageId, Target,
+    Artifact, Edition, Message, Target,
 };
 use serde::Deserialize;
 use shell_escape::escape;
@@ -48,7 +48,12 @@ struct UnitGraph {
 
 #[derive(Debug, Deserialize)]
 struct UnitGraphUnit {
-    pkg_id: PackageId,
+    /// This is not `PackageId` since its format is incompatible with the one
+    /// from cargo metadata. This has been fixed in
+    /// https://github.com/rust-lang/cargo/pull/15447, so the next time we
+    /// upgrade the Rust version we can change this back to `PackageId` and key
+    /// `artifact_outputs` with it instead of `src_path`.
+    pkg_id: String,
     target: Target,
     dependencies: Vec<UnitGraphDependency>,
 }
