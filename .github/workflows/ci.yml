@@ -56,7 +56,7 @@ jobs:
     - name: Install mir-json binaries
       run: cargo install --locked
     - name: Translate modified Rust standard libraries
-      run: mir-json-translate-libs libs-new # TODO: Change this back to libs
+      run: mir-json-translate-libs
 
     # NB: These binary distributions will not work unless you have the
     # appropriate Rust toolchain installed beforehand.
