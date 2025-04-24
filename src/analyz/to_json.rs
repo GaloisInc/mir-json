@@ -1,11 +1,12 @@
 use rustc_abi::ExternAbi;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
-use rustc_hir::{Mutability,Safety};
+use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
-use rustc_middle::mir::{AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, NullOp, UnOp};
+use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, NullOp, UnOp};
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
+use rustc_middle::bug;
 use rustc_session::Session;
 use rustc_span::Span;
 use rustc_span::source_map::Spanned;
@@ -414,7 +415,86 @@ impl<'tcx, K, V> ToJson<'tcx> for BTreeMap<K, V>
 impl<'a> ToJson<'_> for AssertMessage<'a> {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
-        write!(&mut s, "{:?}", self).unwrap();
+        // Based on the implementation of fmt_assert_args (see
+        // https://github.com/rust-lang/rust/blob/553600e0f5f5a7d492de6d95ccb2f057005f5651/compiler/rustc_middle/src/mir/terminator.rs#L224-L301 ).
+        // Sadly, we cannot call that function directly here, as it formats the
+        // AssertMessage just differently enough to where it would look out of
+        // place in error messages.
+        let write_res =
+            match self {
+                AssertKind::BoundsCheck { len, index } => write!(
+                    s,
+                    "index out of bounds: the length is {len:?} but the index is {index:?}"
+                ),
+
+                AssertKind::OverflowNeg(op) => {
+                    write!(s, "attempt to negate `{op:?}`, which would overflow")
+                }
+                AssertKind::DivisionByZero(op) => write!(s, "attempt to divide `{op:?}` by zero"),
+                AssertKind::RemainderByZero(op) => write!(
+                    s,
+                    "attempt to calculate the remainder of `{op:?}` with a divisor of zero"
+                ),
+                AssertKind::Overflow(BinOp::Add, l, r) => write!(
+                    s,
+                    "attempt to compute `{l:?} + {r:?}`, which would overflow"
+                ),
+                AssertKind::Overflow(BinOp::Sub, l, r) => write!(
+                    s,
+                    "attempt to compute `{l:?} - {r:?}`, which would overflow"
+                ),
+                AssertKind::Overflow(BinOp::Mul, l, r) => write!(
+                    s,
+                    "attempt to compute `{l:?} * {r:?}`, which would overflow"
+                ),
+                AssertKind::Overflow(BinOp::Div, l, r) => write!(
+                    s,
+                    "attempt to compute `{l:?} / {r:?}`, which would overflow"
+                ),
+                AssertKind::Overflow(BinOp::Rem, l, r) => write!(
+                    s,
+                    "attempt to compute the remainder of `{l:?} % {r:?}`, which would overflow"
+                ),
+                AssertKind::Overflow(BinOp::Shr, _, r) => {
+                    write!(s, "attempt to shift right by `{r:?}`, which would overflow")
+                }
+                AssertKind::Overflow(BinOp::Shl, _, r) => {
+                    write!(s, "attempt to shift left by `{r:?}`, which would overflow")
+                }
+                AssertKind::Overflow(op, _, _) => bug!("{op:?} cannot overflow"),
+                AssertKind::MisalignedPointerDereference { required, found } => {
+                    write!(
+                        s,
+                        "misaligned pointer dereference: address must be a multiple of {required:?} but is {found:?}"
+                    )
+                }
+                AssertKind::NullPointerDereference => write!(s, "null pointer dereference occurred"),
+                AssertKind::ResumedAfterReturn(CoroutineKind::Coroutine(_)) => {
+                    write!(s, "coroutine resumed after completion")
+                }
+                AssertKind::ResumedAfterReturn(CoroutineKind::Desugared(CoroutineDesugaring::Async, _)) => {
+                    write!(s, "`async fn` resumed after completion")
+                }
+                AssertKind::ResumedAfterReturn(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
+                    write!(s, "`async gen fn` resumed after completion")
+                }
+                AssertKind::ResumedAfterReturn(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
+                    write!(s, "`gen fn` should just keep returning `None` after completion")
+                }
+                AssertKind::ResumedAfterPanic(CoroutineKind::Coroutine(_)) => {
+                    write!(s, "coroutine resumed after panicking")
+                }
+                AssertKind::ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::Async, _)) => {
+                    write!(s, "`async fn` resumed after panicking")
+                }
+                AssertKind::ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
+                    write!(s, "`async gen fn` resumed after panicking")
+                }
+                AssertKind::ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
+                    write!(s, "`gen fn` should just keep returning `None` after panicking")
+                }
+            };
+        write_res.unwrap();
         json!(s)
     }
 }
