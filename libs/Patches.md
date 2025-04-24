@@ -75,6 +75,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   difficult due to limited ability to use generics in a const context.
   Instead, we wrap it in a hook that we can override in crucible-mir.
 
+* Use crucible's allocator in `Box` constructors (last applied: June 9, 2026)
+
+  Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
+  casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
+  with typed memory, we replace the allocator calls in `Box::new` and related
+  functions to call built-in Crucible allocation functions instead (e.g.
+  `crucible::alloc::allocate`).
 
 # Notes
 

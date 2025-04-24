@@ -282,13 +282,7 @@ impl<T> Box<T> {
     #[rustc_diagnostic_item = "box_new"]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub fn new(x: T) -> Self {
-        // This is `Box::new_uninit` but inlined to avoid build time regressions.
-        let ptr = box_new_uninit(<T as SizedTypeProperties>::LAYOUT) as *mut T;
-        // Nothing below can panic so we do not have to worry about deallocating `ptr`.
-        // SAFETY: we just allocated the box to store `x`.
-        unsafe { core::intrinsics::write_via_move(ptr, x) };
-        // SAFETY: we just initialized `b`.
-        unsafe { mem::transmute(ptr) }
+        Box::write(Box::new_uninit(), x)
     }
 
     /// Constructs a new box with uninitialized contents.
@@ -309,12 +303,9 @@ impl<T> Box<T> {
     #[inline(always)]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub fn new_uninit() -> Box<mem::MaybeUninit<T>> {
-        // This is the same as `Self::new_uninit_in(Global)`, but manually inlined (just like
-        // `Box::new`).
-
-        // SAFETY:
-        // - If `allocate` succeeds, the returned pointer exactly matches what `Box` needs.
-        unsafe { mem::transmute(box_new_uninit(<T as SizedTypeProperties>::LAYOUT)) }
+        unsafe {
+            Box::from_raw(crucible::alloc::allocate::<mem::MaybeUninit<T>>(1))
+        }
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -338,7 +329,9 @@ impl<T> Box<T> {
     #[stable(feature = "new_zeroed_alloc", since = "1.92.0")]
     #[must_use]
     pub fn new_zeroed() -> Box<mem::MaybeUninit<T>> {
-        Self::new_zeroed_in(Global)
+        unsafe {
+            Box::from_raw(crucible::alloc::allocate_zeroed::<mem::MaybeUninit<T>>(1))
+        }
     }
 
     /// Constructs a new `Pin<Box<T>>`. If `T` does not implement [`Unpin`], then
@@ -372,7 +365,7 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new(x: T) -> Result<Self, AllocError> {
-        Self::try_new_in(x, Global)
+        Ok(Box::new(x))
     }
 
     /// Constructs a new box with uninitialized contents on the heap,
@@ -394,7 +387,7 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new_uninit() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_uninit_in(Global)
+        Ok(Box::new_uninit())
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -419,7 +412,7 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new_zeroed() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_zeroed_in(Global)
+        Ok(Box::new_zeroed())
     }
 
     /// Maps the value in a box, reusing the allocation if possible.
