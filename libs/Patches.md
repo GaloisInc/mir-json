@@ -118,6 +118,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
   functions to call built-in Crucible allocation functions instead (e.g.
   `crucible::alloc::allocate`).
 
+* Don't deallocate in `Box`/`Rc`/`Arc` `drop` methods (last applied: September 18, 2026)
+
+  Crucible doesn't support a `deallocate` operation.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
