@@ -247,9 +247,12 @@ pub struct Box<
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 #[cfg(not(no_global_oom_handling))]
 #[rustc_const_unstable(feature = "const_heap", issue = "79597")]
-const fn box_new_uninit(layout: Layout) -> *mut u8 {
-    match Global.allocate(layout) {
-        Ok(ptr) => ptr.as_mut_ptr(),
+const fn box_new_uninit<T>() -> *mut T {
+    // Go through `TypedAllocator`, which is const-compatible, unlike `crucible::alloc::allocate`.
+    let alloc = crate::crucible::alloc::TypedAllocator::<mem::MaybeUninit<T>>::new();
+    let layout = <T as SizedTypeProperties>::LAYOUT;
+    match alloc.allocate(Layout::new::<mem::MaybeUninit<T>>()) {
+        Ok(ptr) => ptr.as_mut_ptr().cast(),
         Err(_) => handle_alloc_error(layout),
     }
 }
@@ -286,13 +289,7 @@ impl<T> Box<T> {
     #[rustc_diagnostic_item = "box_new"]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub fn new(x: T) -> Self {
-        // This is `Box::new_uninit` but inlined to avoid build time regressions.
-        let ptr = box_new_uninit(<T as SizedTypeProperties>::LAYOUT) as *mut T;
-        // Nothing below can panic so we do not have to worry about deallocating `ptr`.
-        // SAFETY: we just allocated the box to store `x`.
-        unsafe { core::intrinsics::write_via_move(ptr, x) };
-        // SAFETY: we just initialized the memory `ptr` points to.
-        unsafe { mem::transmute(ptr) }
+        Box::write(Box::new_uninit(), x)
     }
 
     /// Constructs a new box with uninitialized contents.
@@ -314,12 +311,7 @@ impl<T> Box<T> {
     #[inline(always)]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub const fn new_uninit() -> Box<mem::MaybeUninit<T>> {
-        // This is the same as `Self::new_uninit_in(Global)`, but manually inlined (just like
-        // `Box::new`).
-
-        // SAFETY:
-        // - If `allocate` succeeds, the returned pointer exactly matches what `Box` needs.
-        unsafe { mem::transmute(box_new_uninit(<T as SizedTypeProperties>::LAYOUT)) }
+        unsafe { Box::from_raw(box_new_uninit::<MaybeUninit<T>>()) }
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -343,7 +335,9 @@ impl<T> Box<T> {
     #[stable(feature = "new_zeroed_alloc", since = "1.92.0")]
     #[must_use]
     pub fn new_zeroed() -> Box<mem::MaybeUninit<T>> {
-        Self::new_zeroed_in(Global)
+        unsafe {
+            Box::from_raw(crate::crucible::alloc::allocate_zeroed::<mem::MaybeUninit<T>>(1))
+        }
     }
 
     /// Constructs a new `Pin<Box<T>>`. If `T` does not implement [`Unpin`], then
@@ -377,7 +371,8 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new(x: T) -> Result<Self, AllocError> {
-        Self::try_new_in(x, Global)
+        // Crucible allocation can't fail.
+        Ok(Box::new(x))
     }
 
     /// Constructs a new box with uninitialized contents on the heap,
@@ -399,7 +394,8 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new_uninit() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_uninit_in(Global)
+        // Crucible allocation can't fail.
+        Ok(Box::new_uninit())
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -424,7 +420,8 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new_zeroed() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_zeroed_in(Global)
+        // Crucible allocation can't fail.
+        Ok(Box::new_zeroed())
     }
 
     /// Maps the value in a box, reusing the allocation if possible.
@@ -1323,9 +1320,10 @@ impl<T: ?Sized> Box<T> {
     /// [memory layout]: self#memory-layout
     /// [considerations for unsafe code]: self#considerations-for-unsafe-code
     #[stable(feature = "box_raw", since = "1.4.0")]
+    #[rustc_const_unstable(feature = "const_heap", issue = "79597")]
     #[inline]
     #[must_use = "call `drop(Box::from_raw(ptr))` if you intend to drop the `Box`"]
-    pub unsafe fn from_raw(raw: *mut T) -> Self {
+    pub const unsafe fn from_raw(raw: *mut T) -> Self {
         unsafe { Self::from_raw_in(raw, Global) }
     }
 
@@ -1555,8 +1553,9 @@ impl<T: ?Sized, A: Allocator> Box<T, A> {
     /// [memory layout]: self#memory-layout
     /// [considerations for unsafe code]: self#considerations-for-unsafe-code
     #[unstable(feature = "allocator_api", issue = "32838")]
+    #[rustc_const_unstable(feature = "const_heap", issue = "79597")]
     #[inline]
-    pub unsafe fn from_raw_in(raw: *mut T, alloc: A) -> Self {
+    pub const unsafe fn from_raw_in(raw: *mut T, alloc: A) -> Self {
         Box(unsafe { Unique::new_unchecked(raw) }, alloc)
     }
 
