@@ -63,3 +63,11 @@ identify all of the code that was changed in each patch.
   `Option<NonZero<u32>>` in a const context.  Removing this transmute is
   difficult due to limited ability to use generics in a const context.
   Instead, we wrap it in a hook that we can override in crucible-mir.
+
+* Use crucible's allocator in `Box` constructors (last applied: April 24, 2025)
+
+  Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
+  casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
+  with typed memory, we replace the allocator calls in `Box::new` and related
+  functions to call built-in Crucible allocation functions instead (e.g.
+  `crucible::alloc::allocate`).

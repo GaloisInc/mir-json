@@ -271,7 +271,7 @@ impl<T> Box<T> {
     #[rustc_diagnostic_item = "box_new"]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub fn new(x: T) -> Self {
-        return box_new(x);
+        Box::write(Box::new_uninit(), x)
     }
 
     /// Constructs a new box with uninitialized contents.
@@ -291,7 +291,9 @@ impl<T> Box<T> {
     #[must_use]
     #[inline]
     pub fn new_uninit() -> Box<mem::MaybeUninit<T>> {
-        Self::new_uninit_in(Global)
+        unsafe {
+            Box::from_raw(crucible::alloc::allocate::<mem::MaybeUninit<T>>(1))
+        }
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -317,7 +319,9 @@ impl<T> Box<T> {
     #[unstable(feature = "new_zeroed_alloc", issue = "129396")]
     #[must_use]
     pub fn new_zeroed() -> Box<mem::MaybeUninit<T>> {
-        Self::new_zeroed_in(Global)
+        unsafe {
+            Box::from_raw(crucible::alloc::allocate_zeroed::<mem::MaybeUninit<T>>(1))
+        }
     }
 
     /// Constructs a new `Pin<Box<T>>`. If `T` does not implement [`Unpin`], then
@@ -351,7 +355,7 @@ impl<T> Box<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     #[inline]
     pub fn try_new(x: T) -> Result<Self, AllocError> {
-        Self::try_new_in(x, Global)
+        Ok(Box::new(x))
     }
 
     /// Constructs a new box with uninitialized contents on the heap,
@@ -374,7 +378,7 @@ impl<T> Box<T> {
     // #[unstable(feature = "new_uninit", issue = "63291")]
     #[inline]
     pub fn try_new_uninit() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_uninit_in(Global)
+        Ok(Box::new_uninit())
     }
 
     /// Constructs a new `Box` with uninitialized contents, with the memory
@@ -400,7 +404,7 @@ impl<T> Box<T> {
     // #[unstable(feature = "new_uninit", issue = "63291")]
     #[inline]
     pub fn try_new_zeroed() -> Result<Box<mem::MaybeUninit<T>>, AllocError> {
-        Box::try_new_zeroed_in(Global)
+        Ok(Box::new_zeroed())
     }
 }
 
