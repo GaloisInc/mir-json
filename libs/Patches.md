@@ -71,3 +71,8 @@ identify all of the code that was changed in each patch.
   with typed memory, we replace the allocator calls in `Box::new` and related
   functions to call built-in Crucible allocation functions instead (e.g.
   `crucible::alloc::allocate`).
+
+* Don't deallocate in `Box::drop` (last applied: April 24, 2025)
+
+  Crucible doesn't support a `deallocate` operation, and the logic in `drop`
+  also includes a call to the unsupported `mem::size_of_val` function.
