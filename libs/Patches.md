@@ -110,6 +110,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Crux-specific time implementation does not have a `Timespec` in it, so we
   instead always use the regular `sleep` function just like on other platforms.
 
+* Use crucible's allocator in `Box` constructors (last applied: September 18, 2026)
+
+  Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
+  casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
+  with typed memory, we replace the allocator calls in `Box::new` and related
+  functions to call built-in Crucible allocation functions instead (e.g.
+  `crucible::alloc::allocate`).
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
