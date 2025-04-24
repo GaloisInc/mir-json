@@ -99,6 +99,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
   allocator. (See the `` Use crucible's allocator in `Box` constructors ``
   patch above.)
 
+* Don't deallocate in `Box`/`Rc`/`Arc` `drop` methods (last applied: June 9, 2026)
+
+  Crucible doesn't support a `deallocate` operation.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
