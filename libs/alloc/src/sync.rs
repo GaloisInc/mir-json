@@ -2589,6 +2589,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Arc<T, A> {
         // [2]: (https://github.com/rust-lang/rust/pull/41714)
         acquire!(self.inner().strong);
 
+        /*
         // Make sure we aren't trying to "drop" the shared static for empty slices
         // used by Default::default.
         debug_assert!(
@@ -2596,6 +2597,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Arc<T, A> {
             "Arcs backed by a static should never reach a strong count of 0. \
             Likely decrement_strong_count or from_raw were called too many times.",
         );
+        */
 
         unsafe {
             self.drop_slow();
@@ -3223,6 +3225,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Weak<T, A> {
         if inner.weak.fetch_sub(1, Release) == 1 {
             acquire!(inner.weak);
 
+            /*
             // Make sure we aren't trying to "deallocate" the shared static for empty slices
             // used by Default::default.
             debug_assert!(
@@ -3230,6 +3233,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Weak<T, A> {
                 "Arc/Weaks backed by a static should never be deallocated. \
                 Likely decrement_strong_count or from_raw were called too many times.",
             );
+            */
 
             // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
             /*

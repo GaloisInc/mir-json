@@ -80,3 +80,10 @@ identify all of the code that was changed in each patch.
 * Don't deallocate in `Arc::drop` and related functions (last applied: April 25, 2025)
 
   Crucible doesn't support a `deallocate` operation.
+
+* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: April 25, 2025)
+
+  `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
+  guard against attempts to drop the statically-allocated `Arc` used for
+  `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
+  unsupported by crucible-mir (though it probably wouldn't be too hard to add).
