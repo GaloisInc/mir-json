@@ -2077,7 +2077,11 @@ impl<T> Arc<[T]> {
                     let slice = from_raw_parts_mut(self.elems, self.n_elems);
                     ptr::drop_in_place(slice);
 
+                    // Crucible: skip deallocation, which is currently unimplemented in
+                    // crucible-mir.
+                    /*
                     Global.deallocate(self.mem, self.layout);
+                    */
                 }
             }
         }
@@ -3227,9 +3231,12 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Weak<T, A> {
                 Likely decrement_strong_count or from_raw were called too many times.",
             );
 
+            // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+            /*
             unsafe {
                 self.alloc.deallocate(self.ptr.cast(), Layout::for_value_raw(self.ptr.as_ptr()))
             }
+            */
         }
     }
 }
@@ -3995,6 +4002,8 @@ impl<T: ?Sized, A: Allocator> UniqueArcUninit<T, A> {
 #[cfg(not(no_global_oom_handling))]
 impl<T: ?Sized, A: Allocator> Drop for UniqueArcUninit<T, A> {
     fn drop(&mut self) {
+        // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+        /*
         // SAFETY:
         // * new() produced a pointer safe to deallocate.
         // * We own the pointer unless into_arc() was called, which forgets us.
@@ -4004,6 +4013,7 @@ impl<T: ?Sized, A: Allocator> Drop for UniqueArcUninit<T, A> {
                 arcinner_layout_for_value_layout(self.layout_for_value),
             );
         }
+        */
     }
 }
 

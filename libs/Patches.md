@@ -76,3 +76,7 @@ identify all of the code that was changed in each patch.
 
   Crucible doesn't support a `deallocate` operation, and the logic in `drop`
   also includes a call to the unsupported `mem::size_of_val` function.
+
+* Don't deallocate in `Arc::drop` and related functions (last applied: April 25, 2025)
+
+  Crucible doesn't support a `deallocate` operation.
