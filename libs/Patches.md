@@ -116,6 +116,17 @@ into the main commit for that patch, and then the *Update* line can be removed.
   This should produce static allocations, which mir-json and crucible-mir will
   translate just like those arising from static slices and such.
 
+* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: June 9, 2026)
+
+  Upstream has polymorphized the `RawVec` implementation by factoring out most
+  of the logic into a new `RawVecInner` type that's parameterized only by an
+  allocator, not by the element type `T`.  This makes it difficult to switch
+  over to crucible-mir's allocation functions, which require the element type.
+  This patch modifies `RawVec` to always instantiate `RawVecInner` with
+  `crucible::TypedAllocator<T>` as its allocator, which is minimally invasive
+  and has the effect of threading the element type through to the crucible-mir
+  allocation functions.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
