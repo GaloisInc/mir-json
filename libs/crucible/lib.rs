@@ -1,3 +1,4 @@
+#![feature(allocator_api)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
 #![feature(unboxed_closures)]
@@ -17,6 +18,8 @@ pub mod symbolic;
 #[doc(hidden)] pub mod array;
 #[doc(hidden)] pub use core::crucible::ptr;
 #[doc(hidden)] pub mod vector;
+
+pub use self::alloc::TypedAllocator;
 
 // Re-export the `Symbolic` trait, which is used to create symbolic values.
 pub use self::symbolic::Symbolic;
