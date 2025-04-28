@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc_hir::lang_items::LangItem;
+use rustc_hir::lang_items::{self, LangItem};
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{
@@ -63,22 +63,29 @@ impl ToJson<'_> for ty::VariantDiscr {
     }
 }
 
+/// For some categories of lang items, we replace the normal `DefId` with `$lang::Foo`.  This gives
+/// the item a stable name that we can reference within crucible-mir.
+///
+/// Currently, we do this only for ADTs.  We only really need it for `core::cmp::Ordering`, but
+/// covering all ADTs is easier and more consistent.  We don't use `$lang` paths for functions
+/// because it's not needed at the moment and would require a bunch of changes to paths in
+/// `TransCustom.hs`.
+fn rename_as_lang_item(tcx: TyCtxt, def_id: hir::def_id::DefId) -> Option<LangItem> {
+    let lang = tcx.as_lang_item(def_id)?;
+    let use_lang_path = matches!(
+        lang.target(),
+        hir::Target::Enum | hir::Target::Struct | hir::Target::Union,
+    );
+    if use_lang_path {
+        Some(lang)
+    } else {
+        None
+    }
+}
+
 pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
-    if let Some(lang) = tcx.as_lang_item(def_id) {
-        // For some categories of lang items, we replace the normal `DefId` with `$lang::Foo`.
-        // This gives the item a stable name that we can reference within crucible-mir.
-        //
-        // Currently, we do this only for ADTs.  We only really need it for `core::cmp::Ordering`,
-        // but covering all ADTs is easier and more consistent.  We don't use `$lang` paths for
-        // functions because it's not needed at the moment and would require a bunch of changes to
-        // paths in `TransCustom.hs`.
-        let use_lang_path = matches!(
-            lang.target(),
-            hir::Target::Enum | hir::Target::Struct | hir::Target::Union,
-        );
-        if use_lang_path {
-            return format!("$lang/0::{:?}", lang);
-        }
+    if let Some(lang) = rename_as_lang_item(tcx, def_id) {
+        return format!("$lang/0::{:?}", lang);
     }
 
     // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
@@ -115,6 +122,15 @@ pub fn adt_inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     ai: AdtInst<'tcx>,
 ) -> String {
+    if let Some(lang) = rename_as_lang_item(tcx, ai.def_id()) {
+        // For lang items that have no generics, we omit the unpredictable hash from the `_adtXXX`
+        // segment at the end.  This lets us mention the name in crucible-mir.
+        if tcx.generics_of(ai.def_id()).is_empty() {
+            let base = def_id_str(tcx, ai.def_id());
+            format!("{}::_adt[0]", base);
+        }
+    }
+
     // Erase all early-bound regions.
     let args = tcx.erase_regions(ai.args);
     ext_def_id_str(tcx, ai.def_id(), "_adt", args)
