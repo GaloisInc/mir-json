@@ -64,6 +64,23 @@ impl ToJson<'_> for ty::VariantDiscr {
 }
 
 pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
+    if let Some(lang) = tcx.as_lang_item(def_id) {
+        // For some categories of lang items, we replace the normal `DefId` with `$lang::Foo`.
+        // This gives the item a stable name that we can reference within crucible-mir.
+        //
+        // Currently, we do this only for ADTs.  We only really need it for `core::cmp::Ordering`,
+        // but covering all ADTs is easier and more consistent.  We don't use `$lang` paths for
+        // functions because it's not needed at the moment and would require a bunch of changes to
+        // paths in `TransCustom.hs`.
+        let use_lang_path = matches!(
+            lang.target(),
+            hir::Target::Enum | hir::Target::Struct | hir::Target::Union,
+        );
+        if use_lang_path {
+            return format!("$lang/0::{:?}", lang);
+        }
+    }
+
     // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
     let crate_name = tcx.crate_name(def_id.krate);
     let disambig = tcx.crate_hash(def_id.krate);
