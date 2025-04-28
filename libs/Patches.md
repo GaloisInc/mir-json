@@ -104,3 +104,10 @@ identify all of the code that was changed in each patch.
   Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
   `exchange_malloc`, which is an untyped allocation function and thus
   unsupported by crucible-mir.
+
+* Remove calls to `three_way_compare` intrinsic (last applied: April 28, 2025)
+
+  The `PartialOrd` and `Ord` impls for integers are implemented with the
+  `three_way_compare` intrinsic, which compiles down to `BinOp::Cmp`.  This
+  operation is not supported in crucible-mir, so this patch replaces the
+  intrinsic calls with some ordinary two-way comparisons.
