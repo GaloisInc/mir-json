@@ -127,6 +127,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   and has the effect of threading the element type through to the crucible-mir
   allocation functions.
 
+* Use `Box::new` instead of `box_new` in `vec!` macro (last applied: June 9, 2026)
+
+  Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
+  `exchange_malloc`, which is an untyped allocation function and thus
+  unsupported by crucible-mir.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
