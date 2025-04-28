@@ -127,7 +127,7 @@ pub fn adt_inst_id_str<'tcx>(
         // segment at the end.  This lets us mention the name in crucible-mir.
         if tcx.generics_of(ai.def_id()).is_empty() {
             let base = def_id_str(tcx, ai.def_id());
-            format!("{}::_adt[0]", base);
+            return format!("{}::_adt[0]", base);
         }
     }
 
