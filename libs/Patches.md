@@ -87,3 +87,14 @@ identify all of the code that was changed in each patch.
   guard against attempts to drop the statically-allocated `Arc` used for
   `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
   unsupported by crucible-mir (though it probably wouldn't be too hard to add).
+
+* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: April 28, 2025)
+
+  Upstream has polymorphized the `RawVec` implementation by factoring out most
+  of the logic into a new `RawVecInner` type that's parameterized only by an
+  allocator, not by the element type `T`.  This makes it difficult to switch
+  over to crucible-mir's allocation functions, which require the element type.
+  This patch modifies `RawVec` to always instantiate `RawVecInner` with
+  `crucible::TypedAllocator<T>` as its allocator, which is minimally invasive
+  and has the effect of threading the element type through to the crucible-mir
+  allocation functions.
