@@ -111,3 +111,21 @@ identify all of the code that was changed in each patch.
   `three_way_compare` intrinsic, which compiles down to `BinOp::Cmp`.  This
   operation is not supported in crucible-mir, so this patch replaces the
   intrinsic calls with some ordinary two-way comparisons.
+
+* Replace end pointer with length in slice iterator (last applied: April 28, 2025)
+
+  The standard library implementation of slice iterators for non-ZSTs consists
+  of a start pointer and an end pointer.  This is a problem because pointer
+  equality may fail in crucible-mir if the pointers use `Const_RefRoot`.  For
+  ZSTs, the implementation casts the length to a pointer and stores it in place
+  of the end pointer.  This is a problem because crucible-mir doesn't support
+  pointer-to-integer casts, which are used when updating the length.  This
+  patch fixes both issues by changing the representation to consist of a start
+  pointer and an integer length, for both ZST and non-ZST cases.
+
+  We may be able to get rid of this patch in the future.  For the non-ZST case,
+  the issue only occurs with `Const_RefRoot`, which is rarely used; we could
+  remove the last use of it in `Override.hs`, maybe by generating a fresh
+  Crucible `RefCell` instead.  For the ZST case, we could add support for
+  casting `MirReference_Integer` pointers back to an integer, which would allow
+  for the `pointer -> integer -> pointer` casts that are used in the iterator.

@@ -1,62 +1,15 @@
 //! Macros used by iterators of slice.
 
-/// Convenience & performance macro for consuming the `end_or_len` field, by
-/// giving a `(&mut) usize` or `(&mut) NonNull<T>` depending whether `T` is
-/// or is not a ZST respectively.
-///
-/// Internally, this reads the `end` through a pointer-to-`NonNull` so that
-/// it'll get the appropriate non-null metadata in the backend without needing
-/// to call `assume` manually.
-macro_rules! if_zst {
-    (mut $this:ident, $len:ident => $zst_body:expr, $end:ident => $other_body:expr,) => {{
-        #![allow(unused_unsafe)] // we're sometimes used within an unsafe block
-
-        if T::IS_ZST {
-            // SAFETY: for ZSTs, the pointer is storing a provenance-free length,
-            // so consuming and updating it as a `usize` is fine.
-            let $len = unsafe { &mut *(&raw mut $this.end_or_len).cast::<usize>() };
-            $zst_body
-        } else {
-            // SAFETY: for non-ZSTs, the type invariant ensures it cannot be null
-            let $end = unsafe { &mut *(&raw mut $this.end_or_len).cast::<NonNull<T>>() };
-            $other_body
-        }
-    }};
-    ($this:ident, $len:ident => $zst_body:expr, $end:ident => $other_body:expr,) => {{
-        #![allow(unused_unsafe)] // we're sometimes used within an unsafe block
-
-        if T::IS_ZST {
-            let $len = $this.end_or_len.addr();
-            $zst_body
-        } else {
-            // SAFETY: for non-ZSTs, the type invariant ensures it cannot be null
-            let $end = unsafe { mem::transmute::<*const T, NonNull<T>>($this.end_or_len) };
-            $other_body
-        }
-    }};
-}
-
 // Inlining is_empty and len makes a huge performance difference
 macro_rules! is_empty {
     ($self: ident) => {
-        if_zst!($self,
-            len => len == 0,
-            end => $self.ptr == end,
-        )
+        $self.len == 0
     };
 }
 
 macro_rules! len {
     ($self: ident) => {{
-        if_zst!($self,
-            len => len,
-            end => {
-                // To get rid of some bounds checks (see `position`), we use ptr_sub instead of
-                // offset_from (Tested by `codegen/slice-position-bounds-check`.)
-                // SAFETY: by the type invariant pointers are aligned and `start <= end`
-                unsafe { end.sub_ptr($self.ptr) }
-            },
-        )
+        $self.len
     }};
 }
 
@@ -102,11 +55,11 @@ macro_rules! iterator {
                 // SAFETY: the caller guarantees that `offset` doesn't exceed `self.len()`,
                 // so this new pointer is inside `self` and thus guaranteed to be non-null.
                 unsafe {
-                    if_zst!(mut self,
-                        // Using the intrinsic directly avoids emitting a UbCheck
-                        len => *len = crate::intrinsics::unchecked_sub(*len, offset),
-                        _end => self.ptr = self.ptr.add(offset),
-                    );
+                    if !T::IS_ZST {
+                        self.ptr = self.ptr.add(offset);
+                    }
+                    // Using the intrinsic directly avoids emitting a UbCheck
+                    self.len = crate::intrinsics::unchecked_sub(self.len, offset);
                 }
                 old
             }
@@ -116,22 +69,14 @@ macro_rules! iterator {
             // Unsafe because the offset must not exceed `self.len()`.
             #[inline(always)]
             unsafe fn pre_dec_end(&mut self, offset: usize) -> NonNull<T> {
-                if_zst!(mut self,
-                    // SAFETY: By our precondition, `offset` can be at most the
-                    // current length, so the subtraction can never overflow.
-                    len => unsafe {
-                        // Using the intrinsic directly avoids emitting a UbCheck
-                        *len = crate::intrinsics::unchecked_sub(*len, offset);
+                unsafe {
+                    self.len = crate::intrinsics::unchecked_sub(self.len, offset);
+                    if T::IS_ZST {
                         self.ptr
-                    },
-                    // SAFETY: the caller guarantees that `offset` doesn't exceed `self.len()`,
-                    // which is guaranteed to not overflow an `isize`. Also, the resulting pointer
-                    // is in bounds of `slice`, which fulfills the other requirements for `offset`.
-                    end => unsafe {
-                        *end = end.sub(offset);
-                        *end
-                    },
-                )
+                    } else {
+                        self.ptr.add(self.len)
+                    }
+                }
             }
         }
 
@@ -181,11 +126,7 @@ macro_rules! iterator {
             #[inline]
             fn nth(&mut self, n: usize) -> Option<$elem> {
                 if n >= len!(self) {
-                    // This iterator is now empty.
-                    if_zst!(mut self,
-                        len => *len = 0,
-                        end => self.ptr = *end,
-                    );
+                    self.len = 0;
                     return None;
                 }
                 // SAFETY: We are in bounds. `post_inc_start` does the right thing even for ZSTs.
@@ -407,10 +348,7 @@ macro_rules! iterator {
             fn nth_back(&mut self, n: usize) -> Option<$elem> {
                 if n >= len!(self) {
                     // This iterator is now empty.
-                    if_zst!(mut self,
-                        len => *len = 0,
-                        end => *end = self.ptr,
-                    );
+                    self.len = 0;
                     return None;
                 }
                 // SAFETY: We are in bounds. `pre_dec_end` does the right thing even for ZSTs.
