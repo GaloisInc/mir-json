@@ -68,7 +68,7 @@ impl<T: Hash+Eq> Deref for UsedSet<T> {
 pub struct Used<'tcx> {
     pub types: UsedSet<AdtInst<'tcx>>,
     pub vtables: UsedSet<ty::PolyTraitRef<'tcx>>,
-    pub instances: UsedSet<ty::Instance<'tcx>>,
+    pub instances: UsedSet<FnInst<'tcx>>,
     pub traits: UsedSet<TraitInst<'tcx>>,
 }
 
@@ -79,6 +79,19 @@ impl<'tcx> Used<'tcx> {
         vtables.has_new() ||
         instances.has_new() ||
         traits.has_new()
+    }
+}
+
+/// A generalization of `ty::Instance<'tcx>`.  We use this to add some extra shim kinds that rustc
+/// doesn't have built in.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum FnInst<'tcx> {
+    Real(ty::Instance<'tcx>),
+}
+
+impl<'tcx> From<ty::Instance<'tcx>> for FnInst<'tcx> {
+    fn from(x: ty::Instance<'tcx>) -> FnInst<'tcx> {
+        FnInst::Real(x)
     }
 }
 

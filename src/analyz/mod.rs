@@ -807,7 +807,7 @@ fn init_instances_from_mono_items(ms: &mut MirState) -> io::Result<()> {
     for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
-                MonoItem::Fn(inst) => ms.used.instances.insert(inst),
+                MonoItem::Fn(inst) => ms.used.instances.insert(inst.into()),
                 MonoItem::Static(_) |
                 MonoItem::GlobalAsm(_) => {},
             }
@@ -865,7 +865,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
                 panic!("ambiguous Instance::resolve for find test function {:?}?", def_id);
             });
 
-        ms.used.instances.insert(inst);
+        ms.used.instances.insert(inst.into());
         out.add_root(inst_id_str(tcx, inst))?;
     }
     Ok(())
@@ -876,7 +876,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
 fn emit_instance<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
-    inst: ty::Instance<'tcx>,
+    inst: FnInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
@@ -891,44 +891,50 @@ fn emit_instance<'tcx>(
     }))?;
     emit_new_defs(ms, out)?;
 
-    match inst.def {
-        ty::InstanceKind::Item(def_id) => {
-            // Foreign items and non-generics have no MIR available.
-            if tcx.is_foreign_item(def_id) {
-                return Ok(());
+    let ty_inst = match inst {
+        FnInst::Real(ty_inst) => {
+            match ty_inst.def {
+                ty::InstanceKind::Item(def_id) => {
+                    // Foreign items and non-generics have no MIR available.
+                    if tcx.is_foreign_item(def_id) {
+                        return Ok(());
+                    }
+                    if !def_id.is_local() {
+                        if tcx.is_reachable_non_generic(def_id) {
+                            return Ok(());
+                        }
+                        // Items with upstream monomorphizations have already been translated into
+                        // an upstream crate, so we can skip them.
+                        if tcx.upstream_monomorphizations_for(def_id)
+                                .map_or(false, |monos| monos.contains_key(&ty_inst.args)) {
+                            return Ok(());
+                        }
+                    }
+                },
+                // These variants are unsupported by the `mir_shims` query, which backs
+                // `instance_mir`.
+                ty::InstanceKind::Virtual(..) |
+                ty::InstanceKind::Intrinsic(..) => return Ok(()),
+                _ => {},
             }
-            if !def_id.is_local() {
-                if tcx.is_reachable_non_generic(def_id) {
-                    return Ok(());
-                }
-                // Items with upstream monomorphizations have already been translated into an upstream
-                // crate, so we can skip them.
-                if tcx.upstream_monomorphizations_for(def_id)
-                        .map_or(false, |monos| monos.contains_key(&inst.args)) {
-                    return Ok(());
-                }
-            }
+            ty_inst
         },
-        // These variants are unsupported by the `mir_shims` query, which backs `instance_mir`.
-        ty::InstanceKind::Virtual(..) |
-        ty::InstanceKind::Intrinsic(..) => return Ok(()),
-        _ => {},
-    }
+    };
 
     // Look up and monomorphize the MIR for this instance.
     // RUSTUP_TODO: check whether this is correct.  It's based on the implementation of
     // rustc_smir's BodyBuilder::build, which has a separate case for non-polymorphic functions.
-    let mir: Body = inst.instantiate_mir_and_normalize_erasing_regions(
+    let mir: Body = ty_inst.instantiate_mir_and_normalize_erasing_regions(
         tcx,
         ty::TypingEnv::fully_monomorphized(),
-        ty::EarlyBinder::bind(tcx.instance_mir(inst.def).clone()),
+        ty::EarlyBinder::bind(tcx.instance_mir(ty_inst.def).clone()),
     );
     let mir = tcx.arena.alloc(mir);
-    emit_fn(ms, out, &name, Some(inst), mir)?;
+    emit_fn(ms, out, &name, Some(ty_inst), mir)?;
 
-    if let ty::InstanceKind::Item(def_id) = inst.def {
+    if let ty::InstanceKind::Item(def_id) = ty_inst.def {
         for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = inst.instantiate_mir_and_normalize_erasing_regions(
+            let mir = ty_inst.instantiate_mir_and_normalize_erasing_regions(
                 tcx,
                 ty::TypingEnv::fully_monomorphized(),
                 ty::EarlyBinder::bind(mir.clone()),

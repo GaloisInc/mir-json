@@ -138,41 +138,51 @@ pub fn adt_inst_id_str<'tcx>(
 
 pub fn inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
-    inst: ty::Instance<'tcx>,
+    inst: impl Into<FnInst<'tcx>>,
 ) -> String {
-    let args = tcx.normalize_erasing_regions(
-        ty::TypingEnv::fully_monomorphized(),
-        inst.args,
-    );
-    assert!(!args.has_erasable_regions());
-    assert!(!args.has_param());
-
-    match inst.def {
-        ty::InstanceKind::Item(def_id) |
-        ty::InstanceKind::Intrinsic(def_id) => {
-            if args.len() == 0 {
-                def_id_str(tcx, def_id)
-            } else {
-                ext_def_id_str(tcx, def_id, "_inst", args)
+    match inst.into() {
+        FnInst::Real(inst) => {
+            let args = tcx.normalize_erasing_regions(
+                ty::TypingEnv::fully_monomorphized(),
+                inst.args,
+            );
+            assert!(!args.has_erasable_regions());
+            assert!(!args.has_param());
+            match inst.def {
+                ty::InstanceKind::Item(def_id) |
+                ty::InstanceKind::Intrinsic(def_id) => {
+                    if args.len() == 0 {
+                        def_id_str(tcx, def_id)
+                    } else {
+                        ext_def_id_str(tcx, def_id, "_inst", args)
+                    }
+                },
+                ty::InstanceKind::VTableShim(def_id) =>
+                    ext_def_id_str(tcx, def_id, "_vtshim", args),
+                ty::InstanceKind::ReifyShim(def_id, _reason) =>
+                    ext_def_id_str(tcx, def_id, "_reify", args),
+                ty::InstanceKind::Virtual(def_id, idx) =>
+                    ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
+                ty::InstanceKind::DropGlue(def_id, _) =>
+                    ext_def_id_str(tcx, def_id, "_drop", args),
+                ty::InstanceKind::FnPtrShim(def_id, _) =>
+                    ext_def_id_str(tcx, def_id, "_fnptr", args),
+                ty::InstanceKind::ClosureOnceShim { call_once: def_id, .. } =>
+                    ext_def_id_str(tcx, def_id, "_callonce", args),
+                ty::InstanceKind::CloneShim(def_id, _) =>
+                    ext_def_id_str(tcx, def_id, "_shim", args),
+                ty::InstanceKind::ConstructCoroutineInClosureShim {
+                    coroutine_closure_def_id,
+                    receiver_by_ref,
+                } => todo!("RUSTUP_TODO: newly added variant"),
+                ty::InstanceKind::ThreadLocalShim(def_id) =>
+                    todo!("RUSTUP_TODO: newly added variant"),
+                ty::InstanceKind::FnPtrAddrShim(def_id, ty) =>
+                    todo!("RUSTUP_TODO: newly added variant"),
+                ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) =>
+                    todo!("RUSTUP_TODO: newly added variant"),
             }
         },
-        ty::InstanceKind::VTableShim(def_id) =>
-            ext_def_id_str(tcx, def_id, "_vtshim", args),
-        ty::InstanceKind::ReifyShim(def_id, _reason) =>
-            ext_def_id_str(tcx, def_id, "_reify", args),
-        ty::InstanceKind::Virtual(def_id, idx) =>
-            ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
-        ty::InstanceKind::DropGlue(def_id, _) =>
-            ext_def_id_str(tcx, def_id, "_drop", args),
-        ty::InstanceKind::FnPtrShim(def_id, _) |
-        ty::InstanceKind::ClosureOnceShim { call_once: def_id, .. } =>
-            ext_def_id_str(tcx, def_id, "_callonce", args),
-        ty::InstanceKind::CloneShim(def_id, _) =>
-            ext_def_id_str(tcx, def_id, "_shim", args),
-        ty::InstanceKind::ConstructCoroutineInClosureShim { coroutine_closure_def_id, receiver_by_ref } => todo!("RUSTUP_TODO: newly added variant"),
-        ty::InstanceKind::ThreadLocalShim(def_id) => todo!("RUSTUP_TODO: newly added variant"),
-        ty::InstanceKind::FnPtrAddrShim(def_id, ty) => todo!("RUSTUP_TODO: newly added variant"),
-        ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) => todo!("RUSTUP_TODO: newly added variant"),
     }
 }
 
@@ -205,7 +215,7 @@ pub fn get_fn_def_name<'tcx>(
 
     // Compute the mangled name of the monomorphized instance being called.
     if let Ok(Some(inst)) = inst {
-        mir.used.instances.insert(inst);
+        mir.used.instances.insert(inst.into());
         inst_id_str(mir.state.tcx, inst)
     } else {
         eprintln!(
@@ -225,7 +235,7 @@ pub fn get_drop_fn_name<'tcx>(
         // `None` instead of a `Ty` indicates this drop glue is a no-op.
         return None;
     }
-    mir.used.instances.insert(inst);
+    mir.used.instances.insert(inst.into());
     Some(inst_id_str(mir.state.tcx, inst))
 }
 
@@ -247,6 +257,14 @@ fn adjust_method_index<'tcx>(
     methods.iter().take(raw_idx)
         .filter(|m| matches!(m, ty::vtable::VtblEntry::Method(_)))
         .count()
+}
+
+impl<'tcx> ToJson<'tcx> for FnInst<'tcx> {
+    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
+        match *self {
+            FnInst::Real(ty_inst) => ty_inst.to_json(mir),
+        }
+    }
 }
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
@@ -345,7 +363,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                             // it's otherwise unused.  If `inst` is itself a `CloneShim`, its own
                             // callees will be visited when generating the "intrinsics" entry for
                             // `inst`.
-                            mir.used.instances.insert(inst.clone());
+                            mir.used.instances.insert(inst.clone().into());
                         }
                         inst.map(|i| inst_id_str(mir.state.tcx, i))
                     }).collect::<Vec<_>>();
@@ -1139,11 +1157,10 @@ pub fn try_render_opty<'tcx>(
             let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
             match alloc {
                 interpret::GlobalAlloc::Function { instance } => {
-                    mir.used.instances.insert(instance);
+                    mir.used.instances.insert(instance.into());
                     json!({
                         "kind": "fn_ptr",
                         "instance": instance.to_json(mir),
-
                     })
                 },
                 _ => unreachable!("Function pointer doesn't point to a function"),
