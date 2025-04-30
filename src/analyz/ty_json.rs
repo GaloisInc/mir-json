@@ -1167,10 +1167,14 @@ pub fn try_render_opty<'tcx>(
             let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
             match alloc {
                 interpret::GlobalAlloc::Function { instance } => {
+                    eprintln!("constant fnptr: type = {:?}, instance = {:?}, instance sig = {:?}",
+                              ty, instance, instance.ty(tcx, ty::TypingEnv::fully_monomorphized()).fn_sig(tcx));
+                    eprintln!("ptr = {:?}, prov = {:?}, offset = {:?}", ptr, prov, _offset);
+                    eprintln!("alloc = {:?}", alloc);
                     mir.used.instances.insert(instance.into());
                     json!({
                         "kind": "fn_ptr",
-                        "instance": instance.to_json(mir),
+                        "def_id": inst_id_str(mir.state.tcx, instance),
                     })
                 },
                 _ => unreachable!("Function pointer doesn't point to a function"),
