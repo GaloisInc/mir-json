@@ -132,6 +132,32 @@ fn vtable_descriptor_for_cast<'tcx>(
     Some(trait_ref)
 }
 
+/// Compute the callee method for a closure-to-fnptr cast, if applicable.
+fn closure_fn_ptr_callee_for_cast<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    kind: mir::CastKind,
+    old_ty: ty::Ty<'tcx>,
+) -> Option<ty::Instance<'tcx>> {
+    let is_closure_fn_ptr_cast = matches!(kind, mir::CastKind::PointerCoercion(
+            ty::adjustment::PointerCoercion::ClosureFnPointer(_), _));
+    if !is_closure_fn_ptr_cast {
+        return None;
+    }
+
+    // Based on logic in `rustc_const_eval::interpret::cast,` method `InterpCx::cast`.
+    let (def_id, args) = match *old_ty.kind() {
+        ty::Closure(def_id, args) => (def_id, args),
+        _ => return None,
+    };
+    let instance = ty::Instance::resolve_closure(
+        mir.state.tcx,
+        def_id,
+        args,
+        ty::ClosureKind::FnOnce,
+    );
+    Some(instance)
+}
+
 impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
@@ -190,6 +216,14 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                         "vtable": vtable_name(mir, vtable_desc),
                     });
                     mir.used.vtables.insert(vtable_desc);
+                }
+                if let Some(callee_inst) = closure_fn_ptr_callee_for_cast(mir, *ck, op_ty) {
+                    let shim_inst = FnInst::ClosureFnPointer(callee_inst);
+                    mir.used.instances.insert(shim_inst);
+                    j["type"] = json!({
+                        "kind": "ClosureFnPointer",
+                        "shim": inst_id_str(mir.state.tcx, shim_inst),
+                    });
                 }
                 j
             }
