@@ -919,6 +919,9 @@ fn emit_instance<'tcx>(
             }
             ty_inst
         },
+        // We don't generate MIR for `ClosureFnPointer` shims.  Instead, we generate code in
+        // crucible-mir to implement this shim.
+        FnInst::ClosureFnPointer(_) => return Ok(()),
     };
 
     // Look up and monomorphize the MIR for this instance.

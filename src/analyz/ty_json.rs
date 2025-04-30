@@ -183,6 +183,9 @@ pub fn inst_id_str<'tcx>(
                     todo!("RUSTUP_TODO: newly added variant"),
             }
         },
+        FnInst::ClosureFnPointer(base_inst) => {
+            format!("{}::_closurefnptr", inst_id_str(tcx, base_inst))
+        },
     }
 }
 
@@ -263,6 +266,13 @@ impl<'tcx> ToJson<'tcx> for FnInst<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match *self {
             FnInst::Real(ty_inst) => ty_inst.to_json(mir),
+            FnInst::ClosureFnPointer(ty_inst) => {
+                mir.used.instances.insert(ty_inst.into());
+                json!({
+                    "kind": "ClosureFnPointerShim",
+                    "call_mut": inst_id_str(mir.state.tcx, ty_inst),
+                })
+            },
         }
     }
 }

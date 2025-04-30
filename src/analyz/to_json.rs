@@ -87,6 +87,11 @@ impl<'tcx> Used<'tcx> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FnInst<'tcx> {
     Real(ty::Instance<'tcx>),
+    /// Shim for converting a closure with no captures into a function pointer.  Rustc doesn't have
+    /// an `InstanceKind` for this (instead relying on ABI trickery), but crucible-mir needs these
+    /// to be made explicit.  The `Instance` is the `call_mut` method that the shim should dispatch
+    /// to; this may be a `ClosureOnceShim`.
+    ClosureFnPointer(ty::Instance<'tcx>),
 }
 
 impl<'tcx> From<ty::Instance<'tcx>> for FnInst<'tcx> {
