@@ -9,9 +9,7 @@
 
 #[allow(deprecated)]
 use super::{BuildHasher, Hasher, SipHasher13};
-use crate::cell::Cell;
 use crate::fmt;
-use crate::sys::random::hashmap_random_keys;
 
 /// `RandomState` is the default state for [`HashMap`] types.
 ///
