@@ -3,7 +3,6 @@ use crate::collections::TryReserveError;
 use crate::hash::Hash;
 use crate::marker::PhantomData;
 use crate::mem;
-use crate::ops::Range;
 use crate::slice;
 use crate::vec;
 
@@ -153,10 +152,19 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let indices = self.get_many_indices(ks);
-        self.items.get_disjoint_mut(indices)
-            .unwrap()
-            .map(|slice| slice.first_mut().map(|&mut (_, ref mut v)| v))
+        let mut refs: Vec<(&K, Option<&mut V>)> =
+            self.items.iter_mut()
+                .map(|&mut (ref k, ref mut v)| (k, Some(v))).collect();
+        let mut results = [const { None }; N];
+        for i in 0..N {
+            results[i] = refs.iter_mut()
+                .find(|&&mut (ref k, _)| (*k).borrow() == ks[i])
+                .map(|&mut (_, ref mut opt_v)| {
+                    opt_v.take()
+                        .expect("get_many_mut should not have duplicates")
+                });
+        }
+        results
     }
 
     pub unsafe fn get_many_unchecked_mut<Q: ?Sized, const N: usize>(
@@ -167,29 +175,7 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let indices = self.get_many_indices(ks);
-        unsafe {
-            self.items.get_disjoint_unchecked_mut(indices)
-                .map(|slice| slice.first_mut().map(|&mut (_, ref mut v)| v))
-        }
-    }
-
-    fn get_many_indices<Q: ?Sized, const N: usize>(
-        &self,
-        ks: [&Q; N],
-    ) -> [Range<usize>; N]
-    where
-        K: Borrow<Q>,
-        Q: Eq,
-    {
-        ks.map(|k| {
-            let pos = self.items.iter()
-                .position(|&(ref k2, _)| k2.borrow() == k);
-            match pos {
-                None => 0..0,
-                Some(i) => i..(i+1),
-            }
-        })
+        self.get_many_mut(ks)
     }
 
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
