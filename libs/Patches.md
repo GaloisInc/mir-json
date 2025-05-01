@@ -129,3 +129,10 @@ identify all of the code that was changed in each patch.
   Crucible `RefCell` instead.  For the ZST case, we could add support for
   casting `MirReference_Integer` pointers back to an integer, which would allow
   for the `pointer -> integer -> pointer` casts that are used in the iterator.
+
+* Implement `HashMap` in terms of `Vec` (last applied: May 1, 2025)
+
+  The actual implementation (in terms of `hashbrown`) is too complicated for
+  Crucible to handle effectively. In particular, it has a mixed-type allocation
+  that we don't support. It makes one big allocation and uses the first N bytes
+  as flags and the remaining M bytes as key-value pairs.
