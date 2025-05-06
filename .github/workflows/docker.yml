@@ -80,6 +80,11 @@ jobs:
         with:
           submodules: true
 
+      - name: Get schema version
+        shell: bash
+        run: |
+          echo "SCHEMA_VER=$(sed -nr 's/pub const SCHEMA_VER: u64 = ([0-9]+);/\1/p' src/schema_ver.rs)" >> "$GITHUB_ENV"
+
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -104,6 +109,7 @@ jobs:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
+            type=raw,value=${{ env.SCHEMA_VER }},enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
 
