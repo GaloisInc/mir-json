@@ -14,7 +14,7 @@ use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
 use rustc_middle::ty::util::{IntTypeExt};
 use rustc_query_system::ich::StableHashingContext;
-use rustc_abi::{self, Align, FieldIdx, FieldsShape, HasDataLayout, Size};
+use rustc_abi::{self, Align, ExternAbi, FieldIdx, FieldsShape, HasDataLayout, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::usize;
@@ -1167,10 +1167,25 @@ pub fn try_render_opty<'tcx>(
             let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
             match alloc {
                 interpret::GlobalAlloc::Function { instance } => {
-                    mir.used.instances.insert(instance.into());
+                    let expected_abi = ty.fn_sig(tcx).abi();
+                    let real_abi = instance.ty(tcx, ty::TypingEnv::fully_monomorphized())
+                        .fn_sig(tcx).abi();
+                    // The implementation of `ClosureFnPointer` in `rustc_const_eval` simply
+                    // produces a pointer to the closure's `call_once` function.  This means the
+                    // result actually has the wrong ABI (I think there are some details of the ABI
+                    // lowering that makes this work out).  When we detect this situation, we emit
+                    // a pointer to a `ClosureFnPointer` shim instead.
+                    let use_closure_shim =
+                        expected_abi == ExternAbi::Rust && real_abi == ExternAbi::RustCall;
+                    let instance = if use_closure_shim {
+                        FnInst::ClosureFnPointer(instance)
+                    } else {
+                        FnInst::from(instance)
+                    };
+                    mir.used.instances.insert(instance);
                     json!({
                         "kind": "fn_ptr",
-                        "instance": instance.to_json(mir),
+                        "def_id": inst_id_str(tcx, instance),
                     })
                 },
                 _ => unreachable!("Function pointer doesn't point to a function"),
