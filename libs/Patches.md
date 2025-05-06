@@ -136,3 +136,14 @@ identify all of the code that was changed in each patch.
   Crucible to handle effectively. In particular, it has a mixed-type allocation
   that we don't support. It makes one big allocation and uses the first N bytes
   as flags and the remaining M bytes as key-value pairs.
+
+* Don't check for overlapping references in `Cell::swap` (last applied: May 6, 2025)
+
+  The actual implementation of `cell::swap` checks for overlapping `Cell`
+  references before performing the swap and panics if there is overlap. The
+  overlap check relies pointer-to-integer casts that `crucible-mir` does not
+  currently support. As such, we omit the check. This is fine for now, since
+  the only way to get overlapping `Cell` references is by producing `&Cell<T>`
+  values, but `crucible-mir` does not currently support the operations for
+  producing `&Cell<T>` values (see [this
+  commit](https://github.com/GaloisInc/crucible/commit/e703d3014c50a999d3913460dcd99d17ab4f1e9f)).

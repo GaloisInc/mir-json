@@ -454,22 +454,9 @@ impl<T> Cell<T> {
     #[inline]
     #[stable(feature = "move_cell", since = "1.17.0")]
     pub fn swap(&self, other: &Self) {
-        // This function documents that it *will* panic, and intrinsics::is_nonoverlapping doesn't
-        // do the check in const, so trying to use it here would be inviting unnecessary fragility.
-        fn is_nonoverlapping<T>(src: *const T, dst: *const T) -> bool {
-            let src_usize = src.addr();
-            let dst_usize = dst.addr();
-            let diff = src_usize.abs_diff(dst_usize);
-            diff >= size_of::<T>()
-        }
-
         if ptr::eq(self, other) {
             // Swapping wouldn't change anything.
             return;
-        }
-        if !is_nonoverlapping(self, other) {
-            // See <https://github.com/rust-lang/rust/issues/80778> for why we need to stop here.
-            panic!("`Cell::swap` on overlapping non-identical `Cell`s");
         }
         // SAFETY: This can be risky if called from separate threads, but `Cell`
         // is `!Sync` so this won't happen. This also won't invalidate any
