@@ -122,6 +122,11 @@ binaries for specialized purposes.
   `cargo-saw-build` would run it. This is useful for building a single file,
   e.g., `saw-rustc foo.rs`.
 
+It is recommended that you invoke `{crux,saw}-rustc` with `--edition 2021` or
+later. Invoking them with `--edition 2015` in particular has been observed to
+produce undesirably large MIR JSON files (see [this
+issue](https://github.com/GaloisInc/mir-json/issues/94) for more details).
+
 ### `mir-json` utilities
 
 * `mir-json-callgraph`: This prints the reverse callgraph of a function, which
