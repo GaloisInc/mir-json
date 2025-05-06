@@ -147,3 +147,10 @@ identify all of the code that was changed in each patch.
   values, but `crucible-mir` does not currently support the operations for
   producing `&Cell<T>` values (see [this
   commit](https://github.com/GaloisInc/crucible/commit/e703d3014c50a999d3913460dcd99d17ab4f1e9f)).
+
+* Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: May 6, 2025)
+
+  Because Crucible is effectively single-threaded, we can use `std`'s
+  `no_threads` implementations of locks which are much simpler than the real
+  ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
+  concurrent crucible support.
