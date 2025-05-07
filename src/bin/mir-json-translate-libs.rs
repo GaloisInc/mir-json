@@ -807,7 +807,10 @@ fn main() {
                     // everything unstable by default, requiring users to use
                     // `#[feature(rustc_private)]`.
                     let enable_stability_attrs =
-                        &*lib.target.crate_name != "crucible";
+                        !(&*lib.target.crate_name == EXTRA_LIB_CRUCIBLE
+                            || &*lib.target.crate_name == EXTRA_LIB_INT512
+                            || &*lib.target.crate_name == EXTRA_LIB_BYTES
+                            || &*lib.target.crate_name == EXTRA_LIB_BYTEORDER);
                     let mut args = vec![
                         lib.target.src_path.into(),
                         "--edition".into(),
