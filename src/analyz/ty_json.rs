@@ -83,21 +83,51 @@ fn rename_as_lang_item(tcx: TyCtxt, def_id: hir::def_id::DefId) -> Option<LangIt
     }
 }
 
-pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
-    if let Some(lang) = rename_as_lang_item(tcx, def_id) {
-        return format!("$lang/0::{:?}", lang);
-    }
-
+/// Given a `DefId`, return a pair containing:
+///
+/// * A `String` containing the rendered version of the `DefId` in the form
+///   `<crate_name>/<disambig>::<defpath>`.
+///
+/// * An `Option<String>`. If the `DefId` corresponds to a
+///   [lang item](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html),
+///   then this with be a `Some(id_str)` value, where `id_str` will be of the
+///   form `$lang/0::<lang_item_name>`. Otherwise, this will be `None`.
+///
+/// Most of the time, you will want to use [`def_id_str`] instead, which
+/// computes a single `String`. This function is useful for when you need to
+/// use both `String`s.
+pub fn def_id_strs(
+    tcx: TyCtxt,
+    def_id: hir::def_id::DefId,
+) -> (String, Option<String>) {
     // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
     let crate_name = tcx.crate_name(def_id.krate);
     let disambig = tcx.crate_hash(def_id.krate);
     let defpath = tcx.def_path(def_id);
-    format!(
+    let orig_def_id_str = format!(
         "{}/{}{}",
         crate_name,
         &disambig.to_string()[..8],
         defpath.to_string_no_crate_verbose(),
-    )
+    );
+    let lang_item_def_id_str = rename_as_lang_item(tcx, def_id).map(|lang|
+        format!("$lang/0::{:?}", lang)
+    );
+    (orig_def_id_str, lang_item_def_id_str)
+}
+
+/// Render the given `DefId` into a `String` of the form
+/// `<crate_name>/<disambig>::<defpath>`. If the `DefId` is for a
+/// [lang item](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html),
+/// then this function will return the lang item's rendered `String`. Otherwise,
+/// this will fall back to the original, fully qualified path when rendering the
+/// `DefId`.
+pub fn def_id_str(
+    tcx: TyCtxt,
+    def_id: hir::def_id::DefId,
+) -> String {
+    let (orig_def_id_str, lang_item_def_id_str) = def_id_strs(tcx, def_id);
+    lang_item_def_id_str.unwrap_or(orig_def_id_str)
 }
 
 pub fn ext_def_id_str<'tcx, T>(
