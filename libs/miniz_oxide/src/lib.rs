@@ -1,31 +1,34 @@
 //! A pure rust replacement for the [miniz](https://github.com/richgel999/miniz)
 //! DEFLATE/zlib encoder/decoder.
-//! The plan for this crate is to be used as a back-end for the
-//! [flate2](https://github.com/alexcrichton/flate2-rs) crate and eventually remove the
-//! need to depend on a C library.
+//! Used a rust back-end for the
+//! [flate2](https://github.com/alexcrichton/flate2-rs) crate.
 //!
-//! # Usage
-//! ## Simple compression/decompression:
-//! ``` rust
-//!
-//! use miniz_oxide::inflate::decompress_to_vec;
-//! use miniz_oxide::deflate::compress_to_vec;
-//!
-//! fn roundtrip(data: &[u8]) {
-//!     let compressed = compress_to_vec(data, 6);
-//!     let decompressed = decompress_to_vec(compressed.as_slice()).expect("Failed to decompress!");
-//! #   let _ = decompressed;
-//! }
-//!
-//! # roundtrip(b"Test_data test data lalalal blabla");
-//!
-//! ```
+#![cfg_attr(
+    feature = "with-alloc",
+    doc = r##"
+# Usage
+## Simple compression/decompression:
+``` rust
 
+use miniz_oxide::inflate::decompress_to_vec;
+use miniz_oxide::deflate::compress_to_vec;
+
+fn roundtrip(data: &[u8]) {
+    let compressed = compress_to_vec(data, 6);
+    let decompressed = decompress_to_vec(compressed.as_slice()).expect("Failed to decompress!");
+#   let _ = decompressed;
+}
+
+# roundtrip(b"Test_data test data lalalal blabla");
+"##
+)]
 #![forbid(unsafe_code)]
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "with-alloc")]
 extern crate alloc;
 
+#[cfg(feature = "with-alloc")]
 pub mod deflate;
 pub mod inflate;
 mod shared;
@@ -154,7 +157,7 @@ pub enum DataFormat {
 }
 
 impl DataFormat {
-    pub(crate) fn from_window_bits(window_bits: i32) -> DataFormat {
+    pub fn from_window_bits(window_bits: i32) -> DataFormat {
         if window_bits > 0 {
             DataFormat::Zlib
         } else {
@@ -162,7 +165,7 @@ impl DataFormat {
         }
     }
 
-    pub(crate) fn to_window_bits(self) -> i32 {
+    pub fn to_window_bits(self) -> i32 {
         match self {
             DataFormat::Zlib | DataFormat::ZLibIgnoreChecksum => shared::MZ_DEFAULT_WINDOW_BITS,
             DataFormat::Raw => -shared::MZ_DEFAULT_WINDOW_BITS,
@@ -173,7 +176,7 @@ impl DataFormat {
 /// `Result` alias for all miniz status codes both successful and failed.
 pub type MZResult = Result<MZStatus, MZError>;
 
-/// A structure containg the result of a call to the inflate or deflate streaming functions.
+/// A structure containing the result of a call to the inflate or deflate streaming functions.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct StreamResult {
     /// The number of bytes consumed from the input slice.
@@ -186,7 +189,7 @@ pub struct StreamResult {
 
 impl StreamResult {
     #[inline]
-    pub(crate) const fn error(error: MZError) -> StreamResult {
+    pub const fn error(error: MZError) -> StreamResult {
         StreamResult {
             bytes_consumed: 0,
             bytes_written: 0,

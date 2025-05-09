@@ -29,21 +29,10 @@ fn normalize(x: f64) -> Num {
     Num { m: ix, e, sign }
 }
 
+#[inline]
 fn mul(x: u64, y: u64) -> (u64, u64) {
-    let t1: u64;
-    let t2: u64;
-    let t3: u64;
-    let xlo: u64 = x as u32 as u64;
-    let xhi: u64 = x >> 32;
-    let ylo: u64 = y as u32 as u64;
-    let yhi: u64 = y >> 32;
-
-    t1 = xlo * ylo;
-    t2 = xlo * yhi + xhi * ylo;
-    t3 = xhi * yhi;
-    let lo = t1.wrapping_add(t2 << 32);
-    let hi = t3 + (t2 >> 32) + (t1 > lo) as u64;
-    (hi, lo)
+    let t = (x as u128).wrapping_mul(y as u128);
+    ((t >> 64) as u64, t as u64)
 }
 
 /// Floating multiply add (f64)
@@ -93,7 +82,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
             d -= 64;
             if d == 0 {
             } else if d < 64 {
-                rlo = rhi << (64 - d) | rlo >> d | ((rlo << (64 - d)) != 0) as u64;
+                rlo = (rhi << (64 - d)) | (rlo >> d) | ((rlo << (64 - d)) != 0) as u64;
                 rhi = rhi >> d;
             } else {
                 rlo = 1;
@@ -106,7 +95,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         if d == 0 {
             zlo = nz.m;
         } else if d < 64 {
-            zlo = nz.m >> d | ((nz.m << (64 - d)) != 0) as u64;
+            zlo = (nz.m >> d) | ((nz.m << (64 - d)) != 0) as u64;
         } else {
             zlo = 1;
         }
@@ -138,11 +127,11 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         e += 64;
         d = rhi.leading_zeros() as i32 - 1;
         /* note: d > 0 */
-        rhi = rhi << d | rlo >> (64 - d) | ((rlo << d) != 0) as u64;
+        rhi = (rhi << d) | (rlo >> (64 - d)) | ((rlo << d) != 0) as u64;
     } else if rlo != 0 {
         d = rlo.leading_zeros() as i32 - 1;
         if d < 0 {
-            rhi = rlo >> 1 | (rlo & 1);
+            rhi = (rlo >> 1) | (rlo & 1);
         } else {
             rhi = rlo << d;
         }
@@ -176,7 +165,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
             /* one bit is lost when scaled, add another top bit to
             only round once at conversion if it is inexact */
             if (rhi << 53) != 0 {
-                i = (rhi >> 1 | (rhi & 1) | 1 << 62) as i64;
+                i = ((rhi >> 1) | (rhi & 1) | (1 << 62)) as i64;
                 if sign != 0 {
                     i = -i;
                 }
@@ -193,7 +182,7 @@ pub fn fma(x: f64, y: f64, z: f64) -> f64 {
         } else {
             /* only round once when scaled */
             d = 10;
-            i = ((rhi >> d | ((rhi << (64 - d)) != 0) as u64) << d) as i64;
+            i = (((rhi >> d) | ((rhi << (64 - d)) != 0) as u64) << d) as i64;
             if sign != 0 {
                 i = -i;
             }
@@ -227,17 +216,11 @@ mod tests {
 
     #[test]
     fn fma_sbb() {
-        assert_eq!(
-            fma(-(1.0 - f64::EPSILON), f64::MIN, f64::MIN),
-            -3991680619069439e277
-        );
+        assert_eq!(fma(-(1.0 - f64::EPSILON), f64::MIN, f64::MIN), -3991680619069439e277);
     }
 
     #[test]
     fn fma_underflow() {
-        assert_eq!(
-            fma(1.1102230246251565e-16, -9.812526705433188e-305, 1.0894e-320),
-            0.0,
-        );
+        assert_eq!(fma(1.1102230246251565e-16, -9.812526705433188e-305, 1.0894e-320), 0.0,);
     }
 }

@@ -346,10 +346,7 @@ where
 {
     /// Return true if the piece is empty.
     pub fn is_empty(&self) -> bool {
-        match *self {
-            Location::Empty => true,
-            _ => false,
-        }
+        matches!(*self, Location::Empty)
     }
 }
 
@@ -988,6 +985,16 @@ impl<R: Reader> OperationIter<R> {
     }
 }
 
+#[cfg(feature = "fallible-iterator")]
+impl<R: Reader> fallible_iterator::FallibleIterator for OperationIter<R> {
+    type Item = Operation<R>;
+    type Error = Error;
+
+    fn next(&mut self) -> ::core::result::Result<Option<Self::Item>, Self::Error> {
+        OperationIter::next(self)
+    }
+}
+
 /// Specification of what storage should be used for [`Evaluation`].
 ///
 #[cfg_attr(
@@ -1070,10 +1077,10 @@ impl<R: Reader> EvaluationStorage<R> for StoreOnHeap {
 ///
 /// # Examples
 /// ```rust,no_run
-/// use gimli::{EndianSlice, Evaluation, EvaluationResult, Format, LittleEndian, Value};
-/// # let bytecode = EndianSlice::new(&[], LittleEndian);
+/// use gimli::{Evaluation, EvaluationResult, Expression};
+/// # let bytecode = gimli::EndianSlice::new(&[], gimli::LittleEndian);
 /// # let encoding = unimplemented!();
-/// # let get_register_value = |_, _| Value::Generic(42);
+/// # let get_register_value = |_, _| gimli::Value::Generic(42);
 /// # let get_frame_base = || 0xdeadbeef;
 ///
 /// let mut eval = Evaluation::new(bytecode, encoding);
@@ -1119,6 +1126,7 @@ pub struct Evaluation<R: Reader, S: EvaluationStorage<R> = StoreOnHeap> {
     // is stored here while evaluating the subroutine.
     expression_stack: ArrayVec<S::ExpressionStack>,
 
+    value_result: Option<Value>,
     result: ArrayVec<S::Result>,
 }
 
@@ -1168,6 +1176,7 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
             stack: Default::default(),
             expression_stack: Default::default(),
             pc,
+            value_result: None,
             result: Default::default(),
         }
     }
@@ -1225,7 +1234,6 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
         self.stack.try_push(value).map_err(|_| Error::StackFull)
     }
 
-    #[allow(clippy::cyclomatic_complexity)]
     fn evaluate_one_operation(&mut self) -> Result<OperationEvaluationResult<R>> {
         let operation = Operation::parse(&mut self.pc, self.encoding)?;
 
@@ -1235,6 +1243,9 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
                 size,
                 space,
             } => {
+                if size > self.encoding.address_size {
+                    return Err(Error::InvalidDerefSize(size));
+                }
                 let entry = self.pop()?;
                 let addr = entry.to_u64(self.addr_mask)?;
                 let addr_space = if space {
@@ -1594,6 +1605,22 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
         Ok(OperationEvaluationResult::Incomplete)
     }
 
+    /// Get the result if this is an evaluation for a value.
+    ///
+    /// Returns `None` if the evaluation contained operations that are only
+    /// valid for location descriptions.
+    ///
+    /// # Panics
+    /// Panics if this `Evaluation` has not been driven to completion.
+    pub fn value_result(&self) -> Option<Value> {
+        match self.state {
+            EvaluationState::Complete => self.value_result,
+            _ => {
+                panic!("Called `Evaluation::value_result` on an `Evaluation` that has not been completed")
+            }
+        }
+    }
+
     /// Get the result of this `Evaluation`.
     ///
     /// # Panics
@@ -1602,7 +1629,9 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
         match self.state {
             EvaluationState::Complete => &self.result,
             _ => {
-                panic!("Called `Evaluation::result` on an `Evaluation` that has not been completed")
+                panic!(
+                    "Called `Evaluation::as_result` on an `Evaluation` that has not been completed"
+                )
             }
         }
     }
@@ -1962,13 +1991,14 @@ impl<R: Reader, S: EvaluationStorage<R>> Evaluation<R, S> {
                     self.state = EvaluationState::Waiting(waiting);
                     return Ok(result);
                 }
-            };
+            }
         }
 
         // If no pieces have been seen, use the stack top as the
         // result.
         if self.result.is_empty() {
             let entry = self.pop()?;
+            self.value_result = Some(entry);
             let addr = entry.to_u64(self.addr_mask)?;
             self.result
                 .try_push(Piece {
@@ -1995,7 +2025,6 @@ mod tests {
     use crate::leb128;
     use crate::read::{EndianSlice, Error, Result, UnitOffset};
     use crate::test_util::GimliSectionMethods;
-    use core::usize;
     use test_assembler::{Endian, Section};
 
     fn encoding4() -> Encoding {
@@ -2068,7 +2097,7 @@ mod tests {
 
     fn check_op_parse<F>(
         input: F,
-        expect: &Operation<EndianSlice<LittleEndian>>,
+        expect: &Operation<EndianSlice<'_, LittleEndian>>,
         encoding: Encoding,
     ) where
         F: Fn(Section) -> Section,
@@ -2837,7 +2866,7 @@ mod tests {
             markers.push(Marker(None, Vec::new()));
         }
 
-        fn write(stack: &mut Vec<u8>, index: usize, mut num: u64, nbytes: u8) {
+        fn write(stack: &mut [u8], index: usize, mut num: u64, nbytes: u8) {
             for i in 0..nbytes as usize {
                 stack[index + i] = (num & 0xff) as u8;
                 num >>= 8;
@@ -2889,10 +2918,9 @@ mod tests {
         result
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn check_eval_with_args<F>(
         program: &[AssemblerEntry],
-        expect: Result<&[Piece<EndianSlice<LittleEndian>>]>,
+        expect: Result<&[Piece<EndianSlice<'_, LittleEndian>>]>,
         encoding: Encoding,
         object_address: Option<u64>,
         initial_value: Option<u64>,
@@ -2941,7 +2969,7 @@ mod tests {
 
     fn check_eval(
         program: &[AssemblerEntry],
-        expect: Result<&[Piece<EndianSlice<LittleEndian>>]>,
+        expect: Result<&[Piece<EndianSlice<'_, LittleEndian>>]>,
         encoding: Encoding,
     ) {
         check_eval_with_args(program, expect, encoding, None, None, None, |_, result| {
@@ -3476,6 +3504,46 @@ mod tests {
                             }
                         }
                         _ => panic!(),
+                    };
+                }
+
+                Ok(result)
+            },
+        );
+
+        #[rustfmt::skip]
+        let program = [
+            Op(DW_OP_addr), U32(0x7fff_ffff),
+            Op(DW_OP_deref_size), U8(8),
+        ];
+        check_eval_with_args(
+            &program,
+            Err(Error::InvalidDerefSize(8)),
+            encoding4(),
+            None,
+            None,
+            None,
+            |eval, mut result| {
+                while result != EvaluationResult::Complete {
+                    result = match result {
+                        EvaluationResult::RequiresMemory {
+                            address,
+                            size,
+                            space,
+                            base_type,
+                        } => {
+                            assert_eq!(base_type, UnitOffset(0));
+                            let mut v = address << 2;
+                            if let Some(value) = space {
+                                v += value;
+                            }
+                            v &= (1u64 << (8 * size)) - 1;
+                            eval.resume_with_memory(Value::Generic(v))?
+                        }
+                        EvaluationResult::RequiresRelocatedAddress(address) => {
+                            eval.resume_with_relocated_address(address)?
+                        }
+                        _ => panic!("Unexpected result: {:?}", result),
                     };
                 }
 

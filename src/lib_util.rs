@@ -70,6 +70,7 @@ pub enum EntryKind {
     Trait,
     Intrinsic,
     Ty,
+    LangItem,
 }
 
 impl EntryKind {
@@ -83,6 +84,7 @@ impl EntryKind {
             Trait => "trait",
             Intrinsic => "intrinsic",
             Ty => "ty",
+            LangItem => "lang_item",
         }
     }
 
@@ -96,6 +98,7 @@ impl EntryKind {
             Trait => "traits",
             Intrinsic => "intrinsics",
             Ty => "tys",
+            LangItem => "lang_items",
         }
     }
 
@@ -103,12 +106,12 @@ impl EntryKind {
         use self::EntryKind::*;
         // Type annotation ensures we have exactly `count()` entries.
         let all: &'static [EntryKind; Self::count()] =
-            &[Fn, Adt, Static, Vtable, Trait, Intrinsic, Ty];
+            &[Fn, Adt, Static, Vtable, Trait, Intrinsic, Ty, LangItem];
         all.iter().cloned()
     }
 
     pub const fn count() -> usize {
-        7
+        8
     }
 }
 
@@ -315,6 +318,8 @@ impl<W: Write> Emitter<W> {
         write!(self.writer, ",")?;
         self.emit_table_from(EntryKind::Intrinsic, j)?;
         write!(self.writer, ",")?;
+        self.emit_table_from(EntryKind::LangItem, j)?;
+        write!(self.writer, ",")?;
         write!(self.writer, "\"roots\":")?;
         serde_json::to_writer(&mut self.writer, &j["roots"])?;
         write!(self.writer, "}}")?;
@@ -423,6 +428,16 @@ pub struct Output {
     /// key into this table.  This encoding avoids exponential blowup when large types appear
     /// repeatedly within a crate.
     pub tys: Vec<serde_json::Value>,
+    /// For each
+    /// [lang item](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html),
+    /// this gives the lang item identifier (e.g., `$lang/0::Option`) and the
+    /// original identifier (e.g., `core/123456::option::Option`). Currently,
+    /// this only contains the identifiers for ADT definitions.
+    ///
+    /// This is of primary benefit for SAW, as SAW users look up ADT names by
+    /// providing the original identifier, which SAW can then map back to the
+    /// lang item identifier used throughout the rest of the MIR code.
+    pub lang_items: Vec<serde_json::Value>,
     /// Entry points for this crate.
     pub roots: Vec<String>,
 }
@@ -437,6 +452,7 @@ impl JsonOutput for Output {
             EntryKind::Trait => self.traits.push(j),
             EntryKind::Intrinsic => self.intrinsics.push(j),
             EntryKind::Ty => self.tys.push(j),
+            EntryKind::LangItem => self.lang_items.push(j),
         }
         Ok(())
     }

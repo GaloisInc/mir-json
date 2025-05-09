@@ -1,9 +1,8 @@
 //! Serialization for client-server communication.
 
 use std::any::Any;
-use std::char;
 use std::io::Write;
-use std::num::NonZeroU32;
+use std::num::NonZero;
 use std::str;
 
 pub(super) type Writer = super::buffer::Buffer;
@@ -68,7 +67,7 @@ macro_rules! rpc_encode_decode {
                 mod tag {
                     #[repr(u8)] enum Tag { $($variant),* }
 
-                    $(pub const $variant: u8 = Tag::$variant as u8;)*
+                    $(pub(crate) const $variant: u8 = Tag::$variant as u8;)*
                 }
 
                 match self {
@@ -90,7 +89,7 @@ macro_rules! rpc_encode_decode {
                 mod tag {
                     #[repr(u8)] enum Tag { $($variant),* }
 
-                    $(pub const $variant: u8 = Tag::$variant as u8;)*
+                    $(pub(crate) const $variant: u8 = Tag::$variant as u8;)*
                 }
 
                 match u8::decode(r, s) {
@@ -158,13 +157,13 @@ impl<S> DecodeMut<'_, '_, S> for char {
     }
 }
 
-impl<S> Encode<S> for NonZeroU32 {
+impl<S> Encode<S> for NonZero<u32> {
     fn encode(self, w: &mut Writer, s: &mut S) {
         self.get().encode(w, s);
     }
 }
 
-impl<S> DecodeMut<'_, '_, S> for NonZeroU32 {
+impl<S> DecodeMut<'_, '_, S> for NonZero<u32> {
     fn decode(r: &mut Reader<'_>, s: &mut S) -> Self {
         Self::new(u32::decode(r, s)).unwrap()
     }
@@ -265,9 +264,9 @@ impl From<Box<dyn Any + Send>> for PanicMessage {
     }
 }
 
-impl Into<Box<dyn Any + Send>> for PanicMessage {
-    fn into(self) -> Box<dyn Any + Send> {
-        match self {
+impl From<PanicMessage> for Box<dyn Any + Send> {
+    fn from(val: PanicMessage) -> Self {
+        match val {
             PanicMessage::StaticStr(s) => Box::new(s),
             PanicMessage::String(s) => Box::new(s),
             PanicMessage::Unknown => {

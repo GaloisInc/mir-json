@@ -1,12 +1,8 @@
 //! [F16C intrinsics].
 //!
-//! [F16C intrinsics]: https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=fp16&expand=1769
+//! [F16C intrinsics]: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=fp16&expand=1769
 
-use crate::{
-    core_arch::{simd::*, x86::*},
-    //    hint::unreachable_unchecked,
-    mem::transmute,
-};
+use crate::core_arch::{simd::*, x86::*};
 
 #[cfg(test)]
 use stdarch_test::assert_instr;
@@ -26,18 +22,24 @@ extern "unadjusted" {
 /// Converts the 4 x 16-bit half-precision float values in the lowest 64-bit of
 /// the 128-bit vector `a` into 4 x 32-bit float values stored in a 128-bit wide
 /// vector.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtph_ps)
 #[inline]
 #[target_feature(enable = "f16c")]
 #[cfg_attr(test, assert_instr("vcvtph2ps"))]
+#[stable(feature = "x86_f16c_intrinsics", since = "1.68.0")]
 pub unsafe fn _mm_cvtph_ps(a: __m128i) -> __m128 {
     transmute(llvm_vcvtph2ps_128(transmute(a)))
 }
 
 /// Converts the 8 x 16-bit half-precision float values in the 128-bit vector
 /// `a` into 8 x 32-bit float values stored in a 256-bit wide vector.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cvtph_ps)
 #[inline]
 #[target_feature(enable = "f16c")]
 #[cfg_attr(test, assert_instr("vcvtph2ps"))]
+#[stable(feature = "x86_f16c_intrinsics", since = "1.68.0")]
 pub unsafe fn _mm256_cvtph_ps(a: __m128i) -> __m256 {
     transmute(llvm_vcvtph2ps_256(transmute(a)))
 }
@@ -48,17 +50,20 @@ pub unsafe fn _mm256_cvtph_ps(a: __m128i) -> __m256 {
 ///
 /// Rounding is done according to the `imm_rounding` parameter, which can be one of:
 ///
-/// * `_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC`: round to nearest and suppress exceptions,
-/// * `_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC`: round down and suppress exceptions,
-/// * `_MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC`: round up and suppress exceptions,
-/// * `_MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC`: truncate and suppress exceptions,
-/// * `_MM_FROUND_CUR_DIRECTION`: use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`].
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtps_ph)
 #[inline]
 #[target_feature(enable = "f16c")]
 #[cfg_attr(test, assert_instr("vcvtps2ph", IMM_ROUNDING = 0))]
 #[rustc_legacy_const_generics(1)]
+#[stable(feature = "x86_f16c_intrinsics", since = "1.68.0")]
 pub unsafe fn _mm_cvtps_ph<const IMM_ROUNDING: i32>(a: __m128) -> __m128i {
-    static_assert_imm3!(IMM_ROUNDING);
+    static_assert_uimm_bits!(IMM_ROUNDING, 3);
     let a = a.as_f32x4();
     let r = llvm_vcvtps2ph_128(a, IMM_ROUNDING);
     transmute(r)
@@ -69,17 +74,20 @@ pub unsafe fn _mm_cvtps_ph<const IMM_ROUNDING: i32>(a: __m128) -> __m128i {
 ///
 /// Rounding is done according to the `imm_rounding` parameter, which can be one of:
 ///
-/// * `_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC`: round to nearest and suppress exceptions,
-/// * `_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC`: round down and suppress exceptions,
-/// * `_MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC`: round up and suppress exceptions,
-/// * `_MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC`: truncate and suppress exceptions,
-/// * `_MM_FROUND_CUR_DIRECTION`: use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`].
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cvtps_ph)
 #[inline]
 #[target_feature(enable = "f16c")]
 #[cfg_attr(test, assert_instr("vcvtps2ph", IMM_ROUNDING = 0))]
 #[rustc_legacy_const_generics(1)]
+#[stable(feature = "x86_f16c_intrinsics", since = "1.68.0")]
 pub unsafe fn _mm256_cvtps_ph<const IMM_ROUNDING: i32>(a: __m256) -> __m128i {
-    static_assert_imm3!(IMM_ROUNDING);
+    static_assert_uimm_bits!(IMM_ROUNDING, 3);
     let a = a.as_f32x8();
     let r = llvm_vcvtps2ph_256(a, IMM_ROUNDING);
     transmute(r)

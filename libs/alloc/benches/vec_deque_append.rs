@@ -1,10 +1,16 @@
-use std::{collections::VecDeque, time::Instant};
+use std::collections::VecDeque;
+use std::time::Instant;
 
 const VECDEQUE_LEN: i32 = 100000;
 const WARMUP_N: usize = 100;
 const BENCH_N: usize = 1000;
 
 fn main() {
+    if cfg!(miri) {
+        // Don't benchmark Miri...
+        // (Due to bootstrap quirks, this gets picked up by `x.py miri library/alloc --no-doc`.)
+        return;
+    }
     let a: VecDeque<i32> = (0..VECDEQUE_LEN).collect();
     let b: VecDeque<i32> = (0..VECDEQUE_LEN).collect();
 

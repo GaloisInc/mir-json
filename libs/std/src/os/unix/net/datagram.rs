@@ -1,17 +1,3 @@
-#[cfg(any(doc, target_os = "android", target_os = "linux"))]
-use super::{recv_vectored_with_ancillary_from, send_vectored_with_ancillary_to, SocketAncillary};
-use super::{sockaddr_un, SocketAddr};
-#[cfg(any(doc, target_os = "android", target_os = "linux"))]
-use crate::io::{IoSlice, IoSliceMut};
-use crate::net::Shutdown;
-use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
-use crate::path::Path;
-use crate::sys::cvt;
-use crate::sys::net::Socket;
-use crate::sys_common::{AsInner, FromInner, IntoInner};
-use crate::time::Duration;
-use crate::{fmt, io};
-
 #[cfg(any(
     target_os = "linux",
     target_os = "android",
@@ -19,9 +5,27 @@ use crate::{fmt, io};
     target_os = "freebsd",
     target_os = "openbsd",
     target_os = "netbsd",
-    target_os = "haiku"
+    target_os = "solaris",
+    target_os = "illumos",
+    target_os = "haiku",
+    target_os = "nto",
 ))]
 use libc::MSG_NOSIGNAL;
+
+use super::{SocketAddr, sockaddr_un};
+#[cfg(any(doc, target_os = "android", target_os = "linux"))]
+use super::{SocketAncillary, recv_vectored_with_ancillary_from, send_vectored_with_ancillary_to};
+#[cfg(any(doc, target_os = "android", target_os = "linux"))]
+use crate::io::{IoSlice, IoSliceMut};
+use crate::net::Shutdown;
+use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
+use crate::path::Path;
+use crate::sealed::Sealed;
+use crate::sys::cvt;
+use crate::sys::net::Socket;
+use crate::sys_common::{AsInner, FromInner, IntoInner};
+use crate::time::Duration;
+use crate::{fmt, io};
 #[cfg(not(any(
     target_os = "linux",
     target_os = "android",
@@ -29,9 +33,12 @@ use libc::MSG_NOSIGNAL;
     target_os = "freebsd",
     target_os = "openbsd",
     target_os = "netbsd",
-    target_os = "haiku"
+    target_os = "solaris",
+    target_os = "illumos",
+    target_os = "haiku",
+    target_os = "nto",
 )))]
-const MSG_NOSIGNAL: libc::c_int = 0x0;
+const MSG_NOSIGNAL: core::ffi::c_int = 0x0;
 
 /// A Unix datagram socket.
 ///
@@ -51,6 +58,10 @@ const MSG_NOSIGNAL: libc::c_int = 0x0;
 /// ```
 #[stable(feature = "unix_socket", since = "1.10.0")]
 pub struct UnixDatagram(Socket);
+
+/// Allows extension traits within `std`.
+#[unstable(feature = "sealed", issue = "none")]
+impl Sealed for UnixDatagram {}
 
 #[stable(feature = "unix_socket", since = "1.10.0")]
 impl fmt::Debug for UnixDatagram {
@@ -89,7 +100,7 @@ impl UnixDatagram {
             let socket = UnixDatagram::unbound()?;
             let (addr, len) = sockaddr_un(path.as_ref())?;
 
-            cvt(libc::bind(socket.as_raw_fd(), &addr as *const _ as *const _, len as _))?;
+            cvt(libc::bind(socket.as_raw_fd(), (&raw const addr) as *const _, len as _))?;
 
             Ok(socket)
         }
@@ -100,7 +111,6 @@ impl UnixDatagram {
     /// # Examples
     ///
     /// ```no_run
-    /// #![feature(unix_socket_abstract)]
     /// use std::os::unix::net::{UnixDatagram};
     ///
     /// fn main() -> std::io::Result<()> {
@@ -117,13 +127,13 @@ impl UnixDatagram {
     ///     Ok(())
     /// }
     /// ```
-    #[unstable(feature = "unix_socket_abstract", issue = "85410")]
+    #[stable(feature = "unix_socket_abstract", since = "1.70.0")]
     pub fn bind_addr(socket_addr: &SocketAddr) -> io::Result<UnixDatagram> {
         unsafe {
             let socket = UnixDatagram::unbound()?;
             cvt(libc::bind(
                 socket.as_raw_fd(),
-                &socket_addr.addr as *const _ as *const _,
+                (&raw const socket_addr.addr) as *const _,
                 socket_addr.len as _,
             ))?;
             Ok(socket)
@@ -205,7 +215,7 @@ impl UnixDatagram {
         unsafe {
             let (addr, len) = sockaddr_un(path.as_ref())?;
 
-            cvt(libc::connect(self.as_raw_fd(), &addr as *const _ as *const _, len))?;
+            cvt(libc::connect(self.as_raw_fd(), (&raw const addr) as *const _, len))?;
         }
         Ok(())
     }
@@ -215,7 +225,6 @@ impl UnixDatagram {
     /// # Examples
     ///
     /// ```no_run
-    /// #![feature(unix_socket_abstract)]
     /// use std::os::unix::net::{UnixDatagram};
     ///
     /// fn main() -> std::io::Result<()> {
@@ -233,12 +242,12 @@ impl UnixDatagram {
     ///     Ok(())
     /// }
     /// ```
-    #[unstable(feature = "unix_socket_abstract", issue = "85410")]
+    #[stable(feature = "unix_socket_abstract", since = "1.70.0")]
     pub fn connect_addr(&self, socket_addr: &SocketAddr) -> io::Result<()> {
         unsafe {
             cvt(libc::connect(
                 self.as_raw_fd(),
-                &socket_addr.addr as *const _ as *const _,
+                (&raw const socket_addr.addr) as *const _,
                 socket_addr.len,
             ))?;
         }
@@ -312,7 +321,7 @@ impl UnixDatagram {
     fn recv_from_flags(
         &self,
         buf: &mut [u8],
-        flags: libc::c_int,
+        flags: core::ffi::c_int,
     ) -> io::Result<(usize, SocketAddr)> {
         let mut count = 0;
         let addr = SocketAddr::new(|addr, len| unsafe {
@@ -505,7 +514,7 @@ impl UnixDatagram {
                 buf.as_ptr() as *const _,
                 buf.len(),
                 MSG_NOSIGNAL,
-                &addr as *const _ as *const _,
+                (&raw const addr) as *const _,
                 len,
             ))?;
             Ok(count as usize)
@@ -521,7 +530,6 @@ impl UnixDatagram {
     /// # Examples
     ///
     /// ```no_run
-    /// #![feature(unix_socket_abstract)]
     /// use std::os::unix::net::{UnixDatagram};
     ///
     /// fn main() -> std::io::Result<()> {
@@ -533,7 +541,7 @@ impl UnixDatagram {
     ///     Ok(())
     /// }
     /// ```
-    #[unstable(feature = "unix_socket_abstract", issue = "85410")]
+    #[stable(feature = "unix_socket_abstract", since = "1.70.0")]
     pub fn send_to_addr(&self, buf: &[u8], socket_addr: &SocketAddr) -> io::Result<usize> {
         unsafe {
             let count = cvt(libc::sendto(
@@ -541,7 +549,7 @@ impl UnixDatagram {
                 buf.as_ptr() as *const _,
                 buf.len(),
                 MSG_NOSIGNAL,
-                &socket_addr.addr as *const _ as *const _,
+                (&raw const socket_addr.addr) as *const _,
                 socket_addr.len,
             ))?;
             Ok(count as usize)
@@ -803,41 +811,6 @@ impl UnixDatagram {
         self.0.set_nonblocking(nonblocking)
     }
 
-    /// Moves the socket to pass unix credentials as control message in [`SocketAncillary`].
-    ///
-    /// Set the socket option `SO_PASSCRED`.
-    ///
-    /// # Examples
-    ///
-    #[cfg_attr(any(target_os = "android", target_os = "linux"), doc = "```no_run")]
-    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), doc = "```ignore")]
-    /// #![feature(unix_socket_ancillary_data)]
-    /// use std::os::unix::net::UnixDatagram;
-    ///
-    /// fn main() -> std::io::Result<()> {
-    ///     let sock = UnixDatagram::unbound()?;
-    ///     sock.set_passcred(true).expect("set_passcred function failed");
-    ///     Ok(())
-    /// }
-    /// ```
-    #[cfg(any(doc, target_os = "android", target_os = "linux", target_os = "netbsd",))]
-    #[unstable(feature = "unix_socket_ancillary_data", issue = "76915")]
-    pub fn set_passcred(&self, passcred: bool) -> io::Result<()> {
-        self.0.set_passcred(passcred)
-    }
-
-    /// Get the current value of the socket for passing unix credentials in [`SocketAncillary`].
-    /// This value can be change by [`set_passcred`].
-    ///
-    /// Get the socket option `SO_PASSCRED`.
-    ///
-    /// [`set_passcred`]: UnixDatagram::set_passcred
-    #[cfg(any(doc, target_os = "android", target_os = "linux", target_os = "netbsd",))]
-    #[unstable(feature = "unix_socket_ancillary_data", issue = "76915")]
-    pub fn passcred(&self) -> io::Result<bool> {
-        self.0.passcred()
-    }
-
     /// Set the id of the socket for network filtering purpose
     ///
     #[cfg_attr(
@@ -997,6 +970,7 @@ impl AsFd for UnixDatagram {
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl From<UnixDatagram> for OwnedFd {
+    /// Takes ownership of a [`UnixDatagram`]'s socket file descriptor.
     #[inline]
     fn from(unix_datagram: UnixDatagram) -> OwnedFd {
         unsafe { OwnedFd::from_raw_fd(unix_datagram.into_raw_fd()) }
@@ -1008,5 +982,12 @@ impl From<OwnedFd> for UnixDatagram {
     #[inline]
     fn from(owned: OwnedFd) -> Self {
         unsafe { Self::from_raw_fd(owned.into_raw_fd()) }
+    }
+}
+
+impl AsInner<Socket> for UnixDatagram {
+    #[inline]
+    fn as_inner(&self) -> &Socket {
+        &self.0
     }
 }

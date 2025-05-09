@@ -1,6 +1,6 @@
-use int::{DInt, HInt, Int};
+use crate::int::{DInt, HInt, Int};
 
-trait Mul: DInt
+trait Mul: DInt + Int
 where
     Self::H: DInt,
 {
@@ -30,7 +30,7 @@ where
 impl Mul for u64 {}
 impl Mul for i128 {}
 
-pub(crate) trait UMulo: Int + DInt {
+pub(crate) trait UMulo: DInt + Int {
     fn mulo(self, rhs: Self) -> (Self, bool) {
         match (self.hi().is_zero(), rhs.hi().is_zero()) {
             // overflow is guaranteed
@@ -128,11 +128,15 @@ intrinsics! {
         mul
     }
 
-    pub extern "C" fn __rust_i128_mulo(a: i128, b: i128) -> (i128, bool) {
-        i128_overflowing_mul(a, b)
+    pub extern "C" fn __rust_i128_mulo(a: i128, b: i128, oflow: &mut i32) -> i128 {
+        let (mul, o) = i128_overflowing_mul(a, b);
+        *oflow = o.into();
+        mul
     }
 
-    pub extern "C" fn __rust_u128_mulo(a: u128, b: u128) -> (u128, bool) {
-        a.mulo(b)
+    pub extern "C" fn __rust_u128_mulo(a: u128, b: u128, oflow: &mut i32) -> u128 {
+        let (mul, o) = a.mulo(b);
+        *oflow = o.into();
+        mul
     }
 }

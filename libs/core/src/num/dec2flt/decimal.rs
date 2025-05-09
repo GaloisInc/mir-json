@@ -9,10 +9,10 @@
 //! algorithm can be found in "ParseNumberF64 by Simple Decimal Conversion",
 //! available online: <https://nigeltao.github.io/blog/2020/parse-number-f64-simple.html>.
 
-use crate::num::dec2flt::common::{is_8digits, parse_digits, ByteSlice, ByteSliceMut};
+use crate::num::dec2flt::common::{ByteSlice, is_8digits};
 
 #[derive(Clone)]
-pub struct Decimal {
+pub(super) struct Decimal {
     /// The number of significant digits in the decimal.
     pub num_digits: usize,
     /// The offset of the decimal point in the significant digits.
@@ -55,13 +55,13 @@ impl Decimal {
     ///
     /// In Python:
     ///     `-emin + p2 + math.floor((emin+ 1)*math.log(2, b)-math.log(1-2**(-p2), b))`
-    pub const MAX_DIGITS: usize = 768;
+    pub(super) const MAX_DIGITS: usize = 768;
     /// The max digits that can be exactly represented in a 64-bit integer.
-    pub const MAX_DIGITS_WITHOUT_OVERFLOW: usize = 19;
-    pub const DECIMAL_POINT_RANGE: i32 = 2047;
+    pub(super) const MAX_DIGITS_WITHOUT_OVERFLOW: usize = 19;
+    pub(super) const DECIMAL_POINT_RANGE: i32 = 2047;
 
     /// Append a digit to the buffer.
-    pub fn try_add_digit(&mut self, digit: u8) {
+    pub(super) fn try_add_digit(&mut self, digit: u8) {
         if self.num_digits < Self::MAX_DIGITS {
             self.digits[self.num_digits] = digit;
         }
@@ -69,7 +69,7 @@ impl Decimal {
     }
 
     /// Trim trailing zeros from the buffer.
-    pub fn trim(&mut self) {
+    pub(super) fn trim(&mut self) {
         // All of the following calls to `Decimal::trim` can't panic because:
         //
         //  1. `parse_decimal` sets `num_digits` to a max of `Decimal::MAX_DIGITS`.
@@ -83,7 +83,7 @@ impl Decimal {
         }
     }
 
-    pub fn round(&self) -> u64 {
+    pub(super) fn round(&self) -> u64 {
         if self.num_digits == 0 || self.decimal_point < 0 {
             return 0;
         } else if self.decimal_point > 18 {
@@ -111,7 +111,7 @@ impl Decimal {
     }
 
     /// Computes decimal * 2^shift.
-    pub fn left_shift(&mut self, shift: usize) {
+    pub(super) fn left_shift(&mut self, shift: usize) {
         if self.num_digits == 0 {
             return;
         }
@@ -152,7 +152,7 @@ impl Decimal {
     }
 
     /// Computes decimal * 2^-shift.
-    pub fn right_shift(&mut self, shift: usize) {
+    pub(super) fn right_shift(&mut self, shift: usize) {
         let mut read_index = 0;
         let mut write_index = 0;
         let mut n = 0_u64;
@@ -202,32 +202,35 @@ impl Decimal {
 }
 
 /// Parse a big integer representation of the float as a decimal.
-pub fn parse_decimal(mut s: &[u8]) -> Decimal {
+pub(super) fn parse_decimal(mut s: &[u8]) -> Decimal {
     let mut d = Decimal::default();
     let start = s;
-    s = s.skip_chars(b'0');
-    parse_digits(&mut s, |digit| d.try_add_digit(digit));
-    if s.first_is(b'.') {
-        s = s.advance(1);
+
+    while let Some((&b'0', s_next)) = s.split_first() {
+        s = s_next;
+    }
+
+    s = s.parse_digits(|digit| d.try_add_digit(digit));
+
+    if let Some((b'.', s_next)) = s.split_first() {
+        s = s_next;
         let first = s;
         // Skip leading zeros.
         if d.num_digits == 0 {
-            s = s.skip_chars(b'0');
+            while let Some((&b'0', s_next)) = s.split_first() {
+                s = s_next;
+            }
         }
         while s.len() >= 8 && d.num_digits + 8 < Decimal::MAX_DIGITS {
-            // SAFETY: s is at least 8 bytes.
-            let v = unsafe { s.read_u64_unchecked() };
+            let v = s.read_u64();
             if !is_8digits(v) {
                 break;
             }
-            // SAFETY: d.num_digits + 8 is less than d.digits.len()
-            unsafe {
-                d.digits[d.num_digits..].write_u64_unchecked(v - 0x3030_3030_3030_3030);
-            }
+            d.digits[d.num_digits..].write_u64(v - 0x3030_3030_3030_3030);
             d.num_digits += 8;
-            s = s.advance(8);
+            s = &s[8..];
         }
-        parse_digits(&mut s, |digit| d.try_add_digit(digit));
+        s = s.parse_digits(|digit| d.try_add_digit(digit));
         d.decimal_point = s.len() as i32 - first.len() as i32;
     }
     if d.num_digits != 0 {
@@ -248,22 +251,26 @@ pub fn parse_decimal(mut s: &[u8]) -> Decimal {
             d.num_digits = Decimal::MAX_DIGITS;
         }
     }
-    if s.first_is2(b'e', b'E') {
-        s = s.advance(1);
-        let mut neg_exp = false;
-        if s.first_is(b'-') {
-            neg_exp = true;
-            s = s.advance(1);
-        } else if s.first_is(b'+') {
-            s = s.advance(1);
-        }
-        let mut exp_num = 0_i32;
-        parse_digits(&mut s, |digit| {
-            if exp_num < 0x10000 {
-                exp_num = 10 * exp_num + digit as i32;
+    if let Some((&ch, s_next)) = s.split_first() {
+        if ch == b'e' || ch == b'E' {
+            s = s_next;
+            let mut neg_exp = false;
+            if let Some((&ch, s_next)) = s.split_first() {
+                neg_exp = ch == b'-';
+                if ch == b'-' || ch == b'+' {
+                    s = s_next;
+                }
             }
-        });
-        d.decimal_point += if neg_exp { -exp_num } else { exp_num };
+            let mut exp_num = 0_i32;
+
+            s.parse_digits(|digit| {
+                if exp_num < 0x10000 {
+                    exp_num = 10 * exp_num + digit as i32;
+                }
+            });
+
+            d.decimal_point += if neg_exp { -exp_num } else { exp_num };
+        }
     }
     for i in d.num_digits..Decimal::MAX_DIGITS_WITHOUT_OVERFLOW {
         d.digits[i] = 0;

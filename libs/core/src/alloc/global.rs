@@ -1,6 +1,5 @@
 use crate::alloc::Layout;
-use crate::cmp;
-use crate::ptr;
+use crate::{cmp, ptr};
 
 /// A memory allocator that can be registered as the standard library’s default
 /// through the `#[global_allocator]` attribute.
@@ -24,10 +23,7 @@ use crate::ptr;
 /// use std::alloc::{GlobalAlloc, Layout};
 /// use std::cell::UnsafeCell;
 /// use std::ptr::null_mut;
-/// use std::sync::atomic::{
-///     AtomicUsize,
-///     Ordering::{Acquire, SeqCst},
-/// };
+/// use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 ///
 /// const ARENA_SIZE: usize = 128 * 1024;
 /// const MAX_SUPPORTED_ALIGN: usize = 4096;
@@ -61,7 +57,7 @@ use crate::ptr;
 ///         let mut allocated = 0;
 ///         if self
 ///             .remaining
-///             .fetch_update(SeqCst, SeqCst, |mut remaining| {
+///             .fetch_update(Relaxed, Relaxed, |mut remaining| {
 ///                 if size > remaining {
 ///                     return None;
 ///                 }
@@ -81,7 +77,7 @@ use crate::ptr;
 ///
 /// fn main() {
 ///     let _s = format!("allocating a string!");
-///     let currently = ALLOCATOR.remaining.load(Acquire);
+///     let currently = ALLOCATOR.remaining.load(Relaxed);
 ///     println!("allocated so far: {}", ARENA_SIZE - currently);
 /// }
 /// ```
@@ -110,7 +106,7 @@ use crate::ptr;
 ///   ```rust,ignore (unsound and has placeholders)
 ///   drop(Box::new(42));
 ///   let number_of_heap_allocs = /* call private allocator API */;
-///   unsafe { std::intrinsics::assume(number_of_heap_allocs > 0); }
+///   unsafe { std::hint::assert_unchecked(number_of_heap_allocs > 0); }
 ///   ```
 ///
 ///   Note that the optimizations mentioned above are not the only
@@ -121,15 +117,15 @@ use crate::ptr;
 ///   having side effects.
 #[stable(feature = "global_alloc", since = "1.28.0")]
 pub unsafe trait GlobalAlloc {
-    /// Allocate memory as described by the given `layout`.
+    /// Allocates memory as described by the given `layout`.
     ///
     /// Returns a pointer to newly-allocated memory,
     /// or null to indicate allocation failure.
     ///
     /// # Safety
     ///
-    /// This function is unsafe because undefined behavior can result
-    /// if the caller does not ensure that `layout` has non-zero size.
+    /// `layout` must have non-zero size. Attempting to allocate for a zero-sized `layout` may
+    /// result in undefined behavior.
     ///
     /// (Extension subtraits might provide more specific bounds on
     /// behavior, e.g., guarantee a sentinel address or a null pointer
@@ -156,18 +152,18 @@ pub unsafe trait GlobalAlloc {
     #[stable(feature = "global_alloc", since = "1.28.0")]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8;
 
-    /// Deallocate the block of memory at the given `ptr` pointer with the given `layout`.
+    /// Deallocates the block of memory at the given `ptr` pointer with the given `layout`.
     ///
     /// # Safety
     ///
-    /// This function is unsafe because undefined behavior can result
-    /// if the caller does not ensure all of the following:
+    /// The caller must ensure:
     ///
-    /// * `ptr` must denote a block of memory currently allocated via
-    ///   this allocator,
+    /// * `ptr` is a block of memory currently allocated via this allocator and,
     ///
-    /// * `layout` must be the same layout that was used
-    ///   to allocate that block of memory.
+    /// * `layout` is the same layout that was used to allocate that block of
+    ///   memory.
+    ///
+    /// Otherwise undefined behavior can result.
     #[stable(feature = "global_alloc", since = "1.28.0")]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout);
 
@@ -176,7 +172,8 @@ pub unsafe trait GlobalAlloc {
     ///
     /// # Safety
     ///
-    /// This function is unsafe for the same reasons that `alloc` is.
+    /// The caller has to ensure that `layout` has non-zero size. Like `alloc`
+    /// zero sized `layout` can result in undefined behavior.
     /// However the allocated block of memory is guaranteed to be initialized.
     ///
     /// # Errors
@@ -203,7 +200,7 @@ pub unsafe trait GlobalAlloc {
         ptr
     }
 
-    /// Shrink or grow a block of memory to the given `new_size`.
+    /// Shrinks or grows a block of memory to the given `new_size` in bytes.
     /// The block is described by the given `ptr` pointer and `layout`.
     ///
     /// If this returns a non-null pointer, then ownership of the memory block
@@ -211,10 +208,11 @@ pub unsafe trait GlobalAlloc {
     /// Any access to the old `ptr` is Undefined Behavior, even if the
     /// allocation remained in-place. The newly returned pointer is the only valid pointer
     /// for accessing this memory now.
+    ///
     /// The new memory block is allocated with `layout`,
-    /// but with the `size` updated to `new_size`. This new layout must be
-    /// used when deallocating the new memory block with `dealloc`. The range
-    /// `0..min(layout.size(), new_size)` of the new memory block is
+    /// but with the `size` updated to `new_size` in bytes.
+    /// This new layout must be used when deallocating the new memory block with `dealloc`.
+    /// The range `0..min(layout.size(), new_size)` of the new memory block is
     /// guaranteed to have the same values as the original block.
     ///
     /// If this method returns null, then ownership of the memory
@@ -223,18 +221,20 @@ pub unsafe trait GlobalAlloc {
     ///
     /// # Safety
     ///
-    /// This function is unsafe because undefined behavior can result
-    /// if the caller does not ensure all of the following:
+    /// The caller must ensure that:
     ///
-    /// * `ptr` must be currently allocated via this allocator,
+    /// * `ptr` is allocated via this allocator,
     ///
-    /// * `layout` must be the same layout that was used
+    /// * `layout` is the same layout that was used
     ///   to allocate that block of memory,
     ///
-    /// * `new_size` must be greater than zero.
+    /// * `new_size` is greater than zero.
     ///
     /// * `new_size`, when rounded up to the nearest multiple of `layout.align()`,
-    ///   must not overflow (i.e., the rounded value must be less than `usize::MAX`).
+    ///   does not overflow `isize` (i.e., the rounded value must be less than or
+    ///   equal to `isize::MAX`).
+    ///
+    /// If these are not followed, undefined behavior can result.
     ///
     /// (Extension subtraits might provide more specific bounds on
     /// behavior, e.g., guarantee a sentinel address or a null pointer

@@ -278,6 +278,7 @@
 //!
 //! ```
 //! # #![allow(unused_must_use)]
+//! # #![allow(map_unit_fn)]
 //! let v = vec![1, 2, 3, 4, 5];
 //! v.iter().map(|x| println!("{x}"));
 //! ```
@@ -360,69 +361,25 @@ macro_rules! impl_fold_via_try_fold {
     (rfold -> try_rfold) => {
         impl_fold_via_try_fold! { @internal rfold -> try_rfold }
     };
+    (spec_fold -> spec_try_fold) => {
+        impl_fold_via_try_fold! { @internal spec_fold -> spec_try_fold }
+    };
+    (spec_rfold -> spec_try_rfold) => {
+        impl_fold_via_try_fold! { @internal spec_rfold -> spec_try_rfold }
+    };
     (@internal $fold:ident -> $try_fold:ident) => {
         #[inline]
-        fn $fold<AAA, FFF>(mut self, init: AAA, mut fold: FFF) -> AAA
+        fn $fold<AAA, FFF>(mut self, init: AAA, fold: FFF) -> AAA
         where
             FFF: FnMut(AAA, Self::Item) -> AAA,
         {
-            use crate::const_closure::ConstFnMutClosure;
             use crate::ops::NeverShortCircuit;
 
-            let fold = ConstFnMutClosure::new(&mut fold, NeverShortCircuit::wrap_mut_2_imp);
-            self.$try_fold(init, fold).0
+            self.$try_fold(init, NeverShortCircuit::wrap_mut_2(fold)).0
         }
     };
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::traits::Iterator;
-
-#[unstable(
-    feature = "step_trait",
-    reason = "likely to be replaced by finer-grained traits",
-    issue = "42168"
-)]
-pub use self::range::Step;
-
-#[unstable(
-    feature = "iter_from_generator",
-    issue = "43122",
-    reason = "generators are unstable"
-)]
-pub use self::sources::from_generator;
-#[stable(feature = "iter_empty", since = "1.2.0")]
-pub use self::sources::{empty, Empty};
-#[stable(feature = "iter_from_fn", since = "1.34.0")]
-pub use self::sources::{from_fn, FromFn};
-#[stable(feature = "iter_once", since = "1.2.0")]
-pub use self::sources::{once, Once};
-#[stable(feature = "iter_once_with", since = "1.43.0")]
-pub use self::sources::{once_with, OnceWith};
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::sources::{repeat, Repeat};
-#[unstable(feature = "iter_repeat_n", issue = "104434")]
-pub use self::sources::{repeat_n, RepeatN};
-#[stable(feature = "iterator_repeat_with", since = "1.28.0")]
-pub use self::sources::{repeat_with, RepeatWith};
-#[stable(feature = "iter_successors", since = "1.34.0")]
-pub use self::sources::{successors, Successors};
-
-#[stable(feature = "fused", since = "1.26.0")]
-pub use self::traits::FusedIterator;
-#[unstable(issue = "none", feature = "inplace_iteration")]
-pub use self::traits::InPlaceIterable;
-#[unstable(feature = "trusted_len", issue = "37572")]
-pub use self::traits::TrustedLen;
-#[unstable(feature = "trusted_step", issue = "85731")]
-pub use self::traits::TrustedStep;
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::traits::{
-    DoubleEndedIterator, ExactSizeIterator, Extend, FromIterator, IntoIterator, Product, Sum,
-};
-
-#[stable(feature = "iter_zip", since = "1.59.0")]
-pub use self::adapters::zip;
 #[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
 pub use self::adapters::ArrayChunks;
 #[unstable(feature = "std_internals", issue = "none")]
@@ -435,6 +392,8 @@ pub use self::adapters::Copied;
 pub use self::adapters::Flatten;
 #[stable(feature = "iter_map_while", since = "1.57.0")]
 pub use self::adapters::MapWhile;
+#[unstable(feature = "iter_map_windows", reason = "recently added", issue = "87155")]
+pub use self::adapters::MapWindows;
 #[unstable(feature = "inplace_iteration", issue = "none")]
 pub use self::adapters::SourceIter;
 #[stable(feature = "iterator_step_by", since = "1.28.0")]
@@ -443,6 +402,11 @@ pub use self::adapters::StepBy;
 pub use self::adapters::TrustedRandomAccess;
 #[unstable(feature = "trusted_random_access", issue = "none")]
 pub use self::adapters::TrustedRandomAccessNoCoerce;
+#[unstable(feature = "iter_chain", reason = "recently added", issue = "125964")]
+pub use self::adapters::chain;
+pub(crate) use self::adapters::try_process;
+#[stable(feature = "iter_zip", since = "1.59.0")]
+pub use self::adapters::zip;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use self::adapters::{
     Chain, Cycle, Enumerate, Filter, FilterMap, FlatMap, Fuse, Inspect, Map, Peekable, Rev, Scan,
@@ -450,8 +414,51 @@ pub use self::adapters::{
 };
 #[unstable(feature = "iter_intersperse", reason = "recently added", issue = "79524")]
 pub use self::adapters::{Intersperse, IntersperseWith};
-
-pub(crate) use self::adapters::try_process;
+#[unstable(
+    feature = "step_trait",
+    reason = "likely to be replaced by finer-grained traits",
+    issue = "42168"
+)]
+pub use self::range::Step;
+#[stable(feature = "iter_empty", since = "1.2.0")]
+pub use self::sources::{Empty, empty};
+#[unstable(
+    feature = "iter_from_coroutine",
+    issue = "43122",
+    reason = "coroutines are unstable"
+)]
+pub use self::sources::{FromCoroutine, from_coroutine};
+#[stable(feature = "iter_from_fn", since = "1.34.0")]
+pub use self::sources::{FromFn, from_fn};
+#[stable(feature = "iter_once", since = "1.2.0")]
+pub use self::sources::{Once, once};
+#[stable(feature = "iter_once_with", since = "1.43.0")]
+pub use self::sources::{OnceWith, once_with};
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::sources::{Repeat, repeat};
+#[stable(feature = "iter_repeat_n", since = "1.82.0")]
+pub use self::sources::{RepeatN, repeat_n};
+#[stable(feature = "iterator_repeat_with", since = "1.28.0")]
+pub use self::sources::{RepeatWith, repeat_with};
+#[stable(feature = "iter_successors", since = "1.34.0")]
+pub use self::sources::{Successors, successors};
+#[stable(feature = "fused", since = "1.26.0")]
+pub use self::traits::FusedIterator;
+#[unstable(issue = "none", feature = "inplace_iteration")]
+pub use self::traits::InPlaceIterable;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::traits::Iterator;
+#[unstable(issue = "none", feature = "trusted_fused")]
+pub use self::traits::TrustedFused;
+#[unstable(feature = "trusted_len", issue = "37572")]
+pub use self::traits::TrustedLen;
+#[unstable(feature = "trusted_step", issue = "85731")]
+pub use self::traits::TrustedStep;
+pub(crate) use self::traits::UncheckedIterator;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::traits::{
+    DoubleEndedIterator, ExactSizeIterator, Extend, FromIterator, IntoIterator, Product, Sum,
+};
 
 mod adapters;
 mod range;

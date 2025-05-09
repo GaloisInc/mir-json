@@ -7,14 +7,14 @@ use crate::elf;
 use crate::endian::{self, Endianness};
 use crate::pod::Pod;
 use crate::read::{
-    self, Error, ReadRef, Relocation, RelocationEncoding, RelocationKind, RelocationTarget,
-    SectionIndex, SymbolIndex,
+    self, Error, ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind,
+    RelocationTarget, SectionIndex, SymbolIndex,
 };
 
 use super::{ElfFile, FileHeader, SectionHeader, SectionTable};
 
 /// A mapping from section index to associated relocation sections.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RelocationSections {
     relocations: Vec<usize>,
 }
@@ -34,23 +34,30 @@ impl RelocationSections {
             if sh_type == elf::SHT_REL || sh_type == elf::SHT_RELA {
                 // The symbol indices used in relocations must be for the symbol table
                 // we are expecting to use.
-                let sh_link = SectionIndex(section.sh_link(endian) as usize);
+                let sh_link = section.link(endian);
                 if sh_link != symbol_section {
                     continue;
                 }
 
-                let sh_info = section.sh_info(endian) as usize;
-                if sh_info == 0 {
+                let sh_info = section.info_link(endian);
+                if sh_info == SectionIndex(0) {
                     // Skip dynamic relocations.
                     continue;
                 }
-                if sh_info >= relocations.len() {
+                if sh_info.0 >= relocations.len() {
                     return Err(Error("Invalid ELF sh_info for relocation section"));
                 }
 
+                // We don't support relocations that apply to other relocation sections
+                // because it interferes with the chaining of relocation sections below.
+                let sh_info_type = sections.section(sh_info)?.sh_type(endian);
+                if sh_info_type == elf::SHT_REL || sh_info_type == elf::SHT_RELA {
+                    return Err(Error("Unsupported ELF sh_info for relocation section"));
+                }
+
                 // Handle multiple relocation sections by chaining them.
-                let next = relocations[sh_info];
-                relocations[sh_info] = index;
+                let next = relocations[sh_info.0];
+                relocations[sh_info.0] = index;
                 relocations[index] = next;
             }
         }
@@ -61,8 +68,12 @@ impl RelocationSections {
     ///
     /// This may also be called with a relocation section index, and it will return the
     /// next associated relocation section.
-    pub fn get(&self, index: usize) -> Option<usize> {
-        self.relocations.get(index).cloned().filter(|x| *x != 0)
+    pub fn get(&self, index: SectionIndex) -> Option<SectionIndex> {
+        self.relocations
+            .get(index.0)
+            .cloned()
+            .filter(|x| *x != 0)
+            .map(SectionIndex)
     }
 }
 
@@ -91,14 +102,14 @@ impl<'data, Elf: FileHeader> Iterator for ElfRelaIterator<'data, Elf> {
     }
 }
 
-/// An iterator over the dynamic relocations for an `ElfFile32`.
+/// An iterator for the dynamic relocations in an [`ElfFile32`](super::ElfFile32).
 pub type ElfDynamicRelocationIterator32<'data, 'file, Endian = Endianness, R = &'data [u8]> =
     ElfDynamicRelocationIterator<'data, 'file, elf::FileHeader32<Endian>, R>;
-/// An iterator over the dynamic relocations for an `ElfFile64`.
+/// An iterator for the dynamic relocations in an [`ElfFile64`](super::ElfFile64).
 pub type ElfDynamicRelocationIterator64<'data, 'file, Endian = Endianness, R = &'data [u8]> =
     ElfDynamicRelocationIterator<'data, 'file, elf::FileHeader64<Endian>, R>;
 
-/// An iterator over the dynamic relocations for an `ElfFile`.
+/// An iterator for the dynamic relocations in an [`ElfFile`].
 pub struct ElfDynamicRelocationIterator<'data, 'file, Elf, R = &'data [u8]>
 where
     Elf: FileHeader,
@@ -132,8 +143,7 @@ where
             let section = self.file.sections.section(self.section_index).ok()?;
             self.section_index.0 += 1;
 
-            let sh_link = SectionIndex(section.sh_link(endian) as usize);
-            if sh_link != self.file.dynamic_symbols.section() {
+            if section.link(endian) != self.file.dynamic_symbols.section() {
                 continue;
             }
 
@@ -164,14 +174,14 @@ where
     }
 }
 
-/// An iterator over the relocations for an `ElfSection32`.
+/// An iterator for the relocations for an [`ElfSection32`](super::ElfSection32).
 pub type ElfSectionRelocationIterator32<'data, 'file, Endian = Endianness, R = &'data [u8]> =
     ElfSectionRelocationIterator<'data, 'file, elf::FileHeader32<Endian>, R>;
-/// An iterator over the relocations for an `ElfSection64`.
+/// An iterator for the relocations for an [`ElfSection64`](super::ElfSection64).
 pub type ElfSectionRelocationIterator64<'data, 'file, Endian = Endianness, R = &'data [u8]> =
     ElfSectionRelocationIterator<'data, 'file, elf::FileHeader64<Endian>, R>;
 
-/// An iterator over the relocations for an `ElfSection`.
+/// An iterator for the relocations for an [`ElfSection`](super::ElfSection).
 pub struct ElfSectionRelocationIterator<'data, 'file, Elf, R = &'data [u8]>
 where
     Elf: FileHeader,
@@ -201,7 +211,7 @@ where
                 }
                 self.relocations = None;
             }
-            self.section_index = SectionIndex(self.file.relocations.get(self.section_index.0)?);
+            self.section_index = self.file.relocations.get(self.section_index)?;
             // The construction of RelocationSections ensures section_index is valid.
             let section = self.file.sections.section(self.section_index).unwrap();
             match section.sh_type(endian) {
@@ -237,155 +247,203 @@ fn parse_relocation<Elf: FileHeader>(
     reloc: Elf::Rela,
     implicit_addend: bool,
 ) -> Relocation {
-    let mut encoding = RelocationEncoding::Generic;
+    use RelocationEncoding as E;
+    use RelocationKind as K;
+
     let is_mips64el = header.is_mips64el(endian);
-    let (kind, size) = match header.e_machine(endian) {
-        elf::EM_AARCH64 => match reloc.r_type(endian, false) {
-            elf::R_AARCH64_ABS64 => (RelocationKind::Absolute, 64),
-            elf::R_AARCH64_ABS32 => (RelocationKind::Absolute, 32),
-            elf::R_AARCH64_ABS16 => (RelocationKind::Absolute, 16),
-            elf::R_AARCH64_PREL64 => (RelocationKind::Relative, 64),
-            elf::R_AARCH64_PREL32 => (RelocationKind::Relative, 32),
-            elf::R_AARCH64_PREL16 => (RelocationKind::Relative, 16),
-            elf::R_AARCH64_CALL26 => {
-                encoding = RelocationEncoding::AArch64Call;
-                (RelocationKind::PltRelative, 26)
-            }
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_ARM => match reloc.r_type(endian, false) {
-            elf::R_ARM_ABS32 => (RelocationKind::Absolute, 32),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_AVR => match reloc.r_type(endian, false) {
-            elf::R_AVR_32 => (RelocationKind::Absolute, 32),
-            elf::R_AVR_16 => (RelocationKind::Absolute, 16),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_BPF => match reloc.r_type(endian, false) {
-            elf::R_BPF_64_64 => (RelocationKind::Absolute, 64),
-            elf::R_BPF_64_32 => (RelocationKind::Absolute, 32),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_386 => match reloc.r_type(endian, false) {
-            elf::R_386_32 => (RelocationKind::Absolute, 32),
-            elf::R_386_PC32 => (RelocationKind::Relative, 32),
-            elf::R_386_GOT32 => (RelocationKind::Got, 32),
-            elf::R_386_PLT32 => (RelocationKind::PltRelative, 32),
-            elf::R_386_GOTOFF => (RelocationKind::GotBaseOffset, 32),
-            elf::R_386_GOTPC => (RelocationKind::GotBaseRelative, 32),
-            elf::R_386_16 => (RelocationKind::Absolute, 16),
-            elf::R_386_PC16 => (RelocationKind::Relative, 16),
-            elf::R_386_8 => (RelocationKind::Absolute, 8),
-            elf::R_386_PC8 => (RelocationKind::Relative, 8),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_X86_64 => match reloc.r_type(endian, false) {
-            elf::R_X86_64_64 => (RelocationKind::Absolute, 64),
-            elf::R_X86_64_PC32 => (RelocationKind::Relative, 32),
-            elf::R_X86_64_GOT32 => (RelocationKind::Got, 32),
-            elf::R_X86_64_PLT32 => (RelocationKind::PltRelative, 32),
-            elf::R_X86_64_GOTPCREL => (RelocationKind::GotRelative, 32),
-            elf::R_X86_64_32 => (RelocationKind::Absolute, 32),
-            elf::R_X86_64_32S => {
-                encoding = RelocationEncoding::X86Signed;
-                (RelocationKind::Absolute, 32)
-            }
-            elf::R_X86_64_16 => (RelocationKind::Absolute, 16),
-            elf::R_X86_64_PC16 => (RelocationKind::Relative, 16),
-            elf::R_X86_64_8 => (RelocationKind::Absolute, 8),
-            elf::R_X86_64_PC8 => (RelocationKind::Relative, 8),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_HEXAGON => match reloc.r_type(endian, false) {
-            elf::R_HEX_32 => (RelocationKind::Absolute, 32),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_LOONGARCH => match reloc.r_type(endian, false) {
-            elf::R_LARCH_32 => (RelocationKind::Absolute, 32),
-            elf::R_LARCH_64 => (RelocationKind::Absolute, 64),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_MIPS => match reloc.r_type(endian, is_mips64el) {
-            elf::R_MIPS_16 => (RelocationKind::Absolute, 16),
-            elf::R_MIPS_32 => (RelocationKind::Absolute, 32),
-            elf::R_MIPS_64 => (RelocationKind::Absolute, 64),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_MSP430 => match reloc.r_type(endian, false) {
-            elf::R_MSP430_32 => (RelocationKind::Absolute, 32),
-            elf::R_MSP430_16_BYTE => (RelocationKind::Absolute, 16),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_PPC => match reloc.r_type(endian, false) {
-            elf::R_PPC_ADDR32 => (RelocationKind::Absolute, 32),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_PPC64 => match reloc.r_type(endian, false) {
-            elf::R_PPC64_ADDR32 => (RelocationKind::Absolute, 32),
-            elf::R_PPC64_ADDR64 => (RelocationKind::Absolute, 64),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_RISCV => match reloc.r_type(endian, false) {
-            elf::R_RISCV_32 => (RelocationKind::Absolute, 32),
-            elf::R_RISCV_64 => (RelocationKind::Absolute, 64),
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_S390 => match reloc.r_type(endian, false) {
-            elf::R_390_8 => (RelocationKind::Absolute, 8),
-            elf::R_390_16 => (RelocationKind::Absolute, 16),
-            elf::R_390_32 => (RelocationKind::Absolute, 32),
-            elf::R_390_64 => (RelocationKind::Absolute, 64),
-            elf::R_390_PC16 => (RelocationKind::Relative, 16),
-            elf::R_390_PC32 => (RelocationKind::Relative, 32),
-            elf::R_390_PC64 => (RelocationKind::Relative, 64),
-            elf::R_390_PC16DBL => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::Relative, 16)
-            }
-            elf::R_390_PC32DBL => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::Relative, 32)
-            }
-            elf::R_390_PLT16DBL => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::PltRelative, 16)
-            }
-            elf::R_390_PLT32DBL => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::PltRelative, 32)
-            }
-            elf::R_390_GOT16 => (RelocationKind::Got, 16),
-            elf::R_390_GOT32 => (RelocationKind::Got, 32),
-            elf::R_390_GOT64 => (RelocationKind::Got, 64),
-            elf::R_390_GOTENT => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::GotRelative, 32)
-            }
-            elf::R_390_GOTOFF16 => (RelocationKind::GotBaseOffset, 16),
-            elf::R_390_GOTOFF32 => (RelocationKind::GotBaseOffset, 32),
-            elf::R_390_GOTOFF64 => (RelocationKind::GotBaseOffset, 64),
-            elf::R_390_GOTPC => (RelocationKind::GotBaseRelative, 64),
-            elf::R_390_GOTPCDBL => {
-                encoding = RelocationEncoding::S390xDbl;
-                (RelocationKind::GotBaseRelative, 32)
-            }
-            r_type => (RelocationKind::Elf(r_type), 0),
-        },
-        elf::EM_SPARC | elf::EM_SPARC32PLUS | elf::EM_SPARCV9 => {
-            match reloc.r_type(endian, false) {
-                elf::R_SPARC_32 | elf::R_SPARC_UA32 => (RelocationKind::Absolute, 32),
-                elf::R_SPARC_64 | elf::R_SPARC_UA64 => (RelocationKind::Absolute, 64),
-                r_type => (RelocationKind::Elf(r_type), 0),
+    let r_type = reloc.r_type(endian, is_mips64el);
+    let flags = RelocationFlags::Elf { r_type };
+    let g = E::Generic;
+    let unknown = (K::Unknown, E::Generic, 0);
+    let (kind, encoding, size) = match header.e_machine(endian) {
+        elf::EM_AARCH64 => {
+            if header.is_type_64() {
+                match r_type {
+                    elf::R_AARCH64_ABS64 => (K::Absolute, g, 64),
+                    elf::R_AARCH64_ABS32 => (K::Absolute, g, 32),
+                    elf::R_AARCH64_ABS16 => (K::Absolute, g, 16),
+                    elf::R_AARCH64_PREL64 => (K::Relative, g, 64),
+                    elf::R_AARCH64_PREL32 => (K::Relative, g, 32),
+                    elf::R_AARCH64_PREL16 => (K::Relative, g, 16),
+                    elf::R_AARCH64_CALL26 => (K::PltRelative, E::AArch64Call, 26),
+                    _ => unknown,
+                }
+            } else {
+                match r_type {
+                    elf::R_AARCH64_P32_ABS32 => (K::Absolute, g, 32),
+                    _ => unknown,
+                }
             }
         }
-        _ => (RelocationKind::Elf(reloc.r_type(endian, false)), 0),
+        elf::EM_ARM => match r_type {
+            elf::R_ARM_ABS32 => (K::Absolute, g, 32),
+            _ => unknown,
+        },
+        elf::EM_AVR => match r_type {
+            elf::R_AVR_32 => (K::Absolute, g, 32),
+            elf::R_AVR_16 => (K::Absolute, g, 16),
+            _ => unknown,
+        },
+        elf::EM_BPF => match r_type {
+            elf::R_BPF_64_64 => (K::Absolute, g, 64),
+            elf::R_BPF_64_32 => (K::Absolute, g, 32),
+            _ => unknown,
+        },
+        elf::EM_CSKY => match r_type {
+            elf::R_CKCORE_ADDR32 => (K::Absolute, g, 32),
+            elf::R_CKCORE_PCREL32 => (K::Relative, g, 32),
+            _ => unknown,
+        },
+        elf::EM_MCST_ELBRUS => match r_type {
+            elf::R_E2K_32_ABS => (K::Absolute, g, 32),
+            elf::R_E2K_64_ABS => (K::Absolute, g, 64),
+            elf::R_E2K_64_ABS_LIT => (K::Absolute, E::E2KLit, 64),
+            elf::R_E2K_DISP => (K::Relative, E::E2KDisp, 28),
+            elf::R_E2K_GOT => (K::Got, g, 32),
+            _ => unknown,
+        },
+        elf::EM_386 => match r_type {
+            elf::R_386_32 => (K::Absolute, g, 32),
+            elf::R_386_PC32 => (K::Relative, g, 32),
+            elf::R_386_GOT32 => (K::Got, g, 32),
+            elf::R_386_PLT32 => (K::PltRelative, g, 32),
+            elf::R_386_GOTOFF => (K::GotBaseOffset, g, 32),
+            elf::R_386_GOTPC => (K::GotBaseRelative, g, 32),
+            elf::R_386_16 => (K::Absolute, g, 16),
+            elf::R_386_PC16 => (K::Relative, g, 16),
+            elf::R_386_8 => (K::Absolute, g, 8),
+            elf::R_386_PC8 => (K::Relative, g, 8),
+            _ => unknown,
+        },
+        elf::EM_X86_64 => match r_type {
+            elf::R_X86_64_64 => (K::Absolute, g, 64),
+            elf::R_X86_64_PC32 => (K::Relative, g, 32),
+            elf::R_X86_64_GOT32 => (K::Got, g, 32),
+            elf::R_X86_64_PLT32 => (K::PltRelative, g, 32),
+            elf::R_X86_64_GOTPCREL => (K::GotRelative, g, 32),
+            elf::R_X86_64_32 => (K::Absolute, g, 32),
+            elf::R_X86_64_32S => (K::Absolute, E::X86Signed, 32),
+            elf::R_X86_64_16 => (K::Absolute, g, 16),
+            elf::R_X86_64_PC16 => (K::Relative, g, 16),
+            elf::R_X86_64_8 => (K::Absolute, g, 8),
+            elf::R_X86_64_PC8 => (K::Relative, g, 8),
+            _ => unknown,
+        },
+        elf::EM_HEXAGON => match r_type {
+            elf::R_HEX_32 => (K::Absolute, g, 32),
+            _ => unknown,
+        },
+        elf::EM_LOONGARCH => match r_type {
+            elf::R_LARCH_32 => (K::Absolute, g, 32),
+            elf::R_LARCH_64 => (K::Absolute, g, 64),
+            elf::R_LARCH_32_PCREL => (K::Relative, g, 32),
+            elf::R_LARCH_64_PCREL => (K::Relative, g, 64),
+            elf::R_LARCH_B16 => (K::Relative, E::LoongArchBranch, 16),
+            elf::R_LARCH_B21 => (K::Relative, E::LoongArchBranch, 21),
+            elf::R_LARCH_B26 => (K::Relative, E::LoongArchBranch, 26),
+            _ => unknown,
+        },
+        elf::EM_68K => match r_type {
+            elf::R_68K_32 => (K::Absolute, g, 32),
+            elf::R_68K_16 => (K::Absolute, g, 16),
+            elf::R_68K_8 => (K::Absolute, g, 8),
+            elf::R_68K_PC32 => (K::Relative, g, 32),
+            elf::R_68K_PC16 => (K::Relative, g, 16),
+            elf::R_68K_PC8 => (K::Relative, g, 8),
+            elf::R_68K_GOT32O => (K::Got, g, 32),
+            elf::R_68K_GOT16O => (K::Got, g, 16),
+            elf::R_68K_GOT8O => (K::Got, g, 8),
+            elf::R_68K_GOT32 => (K::GotRelative, g, 32),
+            elf::R_68K_GOT16 => (K::GotRelative, g, 16),
+            elf::R_68K_GOT8 => (K::GotRelative, g, 8),
+            elf::R_68K_PLT32 => (K::PltRelative, g, 32),
+            elf::R_68K_PLT16 => (K::PltRelative, g, 16),
+            elf::R_68K_PLT8 => (K::PltRelative, g, 8),
+            _ => unknown,
+        },
+        elf::EM_MIPS => match r_type {
+            elf::R_MIPS_16 => (K::Absolute, g, 16),
+            elf::R_MIPS_32 => (K::Absolute, g, 32),
+            elf::R_MIPS_64 => (K::Absolute, g, 64),
+            _ => unknown,
+        },
+        elf::EM_MSP430 => match r_type {
+            elf::R_MSP430_32 => (K::Absolute, g, 32),
+            elf::R_MSP430_16_BYTE => (K::Absolute, g, 16),
+            _ => unknown,
+        },
+        elf::EM_PPC => match r_type {
+            elf::R_PPC_ADDR32 => (K::Absolute, g, 32),
+            _ => unknown,
+        },
+        elf::EM_PPC64 => match r_type {
+            elf::R_PPC64_ADDR32 => (K::Absolute, g, 32),
+            elf::R_PPC64_ADDR64 => (K::Absolute, g, 64),
+            _ => unknown,
+        },
+        elf::EM_RISCV => match r_type {
+            elf::R_RISCV_32 => (K::Absolute, g, 32),
+            elf::R_RISCV_64 => (K::Absolute, g, 64),
+            _ => unknown,
+        },
+        elf::EM_S390 => match r_type {
+            elf::R_390_8 => (K::Absolute, g, 8),
+            elf::R_390_16 => (K::Absolute, g, 16),
+            elf::R_390_32 => (K::Absolute, g, 32),
+            elf::R_390_64 => (K::Absolute, g, 64),
+            elf::R_390_PC16 => (K::Relative, g, 16),
+            elf::R_390_PC32 => (K::Relative, g, 32),
+            elf::R_390_PC64 => (K::Relative, g, 64),
+            elf::R_390_PC16DBL => (K::Relative, E::S390xDbl, 16),
+            elf::R_390_PC32DBL => (K::Relative, E::S390xDbl, 32),
+            elf::R_390_PLT16DBL => (K::PltRelative, E::S390xDbl, 16),
+            elf::R_390_PLT32DBL => (K::PltRelative, E::S390xDbl, 32),
+            elf::R_390_GOT16 => (K::Got, g, 16),
+            elf::R_390_GOT32 => (K::Got, g, 32),
+            elf::R_390_GOT64 => (K::Got, g, 64),
+            elf::R_390_GOTENT => (K::GotRelative, E::S390xDbl, 32),
+            elf::R_390_GOTOFF16 => (K::GotBaseOffset, g, 16),
+            elf::R_390_GOTOFF32 => (K::GotBaseOffset, g, 32),
+            elf::R_390_GOTOFF64 => (K::GotBaseOffset, g, 64),
+            elf::R_390_GOTPC => (K::GotBaseRelative, g, 64),
+            elf::R_390_GOTPCDBL => (K::GotBaseRelative, E::S390xDbl, 32),
+            _ => unknown,
+        },
+        elf::EM_SBF => match r_type {
+            elf::R_SBF_64_64 => (K::Absolute, g, 64),
+            elf::R_SBF_64_32 => (K::Absolute, g, 32),
+            _ => unknown,
+        },
+        elf::EM_SHARC => match r_type {
+            elf::R_SHARC_ADDR24_V3 => (K::Absolute, E::SharcTypeA, 24),
+            elf::R_SHARC_ADDR32_V3 => (K::Absolute, E::SharcTypeA, 32),
+            elf::R_SHARC_ADDR_VAR_V3 => (K::Absolute, E::Generic, 32),
+            elf::R_SHARC_PCRSHORT_V3 => (K::Relative, E::SharcTypeA, 6),
+            elf::R_SHARC_PCRLONG_V3 => (K::Relative, E::SharcTypeA, 24),
+            elf::R_SHARC_DATA6_V3 => (K::Absolute, E::SharcTypeA, 6),
+            elf::R_SHARC_DATA16_V3 => (K::Absolute, E::SharcTypeA, 16),
+            elf::R_SHARC_DATA6_VISA_V3 => (K::Absolute, E::SharcTypeB, 6),
+            elf::R_SHARC_DATA7_VISA_V3 => (K::Absolute, E::SharcTypeB, 7),
+            elf::R_SHARC_DATA16_VISA_V3 => (K::Absolute, E::SharcTypeB, 16),
+            elf::R_SHARC_PCR6_VISA_V3 => (K::Relative, E::SharcTypeB, 16),
+            elf::R_SHARC_ADDR_VAR16_V3 => (K::Absolute, E::Generic, 16),
+            _ => unknown,
+        },
+        elf::EM_SPARC | elf::EM_SPARC32PLUS | elf::EM_SPARCV9 => match r_type {
+            elf::R_SPARC_32 | elf::R_SPARC_UA32 => (K::Absolute, g, 32),
+            elf::R_SPARC_64 | elf::R_SPARC_UA64 => (K::Absolute, g, 64),
+            _ => unknown,
+        },
+        elf::EM_XTENSA => match r_type {
+            elf::R_XTENSA_32 => (K::Absolute, g, 32),
+            elf::R_XTENSA_32_PCREL => (K::Relative, g, 32),
+            _ => unknown,
+        },
+        _ => unknown,
     };
-    let sym = reloc.r_sym(endian, is_mips64el) as usize;
-    let target = if sym == 0 {
-        RelocationTarget::Absolute
-    } else {
-        RelocationTarget::Symbol(SymbolIndex(sym))
+    let target = match reloc.symbol(endian, is_mips64el) {
+        None => RelocationTarget::Absolute,
+        Some(symbol) => RelocationTarget::Symbol(symbol),
     };
     Relocation {
         kind,
@@ -394,10 +452,11 @@ fn parse_relocation<Elf: FileHeader>(
         target,
         addend: reloc.r_addend(endian).into(),
         implicit_addend,
+        flags,
     }
 }
 
-/// A trait for generic access to `Rel32` and `Rel64`.
+/// A trait for generic access to [`elf::Rel32`] and [`elf::Rel64`].
 #[allow(missing_docs)]
 pub trait Rel: Debug + Pod + Clone {
     type Word: Into<u64>;
@@ -408,6 +467,18 @@ pub trait Rel: Debug + Pod + Clone {
     fn r_info(&self, endian: Self::Endian) -> Self::Word;
     fn r_sym(&self, endian: Self::Endian) -> u32;
     fn r_type(&self, endian: Self::Endian) -> u32;
+
+    /// Get the symbol index referenced by the relocation.
+    ///
+    /// Returns `None` for the null symbol index.
+    fn symbol(&self, endian: Self::Endian) -> Option<SymbolIndex> {
+        let sym = self.r_sym(endian);
+        if sym == 0 {
+            None
+        } else {
+            Some(SymbolIndex(sym as usize))
+        }
+    }
 }
 
 impl<Endian: endian::Endian> Rel for elf::Rel32<Endian> {
@@ -462,7 +533,7 @@ impl<Endian: endian::Endian> Rel for elf::Rel64<Endian> {
     }
 }
 
-/// A trait for generic access to `Rela32` and `Rela64`.
+/// A trait for generic access to [`elf::Rela32`] and [`elf::Rela64`].
 #[allow(missing_docs)]
 pub trait Rela: Debug + Pod + Clone {
     type Word: Into<u64>;
@@ -474,6 +545,18 @@ pub trait Rela: Debug + Pod + Clone {
     fn r_addend(&self, endian: Self::Endian) -> Self::Sword;
     fn r_sym(&self, endian: Self::Endian, is_mips64el: bool) -> u32;
     fn r_type(&self, endian: Self::Endian, is_mips64el: bool) -> u32;
+
+    /// Get the symbol index referenced by the relocation.
+    ///
+    /// Returns `None` for the null symbol index.
+    fn symbol(&self, endian: Self::Endian, is_mips64el: bool) -> Option<SymbolIndex> {
+        let sym = self.r_sym(endian, is_mips64el);
+        if sym == 0 {
+            None
+        } else {
+            Some(SymbolIndex(sym as usize))
+        }
+    }
 }
 
 impl<Endian: endian::Endian> Rela for elf::Rela32<Endian> {
@@ -535,5 +618,116 @@ impl<Endian: endian::Endian> Rela for elf::Rela64<Endian> {
     #[inline]
     fn r_type(&self, endian: Self::Endian, is_mips64el: bool) -> u32 {
         self.r_type(endian, is_mips64el)
+    }
+}
+
+/// An iterator over the relative relocations in an ELF `SHT_RELR` section.
+///
+/// Returned by [`SectionHeader::relr`](super::SectionHeader::relr).
+#[derive(Debug)]
+pub struct RelrIterator<'data, Elf: FileHeader> {
+    offset: Elf::Word,
+    bits: Elf::Word,
+    count: u8,
+    iter: slice::Iter<'data, Elf::Relr>,
+    endian: Elf::Endian,
+}
+
+impl<'data, Elf: FileHeader> RelrIterator<'data, Elf> {
+    /// Create a new iterator given the `SHT_RELR` section data.
+    pub fn new(endian: Elf::Endian, data: &'data [Elf::Relr]) -> Self {
+        RelrIterator {
+            offset: Elf::Word::default(),
+            bits: Elf::Word::default(),
+            count: 0,
+            iter: data.iter(),
+            endian,
+        }
+    }
+}
+
+impl<'data, Elf: FileHeader> Iterator for RelrIterator<'data, Elf> {
+    type Item = Elf::Word;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            while self.count > 0 {
+                self.count -= 1;
+                let offset = Elf::Relr::next(&mut self.offset, &mut self.bits);
+                if offset.is_some() {
+                    return offset;
+                }
+            }
+            let next = self.iter.next()?.get(self.endian);
+            if next.into() & 1 == 0 {
+                self.offset = next;
+                return Some(next);
+            }
+            self.bits = next;
+            self.count = Elf::Relr::COUNT;
+        }
+    }
+}
+
+/// A trait for generic access to [`elf::Relr32`] and [`elf::Relr64`].
+#[allow(missing_docs)]
+pub trait Relr: Debug + Pod + Clone {
+    type Word: Into<u64>;
+    type Endian: endian::Endian;
+
+    /// The number of bits in the bit mask, excluding the lowest bit.
+    const COUNT: u8;
+
+    /// Get the relocation entry.
+    ///
+    /// This value is an offset if the lowest bit is clear, or a bit mask if the lowest bit is set.
+    fn get(&self, endian: Self::Endian) -> Self::Word;
+
+    /// Return the offset corresponding to the next bit in the bit mask.
+    ///
+    /// Updates the offset and bit mask. This method should be called 31 times
+    /// for Relr32 and 63 times for Relr64 to iterate over all the bits.
+    ///
+    /// Returns `None` if the bit is not set.
+    fn next(offset: &mut Self::Word, bits: &mut Self::Word) -> Option<Self::Word>;
+}
+
+impl<Endian: endian::Endian> Relr for elf::Relr32<Endian> {
+    type Word = u32;
+    type Endian = Endian;
+    const COUNT: u8 = 31;
+
+    fn get(&self, endian: Self::Endian) -> Self::Word {
+        self.0.get(endian)
+    }
+
+    fn next(offset: &mut Self::Word, bits: &mut Self::Word) -> Option<Self::Word> {
+        *offset += 4;
+        *bits >>= 1;
+        if *bits & 1 != 0 {
+            Some(*offset)
+        } else {
+            None
+        }
+    }
+}
+
+impl<Endian: endian::Endian> Relr for elf::Relr64<Endian> {
+    type Word = u64;
+    type Endian = Endian;
+    const COUNT: u8 = 63;
+
+    fn get(&self, endian: Self::Endian) -> Self::Word {
+        self.0.get(endian)
+    }
+
+    fn next(offset: &mut Self::Word, bits: &mut Self::Word) -> Option<Self::Word> {
+        *offset += 8;
+        *bits >>= 1;
+        if *bits & 1 != 0 {
+            Some(*offset)
+        } else {
+            None
+        }
     }
 }

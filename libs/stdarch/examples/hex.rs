@@ -12,8 +12,13 @@
 //!
 //! and you should see `746573740a` get printed out.
 
-#![feature(stdsimd, wasm_target_feature)]
+#![allow(internal_features)]
+#![feature(wasm_target_feature)]
 #![cfg_attr(test, feature(test))]
+#![cfg_attr(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    feature(stdarch_internal)
+)]
 #![allow(
     clippy::unwrap_used,
     clippy::print_stdout,
@@ -40,7 +45,7 @@ fn main() {
     io::stdin().read_to_end(&mut input).unwrap();
     let mut dst = vec![0; 2 * input.len()];
     let s = hex_encode(&input, &mut dst).unwrap();
-    println!("{}", s);
+    println!("{s}");
 }
 
 fn hex_encode<'a>(src: &[u8], dst: &'a mut [u8]) -> Result<&'a str, usize> {
@@ -215,8 +220,6 @@ fn hex_encode_fallback<'a>(src: &[u8], dst: &'a mut [u8]) -> Result<&'a str, usi
 // Run these with `cargo +nightly test --example hex -p stdarch`
 #[cfg(test)]
 mod tests {
-    use std::iter;
-
     use super::*;
 
     fn test(input: &[u8], output: &str) {
@@ -243,18 +246,12 @@ mod tests {
 
     #[test]
     fn big() {
-        test(
-            &[0; 1024],
-            &iter::repeat('0').take(2048).collect::<String>(),
-        );
+        test(&[0; 1024], &"0".repeat(2048));
     }
 
     #[test]
     fn odd() {
-        test(
-            &[0; 313],
-            &iter::repeat('0').take(313 * 2).collect::<String>(),
-        );
+        test(&[0; 313], &"0".repeat(313 * 2));
     }
 
     #[test]

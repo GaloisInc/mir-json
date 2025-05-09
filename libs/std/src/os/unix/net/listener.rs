@@ -1,4 +1,4 @@
-use super::{sockaddr_un, SocketAddr, UnixStream};
+use super::{SocketAddr, UnixStream, sockaddr_un};
 use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use crate::path::Path;
 use crate::sys::cvt;
@@ -73,10 +73,37 @@ impl UnixListener {
         unsafe {
             let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
             let (addr, len) = sockaddr_un(path.as_ref())?;
-            const backlog: libc::c_int =
-                if cfg!(any(target_os = "linux", target_os = "freebsd")) { -1 } else { 128 };
+            #[cfg(any(
+                target_os = "windows",
+                target_os = "redox",
+                target_os = "espidf",
+                target_os = "horizon"
+            ))]
+            const backlog: core::ffi::c_int = 128;
+            #[cfg(any(
+                // Silently capped to `/proc/sys/net/core/somaxconn`.
+                target_os = "linux",
+                // Silently capped to `kern.ipc.soacceptqueue`.
+                target_os = "freebsd",
+                // Silently capped to `kern.somaxconn sysctl`.
+                target_os = "openbsd",
+                // Silently capped to the default 128.
+                target_vendor = "apple",
+            ))]
+            const backlog: core::ffi::c_int = -1;
+            #[cfg(not(any(
+                target_os = "windows",
+                target_os = "redox",
+                target_os = "espidf",
+                target_os = "horizon",
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_vendor = "apple",
+            )))]
+            const backlog: libc::c_int = libc::SOMAXCONN;
 
-            cvt(libc::bind(inner.as_inner().as_raw_fd(), &addr as *const _ as *const _, len as _))?;
+            cvt(libc::bind(inner.as_inner().as_raw_fd(), (&raw const addr) as *const _, len as _))?;
             cvt(libc::listen(inner.as_inner().as_raw_fd(), backlog))?;
 
             Ok(UnixListener(inner))
@@ -90,7 +117,6 @@ impl UnixListener {
     /// # Examples
     ///
     /// ```no_run
-    /// #![feature(unix_socket_abstract)]
     /// use std::os::unix::net::{UnixListener};
     ///
     /// fn main() -> std::io::Result<()> {
@@ -107,17 +133,17 @@ impl UnixListener {
     ///     Ok(())
     /// }
     /// ```
-    #[unstable(feature = "unix_socket_abstract", issue = "85410")]
+    #[stable(feature = "unix_socket_abstract", since = "1.70.0")]
     pub fn bind_addr(socket_addr: &SocketAddr) -> io::Result<UnixListener> {
         unsafe {
             let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
             #[cfg(target_os = "linux")]
-            const backlog: libc::c_int = -1;
+            const backlog: core::ffi::c_int = -1;
             #[cfg(not(target_os = "linux"))]
-            const backlog: libc::c_int = 128;
+            const backlog: core::ffi::c_int = 128;
             cvt(libc::bind(
                 inner.as_raw_fd(),
-                &socket_addr.addr as *const _ as *const _,
+                (&raw const socket_addr.addr) as *const _,
                 socket_addr.len as _,
             ))?;
             cvt(libc::listen(inner.as_raw_fd(), backlog))?;
@@ -152,7 +178,7 @@ impl UnixListener {
     pub fn accept(&self) -> io::Result<(UnixStream, SocketAddr)> {
         let mut storage: libc::sockaddr_un = unsafe { mem::zeroed() };
         let mut len = mem::size_of_val(&storage) as libc::socklen_t;
-        let sock = self.0.accept(&mut storage as *mut _ as *mut _, &mut len)?;
+        let sock = self.0.accept((&raw mut storage) as *mut _, &mut len)?;
         let addr = SocketAddr::from_parts(storage, len)?;
         Ok((UnixStream(sock), addr))
     }
@@ -324,6 +350,7 @@ impl From<OwnedFd> for UnixListener {
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl From<UnixListener> for OwnedFd {
+    /// Takes ownership of a [`UnixListener`]'s socket file descriptor.
     #[inline]
     fn from(listener: UnixListener) -> OwnedFd {
         listener.0.into_inner().into_inner()

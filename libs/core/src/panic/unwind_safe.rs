@@ -28,7 +28,7 @@ use crate::task::{Context, Poll};
 /// 2. This broken invariant is then later observed.
 ///
 /// Typically in Rust, it is difficult to perform step (2) because catching a
-/// panic involves either spawning a thread (which in turns makes it difficult
+/// panic involves either spawning a thread (which in turn makes it difficult
 /// to later witness broken invariants) or using the `catch_unwind` function in this
 /// module. Additionally, even if an invariant is witnessed, it typically isn't a
 /// problem in Rust because there are no uninitialized values (like in C or C++).
@@ -83,7 +83,7 @@ use crate::task::{Context, Poll};
 /// implemented for any closed over variables passed to `catch_unwind`.
 #[stable(feature = "catch_unwind", since = "1.9.0")]
 #[cfg_attr(not(test), rustc_diagnostic_item = "unwind_safe_trait")]
-#[rustc_on_unimplemented(
+#[diagnostic::on_unimplemented(
     message = "the type `{Self}` may not be safely transferred across an unwind boundary",
     label = "`{Self}` may not be safely transferred across an unwind boundary"
 )]
@@ -99,7 +99,7 @@ pub auto trait UnwindSafe {}
 /// [`UnwindSafe`] trait, for more information see that documentation.
 #[stable(feature = "catch_unwind", since = "1.9.0")]
 #[cfg_attr(not(test), rustc_diagnostic_item = "ref_unwind_safe_trait")]
-#[rustc_on_unimplemented(
+#[diagnostic::on_unimplemented(
     message = "the type `{Self}` may contain interior mutability and a reference may not be safely \
                transferrable across a catch_unwind boundary",
     label = "`{Self}` may contain interior mutability and a reference may not be safely \
@@ -267,6 +267,7 @@ impl<T> DerefMut for AssertUnwindSafe<T> {
 impl<R, F: FnOnce() -> R> FnOnce<()> for AssertUnwindSafe<F> {
     type Output = R;
 
+    #[inline]
     extern "rust-call" fn call_once(self, _args: ()) -> R {
         (self.0)()
     }

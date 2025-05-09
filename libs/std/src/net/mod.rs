@@ -21,24 +21,22 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use crate::io::{self, ErrorKind};
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use core::net::AddrParseError;
 
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use self::ip_addr::{IpAddr, Ipv4Addr, Ipv6Addr, Ipv6MulticastScope};
 #[stable(feature = "rust1", since = "1.0.0")]
-pub use self::parser::AddrParseError;
-#[stable(feature = "rust1", since = "1.0.0")]
 pub use self::socket_addr::{SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
-#[unstable(feature = "tcplistener_into_incoming", issue = "88339")]
+#[unstable(feature = "tcplistener_into_incoming", issue = "88373")]
 pub use self::tcp::IntoIncoming;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use self::tcp::{Incoming, TcpListener, TcpStream};
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use self::udp::UdpSocket;
+use crate::io::{self, ErrorKind};
 
-mod display_buffer;
 mod ip_addr;
-mod parser;
 mod socket_addr;
 mod tcp;
 #[cfg(test)]
@@ -86,6 +84,6 @@ where
         }
     }
     Err(last_err.unwrap_or_else(|| {
-        io::const_io_error!(ErrorKind::InvalidInput, "could not resolve to any addresses")
+        io::const_error!(ErrorKind::InvalidInput, "could not resolve to any addresses")
     }))
 }

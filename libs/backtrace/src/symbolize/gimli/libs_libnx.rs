@@ -1,13 +1,14 @@
-use super::{Library, LibrarySegment, Vec};
+use super::{Library, LibrarySegment};
+use alloc::vec::Vec;
 
 // DevkitA64 doesn't natively support debug info, but the build system will
 // place debug info at the path `romfs:/debug_info.elf`.
 pub(super) fn native_libraries() -> Vec<Library> {
-    extern "C" {
+    unsafe extern "C" {
         static __start__: u8;
     }
 
-    let bias = unsafe { &__start__ } as *const u8 as usize;
+    let bias = core::ptr::addr_of!(__start__) as usize;
 
     let mut ret = Vec::new();
     let mut segments = Vec::new();

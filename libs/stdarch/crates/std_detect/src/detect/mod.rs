@@ -27,6 +27,7 @@ mod arch;
 // This module needs to be public because the `is_{arch}_feature_detected!`
 // macros expand calls to items within it in user crates.
 #[doc(hidden)]
+#[unstable(feature = "stdarch_internal", issue = "none")]
 pub use self::arch::__is_feature_detected;
 
 pub(crate) use self::arch::Feature;
@@ -47,7 +48,7 @@ cfg_if! {
         // On x86/x86_64 no OS specific functionality is required.
         #[path = "os/x86.rs"]
         mod os;
-    } else if #[cfg(all(target_os = "linux", feature = "libc"))] {
+    } else if #[cfg(all(any(target_os = "linux", target_os = "android"), feature = "libc"))] {
         #[path = "os/linux/mod.rs"]
         mod os;
     } else if #[cfg(all(target_os = "freebsd", feature = "libc"))] {
@@ -56,8 +57,17 @@ cfg_if! {
         mod aarch64;
         #[path = "os/freebsd/mod.rs"]
         mod os;
-    } else if #[cfg(all(target_os = "windows", target_arch = "aarch64"))] {
+    } else if #[cfg(all(target_os = "openbsd", target_arch = "aarch64", feature = "libc"))] {
+        #[allow(dead_code)] // we don't use code that calls the mrs instruction.
+        #[path = "os/aarch64.rs"]
+        mod aarch64;
+        #[path = "os/openbsd/aarch64.rs"]
+        mod os;
+    } else if #[cfg(all(target_os = "windows", any(target_arch = "aarch64", target_arch = "arm64ec")))] {
         #[path = "os/windows/aarch64.rs"]
+        mod os;
+    } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64", feature = "libc"))] {
+        #[path = "os/darwin/aarch64.rs"]
         mod os;
     } else {
         #[path = "os/other.rs"]
@@ -75,7 +85,7 @@ fn check_for(x: Feature) -> bool {
 /// Returns an `Iterator<Item=(&'static str, bool)>` where
 /// `Item.0` is the feature name, and `Item.1` is a `bool` which
 /// is `true` if the feature is supported by the host and `false` otherwise.
-#[unstable(feature = "stdsimd", issue = "27731")]
+#[unstable(feature = "stdarch_internal", issue = "none")]
 pub fn features() -> impl Iterator<Item = (&'static str, bool)> {
     cfg_if! {
         if #[cfg(any(
@@ -83,12 +93,14 @@ pub fn features() -> impl Iterator<Item = (&'static str, bool)> {
             target_arch = "x86_64",
             target_arch = "arm",
             target_arch = "aarch64",
+            target_arch = "arm64ec",
             target_arch = "riscv32",
             target_arch = "riscv64",
             target_arch = "powerpc",
             target_arch = "powerpc64",
             target_arch = "mips",
             target_arch = "mips64",
+            target_arch = "loongarch64",
         ))] {
             (0_u8..Feature::_last as u8).map(|discriminant: u8| {
                 #[allow(bindings_with_variant_name)] // RISC-V has Feature::f

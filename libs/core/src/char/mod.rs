@@ -18,13 +18,14 @@
 //! functions that convert various types to `char`.
 
 #![allow(non_snake_case)]
-#![stable(feature = "core_char", since = "1.2.0")]
+#![stable(feature = "rust1", since = "1.0.0")]
 
 mod convert;
 mod decode;
 mod methods;
 
 // stable re-exports
+#[rustfmt::skip]
 #[stable(feature = "try_from", since = "1.34.0")]
 pub use self::convert::CharTryFromError;
 #[stable(feature = "char_from_str", since = "1.20.0")]
@@ -33,16 +34,20 @@ pub use self::convert::ParseCharError;
 pub use self::decode::{DecodeUtf16, DecodeUtf16Error};
 
 // perma-unstable re-exports
+#[rustfmt::skip]
 #[unstable(feature = "char_internals", reason = "exposed only for libstd", issue = "none")]
-pub use self::methods::encode_utf16_raw;
+pub use self::methods::encode_utf16_raw; // perma-unstable
 #[unstable(feature = "char_internals", reason = "exposed only for libstd", issue = "none")]
-pub use self::methods::encode_utf8_raw;
+pub use self::methods::encode_utf8_raw; // perma-unstable
 
-use crate::error::Error;
-use crate::fmt::{self, Write};
-use crate::iter::FusedIterator;
-
+#[rustfmt::skip]
+use crate::ascii;
 pub(crate) use self::methods::EscapeDebugExtArgs;
+use crate::error::Error;
+use crate::escape;
+use crate::fmt::{self, Write};
+use crate::iter::{FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce};
+use crate::num::NonZero;
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -117,10 +122,10 @@ pub const fn from_u32(i: u32) -> Option<char> {
     self::convert::from_u32(i)
 }
 
-/// Converts a `u32` to a `char`, ignoring validity. Use [`char::from_u32_unchecked`].
+/// Converts a `u32` to a `char`, ignoring validity. Use [`char::from_u32_unchecked`]
 /// instead.
 #[stable(feature = "char_from_unchecked", since = "1.5.0")]
-#[rustc_const_unstable(feature = "const_char_from_u32_unchecked", issue = "89259")]
+#[rustc_const_stable(feature = "const_char_from_u32_unchecked", since = "1.81.0")]
 #[must_use]
 #[inline]
 pub const unsafe fn from_u32_unchecked(i: u32) -> char {
@@ -146,86 +151,43 @@ pub const fn from_digit(num: u32, radix: u32) -> Option<char> {
 /// [`escape_unicode`]: char::escape_unicode
 #[derive(Clone, Debug)]
 #[stable(feature = "rust1", since = "1.0.0")]
-pub struct EscapeUnicode {
-    c: char,
-    state: EscapeUnicodeState,
+pub struct EscapeUnicode(escape::EscapeIterInner<10>);
 
-    // The index of the next hex digit to be printed (0 if none),
-    // i.e., the number of remaining hex digits to be printed;
-    // increasing from the least significant digit: 0x543210
-    hex_digit_idx: usize,
-}
-
-// The enum values are ordered so that their representation is the
-// same as the remaining length (besides the hexadecimal digits). This
-// likely makes `len()` a single load from memory) and inline-worth.
-#[derive(Clone, Debug)]
-enum EscapeUnicodeState {
-    Done,
-    RightBrace,
-    Value,
-    LeftBrace,
-    Type,
-    Backslash,
+impl EscapeUnicode {
+    #[inline]
+    const fn new(c: char) -> Self {
+        Self(escape::EscapeIterInner::unicode(c))
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Iterator for EscapeUnicode {
     type Item = char;
 
+    #[inline]
     fn next(&mut self) -> Option<char> {
-        match self.state {
-            EscapeUnicodeState::Backslash => {
-                self.state = EscapeUnicodeState::Type;
-                Some('\\')
-            }
-            EscapeUnicodeState::Type => {
-                self.state = EscapeUnicodeState::LeftBrace;
-                Some('u')
-            }
-            EscapeUnicodeState::LeftBrace => {
-                self.state = EscapeUnicodeState::Value;
-                Some('{')
-            }
-            EscapeUnicodeState::Value => {
-                let hex_digit = ((self.c as u32) >> (self.hex_digit_idx * 4)) & 0xf;
-                let c = from_digit(hex_digit, 16).unwrap();
-                if self.hex_digit_idx == 0 {
-                    self.state = EscapeUnicodeState::RightBrace;
-                } else {
-                    self.hex_digit_idx -= 1;
-                }
-                Some(c)
-            }
-            EscapeUnicodeState::RightBrace => {
-                self.state = EscapeUnicodeState::Done;
-                Some('}')
-            }
-            EscapeUnicodeState::Done => None,
-        }
+        self.0.next().map(char::from)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let n = self.len();
+        let n = self.0.len();
         (n, Some(n))
     }
 
     #[inline]
     fn count(self) -> usize {
-        self.len()
+        self.0.len()
     }
 
-    fn last(self) -> Option<char> {
-        match self.state {
-            EscapeUnicodeState::Done => None,
+    #[inline]
+    fn last(mut self) -> Option<char> {
+        self.0.next_back().map(char::from)
+    }
 
-            EscapeUnicodeState::RightBrace
-            | EscapeUnicodeState::Value
-            | EscapeUnicodeState::LeftBrace
-            | EscapeUnicodeState::Type
-            | EscapeUnicodeState::Backslash => Some('}'),
-        }
+    #[inline]
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        self.0.advance_by(n)
     }
 }
 
@@ -233,16 +195,7 @@ impl Iterator for EscapeUnicode {
 impl ExactSizeIterator for EscapeUnicode {
     #[inline]
     fn len(&self) -> usize {
-        // The match is a single memory access with no branching
-        self.hex_digit_idx
-            + match self.state {
-                EscapeUnicodeState::Done => 0,
-                EscapeUnicodeState::RightBrace => 1,
-                EscapeUnicodeState::Value => 2,
-                EscapeUnicodeState::LeftBrace => 3,
-                EscapeUnicodeState::Type => 4,
-                EscapeUnicodeState::Backslash => 5,
-            }
+        self.0.len()
     }
 }
 
@@ -252,10 +205,7 @@ impl FusedIterator for EscapeUnicode {}
 #[stable(feature = "char_struct_display", since = "1.16.0")]
 impl fmt::Display for EscapeUnicode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for c in self.clone() {
-            f.write_char(c)?;
-        }
-        Ok(())
+        f.write_str(self.0.as_str())
     }
 }
 
@@ -267,34 +217,128 @@ impl fmt::Display for EscapeUnicode {
 /// [`escape_default`]: char::escape_default
 #[derive(Clone, Debug)]
 #[stable(feature = "rust1", since = "1.0.0")]
-pub struct EscapeDefault {
-    state: EscapeDefaultState,
-}
+pub struct EscapeDefault(escape::EscapeIterInner<10>);
 
-#[derive(Clone, Debug)]
-enum EscapeDefaultState {
-    Done,
-    Char(char),
-    Backslash(char),
-    Unicode(EscapeUnicode),
+impl EscapeDefault {
+    #[inline]
+    const fn printable(c: ascii::Char) -> Self {
+        Self(escape::EscapeIterInner::ascii(c.to_u8()))
+    }
+
+    #[inline]
+    const fn backslash(c: ascii::Char) -> Self {
+        Self(escape::EscapeIterInner::backslash(c))
+    }
+
+    #[inline]
+    const fn unicode(c: char) -> Self {
+        Self(escape::EscapeIterInner::unicode(c))
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Iterator for EscapeDefault {
     type Item = char;
 
+    #[inline]
     fn next(&mut self) -> Option<char> {
-        match self.state {
-            EscapeDefaultState::Backslash(c) => {
-                self.state = EscapeDefaultState::Char(c);
-                Some('\\')
+        self.0.next().map(char::from)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.0.len();
+        (n, Some(n))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.0.len()
+    }
+
+    #[inline]
+    fn last(mut self) -> Option<char> {
+        self.0.next_back().map(char::from)
+    }
+
+    #[inline]
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        self.0.advance_by(n)
+    }
+}
+
+#[stable(feature = "exact_size_escape", since = "1.11.0")]
+impl ExactSizeIterator for EscapeDefault {
+    #[inline]
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+#[stable(feature = "fused", since = "1.26.0")]
+impl FusedIterator for EscapeDefault {}
+
+#[stable(feature = "char_struct_display", since = "1.16.0")]
+impl fmt::Display for EscapeDefault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.as_str())
+    }
+}
+
+/// An iterator that yields the literal escape code of a `char`.
+///
+/// This `struct` is created by the [`escape_debug`] method on [`char`]. See its
+/// documentation for more.
+///
+/// [`escape_debug`]: char::escape_debug
+#[stable(feature = "char_escape_debug", since = "1.20.0")]
+#[derive(Clone, Debug)]
+pub struct EscapeDebug(EscapeDebugInner);
+
+#[derive(Clone, Debug)]
+// Note: It’s possible to manually encode the EscapeDebugInner inside of
+// EscapeIterInner (e.g. with alive=254..255 indicating that data[0..4] holds
+// a char) which would likely result in a more optimised code.  For now we use
+// the option easier to implement.
+enum EscapeDebugInner {
+    Bytes(escape::EscapeIterInner<10>),
+    Char(char),
+}
+
+impl EscapeDebug {
+    #[inline]
+    const fn printable(chr: char) -> Self {
+        Self(EscapeDebugInner::Char(chr))
+    }
+
+    #[inline]
+    const fn backslash(c: ascii::Char) -> Self {
+        Self(EscapeDebugInner::Bytes(escape::EscapeIterInner::backslash(c)))
+    }
+
+    #[inline]
+    const fn unicode(c: char) -> Self {
+        Self(EscapeDebugInner::Bytes(escape::EscapeIterInner::unicode(c)))
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        self.0 = EscapeDebugInner::Bytes(escape::EscapeIterInner::empty());
+    }
+}
+
+#[stable(feature = "char_escape_debug", since = "1.20.0")]
+impl Iterator for EscapeDebug {
+    type Item = char;
+
+    #[inline]
+    fn next(&mut self) -> Option<char> {
+        match self.0 {
+            EscapeDebugInner::Bytes(ref mut bytes) => bytes.next().map(char::from),
+            EscapeDebugInner::Char(chr) => {
+                self.clear();
+                Some(chr)
             }
-            EscapeDefaultState::Char(c) => {
-                self.state = EscapeDefaultState::Done;
-                Some(c)
-            }
-            EscapeDefaultState::Done => None,
-            EscapeDefaultState::Unicode(ref mut iter) => iter.next(),
         }
     }
 
@@ -308,88 +352,17 @@ impl Iterator for EscapeDefault {
     fn count(self) -> usize {
         self.len()
     }
-
-    fn nth(&mut self, n: usize) -> Option<char> {
-        match self.state {
-            EscapeDefaultState::Backslash(c) if n == 0 => {
-                self.state = EscapeDefaultState::Char(c);
-                Some('\\')
-            }
-            EscapeDefaultState::Backslash(c) if n == 1 => {
-                self.state = EscapeDefaultState::Done;
-                Some(c)
-            }
-            EscapeDefaultState::Backslash(_) => {
-                self.state = EscapeDefaultState::Done;
-                None
-            }
-            EscapeDefaultState::Char(c) => {
-                self.state = EscapeDefaultState::Done;
-
-                if n == 0 { Some(c) } else { None }
-            }
-            EscapeDefaultState::Done => None,
-            EscapeDefaultState::Unicode(ref mut i) => i.nth(n),
-        }
-    }
-
-    fn last(self) -> Option<char> {
-        match self.state {
-            EscapeDefaultState::Unicode(iter) => iter.last(),
-            EscapeDefaultState::Done => None,
-            EscapeDefaultState::Backslash(c) | EscapeDefaultState::Char(c) => Some(c),
-        }
-    }
 }
 
-#[stable(feature = "exact_size_escape", since = "1.11.0")]
-impl ExactSizeIterator for EscapeDefault {
+#[stable(feature = "char_escape_debug", since = "1.20.0")]
+impl ExactSizeIterator for EscapeDebug {
     fn len(&self) -> usize {
-        match self.state {
-            EscapeDefaultState::Done => 0,
-            EscapeDefaultState::Char(_) => 1,
-            EscapeDefaultState::Backslash(_) => 2,
-            EscapeDefaultState::Unicode(ref iter) => iter.len(),
+        match &self.0 {
+            EscapeDebugInner::Bytes(bytes) => bytes.len(),
+            EscapeDebugInner::Char(_) => 1,
         }
     }
 }
-
-#[stable(feature = "fused", since = "1.26.0")]
-impl FusedIterator for EscapeDefault {}
-
-#[stable(feature = "char_struct_display", since = "1.16.0")]
-impl fmt::Display for EscapeDefault {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for c in self.clone() {
-            f.write_char(c)?;
-        }
-        Ok(())
-    }
-}
-
-/// An iterator that yields the literal escape code of a `char`.
-///
-/// This `struct` is created by the [`escape_debug`] method on [`char`]. See its
-/// documentation for more.
-///
-/// [`escape_debug`]: char::escape_debug
-#[stable(feature = "char_escape_debug", since = "1.20.0")]
-#[derive(Clone, Debug)]
-pub struct EscapeDebug(EscapeDefault);
-
-#[stable(feature = "char_escape_debug", since = "1.20.0")]
-impl Iterator for EscapeDebug {
-    type Item = char;
-    fn next(&mut self) -> Option<char> {
-        self.0.next()
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-#[stable(feature = "char_escape_debug", since = "1.20.0")]
-impl ExactSizeIterator for EscapeDebug {}
 
 #[stable(feature = "fused", since = "1.26.0")]
 impl FusedIterator for EscapeDebug {}
@@ -397,180 +370,236 @@ impl FusedIterator for EscapeDebug {}
 #[stable(feature = "char_escape_debug", since = "1.20.0")]
 impl fmt::Display for EscapeDebug {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+        match &self.0 {
+            EscapeDebugInner::Bytes(bytes) => f.write_str(bytes.as_str()),
+            EscapeDebugInner::Char(chr) => f.write_char(*chr),
+        }
     }
 }
 
-/// Returns an iterator that yields the lowercase equivalent of a `char`.
-///
-/// This `struct` is created by the [`to_lowercase`] method on [`char`]. See
-/// its documentation for more.
-///
-/// [`to_lowercase`]: char::to_lowercase
-#[stable(feature = "rust1", since = "1.0.0")]
+macro_rules! casemappingiter_impls {
+    ($(#[$attr:meta])* $ITER_NAME:ident) => {
+        $(#[$attr])*
+        #[stable(feature = "rust1", since = "1.0.0")]
+        #[derive(Debug, Clone)]
+        pub struct $ITER_NAME(CaseMappingIter);
+
+        #[stable(feature = "rust1", since = "1.0.0")]
+        impl Iterator for $ITER_NAME {
+            type Item = char;
+            fn next(&mut self) -> Option<char> {
+                self.0.next()
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                self.0.size_hint()
+            }
+
+            fn fold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+            where
+                Fold: FnMut(Acc, Self::Item) -> Acc,
+            {
+                self.0.fold(init, fold)
+            }
+
+            fn count(self) -> usize {
+                self.0.count()
+            }
+
+            fn last(self) -> Option<Self::Item> {
+                self.0.last()
+            }
+
+            fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+                self.0.advance_by(n)
+            }
+
+            unsafe fn __iterator_get_unchecked(&mut self, idx: usize) -> Self::Item {
+                // SAFETY: just forwarding requirements to caller
+                unsafe { self.0.__iterator_get_unchecked(idx) }
+            }
+        }
+
+        #[stable(feature = "case_mapping_double_ended", since = "1.59.0")]
+        impl DoubleEndedIterator for $ITER_NAME {
+            fn next_back(&mut self) -> Option<char> {
+                self.0.next_back()
+            }
+
+            fn rfold<Acc, Fold>(self, init: Acc, rfold: Fold) -> Acc
+            where
+                Fold: FnMut(Acc, Self::Item) -> Acc,
+            {
+                self.0.rfold(init, rfold)
+            }
+
+            fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+                self.0.advance_back_by(n)
+            }
+        }
+
+        #[stable(feature = "fused", since = "1.26.0")]
+        impl FusedIterator for $ITER_NAME {}
+
+        #[stable(feature = "exact_size_case_mapping_iter", since = "1.35.0")]
+        impl ExactSizeIterator for $ITER_NAME {
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+
+            fn is_empty(&self) -> bool {
+                self.0.is_empty()
+            }
+        }
+
+        // SAFETY: forwards to inner `array::IntoIter`
+        #[unstable(feature = "trusted_len", issue = "37572")]
+        unsafe impl TrustedLen for $ITER_NAME {}
+
+        // SAFETY: forwards to inner `array::IntoIter`
+        #[doc(hidden)]
+        #[unstable(feature = "std_internals", issue = "none")]
+        unsafe impl TrustedRandomAccessNoCoerce for $ITER_NAME {
+            const MAY_HAVE_SIDE_EFFECT: bool = false;
+        }
+
+        // SAFETY: this iter has no subtypes/supertypes
+        #[doc(hidden)]
+        #[unstable(feature = "std_internals", issue = "none")]
+        unsafe impl TrustedRandomAccess for $ITER_NAME {}
+
+        #[stable(feature = "char_struct_display", since = "1.16.0")]
+        impl fmt::Display for $ITER_NAME {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Display::fmt(&self.0, f)
+            }
+        }
+    }
+}
+
+casemappingiter_impls! {
+    /// Returns an iterator that yields the lowercase equivalent of a `char`.
+    ///
+    /// This `struct` is created by the [`to_lowercase`] method on [`char`]. See
+    /// its documentation for more.
+    ///
+    /// [`to_lowercase`]: char::to_lowercase
+    ToLowercase
+}
+
+casemappingiter_impls! {
+    /// Returns an iterator that yields the uppercase equivalent of a `char`.
+    ///
+    /// This `struct` is created by the [`to_uppercase`] method on [`char`]. See
+    /// its documentation for more.
+    ///
+    /// [`to_uppercase`]: char::to_uppercase
+    ToUppercase
+}
+
 #[derive(Debug, Clone)]
-pub struct ToLowercase(CaseMappingIter);
-
-#[stable(feature = "rust1", since = "1.0.0")]
-impl Iterator for ToLowercase {
-    type Item = char;
-    fn next(&mut self) -> Option<char> {
-        self.0.next()
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-#[stable(feature = "case_mapping_double_ended", since = "1.59.0")]
-impl DoubleEndedIterator for ToLowercase {
-    fn next_back(&mut self) -> Option<char> {
-        self.0.next_back()
-    }
-}
-
-#[stable(feature = "fused", since = "1.26.0")]
-impl FusedIterator for ToLowercase {}
-
-#[stable(feature = "exact_size_case_mapping_iter", since = "1.35.0")]
-impl ExactSizeIterator for ToLowercase {}
-
-/// Returns an iterator that yields the uppercase equivalent of a `char`.
-///
-/// This `struct` is created by the [`to_uppercase`] method on [`char`]. See
-/// its documentation for more.
-///
-/// [`to_uppercase`]: char::to_uppercase
-#[stable(feature = "rust1", since = "1.0.0")]
-#[derive(Debug, Clone)]
-pub struct ToUppercase(CaseMappingIter);
-
-#[stable(feature = "rust1", since = "1.0.0")]
-impl Iterator for ToUppercase {
-    type Item = char;
-    fn next(&mut self) -> Option<char> {
-        self.0.next()
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-#[stable(feature = "case_mapping_double_ended", since = "1.59.0")]
-impl DoubleEndedIterator for ToUppercase {
-    fn next_back(&mut self) -> Option<char> {
-        self.0.next_back()
-    }
-}
-
-#[stable(feature = "fused", since = "1.26.0")]
-impl FusedIterator for ToUppercase {}
-
-#[stable(feature = "exact_size_case_mapping_iter", since = "1.35.0")]
-impl ExactSizeIterator for ToUppercase {}
-
-#[derive(Debug, Clone)]
-enum CaseMappingIter {
-    Three(char, char, char),
-    Two(char, char),
-    One(char),
-    Zero,
-}
+struct CaseMappingIter(core::array::IntoIter<char, 3>);
 
 impl CaseMappingIter {
+    #[inline]
     fn new(chars: [char; 3]) -> CaseMappingIter {
+        let mut iter = chars.into_iter();
         if chars[2] == '\0' {
+            iter.next_back();
             if chars[1] == '\0' {
-                CaseMappingIter::One(chars[0]) // Including if chars[0] == '\0'
-            } else {
-                CaseMappingIter::Two(chars[0], chars[1])
+                iter.next_back();
+
+                // Deliberately don't check `chars[0]`,
+                // as '\0' lowercases to itself
             }
-        } else {
-            CaseMappingIter::Three(chars[0], chars[1], chars[2])
         }
+        CaseMappingIter(iter)
     }
 }
 
 impl Iterator for CaseMappingIter {
     type Item = char;
+
     fn next(&mut self) -> Option<char> {
-        match *self {
-            CaseMappingIter::Three(a, b, c) => {
-                *self = CaseMappingIter::Two(b, c);
-                Some(a)
-            }
-            CaseMappingIter::Two(b, c) => {
-                *self = CaseMappingIter::One(c);
-                Some(b)
-            }
-            CaseMappingIter::One(c) => {
-                *self = CaseMappingIter::Zero;
-                Some(c)
-            }
-            CaseMappingIter::Zero => None,
-        }
+        self.0.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = match self {
-            CaseMappingIter::Three(..) => 3,
-            CaseMappingIter::Two(..) => 2,
-            CaseMappingIter::One(_) => 1,
-            CaseMappingIter::Zero => 0,
-        };
-        (size, Some(size))
+        self.0.size_hint()
+    }
+
+    fn fold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    where
+        Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        self.0.fold(init, fold)
+    }
+
+    fn count(self) -> usize {
+        self.0.count()
+    }
+
+    fn last(self) -> Option<Self::Item> {
+        self.0.last()
+    }
+
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        self.0.advance_by(n)
+    }
+
+    unsafe fn __iterator_get_unchecked(&mut self, idx: usize) -> Self::Item {
+        // SAFETY: just forwarding requirements to caller
+        unsafe { self.0.__iterator_get_unchecked(idx) }
     }
 }
 
 impl DoubleEndedIterator for CaseMappingIter {
     fn next_back(&mut self) -> Option<char> {
-        match *self {
-            CaseMappingIter::Three(a, b, c) => {
-                *self = CaseMappingIter::Two(a, b);
-                Some(c)
-            }
-            CaseMappingIter::Two(b, c) => {
-                *self = CaseMappingIter::One(b);
-                Some(c)
-            }
-            CaseMappingIter::One(c) => {
-                *self = CaseMappingIter::Zero;
-                Some(c)
-            }
-            CaseMappingIter::Zero => None,
-        }
+        self.0.next_back()
+    }
+
+    fn rfold<Acc, Fold>(self, init: Acc, rfold: Fold) -> Acc
+    where
+        Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        self.0.rfold(init, rfold)
+    }
+
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        self.0.advance_back_by(n)
     }
 }
+
+impl ExactSizeIterator for CaseMappingIter {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl FusedIterator for CaseMappingIter {}
+
+// SAFETY: forwards to inner `array::IntoIter`
+unsafe impl TrustedLen for CaseMappingIter {}
+
+// SAFETY: forwards to inner `array::IntoIter`
+unsafe impl TrustedRandomAccessNoCoerce for CaseMappingIter {
+    const MAY_HAVE_SIDE_EFFECT: bool = false;
+}
+
+// SAFETY: `CaseMappingIter` has no subtypes/supertypes
+unsafe impl TrustedRandomAccess for CaseMappingIter {}
 
 impl fmt::Display for CaseMappingIter {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            CaseMappingIter::Three(a, b, c) => {
-                f.write_char(a)?;
-                f.write_char(b)?;
-                f.write_char(c)
-            }
-            CaseMappingIter::Two(b, c) => {
-                f.write_char(b)?;
-                f.write_char(c)
-            }
-            CaseMappingIter::One(c) => f.write_char(c),
-            CaseMappingIter::Zero => Ok(()),
+        for c in self.0.clone() {
+            f.write_char(c)?;
         }
-    }
-}
-
-#[stable(feature = "char_struct_display", since = "1.16.0")]
-impl fmt::Display for ToLowercase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-#[stable(feature = "char_struct_display", since = "1.16.0")]
-impl fmt::Display for ToUppercase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+        Ok(())
     }
 }
 

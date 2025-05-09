@@ -1,4 +1,5 @@
-use crate::iter::{adapters::SourceIter, FusedIterator, TrustedLen};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{FusedIterator, TrustedLen};
 use crate::ops::{ControlFlow, Try};
 
 /// An iterator with a `peek()` that returns an optional reference to the next
@@ -12,6 +13,7 @@ use crate::ops::{ControlFlow, Try};
 #[derive(Clone, Debug)]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_diagnostic_item = "IterPeekable"]
 pub struct Peekable<I: Iterator> {
     iter: I,
     /// Remember a peeked value, even if it was None.
@@ -267,7 +269,7 @@ impl<I: Iterator> Peekable<I> {
     /// let mut iter = (0..5).peekable();
     /// // The first item of the iterator is 0; consume it.
     /// assert_eq!(iter.next_if(|&x| x == 0), Some(0));
-    /// // The next item returned is now 1, so `consume` will return `false`.
+    /// // The next item returned is now 1, so `next_if` will return `None`.
     /// assert_eq!(iter.next_if(|&x| x == 0), None);
     /// // `next_if` saves the value of the next item if it was not equal to `expected`.
     /// assert_eq!(iter.next(), Some(1));
@@ -302,7 +304,7 @@ impl<I: Iterator> Peekable<I> {
     /// let mut iter = (0..5).peekable();
     /// // The first item of the iterator is 0; consume it.
     /// assert_eq!(iter.next_if_eq(&0), Some(0));
-    /// // The next item returned is now 1, so `consume` will return `false`.
+    /// // The next item returned is now 1, so `next_if` will return `None`.
     /// assert_eq!(iter.next_if_eq(&0), None);
     /// // `next_if_eq` saves the value of the next item if it was not equal to `expected`.
     /// assert_eq!(iter.next(), Some(1));

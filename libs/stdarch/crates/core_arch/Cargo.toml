@@ -13,7 +13,7 @@ readme = "README.md"
 keywords = ["core", "simd", "arch", "intrinsics"]
 categories = ["hardware-support", "no-std"]
 license = "MIT OR Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [badges]
 is-it-maintained-issue-resolution = { repository = "rust-lang/stdarch" }
@@ -23,3 +23,14 @@ maintenance = { status = "experimental" }
 [dev-dependencies]
 stdarch-test = { version = "0.*", path = "../stdarch-test" }
 std_detect = { version = "0.*", path = "../std_detect" }
+
+[target.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.dev-dependencies]
+syscalls = { version = "0.6.18", default-features = false }
+
+[lints.rust]
+unexpected_cfgs = {level = "warn", check-cfg = ['cfg(stdarch_intel_sde)'] }
+
+[lints.clippy]
+too_long_first_doc_paragraph = "allow"
+missing_transmute_annotations = "allow"
+useless_transmute = "allow"

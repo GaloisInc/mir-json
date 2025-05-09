@@ -9,8 +9,14 @@
 /// low-power state until one of a number of asynchronous events occurs.
 // Section 10.1 of ACLE says that the supported arches are: 8, 6K, 6-M
 // LLVM says "instruction requires: armv6k"
-#[cfg(any(target_feature = "v6", target_arch = "aarch64", doc))]
+#[cfg(any(
+    target_feature = "v6",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    doc
+))]
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __wfi() {
     hint(HINT_WFI);
 }
@@ -22,8 +28,14 @@ pub unsafe fn __wfi() {
 /// another processor.
 // Section 10.1 of ACLE says that the supported arches are: 8, 6K, 6-M
 // LLVM says "instruction requires: armv6k"
-#[cfg(any(target_feature = "v6", target_arch = "aarch64", doc))]
+#[cfg(any(
+    target_feature = "v6",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    doc
+))]
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __wfe() {
     hint(HINT_WFE);
 }
@@ -34,8 +46,14 @@ pub unsafe fn __wfe() {
 /// system. It is a NOP on a uniprocessor system.
 // Section 10.1 of ACLE says that the supported arches are: 8, 6K, 6-M, 7-M
 // LLVM says "instruction requires: armv6k"
-#[cfg(any(target_feature = "v6", target_arch = "aarch64", doc))]
+#[cfg(any(
+    target_feature = "v6",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    doc
+))]
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __sev() {
     hint(HINT_SEV);
 }
@@ -49,9 +67,11 @@ pub unsafe fn __sev() {
 #[cfg(any(
     target_feature = "v8", // 32-bit ARMv8
     target_arch = "aarch64", // AArch64
+    target_arch = "arm64ec", // Arm64EC
     doc,
 ))]
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __sevl() {
     hint(HINT_SEVL);
 }
@@ -63,8 +83,14 @@ pub unsafe fn __sevl() {
 /// improve overall system performance.
 // Section 10.1 of ACLE says that the supported arches are: 8, 6K, 6-M
 // LLVM says "instruction requires: armv6k"
-#[cfg(any(target_feature = "v6", target_arch = "aarch64", doc))]
+#[cfg(any(
+    target_feature = "v6",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    doc
+))]
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __yield() {
     hint(HINT_YIELD);
 }
@@ -76,12 +102,16 @@ pub unsafe fn __yield() {
 /// another instruction. It is not guaranteed that inserting this instruction
 /// will increase execution time.
 #[inline(always)]
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub unsafe fn __nop() {
     crate::arch::asm!("nop", options(nomem, nostack, preserves_flags));
 }
 
 extern "unadjusted" {
-    #[cfg_attr(target_arch = "aarch64", link_name = "llvm.aarch64.hint")]
+    #[cfg_attr(
+        any(target_arch = "aarch64", target_arch = "arm64ec"),
+        link_name = "llvm.aarch64.hint"
+    )]
     #[cfg_attr(target_arch = "arm", link_name = "llvm.arm.hint")]
     fn hint(_: i32);
 }

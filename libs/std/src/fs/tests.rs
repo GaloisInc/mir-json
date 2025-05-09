@@ -1,31 +1,22 @@
-use crate::io::prelude::*;
-
-use crate::env;
-use crate::fs::{self, File, OpenOptions};
-use crate::io::{ErrorKind, SeekFrom};
-use crate::path::Path;
-use crate::str;
-use crate::sync::Arc;
-use crate::sys_common::io::test::{tmpdir, TempDir};
-use crate::thread;
-use crate::time::{Duration, Instant};
-
 use rand::RngCore;
 
+use crate::fs::{self, File, FileTimes, OpenOptions};
+use crate::io::prelude::*;
+use crate::io::{BorrowedBuf, ErrorKind, SeekFrom};
+use crate::mem::MaybeUninit;
 #[cfg(unix)]
 use crate::os::unix::fs::symlink as symlink_dir;
 #[cfg(unix)]
 use crate::os::unix::fs::symlink as symlink_file;
 #[cfg(unix)]
-use crate::os::unix::fs::symlink as symlink_junction;
+use crate::os::unix::fs::symlink as junction_point;
 #[cfg(windows)]
-use crate::os::windows::fs::{symlink_dir, symlink_file};
-#[cfg(windows)]
-use crate::sys::fs::symlink_junction;
-#[cfg(target_os = "macos")]
-use crate::sys::weak::weak;
-#[cfg(target_os = "macos")]
-use libc::{c_char, c_int};
+use crate::os::windows::fs::{OpenOptionsExt, junction_point, symlink_dir, symlink_file};
+use crate::path::Path;
+use crate::sync::Arc;
+use crate::test_helpers::{TempDir, tmpdir};
+use crate::time::{Duration, Instant, SystemTime};
+use crate::{env, str, thread};
 
 macro_rules! check {
     ($e:expr) => {
@@ -73,7 +64,7 @@ macro_rules! error_contains {
 // tests most of the time, but at least we do if the user has the right
 // permissions.
 pub fn got_symlink_permission(tmpdir: &TempDir) -> bool {
-    if cfg!(unix) {
+    if cfg!(not(windows)) || env::var_os("CI").is_some() {
         return true;
     }
     let link = tmpdir.join("some_hopefully_unique_link_name");
@@ -83,17 +74,6 @@ pub fn got_symlink_permission(tmpdir: &TempDir) -> bool {
         Err(ref err) if err.raw_os_error() == Some(1314) => false,
         Ok(_) | Err(_) => true,
     }
-}
-
-#[cfg(target_os = "macos")]
-fn able_to_not_follow_symlinks_while_hard_linking() -> bool {
-    weak!(fn linkat(c_int, *const c_char, c_int, *const c_char, c_int) -> c_int);
-    linkat.get().is_some()
-}
-
-#[cfg(not(target_os = "macos"))]
-fn able_to_not_follow_symlinks_while_hard_linking() -> bool {
-    return true;
 }
 
 #[test]
@@ -188,9 +168,9 @@ fn file_test_io_seek_and_tell_smoke_test() {
     {
         let mut read_stream = check!(File::open(filename));
         check!(read_stream.seek(SeekFrom::Start(set_cursor)));
-        tell_pos_pre_read = check!(read_stream.seek(SeekFrom::Current(0)));
+        tell_pos_pre_read = check!(read_stream.stream_position());
         check!(read_stream.read(&mut read_mem));
-        tell_pos_post_read = check!(read_stream.seek(SeekFrom::Current(0)));
+        tell_pos_post_read = check!(read_stream.stream_position());
     }
     check!(fs::remove_file(filename));
     let read_str = str::from_utf8(&read_mem).unwrap();
@@ -221,6 +201,152 @@ fn file_test_io_seek_and_write() {
     check!(fs::remove_file(filename));
     let read_str = str::from_utf8(&read_mem).unwrap();
     assert!(read_str == final_msg);
+}
+
+#[test]
+#[cfg(any(
+    windows,
+    target_os = "freebsd",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple",
+))]
+fn file_lock_multiple_shared() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_multiple_shared_test.txt");
+    let f1 = check!(File::create(filename));
+    let f2 = check!(OpenOptions::new().write(true).open(filename));
+
+    // Check that we can acquire concurrent shared locks
+    check!(f1.lock_shared());
+    check!(f2.lock_shared());
+    check!(f1.unlock());
+    check!(f2.unlock());
+    assert!(check!(f1.try_lock_shared()));
+    assert!(check!(f2.try_lock_shared()));
+}
+
+#[test]
+#[cfg(any(
+    windows,
+    target_os = "freebsd",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple",
+))]
+fn file_lock_blocking() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_blocking_test.txt");
+    let f1 = check!(File::create(filename));
+    let f2 = check!(OpenOptions::new().write(true).open(filename));
+
+    // Check that shared locks block exclusive locks
+    check!(f1.lock_shared());
+    assert!(!check!(f2.try_lock()));
+    check!(f1.unlock());
+
+    // Check that exclusive locks block shared locks
+    check!(f1.lock());
+    assert!(!check!(f2.try_lock_shared()));
+}
+
+#[test]
+#[cfg(any(
+    windows,
+    target_os = "freebsd",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple",
+))]
+fn file_lock_drop() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_dup_test.txt");
+    let f1 = check!(File::create(filename));
+    let f2 = check!(OpenOptions::new().write(true).open(filename));
+
+    // Check that locks are released when the File is dropped
+    check!(f1.lock_shared());
+    assert!(!check!(f2.try_lock()));
+    drop(f1);
+    assert!(check!(f2.try_lock()));
+}
+
+#[test]
+#[cfg(any(
+    windows,
+    target_os = "freebsd",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple",
+))]
+fn file_lock_dup() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_dup_test.txt");
+    let f1 = check!(File::create(filename));
+    let f2 = check!(OpenOptions::new().write(true).open(filename));
+
+    // Check that locks are not dropped if the File has been cloned
+    check!(f1.lock_shared());
+    assert!(!check!(f2.try_lock()));
+    let cloned = check!(f1.try_clone());
+    drop(f1);
+    assert!(!check!(f2.try_lock()));
+    drop(cloned)
+}
+
+#[test]
+#[cfg(windows)]
+fn file_lock_double_unlock() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_double_unlock_test.txt");
+    let f1 = check!(File::create(filename));
+    let f2 = check!(OpenOptions::new().write(true).open(filename));
+
+    // On Windows a file handle may acquire both a shared and exclusive lock.
+    // Check that both are released by unlock()
+    check!(f1.lock());
+    check!(f1.lock_shared());
+    assert!(!check!(f2.try_lock()));
+    check!(f1.unlock());
+    assert!(check!(f2.try_lock()));
+}
+
+#[test]
+#[cfg(windows)]
+fn file_lock_blocking_async() {
+    use crate::thread::{sleep, spawn};
+    const FILE_FLAG_OVERLAPPED: u32 = 0x40000000;
+
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("file_lock_blocking_async.txt");
+    let f1 = check!(File::create(filename));
+    let f2 =
+        check!(OpenOptions::new().custom_flags(FILE_FLAG_OVERLAPPED).write(true).open(filename));
+
+    check!(f1.lock());
+
+    // Ensure that lock() is synchronous when the file is opened for asynchronous IO
+    let t = spawn(move || {
+        check!(f2.lock());
+    });
+    sleep(Duration::from_secs(1));
+    assert!(!t.is_finished());
+    check!(f1.unlock());
+    t.join().unwrap();
+
+    // Ensure that lock_shared() is synchronous when the file is opened for asynchronous IO
+    let f2 =
+        check!(OpenOptions::new().custom_flags(FILE_FLAG_OVERLAPPED).write(true).open(filename));
+    check!(f1.lock());
+
+    // Ensure that lock() is synchronous when the file is opened for asynchronous IO
+    let t = spawn(move || {
+        check!(f2.lock_shared());
+    });
+    sleep(Duration::from_secs(1));
+    assert!(!t.is_finished());
+    check!(f1.unlock());
+    t.join().unwrap();
 }
 
 #[test]
@@ -285,42 +411,42 @@ fn file_test_io_read_write_at() {
         let oo = OpenOptions::new().create_new(true).write(true).read(true).clone();
         let mut rw = check!(oo.open(&filename));
         assert_eq!(check!(rw.write_at(write1.as_bytes(), 5)), write1.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 0);
+        assert_eq!(check!(rw.stream_position()), 0);
         assert_eq!(check!(rw.read_at(&mut buf, 5)), write1.len());
         assert_eq!(str::from_utf8(&buf[..write1.len()]), Ok(write1));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 0);
+        assert_eq!(check!(rw.stream_position()), 0);
         assert_eq!(check!(rw.read_at(&mut buf[..write2.len()], 0)), write2.len());
         assert_eq!(str::from_utf8(&buf[..write2.len()]), Ok("\0\0\0\0\0"));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 0);
+        assert_eq!(check!(rw.stream_position()), 0);
         assert_eq!(check!(rw.write(write2.as_bytes())), write2.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 5);
+        assert_eq!(check!(rw.stream_position()), 5);
         assert_eq!(check!(rw.read(&mut buf)), write1.len());
         assert_eq!(str::from_utf8(&buf[..write1.len()]), Ok(write1));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
         assert_eq!(check!(rw.read_at(&mut buf[..write2.len()], 0)), write2.len());
         assert_eq!(str::from_utf8(&buf[..write2.len()]), Ok(write2));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
         assert_eq!(check!(rw.write_at(write3.as_bytes(), 9)), write3.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
     }
     {
         let mut read = check!(File::open(&filename));
         assert_eq!(check!(read.read_at(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 0);
+        assert_eq!(check!(read.stream_position()), 0);
         assert_eq!(check!(read.seek(SeekFrom::End(-5))), 9);
         assert_eq!(check!(read.read_at(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(read.stream_position()), 9);
         assert_eq!(check!(read.read(&mut buf)), write3.len());
         assert_eq!(str::from_utf8(&buf[..write3.len()]), Ok(write3));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.read_at(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.read_at(&mut buf, 14)), 0);
         assert_eq!(check!(read.read_at(&mut buf, 15)), 0);
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
     }
     check!(fs::remove_file(&filename));
 }
@@ -363,42 +489,59 @@ fn file_test_io_seek_read_write() {
         let oo = OpenOptions::new().create_new(true).write(true).read(true).clone();
         let mut rw = check!(oo.open(&filename));
         assert_eq!(check!(rw.seek_write(write1.as_bytes(), 5)), write1.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
         assert_eq!(check!(rw.seek_read(&mut buf, 5)), write1.len());
         assert_eq!(str::from_utf8(&buf[..write1.len()]), Ok(write1));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
         assert_eq!(check!(rw.seek(SeekFrom::Start(0))), 0);
         assert_eq!(check!(rw.write(write2.as_bytes())), write2.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 5);
+        assert_eq!(check!(rw.stream_position()), 5);
         assert_eq!(check!(rw.read(&mut buf)), write1.len());
         assert_eq!(str::from_utf8(&buf[..write1.len()]), Ok(write1));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 9);
+        assert_eq!(check!(rw.stream_position()), 9);
         assert_eq!(check!(rw.seek_read(&mut buf[..write2.len()], 0)), write2.len());
         assert_eq!(str::from_utf8(&buf[..write2.len()]), Ok(write2));
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 5);
+        assert_eq!(check!(rw.stream_position()), 5);
         assert_eq!(check!(rw.seek_write(write3.as_bytes(), 9)), write3.len());
-        assert_eq!(check!(rw.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(rw.stream_position()), 14);
     }
     {
         let mut read = check!(File::open(&filename));
         assert_eq!(check!(read.seek_read(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.seek(SeekFrom::End(-5))), 9);
         assert_eq!(check!(read.seek_read(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.seek(SeekFrom::End(-5))), 9);
         assert_eq!(check!(read.read(&mut buf)), write3.len());
         assert_eq!(str::from_utf8(&buf[..write3.len()]), Ok(write3));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.seek_read(&mut buf, 0)), content.len());
         assert_eq!(str::from_utf8(&buf[..content.len()]), Ok(content));
-        assert_eq!(check!(read.seek(SeekFrom::Current(0))), 14);
+        assert_eq!(check!(read.stream_position()), 14);
         assert_eq!(check!(read.seek_read(&mut buf, 14)), 0);
         assert_eq!(check!(read.seek_read(&mut buf, 15)), 0);
     }
     check!(fs::remove_file(&filename));
+}
+
+#[test]
+fn file_test_read_buf() {
+    let tmpdir = tmpdir();
+    let filename = &tmpdir.join("test");
+    check!(fs::write(filename, &[1, 2, 3, 4]));
+
+    let mut buf: [MaybeUninit<u8>; 128] = [MaybeUninit::uninit(); 128];
+    let mut buf = BorrowedBuf::from(buf.as_mut_slice());
+    let mut file = check!(File::open(filename));
+    check!(file.read_buf(buf.unfilled()));
+    assert_eq!(buf.filled(), &[1, 2, 3, 4]);
+    // File::read_buf should omit buffer initialization.
+    assert_eq!(buf.init_len(), 4);
+
+    check!(fs::remove_file(filename));
 }
 
 #[test]
@@ -580,7 +723,7 @@ fn recursive_rmdir() {
     check!(fs::create_dir_all(&dtt));
     check!(fs::create_dir_all(&d2));
     check!(check!(File::create(&canary)).write(b"foo"));
-    check!(symlink_junction(&d2, &dt.join("d2")));
+    check!(junction_point(&d2, &dt.join("d2")));
     let _ = symlink_file(&canary, &d1.join("canary"));
     check!(fs::remove_dir_all(&d1));
 
@@ -597,7 +740,7 @@ fn recursive_rmdir_of_symlink() {
     let canary = dir.join("do_not_delete");
     check!(fs::create_dir_all(&dir));
     check!(check!(File::create(&canary)).write(b"foo"));
-    check!(symlink_junction(&dir, &link));
+    check!(junction_point(&dir, &link));
     check!(fs::remove_dir_all(&link));
 
     assert!(!link.is_dir());
@@ -667,7 +810,7 @@ fn recursive_rmdir_toctou() {
     let drop_canary_arc = Arc::new(());
     let drop_canary_weak = Arc::downgrade(&drop_canary_arc);
 
-    eprintln!("x: {:?}", &victim_del_path);
+    eprintln!("x: {victim_del_path:?}");
 
     // victim just continuously removes `victim_del`
     thread::spawn(move || {
@@ -901,6 +1044,7 @@ fn symlink_noexist() {
 
 #[test]
 fn read_link() {
+    let tmpdir = tmpdir();
     if cfg!(windows) {
         // directory symlink
         assert_eq!(check!(fs::read_link(r"C:\Users\All Users")), Path::new(r"C:\ProgramData"));
@@ -915,8 +1059,13 @@ fn read_link() {
                 Path::new(r"C:\Users")
             );
         }
+        // Check that readlink works with non-drive paths on Windows.
+        let link = tmpdir.join("link_unc");
+        if got_symlink_permission(&tmpdir) {
+            check!(symlink_dir(r"\\localhost\c$\", &link));
+            assert_eq!(check!(fs::read_link(&link)), Path::new(r"\\localhost\c$\"));
+        };
     }
-    let tmpdir = tmpdir();
     let link = tmpdir.join("link");
     if !got_symlink_permission(&tmpdir) {
         return;
@@ -935,6 +1084,7 @@ fn readlink_not_symlink() {
 }
 
 #[test]
+#[cfg_attr(target_os = "android", ignore)] // Android SELinux rules prevent creating hardlinks
 fn links_work() {
     let tmpdir = tmpdir();
     let input = tmpdir.join("in.txt");
@@ -1234,7 +1384,7 @@ fn file_try_clone() {
 }
 
 #[test]
-#[cfg(not(windows))]
+#[cfg(not(target_vendor = "win7"))]
 fn unlink_readonly() {
     let tmpdir = tmpdir();
     let path = tmpdir.join("file");
@@ -1378,7 +1528,7 @@ fn create_dir_all_with_junctions() {
 
     fs::create_dir(&target).unwrap();
 
-    check!(symlink_junction(&target, &junction));
+    check!(junction_point(&target, &junction));
     check!(fs::create_dir_all(&b));
     // the junction itself is not a directory, but `is_dir()` on a Path
     // follows links
@@ -1408,7 +1558,7 @@ fn metadata_access_times() {
     assert_eq!(check!(a.modified()), check!(a.modified()));
     assert_eq!(check!(b.accessed()), check!(b.modified()));
 
-    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+    if cfg!(target_vendor = "apple") || cfg!(target_os = "windows") {
         check!(a.created());
         check!(b.created());
     }
@@ -1431,14 +1581,12 @@ fn metadata_access_times() {
 
 /// Test creating hard links to symlinks.
 #[test]
+#[cfg_attr(target_os = "android", ignore)] // Android SELinux rules prevent creating hardlinks
 fn symlink_hard_link() {
     let tmpdir = tmpdir();
     if !got_symlink_permission(&tmpdir) {
         return;
     };
-    if !able_to_not_follow_symlinks_while_hard_linking() {
-        return;
-    }
 
     // Create "file", a file.
     check!(fs::File::create(tmpdir.join("file")));
@@ -1490,7 +1638,9 @@ fn symlink_hard_link() {
 #[test]
 #[cfg(windows)]
 fn create_dir_long_paths() {
-    use crate::{ffi::OsStr, iter, os::windows::ffi::OsStrExt};
+    use crate::ffi::OsStr;
+    use crate::iter;
+    use crate::os::windows::ffi::OsStrExt;
     const PATH_LEN: usize = 247;
 
     let tmpdir = tmpdir();
@@ -1594,4 +1744,241 @@ fn test_read_dir_infinite_loop() {
 
     // Check for duplicate errors
     assert!(dir.filter(|e| e.is_err()).take(2).count() < 2);
+}
+
+#[test]
+fn rename_directory() {
+    let tmpdir = tmpdir();
+    let old_path = tmpdir.join("foo/bar/baz");
+    fs::create_dir_all(&old_path).unwrap();
+    let test_file = &old_path.join("temp.txt");
+
+    File::create(test_file).unwrap();
+
+    let new_path = tmpdir.join("quux/blat");
+    fs::create_dir_all(&new_path).unwrap();
+    fs::rename(&old_path, &new_path.join("newdir")).unwrap();
+    assert!(new_path.join("newdir").is_dir());
+    assert!(new_path.join("newdir/temp.txt").exists());
+}
+
+#[test]
+fn test_file_times() {
+    #[cfg(target_vendor = "apple")]
+    use crate::os::darwin::fs::FileTimesExt;
+    #[cfg(windows)]
+    use crate::os::windows::fs::FileTimesExt;
+
+    let tmp = tmpdir();
+    let file = File::create(tmp.join("foo")).unwrap();
+    let mut times = FileTimes::new();
+    let accessed = SystemTime::UNIX_EPOCH + Duration::from_secs(12345);
+    let modified = SystemTime::UNIX_EPOCH + Duration::from_secs(54321);
+    times = times.set_accessed(accessed).set_modified(modified);
+    #[cfg(any(windows, target_vendor = "apple"))]
+    let created = SystemTime::UNIX_EPOCH + Duration::from_secs(32123);
+    #[cfg(any(windows, target_vendor = "apple"))]
+    {
+        times = times.set_created(created);
+    }
+    match file.set_times(times) {
+        // Allow unsupported errors on platforms which don't support setting times.
+        #[cfg(not(any(
+            windows,
+            all(
+                unix,
+                not(any(
+                    target_os = "android",
+                    target_os = "redox",
+                    target_os = "espidf",
+                    target_os = "horizon"
+                ))
+            )
+        )))]
+        Err(e) if e.kind() == ErrorKind::Unsupported => return,
+        Err(e) => panic!("error setting file times: {e:?}"),
+        Ok(_) => {}
+    }
+    let metadata = file.metadata().unwrap();
+    assert_eq!(metadata.accessed().unwrap(), accessed);
+    assert_eq!(metadata.modified().unwrap(), modified);
+    #[cfg(any(windows, target_vendor = "apple"))]
+    {
+        assert_eq!(metadata.created().unwrap(), created);
+    }
+}
+
+#[test]
+#[cfg(target_vendor = "apple")]
+fn test_file_times_pre_epoch_with_nanos() {
+    use crate::os::darwin::fs::FileTimesExt;
+
+    let tmp = tmpdir();
+    let file = File::create(tmp.join("foo")).unwrap();
+
+    for (accessed, modified, created) in [
+        // The first round is to set filetimes to something we know works, but this time
+        // it's validated with nanoseconds as well which probe the numeric boundary.
+        (
+            SystemTime::UNIX_EPOCH + Duration::new(12345, 1),
+            SystemTime::UNIX_EPOCH + Duration::new(54321, 100_000_000),
+            SystemTime::UNIX_EPOCH + Duration::new(32123, 999_999_999),
+        ),
+        // The second rounds uses pre-epoch dates along with nanoseconds that probe
+        // the numeric boundary.
+        (
+            SystemTime::UNIX_EPOCH - Duration::new(1, 1),
+            SystemTime::UNIX_EPOCH - Duration::new(60, 100_000_000),
+            SystemTime::UNIX_EPOCH - Duration::new(3600, 999_999_999),
+        ),
+    ] {
+        let mut times = FileTimes::new();
+        times = times.set_accessed(accessed).set_modified(modified).set_created(created);
+        file.set_times(times).unwrap();
+
+        let metadata = file.metadata().unwrap();
+        assert_eq!(metadata.accessed().unwrap(), accessed);
+        assert_eq!(metadata.modified().unwrap(), modified);
+        assert_eq!(metadata.created().unwrap(), created);
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn windows_unix_socket_exists() {
+    use crate::sys::{c, net};
+    use crate::{mem, ptr};
+
+    let tmp = tmpdir();
+    let socket_path = tmp.join("socket");
+
+    // std doesn't currently support Unix sockets on Windows so manually create one here.
+    net::init();
+    unsafe {
+        let socket = c::WSASocketW(
+            c::AF_UNIX as i32,
+            c::SOCK_STREAM,
+            0,
+            ptr::null_mut(),
+            0,
+            c::WSA_FLAG_OVERLAPPED | c::WSA_FLAG_NO_HANDLE_INHERIT,
+        );
+        // AF_UNIX is not supported on earlier versions of Windows,
+        // so skip this test if it's unsupported and we're not in CI.
+        if socket == c::INVALID_SOCKET {
+            let error = c::WSAGetLastError();
+            if env::var_os("CI").is_none() && error == c::WSAEAFNOSUPPORT {
+                return;
+            } else {
+                panic!("Creating AF_UNIX socket failed (OS error {error})");
+            }
+        }
+        let mut addr = c::SOCKADDR_UN { sun_family: c::AF_UNIX, sun_path: mem::zeroed() };
+        let bytes = socket_path.as_os_str().as_encoded_bytes();
+        let bytes = core::slice::from_raw_parts(bytes.as_ptr().cast::<i8>(), bytes.len());
+        addr.sun_path[..bytes.len()].copy_from_slice(bytes);
+        let len = mem::size_of_val(&addr) as i32;
+        let result = c::bind(socket, (&raw const addr).cast::<c::SOCKADDR>(), len);
+        c::closesocket(socket);
+        assert_eq!(result, 0);
+    }
+    // Make sure all ways of testing a file exist work for a Unix socket.
+    assert_eq!(socket_path.exists(), true);
+    assert_eq!(socket_path.try_exists().unwrap(), true);
+    assert_eq!(socket_path.metadata().is_ok(), true);
+}
+
+#[cfg(windows)]
+#[test]
+fn test_hidden_file_truncation() {
+    // Make sure that File::create works on an existing hidden file. See #115745.
+    let tmpdir = tmpdir();
+    let path = tmpdir.join("hidden_file.txt");
+
+    // Create a hidden file.
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 2;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .attributes(FILE_ATTRIBUTE_HIDDEN)
+        .open(&path)
+        .unwrap();
+    file.write("hidden world!".as_bytes()).unwrap();
+    file.flush().unwrap();
+    drop(file);
+
+    // Create a new file by truncating the existing one.
+    let file = File::create(&path).unwrap();
+    let metadata = file.metadata().unwrap();
+    assert_eq!(metadata.len(), 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn test_rename_file_over_open_file() {
+    // Make sure that std::fs::rename works if the target file is already opened with FILE_SHARE_DELETE. See #123985.
+    let tmpdir = tmpdir();
+
+    // Create source with test data to read.
+    let source_path = tmpdir.join("source_file.txt");
+    fs::write(&source_path, b"source hello world").unwrap();
+
+    // Create target file with test data to read;
+    let target_path = tmpdir.join("target_file.txt");
+    fs::write(&target_path, b"target hello world").unwrap();
+
+    // Open target file
+    let target_file = fs::File::open(&target_path).unwrap();
+
+    // Rename source
+    fs::rename(source_path, &target_path).unwrap();
+
+    core::mem::drop(target_file);
+    assert_eq!(fs::read(target_path).unwrap(), b"source hello world");
+}
+
+#[test]
+#[cfg(windows)]
+fn test_rename_directory_to_non_empty_directory() {
+    // Renaming a directory over a non-empty existing directory should fail on Windows.
+    let tmpdir: TempDir = tmpdir();
+
+    let source_path = tmpdir.join("source_directory");
+    let target_path = tmpdir.join("target_directory");
+
+    fs::create_dir(&source_path).unwrap();
+    fs::create_dir(&target_path).unwrap();
+
+    fs::write(target_path.join("target_file.txt"), b"target hello world").unwrap();
+
+    error!(fs::rename(source_path, target_path), 145); // ERROR_DIR_NOT_EMPTY
+}
+
+#[test]
+fn test_rename_symlink() {
+    let tmpdir = tmpdir();
+    let original = tmpdir.join("original");
+    let dest = tmpdir.join("dest");
+    let not_exist = Path::new("does not exist");
+
+    symlink_file(not_exist, &original).unwrap();
+    fs::rename(&original, &dest).unwrap();
+    // Make sure that renaming `original` to `dest` preserves the symlink.
+    assert_eq!(fs::read_link(&dest).unwrap().as_path(), not_exist);
+}
+
+#[test]
+#[cfg(windows)]
+fn test_rename_junction() {
+    let tmpdir = tmpdir();
+    let original = tmpdir.join("original");
+    let dest = tmpdir.join("dest");
+    let not_exist = Path::new("does not exist");
+
+    junction_point(&not_exist, &original).unwrap();
+    fs::rename(&original, &dest).unwrap();
+
+    // Make sure that renaming `original` to `dest` preserves the junction point.
+    // Junction links are always absolute so we just check the file name is correct.
+    assert_eq!(fs::read_link(&dest).unwrap().file_name(), Some(not_exist.as_os_str()));
 }

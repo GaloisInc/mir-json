@@ -1,10 +1,12 @@
 mod buffer;
 
+use buffer::Buffer;
+
 use crate::fmt;
 use crate::io::{
-    self, BorrowedCursor, BufRead, IoSliceMut, Read, Seek, SeekFrom, SizeHint, DEFAULT_BUF_SIZE,
+    self, BorrowedCursor, BufRead, DEFAULT_BUF_SIZE, IoSliceMut, Read, Seek, SeekFrom, SizeHint,
+    SpecReadByte, uninlined_slow_read_byte,
 };
-use buffer::Buffer;
 
 /// The `BufReader<R>` struct adds buffering to any reader.
 ///
@@ -25,8 +27,7 @@ use buffer::Buffer;
 /// unwrapping the `BufReader<R>` with [`BufReader::into_inner`] can also cause
 /// data loss.
 ///
-// HACK(#78696): can't use `crate` for associated items
-/// [`TcpStream::read`]: super::super::super::net::TcpStream::read
+/// [`TcpStream::read`]: crate::net::TcpStream::read
 /// [`TcpStream`]: crate::net::TcpStream
 ///
 /// # Examples
@@ -47,13 +48,13 @@ use buffer::Buffer;
 /// }
 /// ```
 #[stable(feature = "rust1", since = "1.0.0")]
-pub struct BufReader<R> {
-    inner: R,
+pub struct BufReader<R: ?Sized> {
     buf: Buffer,
+    inner: R,
 }
 
 impl<R: Read> BufReader<R> {
-    /// Creates a new `BufReader<R>` with a default buffer capacity. The default is currently 8 KB,
+    /// Creates a new `BufReader<R>` with a default buffer capacity. The default is currently 8 KiB,
     /// but may change in the future.
     ///
     /// # Examples
@@ -71,6 +72,14 @@ impl<R: Read> BufReader<R> {
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn new(inner: R) -> BufReader<R> {
         BufReader::with_capacity(DEFAULT_BUF_SIZE, inner)
+    }
+
+    pub(crate) fn try_new_buffer() -> io::Result<Buffer> {
+        Buffer::try_with_capacity(DEFAULT_BUF_SIZE)
+    }
+
+    pub(crate) fn with_buffer(inner: R, buf: Buffer) -> Self {
+        Self { inner, buf }
     }
 
     /// Creates a new `BufReader<R>` with the specified buffer capacity.
@@ -95,7 +104,51 @@ impl<R: Read> BufReader<R> {
     }
 }
 
-impl<R> BufReader<R> {
+impl<R: Read + ?Sized> BufReader<R> {
+    /// Attempt to look ahead `n` bytes.
+    ///
+    /// `n` must be less than or equal to `capacity`.
+    ///
+    /// the returned slice may be less than `n` bytes long if
+    /// end of file is reached.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust
+    /// #![feature(bufreader_peek)]
+    /// use std::io::{Read, BufReader};
+    ///
+    /// let mut bytes = &b"oh, hello"[..];
+    /// let mut rdr = BufReader::with_capacity(6, &mut bytes);
+    /// assert_eq!(rdr.peek(2).unwrap(), b"oh");
+    /// let mut buf = [0; 4];
+    /// rdr.read(&mut buf[..]).unwrap();
+    /// assert_eq!(&buf, b"oh, ");
+    /// assert_eq!(rdr.peek(2).unwrap(), b"he");
+    /// let mut s = String::new();
+    /// rdr.read_to_string(&mut s).unwrap();
+    /// assert_eq!(&s, "hello");
+    /// assert_eq!(rdr.peek(1).unwrap().len(), 0);
+    /// ```
+    #[unstable(feature = "bufreader_peek", issue = "128405")]
+    pub fn peek(&mut self, n: usize) -> io::Result<&[u8]> {
+        assert!(n <= self.capacity());
+        while n > self.buf.buffer().len() {
+            if self.buf.pos() > 0 {
+                self.buf.backshift();
+            }
+            let new = self.buf.read_more(&mut self.inner)?;
+            if new == 0 {
+                // end of file, no more bytes to read
+                return Ok(&self.buf.buffer()[..]);
+            }
+            debug_assert_eq!(self.buf.pos(), 0);
+        }
+        Ok(&self.buf.buffer()[..n])
+    }
+}
+
+impl<R: ?Sized> BufReader<R> {
     /// Gets a reference to the underlying reader.
     ///
     /// It is inadvisable to directly read from the underlying reader.
@@ -213,26 +266,30 @@ impl<R> BufReader<R> {
     /// }
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
-    pub fn into_inner(self) -> R {
+    pub fn into_inner(self) -> R
+    where
+        R: Sized,
+    {
         self.inner
     }
 
     /// Invalidates all data in the internal buffer.
     #[inline]
-    fn discard_buffer(&mut self) {
+    pub(in crate::io) fn discard_buffer(&mut self) {
         self.buf.discard_buffer()
     }
 }
 
 // This is only used by a test which asserts that the initialization-tracking is correct.
 #[cfg(test)]
-impl<R> BufReader<R> {
+impl<R: ?Sized> BufReader<R> {
+    #[allow(missing_docs)]
     pub fn initialized(&self) -> usize {
         self.buf.initialized()
     }
 }
 
-impl<R: Seek> BufReader<R> {
+impl<R: ?Sized + Seek> BufReader<R> {
     /// Seeks relative to the current position. If the new position lies within the buffer,
     /// the buffer will not be flushed, allowing for more efficient seeks.
     /// This method does not return the location of the underlying reader, so the caller
@@ -256,8 +313,24 @@ impl<R: Seek> BufReader<R> {
     }
 }
 
+impl<R> SpecReadByte for BufReader<R>
+where
+    Self: Read,
+{
+    #[inline]
+    fn spec_read_byte(&mut self) -> Option<io::Result<u8>> {
+        let mut byte = 0;
+        if self.buf.consume_with(1, |claimed| byte = claimed[0]) {
+            return Some(Ok(byte));
+        }
+
+        // Fallback case, only reached once per buffer refill.
+        uninlined_slow_read_byte(self)
+    }
+}
+
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<R: Read> Read for BufReader<R> {
+impl<R: ?Sized + Read> Read for BufReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // If we don't have any buffered data and we're doing a massive read
         // (larger than our internal buffer), bypass our internal buffer
@@ -266,10 +339,8 @@ impl<R: Read> Read for BufReader<R> {
             self.discard_buffer();
             return self.inner.read(buf);
         }
-        let nread = {
-            let mut rem = self.fill_buf()?;
-            rem.read(buf)?
-        };
+        let mut rem = self.fill_buf()?;
+        let nread = rem.read(buf)?;
         self.consume(nread);
         Ok(nread)
     }
@@ -286,7 +357,7 @@ impl<R: Read> Read for BufReader<R> {
         let prev = cursor.written();
 
         let mut rem = self.fill_buf()?;
-        rem.read_buf(cursor.reborrow())?;
+        rem.read_buf(cursor.reborrow())?; // actually never fails
 
         self.consume(cursor.written() - prev); //slice impl of read_buf known to never unfill buf
 
@@ -305,16 +376,23 @@ impl<R: Read> Read for BufReader<R> {
         crate::io::default_read_exact(self, buf)
     }
 
+    fn read_buf_exact(&mut self, mut cursor: BorrowedCursor<'_>) -> io::Result<()> {
+        if self.buf.consume_with(cursor.capacity(), |claimed| cursor.append(claimed)) {
+            return Ok(());
+        }
+
+        crate::io::default_read_buf_exact(self, cursor)
+    }
+
     fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
         let total_len = bufs.iter().map(|b| b.len()).sum::<usize>();
         if self.buf.pos() == self.buf.filled() && total_len >= self.capacity() {
             self.discard_buffer();
             return self.inner.read_vectored(bufs);
         }
-        let nread = {
-            let mut rem = self.fill_buf()?;
-            rem.read_vectored(bufs)?
-        };
+        let mut rem = self.fill_buf()?;
+        let nread = rem.read_vectored(bufs)?;
+
         self.consume(nread);
         Ok(nread)
     }
@@ -327,6 +405,7 @@ impl<R: Read> Read for BufReader<R> {
     // delegate to the inner implementation.
     fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
         let inner_buf = self.buffer();
+        buf.try_reserve(inner_buf.len())?;
         buf.extend_from_slice(inner_buf);
         let nread = inner_buf.len();
         self.discard_buffer();
@@ -358,12 +437,7 @@ impl<R: Read> Read for BufReader<R> {
             // buffer.
             let mut bytes = Vec::new();
             self.read_to_end(&mut bytes)?;
-            let string = crate::str::from_utf8(&bytes).map_err(|_| {
-                io::const_io_error!(
-                    io::ErrorKind::InvalidData,
-                    "stream did not contain valid UTF-8",
-                )
-            })?;
+            let string = crate::str::from_utf8(&bytes).map_err(|_| io::Error::INVALID_UTF8)?;
             *buf += string;
             Ok(string.len())
         }
@@ -371,7 +445,7 @@ impl<R: Read> Read for BufReader<R> {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<R: Read> BufRead for BufReader<R> {
+impl<R: ?Sized + Read> BufRead for BufReader<R> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.buf.fill_buf(&mut self.inner)
     }
@@ -384,11 +458,11 @@ impl<R: Read> BufRead for BufReader<R> {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<R> fmt::Debug for BufReader<R>
 where
-    R: fmt::Debug,
+    R: ?Sized + fmt::Debug,
 {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("BufReader")
-            .field("reader", &self.inner)
+            .field("reader", &&self.inner)
             .field(
                 "buffer",
                 &format_args!("{}/{}", self.buf.filled() - self.buf.pos(), self.capacity()),
@@ -398,7 +472,7 @@ where
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<R: Seek> Seek for BufReader<R> {
+impl<R: ?Sized + Seek> Seek for BufReader<R> {
     /// Seek to an offset, in bytes, in the underlying reader.
     ///
     /// The position used for seeking with <code>[SeekFrom::Current]\(_)</code> is the
@@ -489,9 +563,19 @@ impl<R: Seek> Seek for BufReader<R> {
             )
         })
     }
+
+    /// Seeks relative to the current position.
+    ///
+    /// If the new position lies within the buffer, the buffer will not be
+    /// flushed, allowing for more efficient seeks. This method does not return
+    /// the location of the underlying reader, so the caller must track this
+    /// information themselves if it is required.
+    fn seek_relative(&mut self, offset: i64) -> io::Result<()> {
+        self.seek_relative(offset)
+    }
 }
 
-impl<T> SizeHint for BufReader<T> {
+impl<T: ?Sized> SizeHint for BufReader<T> {
     #[inline]
     fn lower_bound(&self) -> usize {
         SizeHint::lower_bound(self.get_ref()) + self.buffer().len()

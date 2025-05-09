@@ -29,7 +29,7 @@ use core::f32;
 use core::ptr::read_volatile;
 
 use super::fenv::{
-    feclearexcept, fegetround, feraiseexcept, fetestexcept, FE_INEXACT, FE_TONEAREST, FE_UNDERFLOW,
+    FE_INEXACT, FE_TONEAREST, FE_UNDERFLOW, feclearexcept, fegetround, feraiseexcept, fetestexcept,
 };
 
 /*
@@ -71,7 +71,7 @@ pub fn fmaf(x: f32, y: f32, mut z: f32) -> f32 {
             underflow may not be raised correctly, example:
             fmaf(0x1p-120f, 0x1p-120f, 0x1p-149f)
         */
-        if e < 0x3ff - 126 && e >= 0x3ff - 149 && fetestexcept(FE_INEXACT) != 0 {
+        if ((0x3ff - 149)..(0x3ff - 126)).contains(&e) && fetestexcept(FE_INEXACT) != 0 {
             feclearexcept(FE_INEXACT);
             // prevent `xy + vz` from being CSE'd with `xy + z` above
             let vz: f32 = unsafe { read_volatile(&z) };
@@ -91,11 +91,7 @@ pub fn fmaf(x: f32, y: f32, mut z: f32) -> f32 {
      * we need to adjust the low-order bit in the direction of the error.
      */
     let neg = ui >> 63 != 0;
-    let err = if neg == (z as f64 > xy) {
-        xy - result + z as f64
-    } else {
-        z as f64 - result + xy
-    };
+    let err = if neg == (z as f64 > xy) { xy - result + z as f64 } else { z as f64 - result + xy };
     if neg == (err < 0.0) {
         ui += 1;
     } else {

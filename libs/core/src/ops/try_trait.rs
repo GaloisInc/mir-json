@@ -128,8 +128,7 @@ use crate::ops::ControlFlow;
 )]
 #[doc(alias = "?")]
 #[lang = "Try"]
-#[const_trait]
-pub trait Try: ~const FromResidual {
+pub trait Try: FromResidual {
     /// The type of the value produced by `?` when *not* short-circuiting.
     #[unstable(feature = "try_trait_v2", issue = "84277")]
     type Output;
@@ -227,8 +226,8 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::result::Result<T, E>",
-            R = "std::option::Option<std::convert::Infallible>"
+            _Self = "core::result::Result<T, E>",
+            R = "core::option::Option<core::convert::Infallible>",
         ),
         message = "the `?` operator can only be used on `Result`s, not `Option`s, \
             in {ItemContext} that returns `Result`",
@@ -238,7 +237,7 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::result::Result<T, E>",
+            _Self = "core::result::Result<T, E>",
         ),
         // There's a special error message in the trait selection code for
         // `From` in `?`, so this is not shown for result-in-result errors,
@@ -251,8 +250,8 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::option::Option<T>",
-            R = "std::result::Result<T, E>",
+            _Self = "core::option::Option<T>",
+            R = "core::result::Result<T, E>",
         ),
         message = "the `?` operator can only be used on `Option`s, not `Result`s, \
             in {ItemContext} that returns `Option`",
@@ -262,7 +261,7 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::option::Option<T>",
+            _Self = "core::option::Option<T>",
         ),
         // `Option`-in-`Option` always works, as there's only one possible
         // residual, so this can also be phrased strongly.
@@ -274,8 +273,8 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::ops::ControlFlow<B, C>",
-            R = "std::ops::ControlFlow<B, C>",
+            _Self = "core::ops::control_flow::ControlFlow<B, C>",
+            R = "core::ops::control_flow::ControlFlow<B, C>",
         ),
         message = "the `?` operator in {ItemContext} that returns `ControlFlow<B, _>` \
             can only be used on other `ControlFlow<B, _>`s (with the same Break type)",
@@ -286,7 +285,7 @@ pub trait Try: ~const FromResidual {
     on(
         all(
             from_desugaring = "QuestionMark",
-            _Self = "std::ops::ControlFlow<B, C>",
+            _Self = "core::ops::control_flow::ControlFlow<B, C>",
             // `R` is not a `ControlFlow`, as that case was matched previously
         ),
         message = "the `?` operator can only be used on `ControlFlow`s \
@@ -305,14 +304,13 @@ pub trait Try: ~const FromResidual {
 )]
 #[rustc_diagnostic_item = "FromResidual"]
 #[unstable(feature = "try_trait_v2", issue = "84277")]
-#[const_trait]
 pub trait FromResidual<R = <Self as Try>::Residual> {
     /// Constructs the type from a compatible `Residual` type.
     ///
     /// This should be implemented consistently with the `branch` method such
     /// that applying the `?` operator will get back an equivalent residual:
     /// `FromResidual::from_residual(r).branch() --> ControlFlow::Break(r)`.
-    /// (It must not be an *identical* residual when interconversion is involved.)
+    /// (The residual is not mandated to be *identical* when interconversion is involved.)
     ///
     /// # Examples
     ///
@@ -340,6 +338,7 @@ pub trait FromResidual<R = <Self as Try>::Residual> {
 #[inline]
 #[track_caller] // because `Result::from_residual` has it
 #[lang = "from_yeet"]
+#[allow(unreachable_pub)] // not-exposed but still used via lang-item
 pub fn from_yeet<T, Y>(yeeted: Y) -> T
 where
     T: FromResidual<Yeet<Y>>,
@@ -358,15 +357,16 @@ where
 /// and in the other direction,
 /// `<Result<Infallible, E> as Residual<T>>::TryType = Result<T, E>`.
 #[unstable(feature = "try_trait_v2_residual", issue = "91285")]
-#[const_trait]
 pub trait Residual<O> {
     /// The "return" type of this meta-function.
     #[unstable(feature = "try_trait_v2_residual", issue = "91285")]
-    type TryType: ~const Try<Output = O, Residual = Self>;
+    type TryType: Try<Output = O, Residual = Self>;
 }
 
 #[unstable(feature = "pub_crate_should_not_need_unstable_attr", issue = "none")]
-pub(crate) type ChangeOutputType<T, V> = <<T as Try>::Residual as Residual<V>>::TryType;
+#[allow(type_alias_bounds)]
+pub(crate) type ChangeOutputType<T: Try<Residual: Residual<V>>, V> =
+    <T::Residual as Residual<V>>::TryType;
 
 /// An adapter for implementing non-try methods via the `Try` implementation.
 ///
@@ -379,19 +379,26 @@ pub(crate) type ChangeOutputType<T, V> = <<T as Try>::Residual as Residual<V>>::
 pub(crate) struct NeverShortCircuit<T>(pub T);
 
 impl<T> NeverShortCircuit<T> {
-    /// Implementation for building `ConstFnMutClosure` for wrapping the output of a ~const FnMut in a `NeverShortCircuit`.
+    /// Wraps a unary function to produce one that wraps the output into a `NeverShortCircuit`.
+    ///
+    /// This is useful for implementing infallible functions in terms of the `try_` ones,
+    /// without accidentally capturing extra generic parameters in a closure.
     #[inline]
-    pub const fn wrap_mut_2_imp<A, B, F: ~const FnMut(A, B) -> T>(
-        f: &mut F,
-        (a, b): (A, B),
-    ) -> NeverShortCircuit<T> {
-        NeverShortCircuit(f(a, b))
+    pub(crate) fn wrap_mut_1<A>(
+        mut f: impl FnMut(A) -> T,
+    ) -> impl FnMut(A) -> NeverShortCircuit<T> {
+        move |a| NeverShortCircuit(f(a))
+    }
+
+    #[inline]
+    pub(crate) fn wrap_mut_2<A, B>(mut f: impl FnMut(A, B) -> T) -> impl FnMut(A, B) -> Self {
+        move |a, b| NeverShortCircuit(f(a, b))
     }
 }
 
 pub(crate) enum NeverShortCircuitResidual {}
 
-impl<T> const Try for NeverShortCircuit<T> {
+impl<T> Try for NeverShortCircuit<T> {
     type Output = T;
     type Residual = NeverShortCircuitResidual;
 
@@ -406,14 +413,14 @@ impl<T> const Try for NeverShortCircuit<T> {
     }
 }
 
-impl<T> const FromResidual for NeverShortCircuit<T> {
+impl<T> FromResidual for NeverShortCircuit<T> {
     #[inline]
     fn from_residual(never: NeverShortCircuitResidual) -> Self {
         match never {}
     }
 }
 
-impl<T> const Residual<T> for NeverShortCircuitResidual {
+impl<T> Residual<T> for NeverShortCircuitResidual {
     type TryType = NeverShortCircuit<T>;
 }
 

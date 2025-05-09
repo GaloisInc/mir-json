@@ -7,14 +7,14 @@ authors = [
     "Gonzalo Brito Gadeschi <gonzalobg88@gmail.com>",
 ]
 description = "Examples of the stdarch crate."
-edition = "2018"
+edition = "2021"
 default-run = "hex"
 
 [dependencies]
 core_arch = { path = "../crates/core_arch" }
 std_detect = { path = "../crates/std_detect" }
-quickcheck = "0.9"
-rand = "0.7"
+quickcheck = "1.0"
+rand = "0.8"
 
 [[bin]]
 name = "hex"

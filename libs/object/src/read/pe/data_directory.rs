@@ -1,11 +1,17 @@
 use core::slice;
 
+use crate::endian::LittleEndian as LE;
+use crate::pe;
 use crate::read::{Error, ReadError, ReadRef, Result};
-use crate::{pe, LittleEndian as LE};
 
-use super::{ExportTable, ImportTable, RelocationBlockIterator, ResourceDirectory, SectionTable};
+use super::{
+    DelayLoadImportTable, ExportTable, ImportTable, RelocationBlockIterator, ResourceDirectory,
+    SectionTable,
+};
 
 /// The table of data directories in a PE file.
+///
+/// Returned by [`ImageNtHeaders::parse`](super::ImageNtHeaders::parse).
 #[derive(Debug, Clone, Copy)]
 pub struct DataDirectories<'data> {
     entries: &'data [pe::ImageDataDirectory],
@@ -105,6 +111,29 @@ impl<'data> DataDirectories<'data> {
         Ok(Some(ImportTable::new(section_data, section_va, import_va)))
     }
 
+    /// Returns the partially parsed delay-load import directory.
+    ///
+    /// `data` must be the entire file data.
+    pub fn delay_load_import_table<R: ReadRef<'data>>(
+        &self,
+        data: R,
+        sections: &SectionTable<'data>,
+    ) -> Result<Option<DelayLoadImportTable<'data>>> {
+        let data_dir = match self.get(pe::IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT) {
+            Some(data_dir) => data_dir,
+            None => return Ok(None),
+        };
+        let import_va = data_dir.virtual_address.get(LE);
+        let (section_data, section_va) = sections
+            .pe_data_containing(data, import_va)
+            .read_error("Invalid import data dir virtual address")?;
+        Ok(Some(DelayLoadImportTable::new(
+            section_data,
+            section_va,
+            import_va,
+        )))
+    }
+
     /// Returns the blocks in the base relocation directory.
     ///
     /// `data` must be the entire file data.
@@ -149,10 +178,10 @@ impl pe::ImageDataDirectory {
     /// This function has some limitations:
     /// - It requires that the data is contained in a single section.
     /// - It uses the size field of the directory entry, which is
-    /// not desirable for all data directories.
+    ///   not desirable for all data directories.
     /// - It uses the `virtual_address` of the directory entry as an address,
-    /// which is not valid for `IMAGE_DIRECTORY_ENTRY_SECURITY`.
-    pub fn file_range<'data>(&self, sections: &SectionTable<'data>) -> Result<(u32, u32)> {
+    ///   which is not valid for `IMAGE_DIRECTORY_ENTRY_SECURITY`.
+    pub fn file_range(&self, sections: &SectionTable<'_>) -> Result<(u32, u32)> {
         let (offset, section_size) = sections
             .pe_file_range_at(self.virtual_address.get(LE))
             .read_error("Invalid data dir virtual address")?;
@@ -168,9 +197,9 @@ impl pe::ImageDataDirectory {
     /// This function has some limitations:
     /// - It requires that the data is contained in a single section.
     /// - It uses the size field of the directory entry, which is
-    /// not desirable for all data directories.
+    ///   not desirable for all data directories.
     /// - It uses the `virtual_address` of the directory entry as an address,
-    /// which is not valid for `IMAGE_DIRECTORY_ENTRY_SECURITY`.
+    ///   which is not valid for `IMAGE_DIRECTORY_ENTRY_SECURITY`.
     pub fn data<'data, R: ReadRef<'data>>(
         &self,
         data: R,

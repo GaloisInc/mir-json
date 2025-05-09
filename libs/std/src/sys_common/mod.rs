@@ -20,50 +20,23 @@
 #[cfg(test)]
 mod tests;
 
-pub mod backtrace;
 pub mod fs;
-pub mod io;
-pub mod lazy_box;
-pub mod memchr;
-pub mod once;
 pub mod process;
-pub mod thread;
-pub mod thread_info;
-pub mod thread_local_dtor;
-pub mod thread_parking;
 pub mod wstr;
 pub mod wtf8;
-
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "windows")] {
-        pub use crate::sys::thread_local_key;
-    } else {
-        pub mod thread_local_key;
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "l4re",
-                 target_os = "hermit",
-                 feature = "restricted-std",
-                 all(target_family = "wasm", not(target_os = "emscripten")),
-                 all(target_vendor = "fortanix", target_env = "sgx")))] {
-        pub use crate::sys::net;
-    } else {
-        pub mod net;
-    }
-}
 
 // common error constructors
 
 /// A trait for viewing representations from std types
 #[doc(hidden)]
+#[allow(dead_code)] // not used on all platforms
 pub trait AsInner<Inner: ?Sized> {
     fn as_inner(&self) -> &Inner;
 }
 
 /// A trait for viewing representations from std types
 #[doc(hidden)]
+#[allow(dead_code)] // not used on all platforms
 pub trait AsInnerMut<Inner: ?Sized> {
     fn as_inner_mut(&mut self) -> &mut Inner;
 }
@@ -91,4 +64,12 @@ pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64 {
     // substitute into (value*numer)/denom and simplify.
     // r < denom, so (denom*numer) is the upper bound of (r*numer)
     q * numer + r * numer / denom
+}
+
+pub fn ignore_notfound<T>(result: crate::io::Result<T>) -> crate::io::Result<()> {
+    match result {
+        Err(err) if err.kind() == crate::io::ErrorKind::NotFound => Ok(()),
+        Ok(_) => Ok(()),
+        Err(err) => Err(err),
+    }
 }

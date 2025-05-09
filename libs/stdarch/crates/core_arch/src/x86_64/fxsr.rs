@@ -22,7 +22,7 @@ extern "C" {
 /// [fxsave]: http://www.felixcloutier.com/x86/FXSAVE.html
 /// [fxrstor]: http://www.felixcloutier.com/x86/FXRSTOR.html
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_fxsave64)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_fxsave64)
 #[inline]
 #[target_feature(enable = "fxsr")]
 #[cfg_attr(test, assert_instr(fxsave64))]
@@ -46,7 +46,7 @@ pub unsafe fn _fxsave64(mem_addr: *mut u8) {
 /// [fxsave]: http://www.felixcloutier.com/x86/FXSAVE.html
 /// [fxrstor]: http://www.felixcloutier.com/x86/FXRSTOR.html
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_fxrstor64)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_fxrstor64)
 #[inline]
 #[target_feature(enable = "fxsr")]
 #[cfg_attr(test, assert_instr(fxrstor64))]
@@ -71,42 +71,18 @@ mod tests {
             FxsaveArea { data: [0; 512] }
         }
         fn ptr(&mut self) -> *mut u8 {
-            &mut self.data[0] as *mut _ as *mut u8
-        }
-    }
-
-    impl PartialEq<FxsaveArea> for FxsaveArea {
-        fn eq(&self, other: &FxsaveArea) -> bool {
-            for i in 0..self.data.len() {
-                if self.data[i] != other.data[i] {
-                    return false;
-                }
-            }
-            true
-        }
-    }
-
-    impl fmt::Debug for FxsaveArea {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "[")?;
-            for i in 0..self.data.len() {
-                write!(f, "{}", self.data[i])?;
-                if i != self.data.len() - 1 {
-                    write!(f, ", ")?;
-                }
-            }
-            write!(f, "]")
+            self.data.as_mut_ptr()
         }
     }
 
     #[simd_test(enable = "fxsr")]
-    unsafe fn fxsave64() {
+    #[cfg_attr(miri, ignore)] // Register saving/restoring is not supported in Miri
+    unsafe fn test_fxsave64() {
         let mut a = FxsaveArea::new();
         let mut b = FxsaveArea::new();
 
         fxsr::_fxsave64(a.ptr());
         fxsr::_fxrstor64(a.ptr());
         fxsr::_fxsave64(b.ptr());
-        assert_eq!(a, b);
     }
 }

@@ -5,14 +5,12 @@ use core::f32;
 /// Finds the nearest integer greater than or equal to `x`.
 #[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn ceilf(x: f32) -> f32 {
-    // On wasm32 we know that LLVM's intrinsic will compile to an optimized
-    // `f32.ceil` native instruction, so we can leverage this for both code size
-    // and speed.
-    llvm_intrinsically_optimized! {
-        #[cfg(target_arch = "wasm32")] {
-            return unsafe { ::core::intrinsics::ceilf32(x) }
-        }
+    select_implementation! {
+        name: ceilf,
+        use_arch: all(target_arch = "wasm32", intrinsics_enabled),
+        args: x,
     }
+
     let mut ui = x.to_bits();
     let e = (((ui >> 23) & 0xff).wrapping_sub(0x7f)) as i32;
 
@@ -45,7 +43,6 @@ pub fn ceilf(x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::f32::*;
 
     #[test]
     fn sanity_check() {
@@ -57,8 +54,8 @@ mod tests {
     #[test]
     fn spec_tests() {
         // Not Asserted: that the current rounding mode has no effect.
-        assert!(ceilf(NAN).is_nan());
-        for f in [0.0, -0.0, INFINITY, NEG_INFINITY].iter().copied() {
+        assert!(ceilf(f32::NAN).is_nan());
+        for f in [0.0, -0.0, f32::INFINITY, f32::NEG_INFINITY].iter().copied() {
             assert_eq!(ceilf(f), f);
         }
     }

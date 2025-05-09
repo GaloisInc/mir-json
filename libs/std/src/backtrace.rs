@@ -89,14 +89,13 @@ mod tests;
 // a backtrace or actually symbolizing it.
 
 use crate::backtrace_rs::{self, BytesOrWideString};
-use crate::cell::UnsafeCell;
-use crate::env;
 use crate::ffi::c_void;
-use crate::fmt;
-use crate::sync::atomic::{AtomicUsize, Ordering::Relaxed};
-use crate::sync::Once;
-use crate::sys_common::backtrace::{lock, output_filename};
-use crate::vec::Vec;
+use crate::panic::UnwindSafe;
+use crate::sync::LazyLock;
+use crate::sync::atomic::AtomicU8;
+use crate::sync::atomic::Ordering::Relaxed;
+use crate::sys::backtrace::{lock, output_filename, set_image_base};
+use crate::{env, fmt};
 
 /// A captured OS thread stack backtrace.
 ///
@@ -133,12 +132,11 @@ pub enum BacktraceStatus {
 enum Inner {
     Unsupported,
     Disabled,
-    Captured(LazilyResolvedCapture),
+    Captured(LazyLock<Capture, LazyResolve>),
 }
 
 struct Capture {
     actual_start: usize,
-    resolved: bool,
     frames: Vec<BacktraceFrame>,
 }
 
@@ -179,7 +177,7 @@ impl fmt::Debug for Backtrace {
         let capture = match &self.inner {
             Inner::Unsupported => return fmt.write_str("<unsupported>"),
             Inner::Disabled => return fmt.write_str("<disabled>"),
-            Inner::Captured(c) => c.force(),
+            Inner::Captured(c) => &**c,
         };
 
         let frames = &capture.frames[capture.actual_start..];
@@ -256,7 +254,7 @@ impl Backtrace {
         // Cache the result of reading the environment variables to make
         // backtrace captures speedy, because otherwise reading environment
         // variables every time can be somewhat slow.
-        static ENABLED: AtomicUsize = AtomicUsize::new(0);
+        static ENABLED: AtomicU8 = AtomicU8::new(0);
         match ENABLED.load(Relaxed) {
             0 => {}
             1 => return false,
@@ -269,11 +267,11 @@ impl Backtrace {
                 Err(_) => false,
             },
         };
-        ENABLED.store(enabled as usize + 1, Relaxed);
+        ENABLED.store(enabled as u8 + 1, Relaxed);
         enabled
     }
 
-    /// Capture a stack backtrace of the current thread.
+    /// Captures a stack backtrace of the current thread.
     ///
     /// This function will capture a stack backtrace of the current OS thread of
     /// execution, returning a `Backtrace` type which can be later used to print
@@ -328,6 +326,7 @@ impl Backtrace {
         let _lock = lock();
         let mut frames = Vec::new();
         let mut actual_start = None;
+        set_image_base();
         unsafe {
             backtrace_rs::trace_unsynchronized(|frame| {
                 frames.push(BacktraceFrame {
@@ -347,11 +346,10 @@ impl Backtrace {
         let inner = if frames.is_empty() {
             Inner::Unsupported
         } else {
-            Inner::Captured(LazilyResolvedCapture::new(Capture {
+            Inner::Captured(LazyLock::new(lazy_resolve(Capture {
                 actual_start: actual_start.unwrap_or(0),
                 frames,
-                resolved: false,
-            }))
+            })))
         };
 
         Backtrace { inner }
@@ -376,7 +374,7 @@ impl<'a> Backtrace {
     #[must_use]
     #[unstable(feature = "backtrace_frames", issue = "79676")]
     pub fn frames(&'a self) -> &'a [BacktraceFrame] {
-        if let Inner::Captured(c) = &self.inner { &c.force().frames } else { &[] }
+        if let Inner::Captured(c) = &self.inner { &c.frames } else { &[] }
     }
 }
 
@@ -386,7 +384,7 @@ impl fmt::Display for Backtrace {
         let capture = match &self.inner {
             Inner::Unsupported => return fmt.write_str("unsupported backtrace"),
             Inner::Disabled => return fmt.write_str("disabled backtrace"),
-            Inner::Captured(c) => c.force(),
+            Inner::Captured(c) => &**c,
         };
 
         let full = fmt.alternate();
@@ -430,75 +428,50 @@ impl fmt::Display for Backtrace {
     }
 }
 
-struct LazilyResolvedCapture {
-    sync: Once,
-    capture: UnsafeCell<Capture>,
-}
+mod helper {
+    use super::*;
+    pub(super) type LazyResolve = impl (FnOnce() -> Capture) + Send + Sync + UnwindSafe;
 
-impl LazilyResolvedCapture {
-    fn new(capture: Capture) -> Self {
-        LazilyResolvedCapture { sync: Once::new(), capture: UnsafeCell::new(capture) }
-    }
-
-    fn force(&self) -> &Capture {
-        self.sync.call_once(|| {
-            // SAFETY: This exclusive reference can't overlap with any others
-            // `Once` guarantees callers will block until this closure returns
-            // `Once` also guarantees only a single caller will enter this closure
-            unsafe { &mut *self.capture.get() }.resolve();
-        });
-
-        // SAFETY: This shared reference can't overlap with the exclusive reference above
-        unsafe { &*self.capture.get() }
-    }
-}
-
-// SAFETY: Access to the inner value is synchronized using a thread-safe `Once`
-// So long as `Capture` is `Sync`, `LazilyResolvedCapture` is too
-unsafe impl Sync for LazilyResolvedCapture where Capture: Sync {}
-
-impl Capture {
-    fn resolve(&mut self) {
-        // If we're already resolved, nothing to do!
-        if self.resolved {
-            return;
-        }
-        self.resolved = true;
-
-        // Use the global backtrace lock to synchronize this as it's a
-        // requirement of the `backtrace` crate, and then actually resolve
-        // everything.
-        let _lock = lock();
-        for frame in self.frames.iter_mut() {
-            let symbols = &mut frame.symbols;
-            let frame = match &frame.frame {
-                RawFrame::Actual(frame) => frame,
-                #[cfg(test)]
-                RawFrame::Fake => unimplemented!(),
-            };
-            unsafe {
-                backtrace_rs::resolve_frame_unsynchronized(frame, |symbol| {
-                    symbols.push(BacktraceSymbol {
-                        name: symbol.name().map(|m| m.as_bytes().to_vec()),
-                        filename: symbol.filename_raw().map(|b| match b {
-                            BytesOrWideString::Bytes(b) => BytesOrWide::Bytes(b.to_owned()),
-                            BytesOrWideString::Wide(b) => BytesOrWide::Wide(b.to_owned()),
-                        }),
-                        lineno: symbol.lineno(),
-                        colno: symbol.colno(),
+    pub(super) fn lazy_resolve(mut capture: Capture) -> LazyResolve {
+        move || {
+            // Use the global backtrace lock to synchronize this as it's a
+            // requirement of the `backtrace` crate, and then actually resolve
+            // everything.
+            let _lock = lock();
+            for frame in capture.frames.iter_mut() {
+                let symbols = &mut frame.symbols;
+                let frame = match &frame.frame {
+                    RawFrame::Actual(frame) => frame,
+                    #[cfg(test)]
+                    RawFrame::Fake => unimplemented!(),
+                };
+                unsafe {
+                    backtrace_rs::resolve_frame_unsynchronized(frame, |symbol| {
+                        symbols.push(BacktraceSymbol {
+                            name: symbol.name().map(|m| m.as_bytes().to_vec()),
+                            filename: symbol.filename_raw().map(|b| match b {
+                                BytesOrWideString::Bytes(b) => BytesOrWide::Bytes(b.to_owned()),
+                                BytesOrWideString::Wide(b) => BytesOrWide::Wide(b.to_owned()),
+                            }),
+                            lineno: symbol.lineno(),
+                            colno: symbol.colno(),
+                        });
                     });
-                });
+                }
             }
+
+            capture
         }
     }
 }
+use helper::*;
 
 impl RawFrame {
     fn ip(&self) -> *mut c_void {
         match self {
             RawFrame::Actual(frame) => frame.ip(),
             #[cfg(test)]
-            RawFrame::Fake => crate::ptr::invalid_mut(1),
+            RawFrame::Fake => crate::ptr::without_provenance_mut(1),
         }
     }
 }

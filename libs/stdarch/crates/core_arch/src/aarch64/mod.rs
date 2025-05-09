@@ -6,36 +6,30 @@
 //! [arm_ref]: http://infocenter.arm.com/help/topic/com.arm.doc.ihi0073a/IHI0073A_arm_neon_intrinsics_ref.pdf
 //! [arm_dat]: https://developer.arm.com/technologies/neon/intrinsics
 
-mod v8;
-pub use self::v8::*;
+mod mte;
+#[unstable(feature = "stdarch_aarch64_mte", issue = "129010")]
+pub use self::mte::*;
 
+// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
+#[cfg(target_endian = "little")]
 mod neon;
+#[cfg(target_endian = "little")]
+#[stable(feature = "neon_intrinsics", since = "1.59.0")]
 pub use self::neon::*;
 
 mod tme;
+#[unstable(feature = "stdarch_aarch64_tme", issue = "117216")]
 pub use self::tme::*;
 
-mod crc;
-pub use self::crc::*;
-
 mod prefetch;
+#[unstable(feature = "stdarch_aarch64_prefetch", issue = "117217")]
 pub use self::prefetch::*;
 
+#[stable(feature = "neon_intrinsics", since = "1.59.0")]
 pub use super::arm_shared::*;
-
-mod armclang;
-
-pub use self::armclang::*;
 
 #[cfg(test)]
 use stdarch_test::assert_instr;
-
-/// Generates the trap instruction `BRK 1`
-#[cfg_attr(test, assert_instr(brk))]
-#[inline]
-pub unsafe fn brk() -> ! {
-    crate::intrinsics::abort()
-}
 
 #[cfg(test)]
 pub(crate) mod test_support;

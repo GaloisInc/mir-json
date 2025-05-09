@@ -35,7 +35,9 @@ use crate::ops::{Deref, DerefMut};
     any(
         target_arch = "arm",
         target_arch = "mips",
+        target_arch = "mips32r6",
         target_arch = "mips64",
+        target_arch = "mips64r6",
         target_arch = "riscv64",
     ),
     repr(align(32))
@@ -59,7 +61,9 @@ use crate::ops::{Deref, DerefMut};
         target_arch = "powerpc64",
         target_arch = "arm",
         target_arch = "mips",
+        target_arch = "mips32r6",
         target_arch = "mips64",
+        target_arch = "mips64r6",
         target_arch = "riscv64",
         target_arch = "s390x",
     )),
@@ -105,10 +109,8 @@ impl Backoff {
 
     /// Backs off using lightweight spinning.
     ///
-    /// This method should be used for:
-    ///     - Retrying an operation because another thread made progress. i.e. on CAS failure.
-    ///     - Waiting for an operation to complete by spinning optimistically for a few iterations
-    ///     before falling back to parking the thread (see `Backoff::is_completed`).
+    /// This method should be used for retrying an operation because another thread made
+    /// progress. i.e. on CAS failure.
     #[inline]
     pub fn spin_light(&self) {
         let step = self.step.get().min(SPIN_LIMIT);
@@ -133,11 +135,5 @@ impl Backoff {
         }
 
         self.step.set(self.step.get() + 1);
-    }
-
-    /// Returns `true` if quadratic backoff has completed and parking the thread is advised.
-    #[inline]
-    pub fn is_completed(&self) -> bool {
-        self.step.get() > SPIN_LIMIT
     }
 }

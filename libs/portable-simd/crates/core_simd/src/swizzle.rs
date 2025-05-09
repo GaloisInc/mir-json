@@ -1,17 +1,14 @@
-use crate::simd::intrinsics;
-use crate::simd::{LaneCount, Simd, SimdElement, SupportedLaneCount};
+use crate::simd::{LaneCount, Mask, MaskElement, Simd, SimdElement, SupportedLaneCount};
 
-/// Constructs a new SIMD vector by copying elements from selected lanes in other vectors.
+/// Constructs a new SIMD vector by copying elements from selected elements in other vectors.
 ///
-/// When swizzling one vector, lanes are selected by a `const` array of `usize`,
-/// like [`Swizzle`].
+/// When swizzling one vector, elements are selected like [`Swizzle::swizzle`].
 ///
-/// When swizzling two vectors, lanes are selected by a `const` array of [`Which`],
-/// like [`Swizzle2`].
+/// When swizzling two vectors, elements are selected like [`Swizzle::concat_swizzle`].
 ///
 /// # Examples
 ///
-/// With a single SIMD vector, the const array specifies lane indices in that vector:
+/// With a single SIMD vector, the const array specifies element indices in that vector:
 /// ```
 /// # #![feature(portable_simd)]
 /// # use core::simd::{u32x2, u32x4, simd_swizzle};
@@ -21,25 +18,27 @@ use crate::simd::{LaneCount, Simd, SimdElement, SupportedLaneCount};
 /// let r: u32x4 = simd_swizzle!(v, [3, 0, 1, 2]);
 /// assert_eq!(r.to_array(), [13, 10, 11, 12]);
 ///
-/// // Changing the number of lanes
+/// // Changing the number of elements
 /// let r: u32x2 = simd_swizzle!(v, [3, 1]);
 /// assert_eq!(r.to_array(), [13, 11]);
 /// ```
 ///
-/// With two input SIMD vectors, the const array uses `Which` to specify the source of each index:
+/// With two input SIMD vectors, the const array specifies element indices in the concatenation of
+/// those vectors:
 /// ```
 /// # #![feature(portable_simd)]
-/// # use core::simd::{u32x2, u32x4, simd_swizzle, Which};
-/// use Which::{First, Second};
+/// # #[cfg(feature = "as_crate")] use core_simd::simd;
+/// # #[cfg(not(feature = "as_crate"))] use core::simd;
+/// # use simd::{u32x2, u32x4, simd_swizzle};
 /// let a = u32x4::from_array([0, 1, 2, 3]);
 /// let b = u32x4::from_array([4, 5, 6, 7]);
 ///
 /// // Keeping the same size
-/// let r: u32x4 = simd_swizzle!(a, b, [First(0), First(1), Second(2), Second(3)]);
+/// let r: u32x4 = simd_swizzle!(a, b, [0, 1, 6, 7]);
 /// assert_eq!(r.to_array(), [0, 1, 6, 7]);
 ///
-/// // Changing the number of lanes
-/// let r: u32x2 = simd_swizzle!(a, b, [First(0), Second(0)]);
+/// // Changing the number of elements
+/// let r: u32x2 = simd_swizzle!(a, b, [0, 4]);
 /// assert_eq!(r.to_array(), [0, 4]);
 /// ```
 #[allow(unused_macros)]
@@ -50,7 +49,7 @@ pub macro simd_swizzle {
         {
             use $crate::simd::Swizzle;
             struct Impl;
-            impl<const LANES: usize> Swizzle<LANES, {$index.len()}> for Impl {
+            impl Swizzle<{$index.len()}> for Impl {
                 const INDEX: [usize; {$index.len()}] = $index;
             }
             Impl::swizzle($vector)
@@ -60,221 +59,259 @@ pub macro simd_swizzle {
         $first:expr, $second:expr, $index:expr $(,)?
     ) => {
         {
-            use $crate::simd::{Which, Swizzle2};
+            use $crate::simd::Swizzle;
             struct Impl;
-            impl<const LANES: usize> Swizzle2<LANES, {$index.len()}> for Impl {
-                const INDEX: [Which; {$index.len()}] = $index;
+            impl Swizzle<{$index.len()}> for Impl {
+                const INDEX: [usize; {$index.len()}] = $index;
             }
-            Impl::swizzle2($first, $second)
+            Impl::concat_swizzle($first, $second)
         }
     }
 }
 
-/// Specifies a lane index into one of two SIMD vectors.
-///
-/// This is an input type for [Swizzle2] and helper macros like [simd_swizzle].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Which {
-    /// Index of a lane in the first input SIMD vector.
-    First(usize),
-    /// Index of a lane in the second input SIMD vector.
-    Second(usize),
-}
+/// Creates a vector from the elements of another vector.
+pub trait Swizzle<const N: usize> {
+    /// Map from the elements of the input vector to the output vector.
+    const INDEX: [usize; N];
 
-/// Create a vector from the elements of another vector.
-pub trait Swizzle<const INPUT_LANES: usize, const OUTPUT_LANES: usize> {
-    /// Map from the lanes of the input vector to the output vector.
-    const INDEX: [usize; OUTPUT_LANES];
-
-    /// Create a new vector from the lanes of `vector`.
+    /// Creates a new vector from the elements of `vector`.
     ///
     /// Lane `i` of the output is `vector[Self::INDEX[i]]`.
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
-    fn swizzle<T>(vector: Simd<T, INPUT_LANES>) -> Simd<T, OUTPUT_LANES>
+    fn swizzle<T, const M: usize>(vector: Simd<T, M>) -> Simd<T, N>
     where
         T: SimdElement,
-        LaneCount<INPUT_LANES>: SupportedLaneCount,
-        LaneCount<OUTPUT_LANES>: SupportedLaneCount,
+        LaneCount<N>: SupportedLaneCount,
+        LaneCount<M>: SupportedLaneCount,
     {
-        // Safety: `vector` is a vector, and `INDEX_IMPL` is a const array of u32.
-        unsafe { intrinsics::simd_shuffle(vector, vector, Self::INDEX_IMPL) }
+        // Safety: `vector` is a vector, and the index is a const vector of u32.
+        unsafe {
+            core::intrinsics::simd::simd_shuffle(
+                vector,
+                vector,
+                const {
+                    let mut output = [0; N];
+                    let mut i = 0;
+                    while i < N {
+                        let index = Self::INDEX[i];
+                        assert!(index as u32 as usize == index);
+                        assert!(
+                            index < M,
+                            "source element index exceeds input vector length"
+                        );
+                        output[i] = index as u32;
+                        i += 1;
+                    }
+
+                    // The index list needs to be returned as a vector.
+                    #[repr(simd)]
+                    struct SimdShuffleIdx<const LEN: usize>([u32; LEN]);
+                    SimdShuffleIdx(output)
+                },
+            )
+        }
     }
-}
 
-/// Create a vector from the elements of two other vectors.
-pub trait Swizzle2<const INPUT_LANES: usize, const OUTPUT_LANES: usize> {
-    /// Map from the lanes of the input vectors to the output vector
-    const INDEX: [Which; OUTPUT_LANES];
-
-    /// Create a new vector from the lanes of `first` and `second`.
+    /// Creates a new vector from the elements of `first` and `second`.
     ///
-    /// Lane `i` is `first[j]` when `Self::INDEX[i]` is `First(j)`, or `second[j]` when it is
-    /// `Second(j)`.
+    /// Lane `i` of the output is `concat[Self::INDEX[i]]`, where `concat` is the concatenation of
+    /// `first` and `second`.
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
-    fn swizzle2<T>(
-        first: Simd<T, INPUT_LANES>,
-        second: Simd<T, INPUT_LANES>,
-    ) -> Simd<T, OUTPUT_LANES>
+    fn concat_swizzle<T, const M: usize>(first: Simd<T, M>, second: Simd<T, M>) -> Simd<T, N>
     where
         T: SimdElement,
-        LaneCount<INPUT_LANES>: SupportedLaneCount,
-        LaneCount<OUTPUT_LANES>: SupportedLaneCount,
+        LaneCount<N>: SupportedLaneCount,
+        LaneCount<M>: SupportedLaneCount,
     {
-        // Safety: `first` and `second` are vectors, and `INDEX_IMPL` is a const array of u32.
-        unsafe { intrinsics::simd_shuffle(first, second, Self::INDEX_IMPL) }
+        // Safety: `first` and `second` are vectors, and the index is a const vector of u32.
+        unsafe {
+            core::intrinsics::simd::simd_shuffle(
+                first,
+                second,
+                const {
+                    let mut output = [0; N];
+                    let mut i = 0;
+                    while i < N {
+                        let index = Self::INDEX[i];
+                        assert!(index as u32 as usize == index);
+                        assert!(
+                            index < 2 * M,
+                            "source element index exceeds input vector length"
+                        );
+                        output[i] = index as u32;
+                        i += 1;
+                    }
+
+                    // The index list needs to be returned as a vector.
+                    #[repr(simd)]
+                    struct SimdShuffleIdx<const LEN: usize>([u32; LEN]);
+                    SimdShuffleIdx(output)
+                },
+            )
+        }
+    }
+
+    /// Creates a new mask from the elements of `mask`.
+    ///
+    /// Element `i` of the output is `mask[Self::INDEX[i]]`.
+    #[inline]
+    #[must_use = "method returns a new mask and does not mutate the original inputs"]
+    fn swizzle_mask<T, const M: usize>(mask: Mask<T, M>) -> Mask<T, N>
+    where
+        T: MaskElement,
+        LaneCount<N>: SupportedLaneCount,
+        LaneCount<M>: SupportedLaneCount,
+    {
+        // SAFETY: all elements of this mask come from another mask
+        unsafe { Mask::from_int_unchecked(Self::swizzle(mask.to_int())) }
+    }
+
+    /// Creates a new mask from the elements of `first` and `second`.
+    ///
+    /// Element `i` of the output is `concat[Self::INDEX[i]]`, where `concat` is the concatenation of
+    /// `first` and `second`.
+    #[inline]
+    #[must_use = "method returns a new mask and does not mutate the original inputs"]
+    fn concat_swizzle_mask<T, const M: usize>(first: Mask<T, M>, second: Mask<T, M>) -> Mask<T, N>
+    where
+        T: MaskElement,
+        LaneCount<N>: SupportedLaneCount,
+        LaneCount<M>: SupportedLaneCount,
+    {
+        // SAFETY: all elements of this mask come from another mask
+        unsafe { Mask::from_int_unchecked(Self::concat_swizzle(first.to_int(), second.to_int())) }
     }
 }
 
-/// The `simd_shuffle` intrinsic expects `u32`, so do error checking and conversion here.
-/// This trait hides `INDEX_IMPL` from the public API.
-trait SwizzleImpl<const INPUT_LANES: usize, const OUTPUT_LANES: usize> {
-    const INDEX_IMPL: [u32; OUTPUT_LANES];
-}
-
-impl<T, const INPUT_LANES: usize, const OUTPUT_LANES: usize> SwizzleImpl<INPUT_LANES, OUTPUT_LANES>
-    for T
-where
-    T: Swizzle<INPUT_LANES, OUTPUT_LANES> + ?Sized,
-{
-    const INDEX_IMPL: [u32; OUTPUT_LANES] = {
-        let mut output = [0; OUTPUT_LANES];
-        let mut i = 0;
-        while i < OUTPUT_LANES {
-            let index = Self::INDEX[i];
-            assert!(index as u32 as usize == index);
-            assert!(index < INPUT_LANES, "source lane exceeds input lane count",);
-            output[i] = index as u32;
-            i += 1;
-        }
-        output
-    };
-}
-
-/// The `simd_shuffle` intrinsic expects `u32`, so do error checking and conversion here.
-/// This trait hides `INDEX_IMPL` from the public API.
-trait Swizzle2Impl<const INPUT_LANES: usize, const OUTPUT_LANES: usize> {
-    const INDEX_IMPL: [u32; OUTPUT_LANES];
-}
-
-impl<T, const INPUT_LANES: usize, const OUTPUT_LANES: usize> Swizzle2Impl<INPUT_LANES, OUTPUT_LANES>
-    for T
-where
-    T: Swizzle2<INPUT_LANES, OUTPUT_LANES> + ?Sized,
-{
-    const INDEX_IMPL: [u32; OUTPUT_LANES] = {
-        let mut output = [0; OUTPUT_LANES];
-        let mut i = 0;
-        while i < OUTPUT_LANES {
-            let (offset, index) = match Self::INDEX[i] {
-                Which::First(index) => (false, index),
-                Which::Second(index) => (true, index),
-            };
-            assert!(index < INPUT_LANES, "source lane exceeds input lane count",);
-
-            // lanes are indexed by the first vector, then second vector
-            let index = if offset { index + INPUT_LANES } else { index };
-            assert!(index as u32 as usize == index);
-            output[i] = index as u32;
-            i += 1;
-        }
-        output
-    };
-}
-
-impl<T, const LANES: usize> Simd<T, LANES>
+impl<T, const N: usize> Simd<T, N>
 where
     T: SimdElement,
-    LaneCount<LANES>: SupportedLaneCount,
+    LaneCount<N>: SupportedLaneCount,
 {
-    /// Reverse the order of the lanes in the vector.
+    /// Reverse the order of the elements in the vector.
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
     pub fn reverse(self) -> Self {
-        const fn reverse_index<const LANES: usize>() -> [usize; LANES] {
-            let mut index = [0; LANES];
-            let mut i = 0;
-            while i < LANES {
-                index[i] = LANES - i - 1;
-                i += 1;
-            }
-            index
-        }
-
         struct Reverse;
 
-        impl<const LANES: usize> Swizzle<LANES, LANES> for Reverse {
-            const INDEX: [usize; LANES] = reverse_index::<LANES>();
+        impl<const N: usize> Swizzle<N> for Reverse {
+            const INDEX: [usize; N] = const {
+                let mut index = [0; N];
+                let mut i = 0;
+                while i < N {
+                    index[i] = N - i - 1;
+                    i += 1;
+                }
+                index
+            };
         }
 
         Reverse::swizzle(self)
     }
 
     /// Rotates the vector such that the first `OFFSET` elements of the slice move to the end
-    /// while the last `LANES - OFFSET` elements move to the front. After calling `rotate_lanes_left`,
-    /// the element previously in lane `OFFSET` will become the first element in the slice.
+    /// while the last `self.len() - OFFSET` elements move to the front. After calling `rotate_elements_left`,
+    /// the element previously at index `OFFSET` will become the first element in the slice.
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
-    pub fn rotate_lanes_left<const OFFSET: usize>(self) -> Self {
-        const fn rotate_index<const OFFSET: usize, const LANES: usize>() -> [usize; LANES] {
-            let offset = OFFSET % LANES;
-            let mut index = [0; LANES];
-            let mut i = 0;
-            while i < LANES {
-                index[i] = (i + offset) % LANES;
-                i += 1;
-            }
-            index
-        }
-
+    pub fn rotate_elements_left<const OFFSET: usize>(self) -> Self {
         struct Rotate<const OFFSET: usize>;
 
-        impl<const OFFSET: usize, const LANES: usize> Swizzle<LANES, LANES> for Rotate<OFFSET> {
-            const INDEX: [usize; LANES] = rotate_index::<OFFSET, LANES>();
+        impl<const OFFSET: usize, const N: usize> Swizzle<N> for Rotate<OFFSET> {
+            const INDEX: [usize; N] = const {
+                let offset = OFFSET % N;
+                let mut index = [0; N];
+                let mut i = 0;
+                while i < N {
+                    index[i] = (i + offset) % N;
+                    i += 1;
+                }
+                index
+            };
         }
 
         Rotate::<OFFSET>::swizzle(self)
     }
 
-    /// Rotates the vector such that the first `LANES - OFFSET` elements of the vector move to
-    /// the end while the last `OFFSET` elements move to the front. After calling `rotate_lanes_right`,
-    /// the element previously at index `LANES - OFFSET` will become the first element in the slice.
+    /// Rotates the vector such that the first `self.len() - OFFSET` elements of the vector move to
+    /// the end while the last `OFFSET` elements move to the front. After calling `rotate_elements_right`,
+    /// the element previously at index `self.len() - OFFSET` will become the first element in the slice.
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
-    pub fn rotate_lanes_right<const OFFSET: usize>(self) -> Self {
-        const fn rotate_index<const OFFSET: usize, const LANES: usize>() -> [usize; LANES] {
-            let offset = LANES - OFFSET % LANES;
-            let mut index = [0; LANES];
-            let mut i = 0;
-            while i < LANES {
-                index[i] = (i + offset) % LANES;
-                i += 1;
-            }
-            index
-        }
-
+    pub fn rotate_elements_right<const OFFSET: usize>(self) -> Self {
         struct Rotate<const OFFSET: usize>;
 
-        impl<const OFFSET: usize, const LANES: usize> Swizzle<LANES, LANES> for Rotate<OFFSET> {
-            const INDEX: [usize; LANES] = rotate_index::<OFFSET, LANES>();
+        impl<const OFFSET: usize, const N: usize> Swizzle<N> for Rotate<OFFSET> {
+            const INDEX: [usize; N] = const {
+                let offset = N - OFFSET % N;
+                let mut index = [0; N];
+                let mut i = 0;
+                while i < N {
+                    index[i] = (i + offset) % N;
+                    i += 1;
+                }
+                index
+            };
         }
 
         Rotate::<OFFSET>::swizzle(self)
+    }
+
+    /// Shifts the vector elements to the left by `OFFSET`, filling in with
+    /// `padding` from the right.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn shift_elements_left<const OFFSET: usize>(self, padding: T) -> Self {
+        struct Shift<const OFFSET: usize>;
+
+        impl<const OFFSET: usize, const N: usize> Swizzle<N> for Shift<OFFSET> {
+            const INDEX: [usize; N] = const {
+                let mut index = [N; N];
+                let mut i = 0;
+                while i + OFFSET < N {
+                    index[i] = i + OFFSET;
+                    i += 1;
+                }
+                index
+            };
+        }
+
+        Shift::<OFFSET>::concat_swizzle(self, Simd::splat(padding))
+    }
+
+    /// Shifts the vector elements to the right by `OFFSET`, filling in with
+    /// `padding` from the left.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn shift_elements_right<const OFFSET: usize>(self, padding: T) -> Self {
+        struct Shift<const OFFSET: usize>;
+
+        impl<const OFFSET: usize, const N: usize> Swizzle<N> for Shift<OFFSET> {
+            const INDEX: [usize; N] = const {
+                let mut index = [N; N];
+                let mut i = OFFSET;
+                while i < N {
+                    index[i] = i - OFFSET;
+                    i += 1;
+                }
+                index
+            };
+        }
+
+        Shift::<OFFSET>::concat_swizzle(self, Simd::splat(padding))
     }
 
     /// Interleave two vectors.
     ///
-    /// Produces two vectors with lanes taken alternately from `self` and `other`.
+    /// The resulting vectors contain elements taken alternatively from `self` and `other`, first
+    /// filling the first result, and then the second.
     ///
-    /// The first result contains the first `LANES / 2` lanes from `self` and `other`,
-    /// alternating, starting with the first lane of `self`.
-    ///
-    /// The second result contains the last `LANES / 2` lanes from `self` and `other`,
-    /// alternating, starting with the lane `LANES / 2` from the start of `self`.
+    /// The reverse of this operation is [`Simd::deinterleave`].
     ///
     /// ```
-    /// #![feature(portable_simd)]
+    /// # #![feature(portable_simd)]
     /// # use core::simd::Simd;
     /// let a = Simd::from_array([0, 1, 2, 3]);
     /// let b = Simd::from_array([4, 5, 6, 7]);
@@ -285,30 +322,13 @@ where
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
     pub fn interleave(self, other: Self) -> (Self, Self) {
-        const fn lo<const LANES: usize>() -> [Which; LANES] {
-            let mut idx = [Which::First(0); LANES];
+        const fn interleave<const N: usize>(high: bool) -> [usize; N] {
+            let mut idx = [0; N];
             let mut i = 0;
-            while i < LANES {
-                let offset = i / 2;
-                idx[i] = if i % 2 == 0 {
-                    Which::First(offset)
-                } else {
-                    Which::Second(offset)
-                };
-                i += 1;
-            }
-            idx
-        }
-        const fn hi<const LANES: usize>() -> [Which; LANES] {
-            let mut idx = [Which::First(0); LANES];
-            let mut i = 0;
-            while i < LANES {
-                let offset = (LANES + i) / 2;
-                idx[i] = if i % 2 == 0 {
-                    Which::First(offset)
-                } else {
-                    Which::Second(offset)
-                };
+            while i < N {
+                let dst_index = if high { i + N } else { i };
+                let src_index = dst_index / 2 + (dst_index % 2) * N;
+                idx[i] = src_index;
                 i += 1;
             }
             idx
@@ -317,28 +337,35 @@ where
         struct Lo;
         struct Hi;
 
-        impl<const LANES: usize> Swizzle2<LANES, LANES> for Lo {
-            const INDEX: [Which; LANES] = lo::<LANES>();
+        impl<const N: usize> Swizzle<N> for Lo {
+            const INDEX: [usize; N] = interleave::<N>(false);
         }
 
-        impl<const LANES: usize> Swizzle2<LANES, LANES> for Hi {
-            const INDEX: [Which; LANES] = hi::<LANES>();
+        impl<const N: usize> Swizzle<N> for Hi {
+            const INDEX: [usize; N] = interleave::<N>(true);
         }
 
-        (Lo::swizzle2(self, other), Hi::swizzle2(self, other))
+        (
+            Lo::concat_swizzle(self, other),
+            Hi::concat_swizzle(self, other),
+        )
     }
 
     /// Deinterleave two vectors.
     ///
-    /// The first result takes every other lane of `self` and then `other`, starting with
-    /// the first lane.
+    /// The first result takes every other element of `self` and then `other`, starting with
+    /// the first element.
     ///
-    /// The second result takes every other lane of `self` and then `other`, starting with
-    /// the second lane.
+    /// The second result takes every other element of `self` and then `other`, starting with
+    /// the second element.
+    ///
+    /// The reverse of this operation is [`Simd::interleave`].
     ///
     /// ```
-    /// #![feature(portable_simd)]
-    /// # use core::simd::Simd;
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::Simd;
     /// let a = Simd::from_array([0, 4, 1, 5]);
     /// let b = Simd::from_array([2, 6, 3, 7]);
     /// let (x, y) = a.deinterleave(b);
@@ -348,22 +375,11 @@ where
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original inputs"]
     pub fn deinterleave(self, other: Self) -> (Self, Self) {
-        const fn even<const LANES: usize>() -> [Which; LANES] {
-            let mut idx = [Which::First(0); LANES];
+        const fn deinterleave<const N: usize>(second: bool) -> [usize; N] {
+            let mut idx = [0; N];
             let mut i = 0;
-            while i < LANES / 2 {
-                idx[i] = Which::First(2 * i);
-                idx[i + LANES / 2] = Which::Second(2 * i);
-                i += 1;
-            }
-            idx
-        }
-        const fn odd<const LANES: usize>() -> [Which; LANES] {
-            let mut idx = [Which::First(0); LANES];
-            let mut i = 0;
-            while i < LANES / 2 {
-                idx[i] = Which::First(2 * i + 1);
-                idx[i + LANES / 2] = Which::Second(2 * i + 1);
+            while i < N {
+                idx[i] = i * 2 + second as usize;
                 i += 1;
             }
             idx
@@ -372,14 +388,258 @@ where
         struct Even;
         struct Odd;
 
-        impl<const LANES: usize> Swizzle2<LANES, LANES> for Even {
-            const INDEX: [Which; LANES] = even::<LANES>();
+        impl<const N: usize> Swizzle<N> for Even {
+            const INDEX: [usize; N] = deinterleave::<N>(false);
         }
 
-        impl<const LANES: usize> Swizzle2<LANES, LANES> for Odd {
-            const INDEX: [Which; LANES] = odd::<LANES>();
+        impl<const N: usize> Swizzle<N> for Odd {
+            const INDEX: [usize; N] = deinterleave::<N>(true);
         }
 
-        (Even::swizzle2(self, other), Odd::swizzle2(self, other))
+        (
+            Even::concat_swizzle(self, other),
+            Odd::concat_swizzle(self, other),
+        )
+    }
+
+    /// Resize a vector.
+    ///
+    /// If `M` > `N`, extends the length of a vector, setting the new elements to `value`.
+    /// If `M` < `N`, truncates the vector to the first `M` elements.
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::u32x4;
+    /// let x = u32x4::from_array([0, 1, 2, 3]);
+    /// assert_eq!(x.resize::<8>(9).to_array(), [0, 1, 2, 3, 9, 9, 9, 9]);
+    /// assert_eq!(x.resize::<2>(9).to_array(), [0, 1]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn resize<const M: usize>(self, value: T) -> Simd<T, M>
+    where
+        LaneCount<M>: SupportedLaneCount,
+    {
+        struct Resize<const N: usize>;
+        impl<const N: usize, const M: usize> Swizzle<M> for Resize<N> {
+            const INDEX: [usize; M] = const {
+                let mut index = [0; M];
+                let mut i = 0;
+                while i < M {
+                    index[i] = if i < N { i } else { N };
+                    i += 1;
+                }
+                index
+            };
+        }
+        Resize::<N>::concat_swizzle(self, Simd::splat(value))
+    }
+
+    /// Extract a vector from another vector.
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::u32x4;
+    /// let x = u32x4::from_array([0, 1, 2, 3]);
+    /// assert_eq!(x.extract::<1, 2>().to_array(), [1, 2]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn extract<const START: usize, const LEN: usize>(self) -> Simd<T, LEN>
+    where
+        LaneCount<LEN>: SupportedLaneCount,
+    {
+        struct Extract<const N: usize, const START: usize>;
+        impl<const N: usize, const START: usize, const LEN: usize> Swizzle<LEN> for Extract<N, START> {
+            const INDEX: [usize; LEN] = const {
+                assert!(START + LEN <= N, "index out of bounds");
+                let mut index = [0; LEN];
+                let mut i = 0;
+                while i < LEN {
+                    index[i] = START + i;
+                    i += 1;
+                }
+                index
+            };
+        }
+        Extract::<N, START>::swizzle(self)
+    }
+}
+
+impl<T, const N: usize> Mask<T, N>
+where
+    T: MaskElement,
+    LaneCount<N>: SupportedLaneCount,
+{
+    /// Reverse the order of the elements in the mask.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn reverse(self) -> Self {
+        // Safety: swizzles are safe for masks
+        unsafe { Self::from_int_unchecked(self.to_int().reverse()) }
+    }
+
+    /// Rotates the mask such that the first `OFFSET` elements of the slice move to the end
+    /// while the last `self.len() - OFFSET` elements move to the front. After calling `rotate_elements_left`,
+    /// the element previously at index `OFFSET` will become the first element in the slice.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn rotate_elements_left<const OFFSET: usize>(self) -> Self {
+        // Safety: swizzles are safe for masks
+        unsafe { Self::from_int_unchecked(self.to_int().rotate_elements_left::<OFFSET>()) }
+    }
+
+    /// Rotates the mask such that the first `self.len() - OFFSET` elements of the mask move to
+    /// the end while the last `OFFSET` elements move to the front. After calling `rotate_elements_right`,
+    /// the element previously at index `self.len() - OFFSET` will become the first element in the slice.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn rotate_elements_right<const OFFSET: usize>(self) -> Self {
+        // Safety: swizzles are safe for masks
+        unsafe { Self::from_int_unchecked(self.to_int().rotate_elements_right::<OFFSET>()) }
+    }
+
+    /// Shifts the mask elements to the left by `OFFSET`, filling in with
+    /// `padding` from the right.
+    #[inline]
+    #[must_use = "method returns a new mask and does not mutate the original inputs"]
+    pub fn shift_elements_left<const OFFSET: usize>(self, padding: bool) -> Self {
+        // Safety: swizzles are safe for masks
+        unsafe {
+            Self::from_int_unchecked(self.to_int().shift_elements_left::<OFFSET>(if padding {
+                T::TRUE
+            } else {
+                T::FALSE
+            }))
+        }
+    }
+
+    /// Shifts the mask elements to the right by `OFFSET`, filling in with
+    /// `padding` from the left.
+    #[inline]
+    #[must_use = "method returns a new mask and does not mutate the original inputs"]
+    pub fn shift_elements_right<const OFFSET: usize>(self, padding: bool) -> Self {
+        // Safety: swizzles are safe for masks
+        unsafe {
+            Self::from_int_unchecked(self.to_int().shift_elements_right::<OFFSET>(if padding {
+                T::TRUE
+            } else {
+                T::FALSE
+            }))
+        }
+    }
+
+    /// Interleave two masks.
+    ///
+    /// The resulting masks contain elements taken alternatively from `self` and `other`, first
+    /// filling the first result, and then the second.
+    ///
+    /// The reverse of this operation is [`Mask::deinterleave`].
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::mask32x4;
+    /// let a = mask32x4::from_array([false, true, false, true]);
+    /// let b = mask32x4::from_array([false, false, true, true]);
+    /// let (x, y) = a.interleave(b);
+    /// assert_eq!(x.to_array(), [false, false, true, false]);
+    /// assert_eq!(y.to_array(), [false, true, true, true]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn interleave(self, other: Self) -> (Self, Self) {
+        let (lo, hi) = self.to_int().interleave(other.to_int());
+        // Safety: swizzles are safe for masks
+        unsafe { (Self::from_int_unchecked(lo), Self::from_int_unchecked(hi)) }
+    }
+
+    /// Deinterleave two masks.
+    ///
+    /// The first result takes every other element of `self` and then `other`, starting with
+    /// the first element.
+    ///
+    /// The second result takes every other element of `self` and then `other`, starting with
+    /// the second element.
+    ///
+    /// The reverse of this operation is [`Mask::interleave`].
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::mask32x4;
+    /// let a = mask32x4::from_array([false, true, false, true]);
+    /// let b = mask32x4::from_array([false, false, true, true]);
+    /// let (x, y) = a.deinterleave(b);
+    /// assert_eq!(x.to_array(), [false, false, false, true]);
+    /// assert_eq!(y.to_array(), [true, true, false, true]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn deinterleave(self, other: Self) -> (Self, Self) {
+        let (even, odd) = self.to_int().deinterleave(other.to_int());
+        // Safety: swizzles are safe for masks
+        unsafe {
+            (
+                Self::from_int_unchecked(even),
+                Self::from_int_unchecked(odd),
+            )
+        }
+    }
+
+    /// Resize a mask.
+    ///
+    /// If `M` > `N`, extends the length of a mask, setting the new elements to `value`.
+    /// If `M` < `N`, truncates the mask to the first `M` elements.
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::mask32x4;
+    /// let x = mask32x4::from_array([false, true, true, false]);
+    /// assert_eq!(x.resize::<8>(true).to_array(), [false, true, true, false, true, true, true, true]);
+    /// assert_eq!(x.resize::<2>(true).to_array(), [false, true]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn resize<const M: usize>(self, value: bool) -> Mask<T, M>
+    where
+        LaneCount<M>: SupportedLaneCount,
+    {
+        // Safety: swizzles are safe for masks
+        unsafe {
+            Mask::<T, M>::from_int_unchecked(self.to_int().resize::<M>(if value {
+                T::TRUE
+            } else {
+                T::FALSE
+            }))
+        }
+    }
+
+    /// Extract a vector from another vector.
+    ///
+    /// ```
+    /// # #![feature(portable_simd)]
+    /// # #[cfg(feature = "as_crate")] use core_simd::simd;
+    /// # #[cfg(not(feature = "as_crate"))] use core::simd;
+    /// # use simd::mask32x4;
+    /// let x = mask32x4::from_array([false, true, true, false]);
+    /// assert_eq!(x.extract::<1, 2>().to_array(), [true, true]);
+    /// ```
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original inputs"]
+    pub fn extract<const START: usize, const LEN: usize>(self) -> Mask<T, LEN>
+    where
+        LaneCount<LEN>: SupportedLaneCount,
+    {
+        // Safety: swizzles are safe for masks
+        unsafe { Mask::<T, LEN>::from_int_unchecked(self.to_int().extract::<START, LEN>()) }
     }
 }

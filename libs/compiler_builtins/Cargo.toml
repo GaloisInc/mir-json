@@ -10,13 +10,16 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
+edition = "2021"
 name = "compiler_builtins"
-version = "0.1.85"
+version = "0.1.146"
 authors = ["Jorge Aparicio <japaricious@gmail.com>"]
+build = "build.rs"
 links = "compiler-rt"
 include = [
     "/Cargo.toml",
     "/build.rs",
+    "/configure.rs",
     "/src/*",
     "/examples/*",
     "/LICENSE.txt",
@@ -24,6 +27,11 @@ include = [
     "/compiler-rt/*",
     "/libm/src/math/*",
 ]
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
 description = """
 Compiler intrinsics used by the Rust compiler. Also available for other targets
 if necessary!
@@ -31,20 +39,31 @@ if necessary!
 homepage = "https://github.com/rust-lang/compiler-builtins"
 documentation = "https://docs.rs/compiler_builtins"
 readme = "README.md"
-license = "MIT/Apache-2.0"
+license = "MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR Apache-2.0)"
 repository = "https://github.com/rust-lang/compiler-builtins"
 
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
+[features]
+c = ["cc"]
+compiler-builtins = []
+default = ["compiler-builtins"]
+mangled-names = []
+mem = []
+no-asm = []
+no-f16-f128 = []
+public-test-deps = []
+rustc-dep-of-std = [
+    "compiler-builtins",
+    "core",
+]
 
 [lib]
+name = "compiler_builtins"
+path = "src/lib.rs"
 test = false
 
 [[example]]
 name = "intrinsics"
+path = "examples/intrinsics.rs"
 required-features = ["compiler-builtins"]
 
 [dependencies.core]
@@ -58,15 +77,8 @@ package = "rustc-std-workspace-core"
 version = "1.0"
 optional = true
 
-[features]
-c = ["cc"]
-compiler-builtins = []
-default = ["compiler-builtins"]
-mangled-names = []
-mem = []
-no-asm = []
-public-test-deps = []
-rustc-dep-of-std = [
-    "compiler-builtins",
-    "core",
-]
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
