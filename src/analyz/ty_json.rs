@@ -83,11 +83,20 @@ fn rename_as_lang_item(tcx: TyCtxt, def_id: hir::def_id::DefId) -> Option<LangIt
     }
 }
 
-pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
-    if let Some(lang) = rename_as_lang_item(tcx, def_id) {
-        return format!("$lang/0::{:?}", lang);
-    }
-
+/// Render the given `DefId` into a `String` of the form
+/// `<crate_name>/<disambig>::<defpath>`. The "orig" in the name
+/// `orig_def_id_str` indicates that this will always pick the _original_
+/// `DefId` for rendering purposes, even for
+/// [lang items](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html).
+/// See [`lang_item_def_id_str`] for a variant of this function that renders
+/// lang items differently.
+///
+/// Usually, you will want to use [`def_id_str`] instead, which renders the
+/// `DefId` differently depending on whether it is for a lang item or not.
+pub fn orig_def_id_str(
+    tcx: TyCtxt,
+    def_id: hir::def_id::DefId,
+) -> String {
     // Based on rustc/ty/context.rs.html TyCtxt::def_path_debug_str
     let crate_name = tcx.crate_name(def_id.krate);
     let disambig = tcx.crate_hash(def_id.krate);
@@ -98,6 +107,36 @@ pub fn def_id_str(tcx: TyCtxt, def_id: hir::def_id::DefId) -> String {
         &disambig.to_string()[..8],
         defpath.to_string_no_crate_verbose(),
     )
+}
+
+/// If the given `DefId` is for a
+/// [lang item](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html),
+/// then return `Some(id_str)`, where `id_str` will be of the form
+/// `$lang/0::<lang_item_name>`. Otherwise, return `None`. See
+/// [`orig_def_id_str`] for a variant of this function that always renders the
+/// original `DefId`.
+///
+/// Usually, you will want to use [`def_id_str`] instead, which renders the
+/// `DefId` differently depending on whether it is for a lang item or not.
+pub fn lang_item_def_id_str(
+    tcx: TyCtxt,
+    def_id: hir::def_id::DefId,
+) -> Option<String> {
+    rename_as_lang_item(tcx, def_id).map(|lang| format!("$lang/0::{:?}", lang))
+}
+
+/// Render the given `DefId` into a `String` of the form
+/// `<crate_name>/<disambig>::<defpath>`. If the `DefId` is for a
+/// [lang item](https://doc.rust-lang.org/unstable-book/language-features/lang-items.html),
+/// then this function will return the lang item's rendered `String`. Otherwise,
+/// this will fall back to the original, fully qualified path when rendering the
+/// `DefId`.
+pub fn def_id_str(
+    tcx: TyCtxt,
+    def_id: hir::def_id::DefId,
+) -> String {
+    lang_item_def_id_str(tcx, def_id)
+      .unwrap_or_else(|| orig_def_id_str(tcx, def_id))
 }
 
 pub fn ext_def_id_str<'tcx, T>(

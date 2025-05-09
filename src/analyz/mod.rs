@@ -1053,9 +1053,20 @@ fn emit_adt<'tcx>(
 ) -> io::Result<()> {
     let tcx = ms.state.tcx;
 
-    let adt_name = adt_inst_id_str(tcx, ai);
-    tcx.sess.dcx().note(format!("Emitting ADT definition for {}", adt_name));
+    // Render the string for the ADT instance (i.e., the ADT applied to its type
+    // arguments). This will go into the `adts` section of the output.
+    let adt_inst_name = adt_inst_id_str(tcx, ai);
+    tcx.sess.dcx().note(format!("Emitting ADT definition for {}", adt_inst_name));
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
+
+    // Render the string for the original ADT definition (i.e., the ADT *before*
+    // it is applied to any type arguments). If the original ADT is a lang item,
+    // then this will go into the `lang_items` section of the output.
+    let adt_orig_did = ai.adt.did();
+    let adt_orig_name = orig_def_id_str(tcx, adt_orig_did);
+    let adt_orig_lang_item_name = lang_item_def_id_str(tcx, adt_orig_did);
+    emit_lang_item(ms, out, &adt_orig_name, adt_orig_lang_item_name.as_deref())?;
+
     emit_new_defs(ms, out)?;
     Ok(())
 }
@@ -1093,6 +1104,28 @@ fn emit_fn<'tcx>(
         "spread_arg": mir.spread_arg.map(|x| x.as_usize()),
     }))?;
     emit_new_defs(ms, out)
+}
+
+/// If an identifier is a lang item (i.e., if the supplied
+/// `lang_item_def_id_str` is a `Some` value), then output the lang item's ID
+/// and its original ID to `out.lang_items`. Otherwise, do nothing.
+fn emit_lang_item(
+    ms: &mut MirState,
+    out: &mut impl JsonOutput,
+    orig_def_id_str: &str,
+    lang_item_def_id_str: Option<&str>,
+) -> io::Result<()> {
+    match lang_item_def_id_str {
+        None => {
+            io::Result::Ok(())
+        },
+        Some(lang_item_def_id_str) => {
+            out.emit(EntryKind::LangItem, json!({
+                "name": lang_item_def_id_str,
+                "orig_def_id": orig_def_id_str,
+            }))
+        },
+    }
 }
 
 fn emit_new_defs(
@@ -1260,6 +1293,7 @@ pub fn analyze_nonstreaming<'tcx>(
         "traits": out.traits,
         "intrinsics": out.intrinsics,
         "tys": out.tys,
+        "lang_items": out.lang_items,
         "roots": out.roots,
     });
     sess.dcx().note(
