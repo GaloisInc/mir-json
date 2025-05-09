@@ -1062,7 +1062,9 @@ fn emit_adt<'tcx>(
     // Render the string for the original ADT definition (i.e., the ADT *before*
     // it is applied to any type arguments). If the original ADT is a lang item,
     // then this will go into the `lang_items` section of the output.
-    let (adt_orig_name, adt_orig_lang_item_name) = def_id_strs(tcx, ai.adt.did());
+    let adt_orig_did = ai.adt.did();
+    let adt_orig_name = orig_def_id_str(tcx, adt_orig_did);
+    let adt_orig_lang_item_name = lang_item_def_id_str(tcx, adt_orig_did);
     emit_lang_item(ms, out, &adt_orig_name, adt_orig_lang_item_name.as_deref())?;
 
     emit_new_defs(ms, out)?;
