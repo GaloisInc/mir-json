@@ -195,6 +195,28 @@ fn go() -> ExitCode {
     args.push("--cfg".into());
     args.push("crux".into());
 
+    // Somewhat counterintuitively, we explicitly opt out of using rustc's
+    // additional runtime checks for runtime behavior. It would be nice if we
+    // could support these, but the null pointer check in particular is
+    // problematic. It works by casting the pointer to an integer and checking
+    // if the integer equals zero, but crucible-mir does not support
+    // pointer-to-integer casts at the moment.
+    //
+    // There does not appear to be a way to disable the null pointer check
+    // specifically while enabling the rest of the ub-checks, and because the
+    // checks are inserted into the MIR as inline code (instead of being guarded
+    // behind function calls), it is not straightforward to override the
+    // behavior of these checks. As such, we opt to disable these checks
+    // wholesale for now.
+    //
+    // This isn't the worst thing in the world, as crucible-mir will be
+    // performing many of these undefined behavior checks regardless. Still, it
+    // would be nice if we didn't have to resort to this hack. See
+    // https://github.com/GaloisInc/mir-json/issues/107 for more discussion on
+    // how we might get rid of this hack in the future.
+    args.push("-Z".into());
+    args.push("ub-checks=false".into());
+
     // Require either CRUX_RUST_LIBRARY_PATH, SAW_RUST_LIBRARY_PATH, or MIR_JSON_USE_RUSTC_LIBRARY.
     if let Ok(s) = env::var("CRUX_RUST_LIBRARY_PATH").or(env::var("SAW_RUST_LIBRARY_PATH")) {
         args.push("-L".into());
