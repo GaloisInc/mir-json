@@ -55,6 +55,8 @@ struct UnitGraphUnit {
     /// `artifact_outputs` with it instead of `src_path`.
     pkg_id: String,
     target: Target,
+    #[serde(default)]
+    is_std: bool,
     dependencies: Vec<UnitGraphDependency>,
 }
 
@@ -166,6 +168,10 @@ struct CustomTargetLib {
     cfgs: Vec<String>,
     /// environment variables
     env: Vec<(String, String)>,
+    /// Whether this library is one of the standard libraries (not necessarily
+    /// `std` specifically). Used to determine whether to pass
+    /// standard-library-specific flags.
+    is_stdlib: bool,
 }
 
 impl CustomTarget<CustomTargetLib> {
@@ -666,6 +672,7 @@ fn main() {
                         .chain(cfgs)
                         .collect(),
                     env,
+                    is_stdlib: unit.is_std,
                 }
             }),
         dependencies: unit.dependencies,
@@ -699,6 +706,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         },
         vec![dep_compiler_builtins.clone(), dep_core.clone()],
     );
@@ -719,6 +727,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![dep_core.clone(), dep_compiler_builtins.clone()],
     });
@@ -733,6 +742,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![
             dep_core.clone(),
@@ -759,6 +769,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec!["feature=\"std\"".into()],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![dep_core, dep_std, dep_compiler_builtins],
     });
@@ -801,16 +812,6 @@ fn main() {
             .map(|lib| CmdInvocation {
                 program: "mir-json".into(),
                 args: {
-                    // Stdlib crates need `-Z force-unstable-if-unmarked` to
-                    // make stability attributes work properly.  But `crucible`
-                    // must not be built with this flag, since the flag makes
-                    // everything unstable by default, requiring users to use
-                    // `#[feature(rustc_private)]`.
-                    let enable_stability_attrs =
-                        !(&*lib.target.crate_name == EXTRA_LIB_CRUCIBLE
-                            || &*lib.target.crate_name == EXTRA_LIB_INT512
-                            || &*lib.target.crate_name == EXTRA_LIB_BYTES
-                            || &*lib.target.crate_name == EXTRA_LIB_BYTEORDER);
                     let mut args = vec![
                         lib.target.src_path.into(),
                         "--edition".into(),
@@ -840,7 +841,12 @@ fn main() {
                     args.push("rlib".into());
                     args.push("--remap-path-prefix".into());
                     args.push(format!("{}=.", cwd));
-                    if enable_stability_attrs {
+                    // Stdlib crates need `-Z force-unstable-if-unmarked` to
+                    // make stability attributes work properly.  But the extra
+                    // libs must not be built with this flag, since the flag
+                    // makes everything unstable by default, requiring users to
+                    // use `#[feature(rustc_private)]`.
+                    if lib.target.is_stdlib {
                         args.push("-Z".into());
                         args.push("force-unstable-if-unmarked".into());
                     }
