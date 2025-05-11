@@ -490,11 +490,6 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
     }
 }
 
-fn operand_span(mir: &MirState, op: &mir::Operand) -> Option<Span> {
-    let local = op.place()?.as_local()?;
-    Some(mir.mir?.local_decls[local].source_info.span)
-}
-
 impl ToJson<'_> for Span {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         let source_map = mir.state.session.source_map();
@@ -526,7 +521,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 let vals: Vec<String> =
                     targets.iter().map(|(c, _)| c.to_string()).collect();
                 let discr_span = mir.match_span_map.get(&self.source_info.span).cloned()
-                    .or_else(|| operand_span(mir, discr))
                     .unwrap_or(self.source_info.span);
                 json!({
                     "kind": "SwitchInt",
