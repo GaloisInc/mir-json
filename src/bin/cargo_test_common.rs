@@ -4,68 +4,77 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use rustc_session::config::host_tuple;
-use cargo::util::command_prelude::*;
-use toml_edit::easy::value::Value as TomlValue;
+use cargo::util::command_prelude::{*, Command as CargoCommand};
+use toml::Value as TomlValue;
 
-fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> App {
+fn cli(subcmd_name: &'static str, subcmd_descr: &'static str) -> CargoCommand {
     // Copy-pasted from
-    // https://github.com/rust-lang/cargo/blob/ba45764a2c0101a7bac8168f8ea8ba408e9ac6e9/src/bin/cargo/commands/test.rs,
+    // https://github.com/rust-lang/cargo/blob/d73d2caf9e41a39daf2a8d6ce60ec80bf354d2a7/src/bin/cargo/commands/test.rs,
     // with minor edits to the text.
     subcommand(subcmd_name)
         // Subcommand aliases are handled in `aliased_command()`.
         // .alias("t")
-        .trailing_var_arg(true)
         .about(subcmd_descr)
         .arg(
             Arg::new("TESTNAME")
+                .action(ArgAction::Set)
                 .help("If specified, only run tests containing this string in their names"),
         )
         .arg(
             Arg::new("args")
+                .value_name("ARGS")
                 .help("Arguments for the test binary")
-                .multiple_values(true)
+                .num_args(0..)
                 .last(true),
         )
+        .arg(flag("no-run", "Compile, but don't run tests"))
+        .arg(flag("no-fail-fast", "Run all tests regardless of failure"))
+        .arg_future_incompat_report()
+        .arg_message_format()
         .arg(
-            opt(
+            flag(
                 "quiet",
                 "Display one character per test instead of one line",
             )
             .short('q'),
         )
-        .arg_targets_all(
-            "Test only this package's library unit tests",
-            "Test only the specified binary",
-            "Test all binaries",
-            "Test only the specified example",
-            "Test all examples",
-            "Test only the specified test target",
-            "Test all tests",
-            "Test only the specified bench target",
-            "Test all benches",
-            "Test all targets",
-        )
-        .arg(opt("doc", "Test only this library's documentation"))
-        .arg(opt("no-run", "Compile, but don't run tests"))
-        .arg(opt("no-fail-fast", "Run all tests regardless of failure"))
         .arg_package_spec(
             "Package to run tests for",
             "Test all packages in the workspace",
             "Exclude packages from the test",
         )
+        .arg_targets_all(
+            "Test only this package's library",
+            "Test only the specified binary",
+            "Test all binaries",
+            "Test only the specified example",
+            "Test all examples",
+            "Test only the specified test target",
+            "Test all targets that have `test = true` set",
+            "Test only the specified bench target",
+            "Test all targets that have `bench = true` set",
+            "Test all targets (does not include doctests)",
+        )
+        .arg(
+            flag("doc", "Test only this library's documentation")
+                .help_heading(heading::TARGET_SELECTION),
+        )
+        .arg_features()
         .arg_jobs()
+        .arg_unsupported_keep_going()
         .arg_release("Build artifacts in release mode, with optimizations")
         .arg_profile("Build artifacts with the specified profile")
-        .arg_features()
         .arg_target_triple("Build for the target triple")
         .arg_target_dir()
-        .arg_manifest_path()
-        .arg_ignore_rust_version()
-        .arg_message_format()
         .arg_unit_graph()
-        .arg_future_incompat_report()
         .arg_timings()
-        .after_help("See `cargo test --help` for more information on these options.")
+        .arg_manifest_path()
+        .arg_lockfile_path()
+        .arg_ignore_rust_version()
+        .after_help(
+            "Run `<cyan,bold>cargo help test</>` for more detailed information.\n\
+             Run `<cyan,bold>cargo test -- --help</>` for test binary options.\n",
+        )
 }
 
 /// Get the list of crates for which crux-mir overrides should be used.
@@ -76,16 +85,20 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
     // a copy of `cargo test`'s command-line argument definitions (which are not exported), to
     // parse the arguments just like `cargo test` does and figure out which packages it intends to
     // test.
-    let config = cargo::Config::default()
-        .unwrap_or_else(|e| panic!("error initializing cargo config: {}", e));
-    let app = App::new(format!("cargo-{}", subcmd_name)).subcommand(cli(subcmd_name, subcmd_descr));
-    let args = app.get_matches();
+    let gctx = cargo::GlobalContext::default()
+        .unwrap_or_else(|e| panic!("error initializing cargo global context: {}", e));
+    let program_name = format!("cargo-{}", subcmd_name);
+    let cmd = CargoCommand::new("cargo")
+        .bin_name(program_name.clone())
+        .display_name(program_name)
+        .subcommand(cli(subcmd_name, subcmd_descr));
+    let args = cmd.get_matches();
     let args = args.subcommand_matches(subcmd_name)
         .unwrap_or_else(|| panic!("expected {} subcommand", subcmd_name));
-    let ws = args.workspace(&config)
+    let ws = args.workspace(&gctx)
         .unwrap_or_else(|e| panic!("error building workspace: {}", e));
     let opts = args.compile_options(
-        &config,
+        &gctx,
         CompileMode::Test,
         Some(&ws),
         ProfileChecking::Custom,
