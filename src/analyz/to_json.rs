@@ -359,17 +359,6 @@ pub struct MirState<'a, 'tcx : 'a> {
     pub used: &'a mut Used<'tcx>,
     pub state: &'a CompileState<'a, 'tcx>,
     pub tys: &'a mut TyIntern<'tcx>,
-    /// Maps the span of each pattern in a `match` expression to the span of the `match`'s
-    /// scrutinee expression.  We use this for coverage reporting: the `SwitchInt` terminator
-    /// introduced by the `match` will have its span set to one of the patterns, but we'd rather
-    /// report coverage errors on the scrutinee instead, so we adjust the `discr_span` of the
-    /// `SwitchInt` using this map.
-    ///
-    /// Note this works only for `match` expressions in the current crate.  Code inlined
-    /// cross-crate will not have an entry in this map, and will not have its `SwitchInt` spans
-    /// rewritten.  This seems okay for now since the user is mostly interested in coverage in
-    /// their own top-level crate anyway.
-    pub match_span_map: &'a HashMap<Span, Span>,
     pub allocs: &'a mut AllocIntern<'tcx>,
     pub export_style: ExportStyle,
 }

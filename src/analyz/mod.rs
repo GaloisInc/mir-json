@@ -520,12 +520,9 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
             } => {
                 let vals: Vec<String> =
                     targets.iter().map(|(c, _)| c.to_string()).collect();
-                let discr_span = mir.match_span_map.get(&self.source_info.span).cloned()
-                    .unwrap_or(self.source_info.span);
                 json!({
                     "kind": "SwitchInt",
                     "discr": discr.to_json(mir),
-                    "discr_span": discr_span.to_json(mir),
                     "values": vals,
                     "targets": targets.all_targets().iter().map(|x| x.to_json(mir))
                         .collect::<Vec<_>>(),
@@ -1081,7 +1078,6 @@ fn emit_fn<'tcx>(
         used: ms.used,
         state: ms.state,
         tys: ms.tys,
-        match_span_map: ms.match_span_map,
         allocs: ms.allocs,
         export_style: ms.export_style,
     };
@@ -1226,7 +1222,6 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         used: &mut used,
         state: &state,
         tys: &mut tys,
-        match_span_map: &get_match_spans(),
         allocs: &mut allocs,
         export_style: export_style,
     };
@@ -1349,87 +1344,4 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
 pub fn inject_attrs<'tcx>(krate: &mut Crate) {
     krate.attrs.push(make_attr("feature", "register_tool"));
     krate.attrs.push(make_attr("register_tool", "crux"));
-}
-
-#[derive(Default)]
-struct GatherMatchSpans {
-    match_span_map: HashMap<Span, Span>,
-    cur_match_discr_span: Option<Span>,
-}
-
-impl GatherMatchSpans {
-    fn with_cur_match_discr_span(&mut self, val: Option<Span>, f: impl FnOnce(&mut Self)) {
-        let old = mem::replace(&mut self.cur_match_discr_span, val);
-        f(self);
-        self.cur_match_discr_span = old;
-    }
-}
-
-impl<'a> visit::Visitor<'a> for GatherMatchSpans {
-    fn visit_expr(&mut self, e: &ast::Expr) {
-        match e.kind {
-            ast::ExprKind::Match(ref discr, ref arms, _kind) => {
-                self.visit_expr(discr);
-
-                self.with_cur_match_discr_span(Some(discr.span), |self_| {
-                    for arm in arms {
-                        self_.visit_arm(arm);
-                    }
-                });
-            },
-            _ => visit::walk_expr(self, e),
-        }
-    }
-
-    fn visit_arm(&mut self, a: &ast::Arm) {
-        // The discr span should be available in the patterns of the arm, but not its guard or body
-        // expressions.
-        self.visit_pat(&a.pat);
-        self.with_cur_match_discr_span(None, |self_| {
-            if let Some(ref e) = a.guard {
-                self_.visit_expr(e);
-            }
-            if let Some(ref e) = a.body {
-                self_.visit_expr(e);
-            }
-        });
-    }
-
-    fn visit_pat(&mut self, p: &ast::Pat) {
-        if let Some(span) = self.cur_match_discr_span {
-            self.match_span_map.insert(p.span, span);
-        }
-        visit::walk_pat(self, p)
-    }
-}
-
-thread_local! {
-    /// See documentation on `MirState::match_span_map` for info.
-    ///
-    /// The handling of the `match_span_map` is a little tricky.  The map must be constructed
-    /// during `rustc_driver::Callbacks::after_expansion`, then used during `after_analysis`.  We'd
-    /// like to pass the map from one callback to the other through our struct that implements
-    /// `Callbacks`, but this is forbidden: the callbacks must implement `Send`, while `Span` is
-    /// `!Send` and `!Sync`.  Instead, we pass it through this thread-local variable, and just hope
-    /// that `after_expansion` and `after_analysis` get called on the same thread.  It seems likely
-    /// that they will be, since both get access to data structures that contain spans, and the
-    /// span interning table is also thread-local (likely this is why spans are `!Sync`).
-    static MATCH_SPAN_MAP: RefCell<Option<Rc<HashMap<Span, Span>>>> = RefCell::default()
-}
-
-pub fn gather_match_spans<'tcx>(tcx: TyCtxt<'tcx>) {
-    let resolver = tcx.resolver_for_lowering();
-    let krate = &resolver.borrow().1;
-    let mut v = GatherMatchSpans::default();
-    visit::walk_crate(&mut v, krate);
-    MATCH_SPAN_MAP.with(|m| m.replace(Some(Rc::new(v.match_span_map))));
-}
-
-fn get_match_spans() -> Rc<HashMap<Span, Span>> {
-    MATCH_SPAN_MAP.with(|m| {
-        match *m.borrow() {
-            Some(ref rc) => rc.clone(),
-            None => panic!("MATCH_SPAN_MAP is uninitialized on this thread"),
-        }
-    })
 }
