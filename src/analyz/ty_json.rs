@@ -216,8 +216,8 @@ pub fn inst_id_str<'tcx>(
                 } => todo!("RUSTUP_TODO: newly added variant"),
                 ty::InstanceKind::ThreadLocalShim(def_id) =>
                     todo!("RUSTUP_TODO: newly added variant"),
-                ty::InstanceKind::FnPtrAddrShim(def_id, ty) =>
-                    todo!("RUSTUP_TODO: newly added variant"),
+                ty::InstanceKind::FnPtrAddrShim(def_id, _ty) =>
+                    ext_def_id_str(tcx, def_id, "_fnptraddr", args),
                 ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) =>
                     todo!("RUSTUP_TODO: newly added variant"),
             }
@@ -426,7 +426,9 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             },
             ty::InstanceKind::ConstructCoroutineInClosureShim { coroutine_closure_def_id, receiver_by_ref } => todo!("RUSTUP_TODO: new variant added"),
             ty::InstanceKind::ThreadLocalShim(def_id) => todo!("RUSTUP_TODO: new variant added"),
-            ty::InstanceKind::FnPtrAddrShim(def_id, ty) => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::FnPtrAddrShim(_def_id, _ty) => json!({
+                "kind": "Unsupported",
+            }),
             ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) => todo!("RUSTUP_TODO: new variant added"),
         }
     }
