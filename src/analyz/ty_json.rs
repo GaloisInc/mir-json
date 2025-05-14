@@ -1,20 +1,17 @@
-use std::convert::TryFrom;
 use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
-use rustc_hir::lang_items::{self, LangItem};
+use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_const_eval::interpret::{
-    self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable, Provenance,
+    self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable,
 };
-use rustc_const_eval::const_eval::CheckAlignment;
-use rustc_middle::bug;
 use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
-use rustc_middle::ty::util::{IntTypeExt};
+use rustc_middle::ty::util::IntTypeExt;
 use rustc_query_system::ich::StableHashingContext;
-use rustc_abi::{self, Align, ExternAbi, FieldIdx, FieldsShape, HasDataLayout, Size};
+use rustc_abi::{Align, ExternAbi, FieldIdx, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
 use std::usize;
@@ -161,13 +158,11 @@ pub fn adt_inst_id_str<'tcx>(
     tcx: TyCtxt<'tcx>,
     ai: AdtInst<'tcx>,
 ) -> String {
-    if let Some(lang) = rename_as_lang_item(tcx, ai.def_id()) {
-        // For lang items that have no generics, we omit the unpredictable hash from the `_adtXXX`
-        // segment at the end.  This lets us mention the name in crucible-mir.
-        if tcx.generics_of(ai.def_id()).is_empty() {
-            let base = def_id_str(tcx, ai.def_id());
-            return format!("{}::_adt[0]", base);
-        }
+    // For lang items that have no generics, we omit the unpredictable hash from the `_adtXXX`
+    // segment at the end.  This lets us mention the name in crucible-mir.
+    if rename_as_lang_item(tcx, ai.def_id()).is_some() && tcx.generics_of(ai.def_id()).is_empty() {
+        let base = def_id_str(tcx, ai.def_id());
+        return format!("{}::_adt[0]", base);
     }
 
     // Erase all early-bound regions.
@@ -1011,8 +1006,8 @@ mod machine {
         }
 
         fn get_global_alloc_salt(
-            ecx: &InterpCx<'tcx, Self>,
-            instance: Option<ty::Instance<'tcx>>,
+            _ecx: &InterpCx<'tcx, Self>,
+            _instance: Option<ty::Instance<'tcx>>,
         ) -> usize {
             mir::interpret::CTFE_ALLOC_SALT
         }
@@ -1328,7 +1323,7 @@ fn make_allocation_body<'tcx>(
                 "ty": aty.to_json(mir),
                 "rendered": rendered,
             })
-        };
+        }
 
         match *rty.kind() {
             // Special cases for &str, &CStr, and &[T]

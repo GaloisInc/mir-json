@@ -1,26 +1,22 @@
 #![macro_use]
 
-use rustc_ast::{ast, token, tokenstream, visit, ptr, Crate};
+use rustc_ast::{ast, token, tokenstream, ptr, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
 use rustc_middle::mir::mono::MonoItem;
-use rustc_session::{self, Session};
+use rustc_session;
 use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::iter;
 use std::fs::File;
-use std::mem;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use serde_json;
 use serde_cbor;
 
@@ -544,7 +540,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
             &mir::TerminatorKind::Drop {
                 place: ref location,
                 ref target,
-                ref unwind,
+                unwind: _,
                 replace: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.tcx).ty;
@@ -564,8 +560,8 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref args,
                 destination: ref dest_place,
                 target: ref dest_block,
-                ref unwind,
-                ref call_source,
+                unwind: _,
+                call_source: _,
                 fn_span: _,
             } => {
                 let destination = dest_block.as_ref().map(|dest_block| {
@@ -607,7 +603,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref expected,
                 ref msg,
                 ref target,
-                ref unwind,
+                unwind: _,
             } => {
                 json!({
                     "kind": "Assert",
@@ -1056,7 +1052,7 @@ fn emit_adt<'tcx>(
     let adt_orig_did = ai.adt.did();
     let adt_orig_name = orig_def_id_str(tcx, adt_orig_did);
     let adt_orig_lang_item_name = lang_item_def_id_str(tcx, adt_orig_did);
-    emit_lang_item(ms, out, &adt_orig_name, adt_orig_lang_item_name.as_deref())?;
+    emit_lang_item(out, &adt_orig_name, adt_orig_lang_item_name.as_deref())?;
 
     emit_new_defs(ms, out)?;
     Ok(())
@@ -1100,7 +1096,6 @@ fn emit_fn<'tcx>(
 /// `lang_item_def_id_str` is a `Some` value), then output the lang item's ID
 /// and its original ID to `out.lang_items`. Otherwise, do nothing.
 fn emit_lang_item(
-    ms: &mut MirState,
     out: &mut impl JsonOutput,
     orig_def_id_str: &str,
     lang_item_def_id_str: Option<&str>,
@@ -1169,7 +1164,6 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     export_style: ExportStyle,
     mk_output: F,
 ) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
-    let mut mir_path = None;
     let mut extern_mir_paths = Vec::new();
 
     let outputs = tcx.output_filenames(());
@@ -1182,14 +1176,13 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         &outputs,
         tcx.crate_name(LOCAL_CRATE),
     );
-    let mir_path_ = match out_path {
+    let mir_path = match out_path {
         OutFileName::Real(path) => path.with_extension("mir"),
         OutFileName::Stdout => {
             tcx.sess.dcx().fatal("writing output to stdout is not supported");
         },
     };
-    let mut out = mk_output(&mir_path_)?;
-    mir_path = Some(mir_path_);
+    let mut out = mk_output(&mir_path)?;
 
     for &cnum in tcx.crates(()) {
         let src = tcx.used_crate_source(cnum);
@@ -1245,11 +1238,6 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     // Any referenced types should normally be emitted immediately after the entry that
     // references them, but we check again here just in case.
     emit_new_defs(&mut ms, &mut out)?;
-
-    let mir_path = match mir_path {
-        Some(x) => x,
-        None => return Ok(None),
-    };
 
     Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out }))
 }

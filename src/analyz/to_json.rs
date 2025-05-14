@@ -7,8 +7,6 @@ use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, Cast
 use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
-use rustc_session::Session;
-use rustc_span::Span;
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::Symbol;
 use serde_json;

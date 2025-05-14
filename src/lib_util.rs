@@ -237,7 +237,7 @@ impl EmitterState {
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
         for (name, v) in self.dep_map {
-            let mut data = items.entry(name).or_insert_with(ItemData::default);
+            let data = items.entry(name).or_insert_with(ItemData::default);
 
             data.deps = v.into_iter().collect::<Vec<_>>();
             data.deps.sort();
