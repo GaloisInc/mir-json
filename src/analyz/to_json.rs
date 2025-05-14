@@ -20,11 +20,6 @@ use std::ops::Deref;
 use std::mem;
 
 
-pub struct CompileState<'a, 'tcx> {
-    pub session: &'a Session,
-    pub tcx: TyCtxt<'tcx>,
-}
-
 #[derive(Clone, Debug)]
 pub struct UsedSet<T: Hash+Eq> {
     cur: HashSet<T>,
@@ -357,7 +352,7 @@ impl<'tcx> AllocIntern<'tcx> {
 pub struct MirState<'a, 'tcx : 'a> {
     pub mir: Option<&'tcx Body<'tcx>>,
     pub used: &'a mut Used<'tcx>,
-    pub state: &'a CompileState<'a, 'tcx>,
+    pub tcx: TyCtxt<'tcx>,
     pub tys: &'a mut TyIntern<'tcx>,
     pub allocs: &'a mut AllocIntern<'tcx>,
     pub export_style: ExportStyle,
