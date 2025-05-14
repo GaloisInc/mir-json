@@ -1204,7 +1204,9 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Ref(_, rty, mutability) =>
             try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
 
-        ty::TyKind::FnDef(_, _) => json!({"kind": "zst"}),
+        ty::TyKind::FnDef(_, _) |
+        ty::TyKind::Never => json!({"kind": "zst"}),
+
         ty::TyKind::FnPtr(_sig_tys, _hdr) => {
             let ptr = icx.read_pointer(op_ty).unwrap();
             let (prov, _offset) = ptr.into_parts();
@@ -1252,7 +1254,6 @@ pub fn try_render_opty<'tcx>(
         }
         ty::TyKind::Coroutine(_, _) => todo!("coroutine not supported yet"), // not supported in haskell
         ty::TyKind::CoroutineWitness(_, _) => todo!("coroutinewitness not supported yet"), // not supported in haskell
-        ty::TyKind::Never => unreachable!("never type should be uninhabited"),
 
         ty::TyKind::Tuple(elts) => {
             let mut vals = Vec::with_capacity(elts.len());
