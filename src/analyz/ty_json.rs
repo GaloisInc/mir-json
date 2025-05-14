@@ -211,15 +211,14 @@ pub fn inst_id_str<'tcx>(
                 ty::InstanceKind::CloneShim(def_id, _) =>
                     ext_def_id_str(tcx, def_id, "_shim", args),
                 ty::InstanceKind::ConstructCoroutineInClosureShim {
-                    coroutine_closure_def_id,
-                    receiver_by_ref,
-                } => todo!("RUSTUP_TODO: newly added variant"),
+                    coroutine_closure_def_id, ..
+                } => ext_def_id_str(tcx, coroutine_closure_def_id, "_corocallonce", args),
                 ty::InstanceKind::ThreadLocalShim(def_id) =>
-                    todo!("RUSTUP_TODO: newly added variant"),
+                    ext_def_id_str(tcx, def_id, "_threadlocal", args),
                 ty::InstanceKind::FnPtrAddrShim(def_id, _ty) =>
                     ext_def_id_str(tcx, def_id, "_fnptraddr", args),
-                ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) =>
-                    todo!("RUSTUP_TODO: newly added variant"),
+                ty::InstanceKind::AsyncDropGlueCtorShim(def_id, _ty) =>
+                    ext_def_id_str(tcx, def_id, "_asyncdrop", args),
             }
         },
         FnInst::ClosureFnPointer(base_inst) => {
@@ -424,12 +423,18 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "callees": callees.to_json(mir),
                 })
             },
-            ty::InstanceKind::ConstructCoroutineInClosureShim { coroutine_closure_def_id, receiver_by_ref } => todo!("RUSTUP_TODO: new variant added"),
-            ty::InstanceKind::ThreadLocalShim(def_id) => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::ConstructCoroutineInClosureShim { .. } => json!({
+                "kind": "Unsupported",
+            }),
+            ty::InstanceKind::ThreadLocalShim(_def_id) => json!({
+                "kind": "Unsupported",
+            }),
             ty::InstanceKind::FnPtrAddrShim(_def_id, _ty) => json!({
                 "kind": "Unsupported",
             }),
-            ty::InstanceKind::AsyncDropGlueCtorShim(def_id, ty) => todo!("RUSTUP_TODO: new variant added"),
+            ty::InstanceKind::AsyncDropGlueCtorShim(_def_id, _ty) => json!({
+                "kind": "Unsupported",
+            }),
         }
     }
 }
@@ -576,10 +581,18 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Alias"})
             }
-            &ty::TyKind::Pat(_, _) => todo!("RUSTUP_TODO: new variant added"),
-            &ty::TyKind::UnsafeBinder(unsafe_binder_inner) => todo!("RUSTUP_TODO: new variant added"),
-            &ty::TyKind::CoroutineClosure(_, _) => todo!("RUSTUP_TODO: new variant added"),
-            &ty::TyKind::Alias(alias_ty_kind, alias_ty) => todo!("RUSTUP_TODO: new variant added"),
+            &ty::TyKind::Pat(_, _) => {
+                json!({"kind": "Unsupported"})
+            },
+            &ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
+                json!({"kind": "Unsupported"})
+            },
+            &ty::TyKind::CoroutineClosure(_, _) => {
+                json!({"kind": "Unsupported"})
+            },
+            &ty::TyKind::Alias(_alias_ty_kind, _alias_ty) => {
+                json!({"kind": "Unsupported"})
+            },
         };
 
         let id = mir.tys.insert(*self, j);
@@ -789,6 +802,7 @@ mod machine {
         type ExtraFnVal = !;
         type FrameExtra = ();
         type AllocExtra = ();
+        type Bytes = Box<[u8]>;
         type MemoryMap = FxIndexMap<
             AllocId,
             (MemoryKind<!>, Allocation),
@@ -857,6 +871,13 @@ mod machine {
             )).into()
         }
 
+        fn check_fn_target_features(
+            _ecx: &InterpCx<'tcx, Self>,
+            _instance: ty::Instance<'tcx>,
+        ) -> InterpResult<'tcx> {
+            interp_ok(())
+        }
+
         fn assert_panic(
             _ecx: &mut InterpCx<'tcx, Self>,
             _msg: &mir::AssertMessage<'tcx>,
@@ -867,6 +888,17 @@ mod machine {
                     "assert_panic".into(),
                 ),
             )).into()
+        }
+
+        fn panic_nounwind(_ecx: &mut InterpCx<'tcx, Self>, _msg: &str) -> InterpResult<'tcx> {
+            unreachable!("rustc typechecked code should not reach this point")
+        }
+
+        fn unwind_terminate(
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _reason: mir::UnwindTerminateReason,
+        ) -> InterpResult<'tcx> {
+            unreachable!("rustc typechecked code should not reach this point")
         }
 
         fn binary_ptr_op(
@@ -882,6 +914,14 @@ mod machine {
             )).into()
         }
 
+        fn ub_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
+            interp_ok(false)
+        }
+
+        fn contract_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
+            interp_ok(false)
+        }
+
         fn extern_static_pointer(
             _ecx: &InterpCx<'tcx, Self>,
             _def_id: DefId,
@@ -891,14 +931,6 @@ mod machine {
                     "extern_static_base_pointer".into(),
                 ),
             )).into()
-        }
-
-        fn adjust_alloc_root_pointer(
-            _ecx: &InterpCx<'tcx, Self>,
-            ptr: Pointer,
-            _kind: Option<MemoryKind<Self::MemoryKind>>,
-        ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
-            interp_ok(ptr)
         }
 
         fn ptr_from_addr_cast(
@@ -936,6 +968,24 @@ mod machine {
             interp_ok(Cow::Borrowed(alloc))
         }
 
+        fn init_alloc_extra(
+            _ecx: &InterpCx<'tcx, Self>,
+            _id: AllocId,
+            _kind: MemoryKind<Self::MemoryKind>,
+            _size: Size,
+            _align: Align,
+        ) -> InterpResult<'tcx, Self::AllocExtra> {
+            interp_ok(())
+        }
+
+        fn adjust_alloc_root_pointer(
+            _ecx: &InterpCx<'tcx, Self>,
+            ptr: Pointer,
+            _kind: Option<MemoryKind<Self::MemoryKind>>,
+        ) -> InterpResult<'tcx, Pointer<Self::Provenance>> {
+            interp_ok(ptr)
+        }
+
         fn init_frame(
             _ecx: &mut InterpCx<'tcx, Self>,
             _frame: Frame<'tcx, Self::Provenance>,
@@ -958,48 +1008,6 @@ mod machine {
             _ecx: &'a mut InterpCx<'tcx, Self>,
         ) -> &'a mut Vec<Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
             unimplemented!("stack_mut")
-        }
-
-        // RUSTUP_TODO: these things were newly added to the trait so they are all at the bottom
-        // after implementing we can put them in the right places in this impl block
-
-        // RUSTUP_TODO: Newly added associated type (I put the Box<[u8]> to get it to compile, idk what it's actually supposed to be)
-        type Bytes = Box<[u8]>;
-
-        fn check_fn_target_features(
-            _ecx: &InterpCx<'tcx, Self>,
-            _instance: ty::Instance<'tcx>,
-        ) -> InterpResult<'tcx> {
-            todo!("RUSTUP_TODO: newly added method")
-        }
-
-        fn panic_nounwind(_ecx: &mut InterpCx<'tcx, Self>, msg: &str) -> InterpResult<'tcx> {
-            todo!("RUSTUP_TODO: newly added method")
-        }
-
-        fn unwind_terminate(
-            ecx: &mut InterpCx<'tcx, Self>,
-            reason: mir::UnwindTerminateReason,
-        ) -> InterpResult<'tcx> {
-            todo!("RUSTUP_TODO: newly added method")
-        }
-
-        fn ub_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
-            todo!("RUSTUP_TODO: newly added method")
-        }
-
-        fn contract_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
-            todo!("RUSTUP_TODO: newly added method")
-        }
-
-        fn init_alloc_extra(
-            ecx: &InterpCx<'tcx, Self>,
-            id: AllocId,
-            kind: MemoryKind<Self::MemoryKind>,
-            size: Size,
-            align: Align,
-        ) -> InterpResult<'tcx, Self::AllocExtra> {
-            todo!("RUSTUP_TODO: newly added method")
         }
 
         fn get_global_alloc_salt(
@@ -1272,9 +1280,15 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Infer(_) => unreachable!("infer is not a real type?"),
         ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
 
-        ty::TyKind::Pat(_, _) => todo!("RUSTUP_TODO: new variant added"),
-        ty::TyKind::UnsafeBinder(unsafe_binder_inner) => todo!("RUSTUP_TODO: new variant added"),
-        ty::TyKind::CoroutineClosure(_, _) => todo!("RUSTUP_TODO: new variant added"),
+        ty::TyKind::Pat(_, _) => {
+            json!({"kind": "unsupported"})
+        },
+        ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
+            json!({"kind": "unsupported"})
+        },
+        ty::TyKind::CoroutineClosure(_, _) => {
+            json!({"kind": "unsupported"})
+        },
     })
 }
 
