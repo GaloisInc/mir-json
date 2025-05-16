@@ -16,16 +16,17 @@ use std::{
     env, fmt, fs,
     io::BufReader,
     os::unix,
+    path::Path,
     process::{Command, Stdio},
 };
 
 use cargo_metadata::{
     camino::{Utf8Path, Utf8PathBuf},
-    Edition, Message, PackageId, Target,
+    Artifact, Edition, Message, Target,
 };
 use serde::Deserialize;
 use shell_escape::escape;
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 
 const EXTRA_LIB_CRUCIBLE: &str = "crucible";
 const EXTRA_LIB_INT512: &str = "int512";
@@ -38,21 +39,28 @@ const EMPTY_PROJECT_NAME: &str = "mir-json-translate-libs-empty-project";
 
 /// Deserialized form of cargo --unit-graph JSON output.
 /// See https://doc.rust-lang.org/cargo/reference/unstable.html#unit-graph
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct UnitGraph {
     version: u32,
     units: Vec<UnitGraphUnit>,
     roots: Vec<usize>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct UnitGraphUnit {
-    pkg_id: PackageId,
+    /// This is not `PackageId` since its format is incompatible with the one
+    /// from cargo metadata. This has been fixed in
+    /// https://github.com/rust-lang/cargo/pull/15447, so the next time we
+    /// upgrade the Rust version we can change this back to `PackageId` and key
+    /// `artifact_outputs` with it instead of `src_path`.
+    pkg_id: String,
     target: Target,
+    #[serde(default)]
+    is_std: bool,
     dependencies: Vec<UnitGraphDependency>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct UnitGraphDependency {
     index: usize,
     extern_crate_name: CrateName,
@@ -61,6 +69,7 @@ struct UnitGraphDependency {
 /// Module to hide field of newtype [CrateName].
 mod crate_name {
     use std::fmt;
+    use std::ops::Deref;
 
     use serde::Deserialize;
 
@@ -72,7 +81,7 @@ mod crate_name {
     /// package names.
     ///
     /// Construct with [From<&str>].
-    #[derive(Clone, Deserialize, PartialEq)]
+    #[derive(Clone, Debug, Deserialize, PartialEq)]
     pub struct CrateName(String);
 
     impl From<&str> for CrateName {
@@ -92,6 +101,13 @@ mod crate_name {
             self.0.fmt(f)
         }
     }
+
+    impl Deref for CrateName {
+        type Target = str;
+        fn deref(&self) -> &str {
+            &self.0
+        }
+    }
 }
 use crate_name::CrateName;
 
@@ -103,20 +119,34 @@ struct CustomUnitGraph {
 }
 
 struct CustomUnit {
-    target: CustomTarget,
+    target: CustomTarget<CustomTargetLib>,
     dependencies: Vec<UnitGraphDependency>,
 }
 
-enum CustomTarget {
+enum CustomTarget<L> {
     /// A library to be compiled for the target architecture. We really only
     /// care about the target information for these, so only this variant has
     /// fields.
-    TargetLib(CustomTargetLib),
+    TargetLib(L),
     /// A dependency to be compiled for the host, like a build script or proc
     /// macro.
     HostDep,
     /// A binary that is not a [CustomTarget::HostDep].
     FinalBin,
+}
+
+impl<L> CustomTarget<L> {
+    /// Map inside [CustomTarget::TargetLib].
+    fn map_lib<M, F>(self, f: F) -> CustomTarget<M>
+    where
+        F: FnOnce(L) -> M,
+    {
+        match self {
+            CustomTarget::TargetLib(lib) => CustomTarget::TargetLib(f(lib)),
+            CustomTarget::HostDep => CustomTarget::HostDep,
+            CustomTarget::FinalBin => CustomTarget::FinalBin,
+        }
+    }
 }
 
 /// The fields here are a combination of the fields we care about from [Target],
@@ -138,14 +168,72 @@ struct CustomTargetLib {
     cfgs: Vec<String>,
     /// environment variables
     env: Vec<(String, String)>,
+    /// Whether this library is one of the standard libraries (not necessarily
+    /// `std` specifically). Used to determine whether to pass
+    /// standard-library-specific flags.
+    is_stdlib: bool,
 }
 
-impl CustomTarget {
+impl CustomTarget<CustomTargetLib> {
     fn is_target_lib_with_crate_name(&self, crate_name: &CrateName) -> bool {
         match self {
             Self::TargetLib(lib) if lib.crate_name == *crate_name => true,
             _ => false,
         }
+    }
+}
+
+/// Classify the given [Target] as one of the [CustomTarget] variants.
+fn custom_kind_of_target(target: &Target) -> CustomTarget<()> {
+    if target.is_custom_build()
+        || target.crate_types.iter().any(|t| t == "proc-macro")
+    {
+        CustomTarget::HostDep
+    } else if target.crate_types.iter().any(|t| t == "bin") {
+        CustomTarget::FinalBin
+    } else {
+        CustomTarget::TargetLib(())
+    }
+}
+
+/// Info about a library's source location.
+struct LibPathInfo<'a> {
+    /// The artifact output corresponding to the library.
+    artifact: &'a Artifact,
+    /// The directory of the library's original source (specifically, the
+    /// directory of its Cargo.toml).
+    orig_pkg_dir: &'a Utf8Path,
+    /// The directory of the library's custom (patched) source.
+    custom_pkg_dir: Utf8PathBuf,
+}
+
+impl UnitGraphUnit {
+    /// If it is a library, compute [LibPathInfo] for this unit with the given
+    /// artifact output map and custom sources directory.
+    fn get_pkg_path_info<'a>(
+        &self,
+        artifact_outputs: &'a HashMap<Utf8PathBuf, Artifact>,
+        sources_dir: &Utf8Path,
+    ) -> CustomTarget<LibPathInfo<'a>> {
+        custom_kind_of_target(&self.target).map_lib(|()| {
+            let artifact = artifact_outputs
+                .get(&self.target.src_path)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "library {} (src_path {}) \
+                        should have a compiler artifact",
+                        self.pkg_id, self.target.src_path
+                    )
+                });
+            LibPathInfo {
+                artifact,
+                orig_pkg_dir: artifact
+                    .manifest_path
+                    .parent()
+                    .expect("manifest path should be a file"),
+                custom_pkg_dir: sources_dir.join(&self.target.name),
+            }
+        })
     }
 }
 
@@ -334,11 +422,29 @@ fn main() {
             clap::Arg::new("target")
                 .long("target")
                 .value_name("TARGET")
-                .default_value(rustc_session::config::host_triple())
+                .default_value(rustc_session::config::host_tuple())
                 .help("Rust target triple to configure the libraries for"),
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",
             ),
+            clap::Arg::new("debug")
+                .long("debug")
+                .help("Emit debug output on stderr"),
+            clap::Arg::new("keep-temp-build")
+                .long("keep-temp-build")
+                .help(
+                    "Persist the temporary cargo package created to run \
+                    `cargo test -Z build-std`",
+                ),
+            clap::Arg::new("copy-sources")
+                .long("copy-sources")
+                .value_name("NEW_LIBS")
+                .help(
+                    "Instead of translating the existing custom standard \
+                    libraries, copy all upstream standard library sources to \
+                    the given directory and exit (used for upgrading Rust \
+                    toolchain)",
+                ),
         ])
         .get_matches();
     let custom_sources_dir = match arg_matches.value_of("libs") {
@@ -356,6 +462,11 @@ fn main() {
     };
     let target_triple = arg_matches.value_of("target").unwrap();
     let generate_only = arg_matches.is_present("generate");
+    let debug_enabled = arg_matches.is_present("debug");
+    let keep_temp_build = arg_matches.is_present("keep-temp-build");
+    let new_sources_dir = arg_matches
+        .value_of("copy-sources")
+        .map(|path| out_dir.join(path));
 
     // Compute the paths that we will use later to store the build artifacts,
     // but don't actually create them yet.
@@ -379,8 +490,16 @@ fn main() {
 
     // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
-    let empty_project_dir =
-        tempdir().expect("temporary directory should be able to be created");
+    let temp_dir =
+        TempDir::with_prefix_in(EMPTY_PROJECT_NAME.to_owned() + "-", out_dir)
+            .expect("temporary directory should be able to be created");
+    let empty_project_dir = if keep_temp_build {
+        let path = temp_dir.into_path();
+        eprintln!("Empty cargo package path: {}", path.display());
+        path
+    } else {
+        temp_dir.path().to_path_buf()
+    };
     let cargo_init_status = Command::new("cargo")
         .current_dir(&empty_project_dir)
         .arg("init")
@@ -397,14 +516,16 @@ fn main() {
     // Run `cargo test -Z build-std` to obtain compiler artifact and build
     // script result messages.
     eprintln!("Running cargo test...");
-    let mut cargo_test_child =
-        cargo_test_cmd(&empty_project_dir, target_triple)
-            .arg("--message-format")
-            .arg("json")
-            .arg("--no-run")
-            .stdout(Stdio::piped())
+    let mut cargo_test_child = {
+        let mut cmd = cargo_test_cmd(&empty_project_dir, target_triple);
+        cmd.arg("--message-format").arg("json").arg("--no-run");
+        if debug_enabled {
+            cmd.arg("--verbose");
+        }
+        cmd.stdout(Stdio::piped())
             .spawn()
-            .expect("cargo test should run");
+            .expect("cargo test should run")
+    };
     let cargo_test_child_stdout = cargo_test_child
         .stdout
         .take()
@@ -413,15 +534,16 @@ fn main() {
     let mut artifact_outputs = HashMap::new();
     let mut build_script_outputs = HashMap::new();
     for msg in Message::parse_stream(cargo_test_child_stdout) {
-        match msg.expect("reading cargo test output should succeed") {
+        let msg = msg.expect("reading cargo test output should succeed");
+        if debug_enabled {
+            eprintln!("Received cargo test message:\n{:#?}", msg);
+        }
+        match msg {
             Message::CompilerArtifact(art) => {
-                if art
-                    .target
-                    .crate_types
-                    .iter()
-                    .all(|t| t != "bin" && t != "proc-macro")
+                if let CustomTarget::TargetLib(()) =
+                    custom_kind_of_target(&art.target)
                 {
-                    artifact_outputs.insert(art.package_id.clone(), art);
+                    artifact_outputs.insert(art.target.src_path.clone(), art);
                 }
             }
             Message::BuildScriptExecuted(bs) => {
@@ -434,6 +556,10 @@ fn main() {
         cargo_test_child.wait().expect("cargo test should have run");
     if !cargo_test_child_status.success() {
         panic!("cargo test exited with {}", cargo_test_child_status);
+    }
+    if debug_enabled {
+        eprintln!("artifact outputs:\n{:#?}", artifact_outputs);
+        eprintln!("build script outputs:\n{:#?}", build_script_outputs);
     }
 
     // Run `cargo test -Z build-std --unit-graph` to obtain unit graph.
@@ -453,55 +579,81 @@ fn main() {
             unit_graph.version
         );
     }
+    if debug_enabled {
+        eprintln!("cargo unit graph:\n{:#?}", unit_graph);
+    }
+
+    // If in copy-sources mode, copy the sources then exit
+    if let Some(new_sources_dir) = new_sources_dir {
+        fs::create_dir_all(&new_sources_dir)
+            .expect("creating copy-sources directory should succeed");
+        fn copy(orig_dir: &Utf8Path, custom_dir: &Utf8Path) {
+            eprintln!("Copying {} to {}", orig_dir, custom_dir);
+            copy_dir(orig_dir, custom_dir);
+        }
+        for unit in &unit_graph.units {
+            if let CustomTarget::TargetLib(path_info) =
+                unit.get_pkg_path_info(&artifact_outputs, &new_sources_dir)
+            {
+                copy(path_info.orig_pkg_dir, &path_info.custom_pkg_dir);
+                // These modules are located outside of the `core`/`std` source
+                // tree but compiled together with `core`/`std` using #[path],
+                // so they don't show up in the unit graph and we have to add
+                // them manually. `core`/`std` expects them to be located
+                // alongside `core`/`std`.
+                if unit.target.name == "core" {
+                    copy(
+                        &path_info.orig_pkg_dir.with_file_name("stdarch"),
+                        &path_info.custom_pkg_dir.with_file_name("stdarch"),
+                    );
+                    copy(
+                        &path_info.orig_pkg_dir.with_file_name("portable-simd"),
+                        &path_info
+                            .custom_pkg_dir
+                            .with_file_name("portable-simd"),
+                    );
+                } else if unit.target.name == "std" {
+                    copy(
+                        &path_info.orig_pkg_dir.with_file_name("backtrace"),
+                        &path_info.custom_pkg_dir.with_file_name("backtrace"),
+                    );
+                }
+            }
+        }
+        eprintln!("Remember to add extra libs (e.g. crucible)!");
+        return;
+    }
 
     // Process the unit graph, rewriting source file paths to point to our
     // patched versions of the standard library sources, and incorporating
     // information from artifact and build script result messages.
     eprintln!("Processing unit graph...");
     let convert_unit = |unit: UnitGraphUnit| CustomUnit {
-        target: {
-            if unit.target.is_custom_build()
-                || unit.target.crate_types.iter().any(|t| t == "proc-macro")
-            {
-                CustomTarget::HostDep
-            } else if unit.target.crate_types.iter().any(|t| t == "bin") {
-                CustomTarget::FinalBin
-            } else {
-                let artifact =
-                    artifact_outputs.get(&unit.pkg_id).unwrap_or_else(|| {
-                        panic!(
-                            "library {} should have a compiler artifact",
-                            unit.pkg_id
-                        )
-                    });
+        target: unit
+            .get_pkg_path_info(&artifact_outputs, &custom_sources_dir)
+            .map_lib(|path_info| {
                 // Compute the patched source file path by finding the original
-                // file's relative path to its Cargo.toml, then joining that
-                // with our patched sources directory.
-                let orig_pkg_dir = artifact
-                    .manifest_path
-                    .parent()
-                    .expect("manifest path should be a file");
-                let rel_src_path =
-                    unit.target.src_path.strip_prefix(orig_pkg_dir).expect(
+                // file's relative path to its package directory, then joining
+                // that with our patched package directory.
+                let rel_src_path = unit
+                    .target
+                    .src_path
+                    .strip_prefix(path_info.orig_pkg_dir)
+                    .expect(
                         "source file should be inside directory of Cargo.toml",
                     );
-                let src_path = [
-                    custom_sources_dir.as_path(),
-                    Utf8Path::new(&unit.target.name),
-                    rel_src_path,
-                ]
-                .iter()
-                .collect();
                 let (linked_libs, linked_paths, cfgs, env) =
-                    match build_script_outputs.remove(&unit.pkg_id) {
+                    match build_script_outputs
+                        .remove(&path_info.artifact.package_id)
+                    {
                         Some(bs) => {
                             (bs.linked_libs, bs.linked_paths, bs.cfgs, bs.env)
                         }
                         None => (vec![], vec![], vec![], vec![]),
                     };
-                CustomTarget::TargetLib(CustomTargetLib {
+                CustomTargetLib {
                     crate_name: unit.target.name.as_str().into(),
-                    src_path,
+                    src_path: path_info.custom_pkg_dir.join(rel_src_path),
                     edition: unit.target.edition,
                     linked_libs,
                     linked_paths,
@@ -512,16 +664,17 @@ fn main() {
                     // message version because it is closer to an actual
                     // invocation of rustc. Not sure if there is actually a
                     // difference.
-                    cfgs: artifact
+                    cfgs: path_info
+                        .artifact
                         .features
                         .iter()
                         .map(|f| format!("feature=\"{f}\""))
                         .chain(cfgs)
                         .collect(),
                     env,
-                })
-            }
-        },
+                    is_stdlib: unit.is_std,
+                }
+            }),
         dependencies: unit.dependencies,
     };
 
@@ -553,6 +706,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         },
         vec![dep_compiler_builtins.clone(), dep_core.clone()],
     );
@@ -573,6 +727,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![dep_core.clone(), dep_compiler_builtins.clone()],
     });
@@ -587,6 +742,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec![],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![
             dep_core.clone(),
@@ -613,6 +769,7 @@ fn main() {
             linked_paths: vec![],
             cfgs: vec!["feature=\"std\"".into()],
             env: vec![],
+            is_stdlib: false,
         }),
         dependencies: vec![dep_core, dep_std, dep_compiler_builtins],
     });
@@ -684,6 +841,20 @@ fn main() {
                     args.push("rlib".into());
                     args.push("--remap-path-prefix".into());
                     args.push(format!("{}=.", cwd));
+                    // Stdlib crates need `-Z force-unstable-if-unmarked` to
+                    // make stability attributes work properly.  But the extra
+                    // libs must not be built with this flag, since the flag
+                    // makes everything unstable by default, requiring users to
+                    // use `#[feature(rustc_private)]`.
+                    if lib.target.is_stdlib {
+                        args.push("-Z".into());
+                        args.push("force-unstable-if-unmarked".into());
+                    }
+                    // `-Z ub-checks` generates code that uses unsupported
+                    // casts, such as pointer-to-integer casts in alignment
+                    // checks.
+                    args.push("-Z".into());
+                    args.push("ub-checks=false".into());
                     for linked_path in lib.target.linked_paths {
                         args.push("-L".into());
                         args.push(linked_path.into());
@@ -716,7 +887,7 @@ fn main() {
 }
 
 /// Build a `cargo test -Z build-std` command.
-fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
+fn cargo_test_cmd(project_dir: &Path, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(project_dir)
         .arg("test")
@@ -731,4 +902,14 @@ fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
         cmd.arg("build-std");
     }
     cmd
+}
+
+/// `cp -r src dest`
+fn copy_dir(src: &Utf8Path, dest: &Utf8Path) {
+    let mut cp_cmd = Command::new("cp");
+    cp_cmd.arg("-r").arg(src).arg(dest);
+    let cp_status = cp_cmd.status().expect("cp should run");
+    if !cp_status.success() {
+        panic!("{:?} exited with {}", cp_cmd, cp_status);
+    }
 }

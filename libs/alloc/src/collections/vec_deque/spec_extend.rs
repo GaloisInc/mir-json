@@ -1,12 +1,13 @@
-use crate::alloc::Allocator;
-use crate::vec;
 use core::iter::TrustedLen;
 use core::slice;
 
 use super::VecDeque;
+use crate::alloc::Allocator;
+use crate::vec;
 
 // Specialization trait used for VecDeque::extend
 pub(super) trait SpecExtend<T, I> {
+    #[track_caller]
     fn spec_extend(&mut self, iter: I);
 }
 
@@ -14,6 +15,7 @@ impl<T, I, A: Allocator> SpecExtend<T, I> for VecDeque<T, A>
 where
     I: Iterator<Item = T>,
 {
+    #[track_caller]
     default fn spec_extend(&mut self, mut iter: I) {
         // This function should be the moral equivalent of:
         //
@@ -21,21 +23,12 @@ where
         //     self.push_back(item);
         // }
 
-        // May only be called if `deque.len() < deque.capacity()`
-        unsafe fn push_unchecked<T, A: Allocator>(deque: &mut VecDeque<T, A>, element: T) {
-            // SAFETY: Because of the precondition, it's guaranteed that there is space
-            // in the logical array after the last element.
-            unsafe { deque.buffer_write(deque.to_physical_idx(deque.len), element) };
-            // This can't overflow because `deque.len() < deque.capacity() <= usize::MAX`.
-            deque.len += 1;
-        }
-
         while let Some(element) = iter.next() {
             let (lower, _) = iter.size_hint();
             self.reserve(lower.saturating_add(1));
 
             // SAFETY: We just reserved space for at least one element.
-            unsafe { push_unchecked(self, element) };
+            unsafe { self.push_unchecked(element) };
 
             // Inner loop to avoid repeatedly calling `reserve`.
             while self.len < self.capacity() {
@@ -43,7 +36,7 @@ where
                     return;
                 };
                 // SAFETY: The loop condition guarantees that `self.len() < self.capacity()`.
-                unsafe { push_unchecked(self, element) };
+                unsafe { self.push_unchecked(element) };
             }
         }
     }
@@ -53,6 +46,7 @@ impl<T, I, A: Allocator> SpecExtend<T, I> for VecDeque<T, A>
 where
     I: TrustedLen<Item = T>,
 {
+    #[track_caller]
     default fn spec_extend(&mut self, iter: I) {
         // This is the case for a TrustedLen iterator.
         let (low, high) = iter.size_hint();
@@ -85,6 +79,7 @@ where
 }
 
 impl<T, A: Allocator> SpecExtend<T, vec::IntoIter<T>> for VecDeque<T, A> {
+    #[track_caller]
     fn spec_extend(&mut self, mut iterator: vec::IntoIter<T>) {
         let slice = iterator.as_slice();
         self.reserve(slice.len());
@@ -102,6 +97,7 @@ where
     I: Iterator<Item = &'a T>,
     T: Copy,
 {
+    #[track_caller]
     default fn spec_extend(&mut self, iterator: I) {
         self.spec_extend(iterator.copied())
     }
@@ -111,6 +107,7 @@ impl<'a, T: 'a, A: Allocator> SpecExtend<&'a T, slice::Iter<'a, T>> for VecDeque
 where
     T: Copy,
 {
+    #[track_caller]
     fn spec_extend(&mut self, iterator: slice::Iter<'a, T>) {
         let slice = iterator.as_slice();
         self.reserve(slice.len());

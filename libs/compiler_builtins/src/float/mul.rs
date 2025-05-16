@@ -1,5 +1,5 @@
-use float::Float;
-use int::{CastInto, DInt, HInt, Int};
+use crate::float::Float;
+use crate::int::{CastInto, DInt, HInt, Int, MinInt};
 
 fn mul<F: Float>(a: F, b: F) -> F
 where
@@ -13,23 +13,23 @@ where
     let zero = F::Int::ZERO;
 
     let bits = F::BITS;
-    let significand_bits = F::SIGNIFICAND_BITS;
-    let max_exponent = F::EXPONENT_MAX;
+    let significand_bits = F::SIG_BITS;
+    let max_exponent = F::EXP_SAT;
 
-    let exponent_bias = F::EXPONENT_BIAS;
+    let exponent_bias = F::EXP_BIAS;
 
     let implicit_bit = F::IMPLICIT_BIT;
-    let significand_mask = F::SIGNIFICAND_MASK;
-    let sign_bit = F::SIGN_MASK as F::Int;
+    let significand_mask = F::SIG_MASK;
+    let sign_bit = F::SIGN_MASK;
     let abs_mask = sign_bit - one;
-    let exponent_mask = F::EXPONENT_MASK;
+    let exponent_mask = F::EXP_MASK;
     let inf_rep = exponent_mask;
     let quiet_bit = implicit_bit >> 1;
     let qnan_rep = exponent_mask | quiet_bit;
-    let exponent_bits = F::EXPONENT_BITS;
+    let exponent_bits = F::EXP_BITS;
 
-    let a_rep = a.repr();
-    let b_rep = b.repr();
+    let a_rep = a.to_bits();
+    let b_rep = b.to_bits();
 
     let a_exponent = (a_rep >> significand_bits) & max_exponent.cast();
     let b_exponent = (b_rep >> significand_bits) & max_exponent.cast();
@@ -48,41 +48,41 @@ where
 
         // NaN + anything = qNaN
         if a_abs > inf_rep {
-            return F::from_repr(a_rep | quiet_bit);
+            return F::from_bits(a_rep | quiet_bit);
         }
         // anything + NaN = qNaN
         if b_abs > inf_rep {
-            return F::from_repr(b_rep | quiet_bit);
+            return F::from_bits(b_rep | quiet_bit);
         }
 
         if a_abs == inf_rep {
             if b_abs != zero {
                 // infinity * non-zero = +/- infinity
-                return F::from_repr(a_abs | product_sign);
+                return F::from_bits(a_abs | product_sign);
             } else {
                 // infinity * zero = NaN
-                return F::from_repr(qnan_rep);
+                return F::from_bits(qnan_rep);
             }
         }
 
         if b_abs == inf_rep {
             if a_abs != zero {
                 // infinity * non-zero = +/- infinity
-                return F::from_repr(b_abs | product_sign);
+                return F::from_bits(b_abs | product_sign);
             } else {
                 // infinity * zero = NaN
-                return F::from_repr(qnan_rep);
+                return F::from_bits(qnan_rep);
             }
         }
 
         // zero * anything = +/- zero
         if a_abs == zero {
-            return F::from_repr(product_sign);
+            return F::from_bits(product_sign);
         }
 
         // anything * zero = +/- zero
         if b_abs == zero {
-            return F::from_repr(product_sign);
+            return F::from_bits(product_sign);
         }
 
         // one or both of a or b is denormal, the other (if applicable) is a
@@ -133,7 +133,7 @@ where
 
     // If we have overflowed the type, return +/- infinity.
     if product_exponent >= max_exponent as i32 {
-        return F::from_repr(inf_rep | product_sign);
+        return F::from_bits(inf_rep | product_sign);
     }
 
     if product_exponent <= 0 {
@@ -145,22 +145,17 @@ where
         // simplify the shift logic.
         let shift = one.wrapping_sub(product_exponent.cast()).cast();
         if shift >= bits {
-            return F::from_repr(product_sign);
+            return F::from_bits(product_sign);
         }
 
         // Otherwise, shift the significand of the result so that the round
-        // bit is the high bit of productLo.
-        if shift < bits {
-            let sticky = product_low << (bits - shift);
-            product_low = product_high << (bits - shift) | product_low >> shift | sticky;
-            product_high >>= shift;
-        } else if shift < (2 * bits) {
-            let sticky = product_high << (2 * bits - shift) | product_low;
-            product_low = product_high >> (shift - bits) | sticky;
-            product_high = zero;
-        } else {
-            product_high = zero;
-        }
+        // bit is the high bit of `product_low`.
+        // Ensure one of the non-highest bits in `product_low` is set if the shifted out bit are
+        // not all zero so that the result is correctly rounded below.
+        let sticky = product_low << (bits - shift) != zero;
+        product_low =
+            (product_high << (bits - shift)) | (product_low >> shift) | (sticky as u32).cast();
+        product_high >>= shift;
     } else {
         // Result is normal before rounding; insert the exponent.
         product_high &= significand_mask;
@@ -181,29 +176,27 @@ where
         product_high += product_high & one;
     }
 
-    F::from_repr(product_high)
+    F::from_bits(product_high)
 }
 
 intrinsics! {
+    #[avr_skip]
     #[aapcs_on_arm]
     #[arm_aeabi_alias = __aeabi_fmul]
     pub extern "C" fn __mulsf3(a: f32, b: f32) -> f32 {
         mul(a, b)
     }
 
+    #[avr_skip]
     #[aapcs_on_arm]
     #[arm_aeabi_alias = __aeabi_dmul]
     pub extern "C" fn __muldf3(a: f64, b: f64) -> f64 {
         mul(a, b)
     }
 
-    #[cfg(target_arch = "arm")]
-    pub extern "C" fn __mulsf3vfp(a: f32, b: f32) -> f32 {
-        a * b
-    }
-
-    #[cfg(target_arch = "arm")]
-    pub extern "C" fn __muldf3vfp(a: f64, b: f64) -> f64 {
-        a * b
+    #[ppc_alias = __mulkf3]
+    #[cfg(f128_enabled)]
+    pub extern "C" fn __multf3(a: f128, b: f128) -> f128 {
+        mul(a, b)
     }
 }

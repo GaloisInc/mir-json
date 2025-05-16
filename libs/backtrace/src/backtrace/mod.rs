@@ -63,7 +63,7 @@ pub fn trace<F: FnMut(&Frame) -> bool>(cb: F) {
 ///
 /// See information on `trace` for caveats on `cb` panicking.
 pub unsafe fn trace_unsynchronized<F: FnMut(&Frame) -> bool>(mut cb: F) {
-    trace_imp(&mut cb)
+    unsafe { trace_imp(&mut cb) }
 }
 
 /// A trait representing one frame of a backtrace, yielded to the `trace`
@@ -125,6 +125,44 @@ impl fmt::Debug for Frame {
     }
 }
 
+#[cfg(all(target_env = "sgx", target_vendor = "fortanix"))]
+mod sgx_image_base {
+
+    #[cfg(not(feature = "std"))]
+    pub(crate) mod imp {
+        use core::ffi::c_void;
+        use core::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+        static IMAGE_BASE: AtomicUsize = AtomicUsize::new(0);
+
+        /// Set the image base address. This is only available for Fortanix SGX
+        /// target when the `std` feature is not enabled. This can be used in the
+        /// standard library to set the correct base address.
+        #[doc(hidden)]
+        pub fn set_image_base(base_addr: *mut c_void) {
+            IMAGE_BASE.store(base_addr as _, SeqCst);
+        }
+
+        pub(crate) fn get_image_base() -> *mut c_void {
+            IMAGE_BASE.load(SeqCst) as _
+        }
+    }
+
+    #[cfg(feature = "std")]
+    mod imp {
+        use core::ffi::c_void;
+
+        pub(crate) fn get_image_base() -> *mut c_void {
+            std::os::fortanix_sgx::mem::image_base() as _
+        }
+    }
+
+    pub(crate) use imp::get_image_base;
+}
+
+#[cfg(all(target_env = "sgx", target_vendor = "fortanix", not(feature = "std")))]
+pub use sgx_image_base::imp::set_image_base;
+
 cfg_if::cfg_if! {
     // This needs to come first, to ensure that
     // Miri takes priority over the host platform
@@ -149,11 +187,17 @@ cfg_if::cfg_if! {
         use self::libunwind::trace as trace_imp;
         pub(crate) use self::libunwind::Frame as FrameImp;
     } else if #[cfg(all(windows, not(target_vendor = "uwp")))] {
-        mod dbghelp;
-        use self::dbghelp::trace as trace_imp;
-        pub(crate) use self::dbghelp::Frame as FrameImp;
-        #[cfg(target_env = "msvc")] // only used in dbghelp symbolize
-        pub(crate) use self::dbghelp::StackFrame;
+        cfg_if::cfg_if! {
+            if #[cfg(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm64ec"))] {
+                mod win64;
+                use self::win64::trace as trace_imp;
+                pub(crate) use self::win64::Frame as FrameImp;
+            } else if #[cfg(any(target_arch = "x86", target_arch = "arm"))] {
+                mod win32;
+                use self::win32::trace as trace_imp;
+                pub(crate) use self::win32::Frame as FrameImp;
+            }
+        }
     } else {
         mod noop;
         use self::noop::trace as trace_imp;

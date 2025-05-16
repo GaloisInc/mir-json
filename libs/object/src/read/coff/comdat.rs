@@ -6,23 +6,43 @@ use crate::read::{
     self, ComdatKind, ObjectComdat, ReadError, ReadRef, Result, SectionIndex, SymbolIndex,
 };
 
-use super::CoffFile;
+use super::{CoffFile, CoffHeader, ImageSymbol};
 
-/// An iterator over the COMDAT section groups of a `CoffFile`.
+/// An iterator for the COMDAT section groups in a [`CoffBigFile`](super::CoffBigFile).
+pub type CoffBigComdatIterator<'data, 'file, R = &'data [u8]> =
+    CoffComdatIterator<'data, 'file, R, pe::AnonObjectHeaderBigobj>;
+
+/// An iterator for the COMDAT section groups in a [`CoffFile`].
 #[derive(Debug)]
-pub struct CoffComdatIterator<'data, 'file, R: ReadRef<'data> = &'data [u8]> {
-    pub(super) file: &'file CoffFile<'data, R>,
-    pub(super) index: usize,
+pub struct CoffComdatIterator<
+    'data,
+    'file,
+    R: ReadRef<'data> = &'data [u8],
+    Coff: CoffHeader = pe::ImageFileHeader,
+> {
+    file: &'file CoffFile<'data, R, Coff>,
+    index: SymbolIndex,
 }
 
-impl<'data, 'file, R: ReadRef<'data>> Iterator for CoffComdatIterator<'data, 'file, R> {
-    type Item = CoffComdat<'data, 'file, R>;
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> CoffComdatIterator<'data, 'file, R, Coff> {
+    pub(crate) fn new(file: &'file CoffFile<'data, R, Coff>) -> Self {
+        CoffComdatIterator {
+            file,
+            index: SymbolIndex(0),
+        }
+    }
+}
+
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> Iterator
+    for CoffComdatIterator<'data, 'file, R, Coff>
+{
+    type Item = CoffComdat<'data, 'file, R, Coff>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let index = self.index;
             let symbol = self.file.common.symbols.symbol(index).ok()?;
-            self.index += 1 + symbol.number_of_aux_symbols as usize;
+            self.index.0 += 1 + symbol.number_of_aux_symbols() as usize;
             if let Some(comdat) = CoffComdat::parse(self.file, symbol, index) {
                 return Some(comdat);
             }
@@ -30,21 +50,34 @@ impl<'data, 'file, R: ReadRef<'data>> Iterator for CoffComdatIterator<'data, 'fi
     }
 }
 
-/// A COMDAT section group of a `CoffFile`.
+/// A COMDAT section group in a [`CoffBigFile`](super::CoffBigFile).
+///
+/// Most functionality is provided by the [`ObjectComdat`] trait implementation.
+pub type CoffBigComdat<'data, 'file, R = &'data [u8]> =
+    CoffComdat<'data, 'file, R, pe::AnonObjectHeaderBigobj>;
+
+/// A COMDAT section group in a [`CoffFile`].
+///
+/// Most functionality is provided by the [`ObjectComdat`] trait implementation.
 #[derive(Debug)]
-pub struct CoffComdat<'data, 'file, R: ReadRef<'data> = &'data [u8]> {
-    file: &'file CoffFile<'data, R>,
+pub struct CoffComdat<
+    'data,
+    'file,
+    R: ReadRef<'data> = &'data [u8],
+    Coff: CoffHeader = pe::ImageFileHeader,
+> {
+    file: &'file CoffFile<'data, R, Coff>,
     symbol_index: SymbolIndex,
-    symbol: &'data pe::ImageSymbol,
+    symbol: &'data Coff::ImageSymbol,
     selection: u8,
 }
 
-impl<'data, 'file, R: ReadRef<'data>> CoffComdat<'data, 'file, R> {
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> CoffComdat<'data, 'file, R, Coff> {
     fn parse(
-        file: &'file CoffFile<'data, R>,
-        section_symbol: &'data pe::ImageSymbol,
-        index: usize,
-    ) -> Option<CoffComdat<'data, 'file, R>> {
+        file: &'file CoffFile<'data, R, Coff>,
+        section_symbol: &'data Coff::ImageSymbol,
+        index: SymbolIndex,
+    ) -> Option<CoffComdat<'data, 'file, R, Coff>> {
         // Must be a section symbol.
         if !section_symbol.has_aux_section() {
             return None;
@@ -60,28 +93,33 @@ impl<'data, 'file, R: ReadRef<'data>> CoffComdat<'data, 'file, R> {
         // Find the COMDAT symbol.
         let mut symbol_index = index;
         let mut symbol = section_symbol;
-        let section_number = section_symbol.section_number.get(LE);
+        let section_number = section_symbol.section_number();
         loop {
-            symbol_index += 1 + symbol.number_of_aux_symbols as usize;
+            symbol_index.0 += 1 + symbol.number_of_aux_symbols() as usize;
             symbol = file.common.symbols.symbol(symbol_index).ok()?;
-            if section_number == symbol.section_number.get(LE) {
+            if section_number == symbol.section_number() {
                 break;
             }
         }
 
         Some(CoffComdat {
             file,
-            symbol_index: SymbolIndex(symbol_index),
+            symbol_index,
             symbol,
             selection,
         })
     }
 }
 
-impl<'data, 'file, R: ReadRef<'data>> read::private::Sealed for CoffComdat<'data, 'file, R> {}
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> read::private::Sealed
+    for CoffComdat<'data, 'file, R, Coff>
+{
+}
 
-impl<'data, 'file, R: ReadRef<'data>> ObjectComdat<'data> for CoffComdat<'data, 'file, R> {
-    type SectionIterator = CoffComdatSectionIterator<'data, 'file, R>;
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> ObjectComdat<'data>
+    for CoffComdat<'data, 'file, R, Coff>
+{
+    type SectionIterator = CoffComdatSectionIterator<'data, 'file, R, Coff>;
 
     #[inline]
     fn kind(&self) -> ComdatKind {
@@ -102,13 +140,13 @@ impl<'data, 'file, R: ReadRef<'data>> ObjectComdat<'data> for CoffComdat<'data, 
     }
 
     #[inline]
-    fn name_bytes(&self) -> Result<&[u8]> {
+    fn name_bytes(&self) -> Result<&'data [u8]> {
         // Find the name of first symbol referring to the section.
         self.symbol.name(self.file.common.symbols.strings())
     }
 
     #[inline]
-    fn name(&self) -> Result<&str> {
+    fn name(&self) -> Result<&'data str> {
         let bytes = self.name_bytes()?;
         str::from_utf8(bytes)
             .ok()
@@ -119,21 +157,32 @@ impl<'data, 'file, R: ReadRef<'data>> ObjectComdat<'data> for CoffComdat<'data, 
     fn sections(&self) -> Self::SectionIterator {
         CoffComdatSectionIterator {
             file: self.file,
-            section_number: self.symbol.section_number.get(LE),
-            index: 0,
+            section_number: self.symbol.section_number(),
+            index: SymbolIndex(0),
         }
     }
 }
 
-/// An iterator over the sections in a COMDAT section group of a `CoffFile`.
+/// An iterator for the sections in a COMDAT section group in a [`CoffBigFile`](super::CoffBigFile).
+pub type CoffBigComdatSectionIterator<'data, 'file, R = &'data [u8]> =
+    CoffComdatSectionIterator<'data, 'file, R, pe::AnonObjectHeaderBigobj>;
+
+/// An iterator for the sections in a COMDAT section group in a [`CoffFile`].
 #[derive(Debug)]
-pub struct CoffComdatSectionIterator<'data, 'file, R: ReadRef<'data> = &'data [u8]> {
-    file: &'file CoffFile<'data, R>,
-    section_number: u16,
-    index: usize,
+pub struct CoffComdatSectionIterator<
+    'data,
+    'file,
+    R: ReadRef<'data> = &'data [u8],
+    Coff: CoffHeader = pe::ImageFileHeader,
+> {
+    file: &'file CoffFile<'data, R, Coff>,
+    section_number: i32,
+    index: SymbolIndex,
 }
 
-impl<'data, 'file, R: ReadRef<'data>> Iterator for CoffComdatSectionIterator<'data, 'file, R> {
+impl<'data, 'file, R: ReadRef<'data>, Coff: CoffHeader> Iterator
+    for CoffComdatSectionIterator<'data, 'file, R, Coff>
+{
     type Item = SectionIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -142,19 +191,23 @@ impl<'data, 'file, R: ReadRef<'data>> Iterator for CoffComdatSectionIterator<'da
         loop {
             let index = self.index;
             let symbol = self.file.common.symbols.symbol(index).ok()?;
-            self.index += 1 + symbol.number_of_aux_symbols as usize;
+            self.index.0 += 1 + symbol.number_of_aux_symbols() as usize;
 
             // Must be a section symbol.
             if !symbol.has_aux_section() {
                 continue;
             }
 
-            let section_number = symbol.section_number.get(LE);
+            let section_number = symbol.section_number();
 
             let aux = self.file.common.symbols.aux_section(index).ok()?;
             if aux.selection == pe::IMAGE_COMDAT_SELECT_ASSOCIATIVE {
-                // TODO: use high_number for bigobj
-                if aux.number.get(LE) == self.section_number {
+                let number = if Coff::is_type_bigobj() {
+                    u32::from(aux.number.get(LE)) | (u32::from(aux.high_number.get(LE)) << 16)
+                } else {
+                    u32::from(aux.number.get(LE))
+                };
+                if number as i32 == self.section_number {
                     return Some(SectionIndex(section_number as usize));
                 }
             } else if aux.selection != 0 {

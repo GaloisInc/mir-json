@@ -1,7 +1,4 @@
-use crate::{
-    core_arch::{simd::*, x86::*},
-    mem::transmute,
-};
+use crate::core_arch::{simd::*, x86::*};
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -28,7 +25,7 @@ use stdarch_test::assert_instr;
 /// (unsigned 32-bit integers) using previous message values from `a` and `b`,
 /// and returning the result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha1msg1_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha1msg1_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha1msg1))]
@@ -41,7 +38,7 @@ pub unsafe fn _mm_sha1msg1_epu32(a: __m128i, b: __m128i) -> __m128i {
 /// (unsigned 32-bit integers) using the intermediate result in `a` and the
 /// previous message values in `b`, and returns the result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha1msg2_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha1msg2_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha1msg2))]
@@ -54,7 +51,7 @@ pub unsafe fn _mm_sha1msg2_epu32(a: __m128i, b: __m128i) -> __m128i {
 /// current SHA1 state variable `a`, add that value to the scheduled values
 /// (unsigned 32-bit integers) in `b`, and returns the result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha1nexte_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha1nexte_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha1nexte))]
@@ -69,14 +66,14 @@ pub unsafe fn _mm_sha1nexte_epu32(a: __m128i, b: __m128i) -> __m128i {
 /// updated SHA1 state (A,B,C,D). `FUNC` contains the logic functions and round
 /// constants.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha1rnds4_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha1rnds4_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha1rnds4, FUNC = 0))]
 #[rustc_legacy_const_generics(2)]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_sha1rnds4_epu32<const FUNC: i32>(a: __m128i, b: __m128i) -> __m128i {
-    static_assert_imm2!(FUNC);
+    static_assert_uimm_bits!(FUNC, 2);
     transmute(sha1rnds4(a.as_i32x4(), b.as_i32x4(), FUNC as i8))
 }
 
@@ -84,7 +81,7 @@ pub unsafe fn _mm_sha1rnds4_epu32<const FUNC: i32>(a: __m128i, b: __m128i) -> __
 /// (unsigned 32-bit integers) using previous message values from `a` and `b`,
 /// and return the result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha256msg1_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha256msg1_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha256msg1))]
@@ -97,7 +94,7 @@ pub unsafe fn _mm_sha256msg1_epu32(a: __m128i, b: __m128i) -> __m128i {
 /// (unsigned 32-bit integers) using previous message values from `a` and `b`,
 /// and return the result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha256msg2_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha256msg2_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha256msg2))]
@@ -112,7 +109,7 @@ pub unsafe fn _mm_sha256msg2_epu32(a: __m128i, b: __m128i) -> __m128i {
 /// integers) and the corresponding round constants from `k`, and store the
 /// updated SHA256 state (A,B,E,F) in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sha256rnds2_epu32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sha256rnds2_epu32)
 #[inline]
 #[target_feature(enable = "sha")]
 #[cfg_attr(test, assert_instr(sha256rnds2))]
@@ -124,9 +121,7 @@ pub unsafe fn _mm_sha256rnds2_epu32(a: __m128i, b: __m128i, k: __m128i) -> __m12
 #[cfg(test)]
 mod tests {
     use std::{
-        f32,
-        f64::{self, NAN},
-        i32,
+        f32, f64,
         mem::{self, transmute},
     };
 
@@ -135,6 +130,8 @@ mod tests {
         hint::black_box,
     };
     use stdarch_test::simd_test;
+
+    const NAN: f64 = f64::NAN;
 
     #[simd_test(enable = "sha")]
     #[allow(overflowing_literals)]

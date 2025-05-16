@@ -1,14 +1,19 @@
+// FIXME(static_mut_refs): Do not allow `static_mut_refs` lint
+#![allow(static_mut_refs)]
+
+use core::num::NonZero;
 use std::assert_matches::assert_matches;
 use std::collections::TryReserveErrorKind::*;
-use std::collections::{vec_deque::Drain, VecDeque};
+use std::collections::VecDeque;
+use std::collections::vec_deque::Drain;
 use std::fmt::Debug;
 use std::ops::Bound::*;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-
-use crate::hash;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use Taggy::*;
 use Taggypar::*;
+
+use crate::hash;
 
 #[test]
 fn test_simple() {
@@ -73,6 +78,45 @@ fn test_parameterized<T: Clone + PartialEq + Debug>(a: T, b: T, c: T, d: T) {
     assert_eq!(deq[1].clone(), b.clone());
     assert_eq!(deq[2].clone(), c.clone());
     assert_eq!(deq[3].clone(), d.clone());
+}
+
+#[test]
+fn test_pop_if() {
+    let mut deq: VecDeque<_> = vec![0, 1, 2, 3, 4].into();
+    let pred = |x: &mut i32| *x % 2 == 0;
+
+    assert_eq!(deq.pop_front_if(pred), Some(0));
+    assert_eq!(deq, [1, 2, 3, 4]);
+
+    assert_eq!(deq.pop_front_if(pred), None);
+    assert_eq!(deq, [1, 2, 3, 4]);
+
+    assert_eq!(deq.pop_back_if(pred), Some(4));
+    assert_eq!(deq, [1, 2, 3]);
+
+    assert_eq!(deq.pop_back_if(pred), None);
+    assert_eq!(deq, [1, 2, 3]);
+}
+
+#[test]
+fn test_pop_if_empty() {
+    let mut deq = VecDeque::<i32>::new();
+    assert_eq!(deq.pop_front_if(|_| true), None);
+    assert_eq!(deq.pop_back_if(|_| true), None);
+    assert!(deq.is_empty());
+}
+
+#[test]
+fn test_pop_if_mutates() {
+    let mut v: VecDeque<_> = vec![-1, 1].into();
+    let pred = |x: &mut i32| {
+        *x *= 2;
+        false
+    };
+    assert_eq!(v.pop_front_if(pred), None);
+    assert_eq!(v, [-2, 1]);
+    assert_eq!(v.pop_back_if(pred), None);
+    assert_eq!(v, [-2, 2]);
 }
 
 #[test]
@@ -426,6 +470,28 @@ fn test_into_iter() {
         assert_eq!(it.next(), Some(7));
         assert_eq!(it.size_hint(), (5, Some(5)));
     }
+
+    // advance_by
+    {
+        let mut d = VecDeque::new();
+        for i in 0..=4 {
+            d.push_back(i);
+        }
+        for i in 6..=8 {
+            d.push_front(i);
+        }
+
+        let mut it = d.into_iter();
+        assert_eq!(it.advance_by(1), Ok(()));
+        assert_eq!(it.next(), Some(7));
+        assert_eq!(it.advance_back_by(1), Ok(()));
+        assert_eq!(it.next_back(), Some(3));
+
+        let mut it = VecDeque::from(vec![1, 2, 3, 4, 5]).into_iter();
+        assert_eq!(it.advance_by(10), Err(NonZero::new(5).unwrap()));
+        let mut it = VecDeque::from(vec![1, 2, 3, 4, 5]).into_iter();
+        assert_eq!(it.advance_back_by(10), Err(NonZero::new(5).unwrap()));
+    }
 }
 
 #[test]
@@ -724,6 +790,7 @@ fn test_drop_clear() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_drop_panic() {
     static mut DROPS: i32 = 0;
 
@@ -1046,6 +1113,20 @@ fn test_append_double_drop() {
 }
 
 #[test]
+#[should_panic]
+fn test_append_zst_capacity_overflow() {
+    let mut v = Vec::with_capacity(usize::MAX);
+    // note: using resize instead of set_len here would
+    //       be *extremely* slow in unoptimized builds.
+    // SAFETY: `v` has capacity `usize::MAX`, and no initialization
+    //         is needed for empty tuples.
+    unsafe { v.set_len(usize::MAX) };
+    let mut v = VecDeque::from(v);
+    let mut w = vec![()].into();
+    v.append(&mut w);
+}
+
+#[test]
 fn test_retain() {
     let mut buf = VecDeque::new();
     buf.extend(1..5);
@@ -1146,7 +1227,16 @@ fn test_reserve_exact_2() {
 
 #[test]
 #[cfg_attr(miri, ignore)] // Miri does not support signalling OOM
-#[cfg_attr(target_os = "android", ignore)] // Android used in CI has a broken dlmalloc
+fn test_try_with_capacity() {
+    let vec: VecDeque<u32> = VecDeque::try_with_capacity(5).unwrap();
+    assert_eq!(0, vec.len());
+    assert!(vec.capacity() >= 5 && vec.capacity() <= isize::MAX as usize / 4);
+
+    assert!(VecDeque::<u16>::try_with_capacity(isize::MAX as usize + 1).is_err());
+}
+
+#[test]
+#[cfg_attr(miri, ignore)] // Miri does not support signalling OOM
 fn test_try_reserve() {
     // These are the interesting cases:
     // * exactly isize::MAX should never trigger a CapacityOverflow (can be OOM)
@@ -1242,7 +1332,6 @@ fn test_try_reserve() {
 
 #[test]
 #[cfg_attr(miri, ignore)] // Miri does not support signalling OOM
-#[cfg_attr(target_os = "android", ignore)] // Android used in CI has a broken dlmalloc
 fn test_try_reserve_exact() {
     // This is exactly the same as test_try_reserve with the method changed.
     // See that test for comments.
@@ -1564,6 +1653,7 @@ fn test_try_rfold_moves_iter() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn truncate_leak() {
     static mut DROPS: i32 = 0;
 
@@ -1597,6 +1687,7 @@ fn truncate_leak() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_drain_leak() {
     static mut DROPS: i32 = 0;
 

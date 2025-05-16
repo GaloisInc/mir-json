@@ -1,7 +1,7 @@
 //! Disassembly calling function for most targets.
 
 use crate::Function;
-use std::{collections::HashSet, env, process::Command, str};
+use std::{collections::HashSet, env, str};
 
 // Extracts the "shim" name from the `symbol`.
 fn normalize(mut symbol: &str) -> String {
@@ -24,7 +24,7 @@ fn normalize(mut symbol: &str) -> String {
 
     // Remove Rust paths
     if let Some(last_colon) = symbol.rfind(':') {
-        symbol = (&symbol[last_colon + 1..]).to_string();
+        symbol = symbol[last_colon + 1..].to_string();
     }
 
     // Normalize to no leading underscore to handle platforms that may
@@ -34,63 +34,69 @@ fn normalize(mut symbol: &str) -> String {
     }
     // Windows/x86 has a suffix such as @@4.
     if let Some(idx) = symbol.find("@@") {
-        symbol = (&symbol[..idx]).to_string();
+        symbol = symbol[..idx].to_string();
     }
     symbol
 }
 
+#[cfg(target_env = "msvc")]
 pub(crate) fn disassemble_myself() -> HashSet<Function> {
     let me = env::current_exe().expect("failed to get current exe");
 
-    let disassembly = if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
-        let target = if cfg!(target_arch = "x86_64") {
-            "x86_64-pc-windows-msvc"
-        } else if cfg!(target_arch = "x86") {
-            "i686-pc-windows-msvc"
-        } else {
-            panic!("disassembly unimplemented")
-        };
-        let mut cmd = cc::windows_registry::find(target, "dumpbin.exe")
-            .expect("failed to find `dumpbin` tool");
-        let output = cmd
-            .arg("/DISASM")
-            .arg(&me)
-            .output()
-            .expect("failed to execute dumpbin");
-        println!(
-            "{}\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(output.status.success());
-        // Windows does not return valid UTF-8 output:
-        String::from_utf8_lossy(Vec::leak(output.stdout))
-    } else if cfg!(target_os = "windows") {
-        panic!("disassembly unimplemented")
+    let target = if cfg!(target_arch = "x86_64") {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(target_arch = "x86") {
+        "i686-pc-windows-msvc"
+    } else if cfg!(target_arch = "aarch64") {
+        "aarch64-pc-windows-msvc"
     } else {
-        let objdump = env::var("OBJDUMP").unwrap_or_else(|_| "objdump".to_string());
-        let add_args = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-            // Target features need to be enabled for LLVM objdump on Macos ARM64
-            vec!["--mattr=+v8.6a,+crypto,+tme"]
-        } else {
-            vec![]
-        };
-        let output = Command::new(objdump.clone())
-            .arg("--disassemble")
-            .arg("--no-show-raw-insn")
-            .args(add_args)
-            .arg(&me)
-            .output()
-            .unwrap_or_else(|_| panic!("failed to execute objdump. OBJDUMP={}", objdump));
-        println!(
-            "{}\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(output.status.success());
-
-        String::from_utf8_lossy(Vec::leak(output.stdout))
+        panic!("disassembly unimplemented")
     };
+    let mut cmd =
+        cc::windows_registry::find(target, "dumpbin.exe").expect("failed to find `dumpbin` tool");
+    let output = cmd
+        .arg("/DISASM:NOBYTES")
+        .arg(&me)
+        .output()
+        .expect("failed to execute dumpbin");
+    println!(
+        "{}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success());
+    // Windows does not return valid UTF-8 output:
+    parse(&String::from_utf8_lossy(Vec::leak(output.stdout)))
+}
+
+#[cfg(not(target_env = "msvc"))]
+pub(crate) fn disassemble_myself() -> HashSet<Function> {
+    let me = env::current_exe().expect("failed to get current exe");
+
+    let objdump = env::var("OBJDUMP").unwrap_or_else(|_| "objdump".to_string());
+    let add_args = if cfg!(target_vendor = "apple") && cfg!(target_arch = "aarch64") {
+        // Target features need to be enabled for LLVM objdump on Darwin ARM64
+        vec!["--mattr=+v8.6a,+crypto,+tme"]
+    } else if cfg!(target_arch = "riscv64") {
+        vec!["--mattr=+zk,+zks,+zbc,+zbb"]
+    } else {
+        vec![]
+    };
+    let output = std::process::Command::new(objdump.clone())
+        .arg("--disassemble")
+        .arg("--no-show-raw-insn")
+        .args(add_args)
+        .arg(&me)
+        .output()
+        .unwrap_or_else(|_| panic!("failed to execute objdump. OBJDUMP={objdump}"));
+    println!(
+        "{}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success());
+
+    let disassembly = String::from_utf8_lossy(Vec::leak(output.stdout));
 
     parse(&disassembly)
 }
@@ -103,7 +109,7 @@ fn parse(output: &str) -> HashSet<Function> {
         lines.clone().count()
     );
     for line in output.lines().take(100) {
-        println!("{}", line);
+        println!("{line}");
     }
 
     let mut functions = HashSet::new();
@@ -112,11 +118,11 @@ fn parse(output: &str) -> HashSet<Function> {
         if !header.ends_with(':') || !header.contains("stdarch_test_shim") {
             continue;
         }
-        eprintln!("header: {}", header);
+        eprintln!("header: {header}");
         let symbol = normalize(header);
-        eprintln!("normalized symbol: {}", symbol);
+        eprintln!("normalized symbol: {symbol}");
         let mut instructions = Vec::new();
-        while let Some(instruction) = lines.next() {
+        for instruction in lines.by_ref() {
             if instruction.ends_with(':') {
                 cached_header = Some(instruction);
                 break;
@@ -128,17 +134,13 @@ fn parse(output: &str) -> HashSet<Function> {
             let mut parts = if cfg!(target_env = "msvc") {
                 // Each line looks like:
                 //
-                // >  $addr: ab cd ef     $instr..
-                // >         00 12          # this line os optional
-                if instruction.starts_with("       ") {
-                    continue;
-                }
+                // >  $addr: $instr..
                 instruction
-                    .split_whitespace()
+                    .split(&[' ', ','])
+                    .filter(|&x| !x.is_empty())
                     .skip(1)
-                    .skip_while(|s| s.len() == 2 && usize::from_str_radix(s, 16).is_ok())
-                    .map(std::string::ToString::to_string)
-                    .skip_while(|s| *s == "lock") // skip x86-specific prefix
+                    .map(str::to_lowercase)
+                    .skip_while(|s| matches!(&**s, "lock" | "vex")) // skip x86-specific prefix
                     .collect::<Vec<String>>()
             } else {
                 // objdump with --no-show-raw-insn
@@ -148,22 +150,26 @@ fn parse(output: &str) -> HashSet<Function> {
                 instruction
                     .split_whitespace()
                     .skip(1)
-                    .skip_while(|s| *s == "lock") // skip x86-specific prefix
-                    .map(std::string::ToString::to_string)
+                    .skip_while(|s| matches!(*s, "lock" | "{evex}" | "{vex}")) // skip x86-specific prefix
+                    .map(ToString::to_string)
                     .collect::<Vec<String>>()
             };
 
-            if cfg!(target_arch = "aarch64") {
+            if cfg!(any(target_arch = "aarch64", target_arch = "arm64ec")) {
                 // Normalize [us]shll.* ..., #0 instructions to the preferred form: [us]xtl.* ...
-                // as LLVM objdump does not do that.
+                // as neither LLVM objdump nor dumpbin does that.
                 // See https://developer.arm.com/documentation/ddi0602/latest/SIMD-FP-Instructions/UXTL--UXTL2--Unsigned-extend-Long--an-alias-of-USHLL--USHLL2-
                 // and https://developer.arm.com/documentation/ddi0602/latest/SIMD-FP-Instructions/SXTL--SXTL2--Signed-extend-Long--an-alias-of-SSHLL--SSHLL2-
                 // for details.
+                fn is_shll(instr: &str) -> bool {
+                    if cfg!(target_env = "msvc") {
+                        instr.starts_with("ushll") || instr.starts_with("sshll")
+                    } else {
+                        instr.starts_with("ushll.") || instr.starts_with("sshll.")
+                    }
+                }
                 match (parts.first(), parts.last()) {
-                    (Some(instr), Some(last_arg))
-                        if (instr.starts_with("ushll.") || instr.starts_with("sshll."))
-                            && last_arg == "#0" =>
-                    {
+                    (Some(instr), Some(last_arg)) if is_shll(instr) && last_arg == "#0" => {
                         assert_eq!(parts.len(), 4);
                         let mut new_parts = Vec::with_capacity(3);
                         let new_instr = format!("{}{}{}", &instr[..1], "xtl", &instr[5..]);
@@ -171,6 +177,10 @@ fn parse(output: &str) -> HashSet<Function> {
                         new_parts.push(parts[1].clone());
                         new_parts.push(parts[2][0..parts[2].len() - 1].to_owned()); // strip trailing comma
                         parts = new_parts;
+                    }
+                    // dumpbin uses "ins" instead of "mov"
+                    (Some(instr), _) if cfg!(target_env = "msvc") && instr == "ins" => {
+                        parts[0] = "mov".to_string()
                     }
                     _ => {}
                 };

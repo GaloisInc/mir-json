@@ -1,7 +1,7 @@
 fn require_sync<T: Sync>(_: T) {}
 fn require_send_sync<T: Send + Sync>(_: T) {}
 
-struct NotSend(*const ());
+struct NotSend(#[allow(dead_code)] *const ());
 unsafe impl Sync for NotSend {}
 
 #[test]
@@ -14,8 +14,8 @@ fn test_btree_map() {
     //
     // We test autotraits in this convoluted way, instead of a straightforward
     // `require_send_sync::<TypeIWantToTest>()`, because the interaction with
-    // generators exposes some current limitations in rustc's ability to prove a
-    // lifetime bound on the erased generator witness types. See the above link.
+    // coroutines exposes some current limitations in rustc's ability to prove a
+    // lifetime bound on the erased coroutine witness types. See the above link.
     //
     // A typical way this would surface in real code is:
     //
@@ -55,12 +55,7 @@ fn test_btree_map() {
 
     require_send_sync(async {
         let _v = None::<
-            alloc::collections::btree_map::DrainFilter<
-                '_,
-                &u32,
-                &u32,
-                fn(&&u32, &mut &u32) -> bool,
-            >,
+            alloc::collections::btree_map::ExtractIf<'_, &u32, &u32, fn(&&u32, &mut &u32) -> bool>,
         >;
         async {}.await;
     });
@@ -149,7 +144,7 @@ fn test_btree_set() {
     });
 
     require_send_sync(async {
-        let _v = None::<alloc::collections::btree_set::DrainFilter<'_, &u32, fn(&&u32) -> bool>>;
+        let _v = None::<alloc::collections::btree_set::ExtractIf<'_, &u32, fn(&&u32) -> bool>>;
         async {}.await;
     });
 
@@ -238,7 +233,7 @@ fn test_linked_list() {
     /*
     require_send_sync(async {
         let _v =
-            None::<alloc::collections::linked_list::DrainFilter<'_, &u32, fn(&mut &u32) -> bool>>;
+            None::<alloc::collections::linked_list::ExtractIf<'_, &u32, fn(&mut &u32) -> bool>>;
         async {}.await;
     });
     */

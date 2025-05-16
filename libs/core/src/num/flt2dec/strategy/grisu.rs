@@ -7,7 +7,7 @@
 
 use crate::mem::MaybeUninit;
 use crate::num::diy_float::Fp;
-use crate::num::flt2dec::{round_up, Decoded, MAX_SIG_DIGITS};
+use crate::num::flt2dec::{Decoded, MAX_SIG_DIGITS, round_up};
 
 // see the comments in `format_shortest_opt` for the rationale.
 #[doc(hidden)]
@@ -275,7 +275,7 @@ pub fn format_shortest_opt<'a>(
             let ten_kappa = (ten_kappa as u64) << e; // scale 10^kappa back to the shared exponent
             return round_and_weed(
                 // SAFETY: we initialized that memory above.
-                unsafe { MaybeUninit::slice_assume_init_mut(&mut buf[..i]) },
+                unsafe { buf[..i].assume_init_mut() },
                 exp,
                 plus1rem,
                 delta1,
@@ -324,7 +324,7 @@ pub fn format_shortest_opt<'a>(
             let ten_kappa = 1 << e; // implicit divisor
             return round_and_weed(
                 // SAFETY: we initialized that memory above.
-                unsafe { MaybeUninit::slice_assume_init_mut(&mut buf[..i]) },
+                unsafe { buf[..i].assume_init_mut() },
                 exp,
                 r,
                 threshold,
@@ -486,6 +486,22 @@ pub fn format_exact_opt<'a>(
     let e = -v.e as usize;
     let vint = (v.f >> e) as u32;
     let vfrac = v.f & ((1 << e) - 1);
+
+    let requested_digits = buf.len();
+
+    const POW10_UP_TO_9: [u32; 10] =
+        [1, 10, 100, 1000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000];
+
+    // We deviate from the original algorithm here and do some early checks to determine if we can satisfy requested_digits.
+    // If we determine that we can't, we exit early and avoid most of the heavy lifting that the algorithm otherwise does.
+    //
+    // When vfrac is zero, we can easily determine if vint can satisfy requested digits:
+    //      If requested_digits >= 11, vint is not able to exhaust the count by itself since 10^(11 -1) > u32 max value >= vint.
+    //      If vint < 10^(requested_digits - 1), vint cannot exhaust the count.
+    //      Otherwise, vint might be able to exhaust the count and we need to execute the rest of the code.
+    if (vfrac == 0) && ((requested_digits >= 11) || (vint < POW10_UP_TO_9[requested_digits - 1])) {
+        return None;
+    }
 
     // both old `v` and new `v` (scaled by `10^-k`) has an error of < 1 ulp (Theorem 5.1).
     // as we don't know the error is positive or negative, we use two approximations
@@ -697,7 +713,7 @@ pub fn format_exact_opt<'a>(
         // `10^kappa` did not overflow after all, the second check is fine.
         if ten_kappa - remainder > remainder && ten_kappa - 2 * remainder >= 2 * ulp {
             // SAFETY: our caller initialized that memory.
-            return Some((unsafe { MaybeUninit::slice_assume_init_ref(&buf[..len]) }, exp));
+            return Some((unsafe { buf[..len].assume_init_ref() }, exp));
         }
 
         //   :<------- remainder ------>|   :
@@ -720,7 +736,7 @@ pub fn format_exact_opt<'a>(
         if remainder > ulp && ten_kappa - (remainder - ulp) <= remainder - ulp {
             if let Some(c) =
                 // SAFETY: our caller must have initialized that memory.
-                round_up(unsafe { MaybeUninit::slice_assume_init_mut(&mut buf[..len]) })
+                round_up(unsafe { buf[..len].assume_init_mut() })
             {
                 // only add an additional digit when we've been requested the fixed precision.
                 // we also need to check that, if the original buffer was empty,
@@ -732,7 +748,7 @@ pub fn format_exact_opt<'a>(
                 }
             }
             // SAFETY: we and our caller initialized that memory.
-            return Some((unsafe { MaybeUninit::slice_assume_init_ref(&buf[..len]) }, exp));
+            return Some((unsafe { buf[..len].assume_init_ref() }, exp));
         }
 
         // otherwise we are doomed (i.e., some values between `v - 1 ulp` and `v + 1 ulp` are

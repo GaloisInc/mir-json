@@ -13,7 +13,6 @@ use super::error::*;
 use super::select::{Operation, Selected, Token};
 use super::utils::{Backoff, CachePadded};
 use super::waker::SyncWaker;
-
 use crate::cell::UnsafeCell;
 use crate::mem::MaybeUninit;
 use crate::ptr;
@@ -25,7 +24,8 @@ struct Slot<T> {
     /// The current stamp.
     stamp: AtomicUsize,
 
-    /// The message in this slot.
+    /// The message in this slot. Either read out in `read` or dropped through
+    /// `discard_all_messages`.
     msg: UnsafeCell<MaybeUninit<T>>,
 }
 
@@ -199,11 +199,12 @@ impl<T> Channel<T> {
             return Err(msg);
         }
 
-        let slot: &Slot<T> = &*(token.array.slot as *const Slot<T>);
-
         // Write the message into the slot and update the stamp.
-        slot.msg.get().write(MaybeUninit::new(msg));
-        slot.stamp.store(token.array.stamp, Ordering::Release);
+        unsafe {
+            let slot: &Slot<T> = &*(token.array.slot as *const Slot<T>);
+            slot.msg.get().write(MaybeUninit::new(msg));
+            slot.stamp.store(token.array.stamp, Ordering::Release);
+        }
 
         // Wake a sleeping receiver.
         self.receivers.notify();
@@ -290,11 +291,14 @@ impl<T> Channel<T> {
             return Err(());
         }
 
-        let slot: &Slot<T> = &*(token.array.slot as *const Slot<T>);
-
         // Read the message from the slot and update the stamp.
-        let msg = slot.msg.get().read().assume_init();
-        slot.stamp.store(token.array.stamp, Ordering::Release);
+        let msg = unsafe {
+            let slot: &Slot<T> = &*(token.array.slot as *const Slot<T>);
+
+            let msg = slot.msg.get().read().assume_init();
+            slot.stamp.store(token.array.stamp, Ordering::Release);
+            msg
+        };
 
         // Wake a sleeping sender.
         self.senders.notify();
@@ -319,19 +323,10 @@ impl<T> Channel<T> {
     ) -> Result<(), SendTimeoutError<T>> {
         let token = &mut Token::default();
         loop {
-            // Try sending a message several times.
-            let backoff = Backoff::new();
-            loop {
-                if self.start_send(token) {
-                    let res = unsafe { self.write(token, msg) };
-                    return res.map_err(SendTimeoutError::Disconnected);
-                }
-
-                if backoff.is_completed() {
-                    break;
-                } else {
-                    backoff.spin_light();
-                }
+            // Try sending a message.
+            if self.start_send(token) {
+                let res = unsafe { self.write(token, msg) };
+                return res.map_err(SendTimeoutError::Disconnected);
             }
 
             if let Some(d) = deadline {
@@ -351,7 +346,8 @@ impl<T> Channel<T> {
                 }
 
                 // Block the current thread.
-                let sel = cx.wait_until(deadline);
+                // SAFETY: the context belongs to the current thread.
+                let sel = unsafe { cx.wait_until(deadline) };
 
                 match sel {
                     Selected::Waiting => unreachable!(),
@@ -379,6 +375,7 @@ impl<T> Channel<T> {
     pub(crate) fn recv(&self, deadline: Option<Instant>) -> Result<T, RecvTimeoutError> {
         let token = &mut Token::default();
         loop {
+            // Try receiving a message.
             if self.start_recv(token) {
                 let res = unsafe { self.read(token) };
                 return res.map_err(|_| RecvTimeoutError::Disconnected);
@@ -401,7 +398,8 @@ impl<T> Channel<T> {
                 }
 
                 // Block the current thread.
-                let sel = cx.wait_until(deadline);
+                // SAFETY: the context belongs to the current thread.
+                let sel = unsafe { cx.wait_until(deadline) };
 
                 match sel {
                     Selected::Waiting => unreachable!(),
@@ -447,18 +445,96 @@ impl<T> Channel<T> {
         Some(self.cap)
     }
 
-    /// Disconnects the channel and wakes up all blocked senders and receivers.
+    /// Disconnects senders and wakes up all blocked receivers.
     ///
     /// Returns `true` if this call disconnected the channel.
-    pub(crate) fn disconnect(&self) -> bool {
+    pub(crate) fn disconnect_senders(&self) -> bool {
         let tail = self.tail.fetch_or(self.mark_bit, Ordering::SeqCst);
 
         if tail & self.mark_bit == 0 {
-            self.senders.disconnect();
             self.receivers.disconnect();
             true
         } else {
             false
+        }
+    }
+
+    /// Disconnects receivers and wakes up all blocked senders.
+    ///
+    /// Returns `true` if this call disconnected the channel.
+    ///
+    /// # Safety
+    /// May only be called once upon dropping the last receiver. The
+    /// destruction of all other receivers must have been observed with acquire
+    /// ordering or stronger.
+    pub(crate) unsafe fn disconnect_receivers(&self) -> bool {
+        let tail = self.tail.fetch_or(self.mark_bit, Ordering::SeqCst);
+        let disconnected = if tail & self.mark_bit == 0 {
+            self.senders.disconnect();
+            true
+        } else {
+            false
+        };
+
+        unsafe { self.discard_all_messages(tail) };
+        disconnected
+    }
+
+    /// Discards all messages.
+    ///
+    /// `tail` should be the current (and therefore last) value of `tail`.
+    ///
+    /// # Panicking
+    /// If a destructor panics, the remaining messages are leaked, matching the
+    /// behavior of the unbounded channel.
+    ///
+    /// # Safety
+    /// This method must only be called when dropping the last receiver. The
+    /// destruction of all other receivers must have been observed with acquire
+    /// ordering or stronger.
+    unsafe fn discard_all_messages(&self, tail: usize) {
+        debug_assert!(self.is_disconnected());
+
+        // Only receivers modify `head`, so since we are the last one,
+        // this value will not change and will not be observed (since
+        // no new messages can be sent after disconnection).
+        let mut head = self.head.load(Ordering::Relaxed);
+        let tail = tail & !self.mark_bit;
+
+        let backoff = Backoff::new();
+        loop {
+            // Deconstruct the head.
+            let index = head & (self.mark_bit - 1);
+            let lap = head & !(self.one_lap - 1);
+
+            // Inspect the corresponding slot.
+            debug_assert!(index < self.buffer.len());
+            let slot = unsafe { self.buffer.get_unchecked(index) };
+            let stamp = slot.stamp.load(Ordering::Acquire);
+
+            // If the stamp is ahead of the head by 1, we may drop the message.
+            if head + 1 == stamp {
+                head = if index + 1 < self.cap {
+                    // Same lap, incremented index.
+                    // Set to `{ lap: lap, mark: 0, index: index + 1 }`.
+                    head + 1
+                } else {
+                    // One lap forward, index wraps around to zero.
+                    // Set to `{ lap: lap.wrapping_add(1), mark: 0, index: 0 }`.
+                    lap.wrapping_add(self.one_lap)
+                };
+
+                unsafe {
+                    (*slot.msg.get()).assume_init_drop();
+                }
+            // If the tail equals the head, that means the channel is empty.
+            } else if tail == head {
+                return;
+            // Otherwise, a sender is about to write into the slot, so we need
+            // to wait for it to update the stamp.
+            } else {
+                backoff.spin_heavy();
+            }
         }
     }
 
@@ -489,25 +565,5 @@ impl<T> Channel<T> {
         // Note: If the tail changes just before we load the head, that means there was a moment
         // when the channel was not full, so it is safe to just return `false`.
         head.wrapping_add(self.one_lap) == tail & !self.mark_bit
-    }
-}
-
-impl<T> Drop for Channel<T> {
-    fn drop(&mut self) {
-        // Get the index of the head.
-        let hix = self.head.load(Ordering::Relaxed) & (self.mark_bit - 1);
-
-        // Loop over all slots that hold a message and drop them.
-        for i in 0..self.len() {
-            // Compute the index of the next slot holding a message.
-            let index = if hix + i < self.cap { hix + i } else { hix + i - self.cap };
-
-            unsafe {
-                debug_assert!(index < self.buffer.len());
-                let slot = self.buffer.get_unchecked_mut(index);
-                let msg = &mut *slot.msg.get();
-                msg.as_mut_ptr().drop_in_place();
-            }
-        }
     }
 }

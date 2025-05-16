@@ -19,6 +19,8 @@ macro_rules! bt {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittest)
 #[inline]
 #[cfg_attr(test, assert_instr(bt))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -36,6 +38,8 @@ pub unsafe fn _bittest(p: *const i32, b: i32) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then sets the bit to `1`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandset)
 #[inline]
 #[cfg_attr(test, assert_instr(bts))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -53,6 +57,8 @@ pub unsafe fn _bittestandset(p: *mut i32, b: i32) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then resets that bit to `0`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandreset)
 #[inline]
 #[cfg_attr(test, assert_instr(btr))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -70,6 +76,8 @@ pub unsafe fn _bittestandreset(p: *mut i32, b: i32) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then inverts that bit.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandcomplement)
 #[inline]
 #[cfg_attr(test, assert_instr(btc))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -91,6 +99,7 @@ mod tests {
     use crate::core_arch::x86::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittest() {
         unsafe {
             let a = 0b0101_0000i32;
@@ -100,6 +109,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandset() {
         unsafe {
             let mut a = 0b0101_0000i32;
@@ -111,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandreset() {
         unsafe {
             let mut a = 0b0101_0000i32;
@@ -122,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandcomplement() {
         unsafe {
             let mut a = 0b0101_0000i32;

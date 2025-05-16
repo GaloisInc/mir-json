@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
   gcc \
   libc6-dev \
@@ -6,9 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   make \
   ca-certificates \
   wget \
-  bzip2
+  xz-utils
 
-RUN wget https://github.com/gnzlbg/intel_sde/raw/master/sde-external-8.35.0-2019-03-11-lin.tar.bz2
-RUN tar -xjf sde-external-8.35.0-2019-03-11-lin.tar.bz2
-ENV SKIP_TESTS="avx512bf16"
-ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="/sde-external-8.35.0-2019-03-11-lin/sde64 -rtm_mode full --"
+RUN wget https://downloadmirror.intel.com/843185/sde-external-9.48.0-2024-11-25-lin.tar.xz
+RUN tar -xJf sde-external-9.48.0-2024-11-25-lin.tar.xz
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="/sde-external-9.48.0-2024-11-25-lin/sde64 \
+            -cpuid-in /checkout/ci/docker/x86_64-unknown-linux-gnu-emulated/cpuid.def \
+            -rtm-mode full -tsx --"

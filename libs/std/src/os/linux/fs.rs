@@ -5,10 +5,9 @@
 #![stable(feature = "metadata_ext", since = "1.1.0")]
 
 use crate::fs::Metadata;
-use crate::sys_common::AsInner;
-
 #[allow(deprecated)]
 use crate::os::linux::raw;
+use crate::sys_common::AsInner;
 
 /// OS-specific extensions to [`fs::Metadata`].
 ///
@@ -329,7 +328,14 @@ pub trait MetadataExt {
 impl MetadataExt for Metadata {
     #[allow(deprecated)]
     fn as_raw_stat(&self) -> &raw::stat {
-        unsafe { &*(self.as_inner().as_inner() as *const libc::stat64 as *const raw::stat) }
+        #[cfg(target_env = "musl")]
+        unsafe {
+            &*(self.as_inner().as_inner() as *const libc::stat as *const raw::stat)
+        }
+        #[cfg(not(target_env = "musl"))]
+        unsafe {
+            &*(self.as_inner().as_inner() as *const libc::stat64 as *const raw::stat)
+        }
     }
     fn st_dev(&self) -> u64 {
         self.as_inner().as_inner().st_dev as u64

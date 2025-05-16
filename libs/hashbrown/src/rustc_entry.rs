@@ -1,5 +1,5 @@
 use self::RustcEntry::*;
-use crate::map::{make_insert_hash, Drain, HashMap, IntoIter, Iter, IterMut};
+use crate::map::{make_hash, Drain, HashMap, IntoIter, Iter, IterMut};
 use crate::raw::{Allocator, Bucket, Global, RawTable};
 use core::fmt::{self, Debug};
 use core::hash::{BuildHasher, Hash};
@@ -9,7 +9,7 @@ impl<K, V, S, A> HashMap<K, V, S, A>
 where
     K: Eq + Hash,
     S: BuildHasher,
-    A: Allocator + Clone,
+    A: Allocator,
 {
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
     ///
@@ -32,10 +32,9 @@ where
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn rustc_entry(&mut self, key: K) -> RustcEntry<'_, K, V, A> {
-        let hash = make_insert_hash(&self.hash_builder, &key);
+        let hash = make_hash(&self.hash_builder, &key);
         if let Some(elem) = self.table.find(hash, |q| q.0.eq(&key)) {
             RustcEntry::Occupied(RustcOccupiedEntry {
-                key: Some(key),
                 elem,
                 table: &mut self.table,
             })
@@ -62,7 +61,7 @@ where
 /// [`rustc_entry`]: struct.HashMap.html#method.rustc_entry
 pub enum RustcEntry<'a, K, V, A = Global>
 where
-    A: Allocator + Clone,
+    A: Allocator,
 {
     /// An occupied entry.
     Occupied(RustcOccupiedEntry<'a, K, V, A>),
@@ -71,7 +70,7 @@ where
     Vacant(RustcVacantEntry<'a, K, V, A>),
 }
 
-impl<K: Debug, V: Debug, A: Allocator + Clone> Debug for RustcEntry<'_, K, V, A> {
+impl<K: Debug, V: Debug, A: Allocator> Debug for RustcEntry<'_, K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Vacant(ref v) => f.debug_tuple("Entry").field(v).finish(),
@@ -86,9 +85,8 @@ impl<K: Debug, V: Debug, A: Allocator + Clone> Debug for RustcEntry<'_, K, V, A>
 /// [`RustcEntry`]: enum.RustcEntry.html
 pub struct RustcOccupiedEntry<'a, K, V, A = Global>
 where
-    A: Allocator + Clone,
+    A: Allocator,
 {
-    key: Option<K>,
     elem: Bucket<(K, V)>,
     table: &'a mut RawTable<(K, V), A>,
 }
@@ -97,18 +95,18 @@ unsafe impl<K, V, A> Send for RustcOccupiedEntry<'_, K, V, A>
 where
     K: Send,
     V: Send,
-    A: Allocator + Clone + Send,
+    A: Allocator + Send,
 {
 }
 unsafe impl<K, V, A> Sync for RustcOccupiedEntry<'_, K, V, A>
 where
     K: Sync,
     V: Sync,
-    A: Allocator + Clone + Sync,
+    A: Allocator + Sync,
 {
 }
 
-impl<K: Debug, V: Debug, A: Allocator + Clone> Debug for RustcOccupiedEntry<'_, K, V, A> {
+impl<K: Debug, V: Debug, A: Allocator> Debug for RustcOccupiedEntry<'_, K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OccupiedEntry")
             .field("key", self.key())
@@ -123,20 +121,20 @@ impl<K: Debug, V: Debug, A: Allocator + Clone> Debug for RustcOccupiedEntry<'_, 
 /// [`RustcEntry`]: enum.RustcEntry.html
 pub struct RustcVacantEntry<'a, K, V, A = Global>
 where
-    A: Allocator + Clone,
+    A: Allocator,
 {
     hash: u64,
     key: K,
     table: &'a mut RawTable<(K, V), A>,
 }
 
-impl<K: Debug, V, A: Allocator + Clone> Debug for RustcVacantEntry<'_, K, V, A> {
+impl<K: Debug, V, A: Allocator> Debug for RustcVacantEntry<'_, K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("VacantEntry").field(self.key()).finish()
     }
 }
 
-impl<'a, K, V, A: Allocator + Clone> RustcEntry<'a, K, V, A> {
+impl<'a, K, V, A: Allocator> RustcEntry<'a, K, V, A> {
     /// Sets the value of the entry, and returns a RustcOccupiedEntry.
     ///
     /// # Examples
@@ -265,7 +263,7 @@ impl<'a, K, V, A: Allocator + Clone> RustcEntry<'a, K, V, A> {
     }
 }
 
-impl<'a, K, V: Default, A: Allocator + Clone> RustcEntry<'a, K, V, A> {
+impl<'a, K, V: Default, A: Allocator> RustcEntry<'a, K, V, A> {
     /// Ensures a value is in the entry by inserting the default value if empty,
     /// and returns a mutable reference to the value in the entry.
     ///
@@ -293,7 +291,7 @@ impl<'a, K, V: Default, A: Allocator + Clone> RustcEntry<'a, K, V, A> {
     }
 }
 
-impl<'a, K, V, A: Allocator + Clone> RustcOccupiedEntry<'a, K, V, A> {
+impl<'a, K, V, A: Allocator> RustcOccupiedEntry<'a, K, V, A> {
     /// Gets a reference to the key in the entry.
     ///
     /// # Examples
@@ -330,7 +328,7 @@ impl<'a, K, V, A: Allocator + Clone> RustcOccupiedEntry<'a, K, V, A> {
     /// ```
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn remove_entry(self) -> (K, V) {
-        unsafe { self.table.remove(self.elem) }
+        unsafe { self.table.remove(self.elem).0 }
     }
 
     /// Gets a reference to the value in the entry.
@@ -456,69 +454,9 @@ impl<'a, K, V, A: Allocator + Clone> RustcOccupiedEntry<'a, K, V, A> {
     pub fn remove(self) -> V {
         self.remove_entry().1
     }
-
-    /// Replaces the entry, returning the old key and value. The new key in the hash map will be
-    /// the key used to create this entry.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hashbrown::hash_map::{RustcEntry, HashMap};
-    /// use std::rc::Rc;
-    ///
-    /// let mut map: HashMap<Rc<String>, u32> = HashMap::new();
-    /// map.insert(Rc::new("Stringthing".to_string()), 15);
-    ///
-    /// let my_key = Rc::new("Stringthing".to_string());
-    ///
-    /// if let RustcEntry::Occupied(entry) = map.rustc_entry(my_key) {
-    ///     // Also replace the key with a handle to our other key.
-    ///     let (old_key, old_value): (Rc<String>, u32) = entry.replace_entry(16);
-    /// }
-    ///
-    /// ```
-    #[cfg_attr(feature = "inline-more", inline)]
-    pub fn replace_entry(self, value: V) -> (K, V) {
-        let entry = unsafe { self.elem.as_mut() };
-
-        let old_key = mem::replace(&mut entry.0, self.key.unwrap());
-        let old_value = mem::replace(&mut entry.1, value);
-
-        (old_key, old_value)
-    }
-
-    /// Replaces the key in the hash map with the key used to create this entry.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hashbrown::hash_map::{RustcEntry, HashMap};
-    /// use std::rc::Rc;
-    ///
-    /// let mut map: HashMap<Rc<String>, u32> = HashMap::new();
-    /// let mut known_strings: Vec<Rc<String>> = Vec::new();
-    ///
-    /// // Initialise known strings, run program, etc.
-    ///
-    /// reclaim_memory(&mut map, &known_strings);
-    ///
-    /// fn reclaim_memory(map: &mut HashMap<Rc<String>, u32>, known_strings: &[Rc<String>] ) {
-    ///     for s in known_strings {
-    ///         if let RustcEntry::Occupied(entry) = map.rustc_entry(s.clone()) {
-    ///             // Replaces the entry's key with our version of it in `known_strings`.
-    ///             entry.replace_key();
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    #[cfg_attr(feature = "inline-more", inline)]
-    pub fn replace_key(self) -> K {
-        let entry = unsafe { self.elem.as_mut() };
-        mem::replace(&mut entry.0, self.key.unwrap())
-    }
 }
 
-impl<'a, K, V, A: Allocator + Clone> RustcVacantEntry<'a, K, V, A> {
+impl<'a, K, V, A: Allocator> RustcVacantEntry<'a, K, V, A> {
     /// Gets a reference to the key that would be used when inserting a value
     /// through the `RustcVacantEntry`.
     ///
@@ -598,7 +536,6 @@ impl<'a, K, V, A: Allocator + Clone> RustcVacantEntry<'a, K, V, A> {
     pub fn insert_entry(self, value: V) -> RustcOccupiedEntry<'a, K, V, A> {
         let bucket = unsafe { self.table.insert_no_grow(self.hash, (self.key, value)) };
         RustcOccupiedEntry {
-            key: None,
             elem: bucket,
             table: self.table,
         }

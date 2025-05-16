@@ -11,15 +11,17 @@ use crate::deflate::buffer::{
     update_hash, HashBuffers, LocalBuf, LZ_CODE_BUF_SIZE, LZ_DICT_FULL_SIZE, LZ_HASH_BITS,
     LZ_HASH_SHIFT, LZ_HASH_SIZE, OUT_BUF_SIZE,
 };
+use crate::deflate::stored::compress_stored;
+use crate::deflate::zlib;
 use crate::shared::{update_adler32, HUFFMAN_LENGTH_ORDER, MZ_ADLER32_INIT};
 use crate::DataFormat;
 
 // Currently not bubbled up outside this module, so can fill in with more
 // context eventually if needed.
 type Result<T, E = Error> = core::result::Result<T, E>;
-struct Error {}
+pub(crate) struct Error {}
 
-const MAX_PROBES_MASK: i32 = 0xFFF;
+pub(crate) const MAX_PROBES_MASK: i32 = 0xFFF;
 
 const MAX_SUPPORTED_HUFF_CODESIZE: usize = 32;
 
@@ -157,7 +159,7 @@ const BITMASKS: [u32; 17] = [
 
 /// The maximum number of checks for matches in the hash table the compressor will make for each
 /// compression level.
-const NUM_PROBES: [u32; 11] = [0, 1, 6, 32, 16, 32, 128, 256, 512, 768, 1500];
+pub(crate) const NUM_PROBES: [u32; 11] = [0, 1, 6, 32, 16, 32, 128, 256, 512, 768, 1500];
 
 #[derive(Copy, Clone)]
 struct SymFreq {
@@ -206,6 +208,13 @@ pub enum CompressionStrategy {
     Fixed = 4,
 }
 
+impl From<CompressionStrategy> for i32 {
+    #[inline(always)]
+    fn from(value: CompressionStrategy) -> Self {
+        value as i32
+    }
+}
+
 /// A list of deflate flush types.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TDEFLFlush {
@@ -240,7 +249,7 @@ impl From<MZFlush> for TDEFLFlush {
 }
 
 impl TDEFLFlush {
-    pub fn new(flush: i32) -> Result<Self, MZError> {
+    pub const fn new(flush: i32) -> Result<Self, MZError> {
         match flush {
             0 => Ok(TDEFLFlush::None),
             2 => Ok(TDEFLFlush::Sync),
@@ -290,111 +299,13 @@ const MAX_HUFF_SYMBOLS_2: usize = 19;
 /// Size of the chained hash table.
 pub(crate) const LZ_DICT_SIZE: usize = 32_768;
 /// Mask used when stepping through the hash chains.
-const LZ_DICT_SIZE_MASK: usize = (LZ_DICT_SIZE as u32 - 1) as usize;
+pub(crate) const LZ_DICT_SIZE_MASK: usize = (LZ_DICT_SIZE as u32 - 1) as usize;
 /// The minimum length of a match.
-const MIN_MATCH_LEN: u8 = 3;
+pub(crate) const MIN_MATCH_LEN: u8 = 3;
 /// The maximum length of a match.
 pub(crate) const MAX_MATCH_LEN: usize = 258;
 
-const DEFAULT_FLAGS: u32 = NUM_PROBES[4] | TDEFL_WRITE_ZLIB_HEADER;
-
-mod zlib {
-    const DEFAULT_CM: u8 = 8;
-    const DEFAULT_CINFO: u8 = 7 << 4;
-    const _DEFAULT_FDICT: u8 = 0;
-    const DEFAULT_CMF: u8 = DEFAULT_CM | DEFAULT_CINFO;
-    /// The 16-bit value consisting of CMF and FLG must be divisible by this to be valid.
-    const FCHECK_DIVISOR: u8 = 31;
-
-    /// Generate FCHECK from CMF and FLG (without FCKECH )so that they are correct according to the
-    /// specification, i.e (CMF*256 + FCHK) % 31 = 0.
-    /// Returns flg with the FCHKECK bits added (any existing FCHECK bits are ignored).
-    fn add_fcheck(cmf: u8, flg: u8) -> u8 {
-        let rem = ((usize::from(cmf) * 256) + usize::from(flg)) % usize::from(FCHECK_DIVISOR);
-
-        // Clear existing FCHECK if any
-        let flg = flg & 0b11100000;
-
-        // Casting is safe as rem can't overflow since it is a value mod 31
-        // We can simply add the value to flg as (31 - rem) will never be above 2^5
-        flg + (FCHECK_DIVISOR - rem as u8)
-    }
-
-    fn zlib_level_from_flags(flags: u32) -> u8 {
-        use super::NUM_PROBES;
-
-        let num_probes = flags & (super::MAX_PROBES_MASK as u32);
-        if flags & super::TDEFL_GREEDY_PARSING_FLAG != 0 {
-            if num_probes <= 1 {
-                0
-            } else {
-                1
-            }
-        } else if num_probes >= NUM_PROBES[9] {
-            3
-        } else {
-            2
-        }
-    }
-
-    /// Get the zlib header for the level using the default window size and no
-    /// dictionary.
-    fn header_from_level(level: u8) -> [u8; 2] {
-        let cmf = DEFAULT_CMF;
-        [cmf, add_fcheck(cmf, (level as u8) << 6)]
-    }
-
-    /// Create a zlib header from the given compression flags.
-    /// Only level is considered.
-    pub fn header_from_flags(flags: u32) -> [u8; 2] {
-        let level = zlib_level_from_flags(flags);
-        header_from_level(level)
-    }
-
-    #[cfg(test)]
-    mod test {
-        #[test]
-        fn zlib() {
-            use super::super::*;
-            use super::*;
-
-            let test_level = |level, expected| {
-                let flags = create_comp_flags_from_zip_params(
-                    level,
-                    MZ_DEFAULT_WINDOW_BITS,
-                    CompressionStrategy::Default as i32,
-                );
-                assert_eq!(zlib_level_from_flags(flags), expected);
-            };
-
-            assert_eq!(zlib_level_from_flags(DEFAULT_FLAGS), 2);
-            test_level(0, 0);
-            test_level(1, 0);
-            test_level(2, 1);
-            test_level(3, 1);
-            for i in 4..=8 {
-                test_level(i, 2)
-            }
-            test_level(9, 3);
-            test_level(10, 3);
-        }
-
-        #[test]
-        fn test_header() {
-            let header = super::header_from_level(3);
-            assert_eq!(
-                ((usize::from(header[0]) * 256) + usize::from(header[1])) % 31,
-                0
-            );
-        }
-    }
-}
-
-fn memset<T: Copy>(slice: &mut [T], val: T) {
-    for x in slice {
-        *x = val
-    }
-}
+pub(crate) const DEFAULT_FLAGS: u32 = NUM_PROBES[4] | TDEFL_WRITE_ZLIB_HEADER;
 
 #[cfg(test)]
 #[inline]
@@ -412,10 +323,12 @@ const fn read_u16_le(slice: &[u8], pos: usize) -> u16 {
 
 /// Main compression struct.
 pub struct CompressorOxide {
-    lz: LZOxide,
-    params: ParamsOxide,
-    huff: Box<HuffmanOxide>,
-    dict: DictOxide,
+    pub(crate) lz: LZOxide,
+    pub(crate) params: ParamsOxide,
+    /// Put HuffmanOxide on the heap with default trick to avoid
+    /// excessive stack copies.
+    pub(crate) huff: Box<HuffmanOxide>,
+    pub(crate) dict: DictOxide,
 }
 
 impl CompressorOxide {
@@ -427,8 +340,6 @@ impl CompressorOxide {
         CompressorOxide {
             lz: LZOxide::new(),
             params: ParamsOxide::new(flags),
-            /// Put HuffmanOxide on the heap with default trick to avoid
-            /// excessive stack copies.
             huff: Box::default(),
             dict: DictOxide::new(flags),
         }
@@ -454,7 +365,7 @@ impl CompressorOxide {
     }
 
     /// Returns whether the compressor is wrapping the data in a zlib format or not.
-    pub fn data_format(&self) -> DataFormat {
+    pub const fn data_format(&self) -> DataFormat {
         if (self.params.flags & TDEFL_WRITE_ZLIB_HEADER) != 0 {
             DataFormat::Zlib
         } else {
@@ -517,13 +428,10 @@ impl CompressorOxide {
 impl Default for CompressorOxide {
     /// Initialize the compressor with a level of 4, zlib wrapper and
     /// the default strategy.
-    #[inline(always)]
     fn default() -> Self {
         CompressorOxide {
             lz: LZOxide::new(),
             params: ParamsOxide::new(DEFAULT_FLAGS),
-            /// Put HuffmanOxide on the heap with default trick to avoid
-            /// excessive stack copies.
             huff: Box::default(),
             dict: DictOxide::new(DEFAULT_FLAGS),
         }
@@ -535,7 +443,7 @@ pub struct CallbackFunc<'a> {
     pub put_buf_func: &'a mut dyn FnMut(&[u8]) -> bool,
 }
 
-impl<'a> CallbackFunc<'a> {
+impl CallbackFunc<'_> {
     fn flush_output(
         &mut self,
         saved_output: SavedOutputBufferOxide,
@@ -544,7 +452,7 @@ impl<'a> CallbackFunc<'a> {
         // TODO: As this could be unsafe since
         // we can't verify the function pointer
         // this whole function should maybe be unsafe as well.
-        let call_success = (self.put_buf_func)(&params.local_buf.b[0..saved_output.pos as usize]);
+        let call_success = (self.put_buf_func)(&params.local_buf.b[0..saved_output.pos]);
 
         if !call_success {
             params.prev_return_status = TDEFLStatus::PutBufFailed;
@@ -559,18 +467,15 @@ struct CallbackBuf<'a> {
     pub out_buf: &'a mut [u8],
 }
 
-impl<'a> CallbackBuf<'a> {
+impl CallbackBuf<'_> {
     fn flush_output(
         &mut self,
         saved_output: SavedOutputBufferOxide,
         params: &mut ParamsOxide,
     ) -> i32 {
         if saved_output.local {
-            let n = cmp::min(
-                saved_output.pos as usize,
-                self.out_buf.len() - params.out_buf_ofs,
-            );
-            (&mut self.out_buf[params.out_buf_ofs..params.out_buf_ofs + n])
+            let n = cmp::min(saved_output.pos, self.out_buf.len() - params.out_buf_ofs);
+            (self.out_buf[params.out_buf_ofs..params.out_buf_ofs + n])
                 .copy_from_slice(&params.local_buf.b[..n]);
 
             params.out_buf_ofs += n;
@@ -591,7 +496,7 @@ enum CallbackOut<'a> {
     Buf(CallbackBuf<'a>),
 }
 
-impl<'a> CallbackOut<'a> {
+impl CallbackOut<'_> {
     fn new_output_buffer<'b>(
         &'b mut self,
         local_buf: &'b mut [u8],
@@ -620,7 +525,7 @@ impl<'a> CallbackOut<'a> {
     }
 }
 
-struct CallbackOxide<'a> {
+pub(crate) struct CallbackOxide<'a> {
     in_buf: Option<&'a [u8]>,
     in_buf_size: Option<&'a mut usize>,
     out_buf_size: Option<&'a mut usize>,
@@ -671,6 +576,10 @@ impl<'a> CallbackOxide<'a> {
             CallbackOut::Buf(ref mut cb) => cb.flush_output(saved_output, params),
         }
     }
+
+    pub(crate) fn buf(&mut self) -> Option<&'a [u8]> {
+        self.in_buf
+    }
 }
 
 struct OutputBufferOxide<'a> {
@@ -682,17 +591,31 @@ struct OutputBufferOxide<'a> {
     pub bits_in: u32,
 }
 
-impl<'a> OutputBufferOxide<'a> {
+impl OutputBufferOxide<'_> {
+    /// Write bits to the bit buffer and flushes
+    /// the bit buffer so any whole bytes are output
+    /// to the underlying buffer.
     fn put_bits(&mut self, bits: u32, len: u32) {
+        // TODO: Removing this assertion worsens performance
+        // Need to figure out why
         assert!(bits <= ((1u32 << len) - 1u32));
         self.bit_buffer |= bits << self.bits_in;
         self.bits_in += len;
+
         while self.bits_in >= 8 {
             self.inner[self.inner_pos] = self.bit_buffer as u8;
             self.inner_pos += 1;
             self.bit_buffer >>= 8;
             self.bits_in -= 8;
         }
+    }
+
+    #[inline]
+    /// Write the provided bits to the bit buffer without flushing
+    /// anything. Does not check if there is actually space for it.
+    fn put_bits_no_flush(&mut self, bits: u32, len: u32) {
+        self.bit_buffer |= bits << self.bits_in;
+        self.bits_in += len;
     }
 
     const fn save(&self) -> SavedOutputBufferOxide {
@@ -711,11 +634,21 @@ impl<'a> OutputBufferOxide<'a> {
         self.local = saved.local;
     }
 
+    #[inline]
+    /// Pad the bit buffer to a whole byte with
+    /// zeroes and write that byte to the output buffer.
     fn pad_to_bytes(&mut self) {
         if self.bits_in != 0 {
             let len = 8 - self.bits_in;
             self.put_bits(0, len);
         }
+    }
+
+    #[inline]
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        debug_assert_eq!(self.bits_in, 0);
+        self.inner[self.inner_pos..self.inner_pos + bytes.len()].copy_from_slice(bytes);
+        self.inner_pos += bytes.len();
     }
 }
 
@@ -760,7 +693,7 @@ impl BitBuffer {
 /// NOTE: Only the literal/lengths have enough symbols to actually use
 /// the full array. It's unclear why it's defined like this in miniz,
 /// it could be for cache/alignment reasons.
-struct HuffmanOxide {
+pub(crate) struct HuffmanOxide {
     /// Number of occurrences of each symbol.
     pub count: [[u16; MAX_HUFF_SYMBOLS]; MAX_HUFF_TABLES],
     /// The bits of the huffman code assigned to the symbol
@@ -779,7 +712,7 @@ const HUFF_CODES_TABLE: usize = 2;
 /// Status of RLE encoding of huffman code lengths.
 struct Rle {
     pub z_count: u32,
-    pub repeat_count: u32,
+    pub repeat_count: u16,
     pub prev_code_size: u8,
 }
 
@@ -795,7 +728,7 @@ impl Rle {
         if self.repeat_count != 0 {
             if self.repeat_count < 3 {
                 counts[self.prev_code_size as usize] =
-                    counts[self.prev_code_size as usize].wrapping_add(self.repeat_count as u16);
+                    counts[self.prev_code_size as usize].wrapping_add(self.repeat_count);
                 let code = self.prev_code_size;
                 write(&[code, code, code][..self.repeat_count as usize])?;
             } else {
@@ -1020,8 +953,8 @@ impl HuffmanOxide {
 
             Self::enforce_max_code_size(&mut num_codes, num_used_symbols, code_size_limit);
 
-            memset(&mut self.code_sizes[table_num][..], 0);
-            memset(&mut self.codes[table_num][..], 0);
+            self.code_sizes[table_num].fill(0);
+            self.codes[table_num].fill(0);
 
             let mut last = num_used_symbols;
             for (i, &num_item) in num_codes
@@ -1067,12 +1000,12 @@ impl HuffmanOxide {
     }
 
     fn start_static_block(&mut self, output: &mut OutputBufferOxide) {
-        memset(&mut self.code_sizes[LITLEN_TABLE][0..144], 8);
-        memset(&mut self.code_sizes[LITLEN_TABLE][144..256], 9);
-        memset(&mut self.code_sizes[LITLEN_TABLE][256..280], 7);
-        memset(&mut self.code_sizes[LITLEN_TABLE][280..288], 8);
+        self.code_sizes[LITLEN_TABLE][0..144].fill(8);
+        self.code_sizes[LITLEN_TABLE][144..256].fill(9);
+        self.code_sizes[LITLEN_TABLE][256..280].fill(7);
+        self.code_sizes[LITLEN_TABLE][280..288].fill(8);
 
-        memset(&mut self.code_sizes[DIST_TABLE][..32], 5);
+        self.code_sizes[DIST_TABLE][..32].fill(5);
 
         self.optimize_table(LITLEN_TABLE, 288, 15, true);
         self.optimize_table(DIST_TABLE, 32, 15, true);
@@ -1117,7 +1050,7 @@ impl HuffmanOxide {
             prev_code_size: 0xFF,
         };
 
-        memset(&mut self.count[HUFF_CODES_TABLE][..MAX_HUFF_SYMBOLS_2], 0);
+        self.count[HUFF_CODES_TABLE][..MAX_HUFF_SYMBOLS_2].fill(0);
 
         let mut packed_pos = 0;
         for &code_size in &code_sizes_to_pack[..total_code_sizes_to_pack] {
@@ -1152,10 +1085,10 @@ impl HuffmanOxide {
 
         self.optimize_table(2, MAX_HUFF_SYMBOLS_2, 7, false);
 
-        output.put_bits(2, 2);
+        output.put_bits_no_flush(2, 2);
 
-        output.put_bits((num_lit_codes - 257) as u32, 5);
-        output.put_bits((num_dist_codes - 1) as u32, 5);
+        output.put_bits_no_flush((num_lit_codes - 257) as u32, 5);
+        output.put_bits_no_flush((num_dist_codes - 1) as u32, 5);
 
         let mut num_bit_lengths = 18
             - HUFFMAN_LENGTH_ORDER
@@ -1195,7 +1128,7 @@ impl HuffmanOxide {
     }
 }
 
-struct DictOxide {
+pub(crate) struct DictOxide {
     /// The maximum number of checks in the hash chain, for the initial,
     /// and the lazy match respectively.
     pub max_probes: [u32; 2],
@@ -1245,9 +1178,11 @@ impl DictOxide {
     #[inline]
     fn read_unaligned_u32(&self, pos: usize) -> u32 {
         // Masking the value here helps avoid bounds checks.
-        let pos = (pos & LZ_DICT_SIZE_MASK) as usize;
+        let pos = pos & LZ_DICT_SIZE_MASK;
         let end = pos + 4;
         // Somehow this assertion makes things faster.
+        // TODO: as of may 2024 this does not seem to make any difference
+        // so consider removing.
         assert!(end < LZ_DICT_FULL_SIZE);
 
         let bytes: [u8; 4] = self.b.dict[pos..end].try_into().unwrap();
@@ -1258,7 +1193,10 @@ impl DictOxide {
     /// type T.
     #[inline]
     fn read_unaligned_u64(&self, pos: usize) -> u64 {
-        let pos = pos as usize;
+        // Help evade bounds/panic code check by masking the position value
+        // This provides a small speedup at the cost of an instruction or two instead of
+        // having to use unsafe.
+        let pos = pos & LZ_DICT_SIZE_MASK;
         let bytes: [u8; 8] = self.b.dict[pos..pos + 8].try_into().unwrap();
         u64::from_le_bytes(bytes)
     }
@@ -1290,7 +1228,7 @@ impl DictOxide {
         let max_match_len = cmp::min(MAX_MATCH_LEN as u32, max_match_len);
         match_len = cmp::max(match_len, 1);
 
-        let pos = lookahead_pos as usize & LZ_DICT_SIZE_MASK;
+        let pos = lookahead_pos & LZ_DICT_SIZE_MASK;
         let mut probe_pos = pos;
         // Number of probes into the hash chains.
         let mut num_probes_left = self.max_probes[(match_len >= 32) as usize];
@@ -1301,9 +1239,9 @@ impl DictOxide {
         }
 
         // Read the last byte of the current match, and the next one, used to compare matches.
-        let mut c01: u16 = self.read_as_u16(pos as usize + match_len as usize - 1);
+        let mut c01: u16 = self.read_as_u16(pos + match_len as usize - 1);
         // Read the two bytes at the end position of the current match.
-        let s01: u16 = self.read_as_u16(pos as usize);
+        let s01: u16 = self.read_as_u16(pos);
 
         'outer: loop {
             let mut dist;
@@ -1316,7 +1254,7 @@ impl DictOxide {
                 }
 
                 for _ in 0..3 {
-                    let next_probe_pos = self.b.next[probe_pos as usize] as usize;
+                    let next_probe_pos = self.b.next[probe_pos] as usize;
 
                     dist = (lookahead_pos - next_probe_pos) & 0xFFFF;
                     if next_probe_pos == 0 || dist > max_dist {
@@ -1330,7 +1268,8 @@ impl DictOxide {
                     // position to match against.
                     probe_pos = next_probe_pos & LZ_DICT_SIZE_MASK;
 
-                    if self.read_as_u16((probe_pos + match_len as usize - 1) as usize) == c01 {
+                    // TODO: This bounds check does not get optimized out
+                    if self.read_as_u16(probe_pos + match_len as usize - 1) == c01 {
                         break 'found;
                     }
                 }
@@ -1343,7 +1282,7 @@ impl DictOxide {
             }
 
             // Check if the two first bytes match.
-            if self.read_as_u16(probe_pos as usize) != s01 {
+            if self.read_as_u16(probe_pos) != s01 {
                 continue;
             }
 
@@ -1384,7 +1323,7 @@ impl DictOxide {
     }
 }
 
-struct ParamsOxide {
+pub(crate) struct ParamsOxide {
     pub flags: u32,
     pub greedy_parsing: bool,
     pub block_index: u32,
@@ -1459,13 +1398,12 @@ impl ParamsOxide {
     }
 }
 
-struct LZOxide {
+pub(crate) struct LZOxide {
     pub codes: [u8; LZ_CODE_BUF_SIZE],
     pub code_position: usize,
     pub flag_position: usize,
 
     // The total number of bytes in the current block.
-    // (Could maybe use usize, but it's not possible to exceed a block size of )
     pub total_bytes: u32,
     pub num_flags_left: u32,
 }
@@ -1482,7 +1420,9 @@ impl LZOxide {
     }
 
     fn write_code(&mut self, val: u8) {
-        self.codes[self.code_position] = val;
+        // Perf - go via u16 to help evade bounds check
+        // TODO: see if we can use u16 for flag_position in general.
+        self.codes[usize::from(self.code_position as u16)] = val;
         self.code_position += 1;
     }
 
@@ -1496,7 +1436,9 @@ impl LZOxide {
     }
 
     fn get_flag(&mut self) -> &mut u8 {
-        &mut self.codes[self.flag_position]
+        // Perf - go via u16 to help evade bounds check
+        // TODO: see if we can use u16 for flag_position in general.
+        &mut self.codes[usize::from(self.flag_position as u16)]
     }
 
     fn plant_flag(&mut self) {
@@ -1568,7 +1510,7 @@ fn compress_lz_codes(
                 u32::from(huff.code_sizes[1][sym]),
             );
             bb.put_fast(
-                u64::from(match_dist) & u64::from(BITMASKS[num_extra_bits as usize]),
+                u64::from(match_dist) & u64::from(BITMASKS[num_extra_bits]),
                 num_extra_bits as u32,
             );
         } else {
@@ -1626,7 +1568,7 @@ fn compress_block(
     compress_lz_codes(huff, output, &lz.codes[..lz.code_position])
 }
 
-fn flush_block(
+pub(crate) fn flush_block(
     d: &mut CompressorOxide,
     callback: &mut CallbackOxide,
     flush: TDEFLFlush,
@@ -1639,8 +1581,13 @@ fn flush_block(
         output.bit_buffer = d.params.saved_bit_buffer;
         output.bits_in = d.params.saved_bits_in;
 
+        // TODO: Don't think this second condition should be here but need to verify.
         let use_raw_block = (d.params.flags & TDEFL_FORCE_ALL_RAW_BLOCKS != 0)
             && (d.dict.lookahead_pos - d.dict.code_buf_dict_pos) <= d.dict.size;
+        debug_assert_eq!(
+            use_raw_block,
+            d.params.flags & TDEFL_FORCE_ALL_RAW_BLOCKS != 0
+        );
 
         assert!(d.params.flush_remaining == 0);
         d.params.flush_ofs = 0;
@@ -1650,8 +1597,8 @@ fn flush_block(
 
         // If we are at the start of the stream, write the zlib header if requested.
         if d.params.flags & TDEFL_WRITE_ZLIB_HEADER != 0 && d.params.block_index == 0 {
-            let header = zlib::header_from_flags(d.params.flags as u32);
-            output.put_bits(header[0].into(), 8);
+            let header = zlib::header_from_flags(d.params.flags);
+            output.put_bits_no_flush(header[0].into(), 8);
             output.put_bits(header[1].into(), 8);
         }
 
@@ -1695,9 +1642,14 @@ fn flush_block(
             output.put_bits(!d.lz.total_bytes & 0xFFFF, 16);
 
             // Write the actual bytes.
-            for i in 0..d.lz.total_bytes {
-                let pos = (d.dict.code_buf_dict_pos + i as usize) & LZ_DICT_SIZE_MASK;
-                output.put_bits(u32::from(d.dict.b.dict[pos as usize]), 8);
+            let start = d.dict.code_buf_dict_pos & LZ_DICT_SIZE_MASK;
+            let end = (d.dict.code_buf_dict_pos + d.lz.total_bytes as usize) & LZ_DICT_SIZE_MASK;
+            let dict = &mut d.dict.b.dict;
+            if start < end {
+                output.write_bytes(&dict[start..end]);
+            } else {
+                output.write_bytes(&dict[start..LZ_DICT_SIZE]);
+                output.write_bytes(&dict[..end]);
             }
         } else if !comp_success {
             output.load(saved_buffer);
@@ -1724,9 +1676,10 @@ fn flush_block(
             }
         }
 
-        memset(&mut d.huff.count[0][..MAX_HUFF_SYMBOLS_0], 0);
-        memset(&mut d.huff.count[1][..MAX_HUFF_SYMBOLS_1], 0);
+        d.huff.count[0][..MAX_HUFF_SYMBOLS_0].fill(0);
+        d.huff.count[1][..MAX_HUFF_SYMBOLS_1].fill(0);
 
+        // Clear LZ buffer for the next block.
         d.lz.code_position = 1;
         d.lz.flag_position = 0;
         d.lz.num_flags_left = 8;
@@ -1743,7 +1696,7 @@ fn flush_block(
     Ok(callback.flush_output(saved_buffer, &mut d.params))
 }
 
-fn record_literal(h: &mut HuffmanOxide, lz: &mut LZOxide, lit: u8) {
+pub(crate) fn record_literal(h: &mut HuffmanOxide, lz: &mut LZOxide, lit: u8) {
     lz.total_bytes += 1;
     lz.write_code(lit);
 
@@ -1754,9 +1707,9 @@ fn record_literal(h: &mut HuffmanOxide, lz: &mut LZOxide, lit: u8) {
 }
 
 fn record_match(h: &mut HuffmanOxide, lz: &mut LZOxide, mut match_len: u32, mut match_dist: u32) {
-    assert!(match_len >= MIN_MATCH_LEN.into());
-    assert!(match_dist >= 1);
-    assert!(match_dist as usize <= LZ_DICT_SIZE);
+    debug_assert!(match_len >= MIN_MATCH_LEN.into());
+    debug_assert!(match_dist >= 1);
+    debug_assert!(match_dist as usize <= LZ_DICT_SIZE);
 
     lz.total_bytes += match_len;
     match_dist -= 1;
@@ -1775,7 +1728,8 @@ fn record_match(h: &mut HuffmanOxide, lz: &mut LZOxide, mut match_len: u32, mut 
         LARGE_DIST_SYM[((match_dist >> 8) & 127) as usize]
     } as usize;
     h.count[1][symbol] += 1;
-    h.count[0][LEN_SYM[match_len as usize] as usize] += 1;
+    // Perf - go via u8 to help optimize out bounds check.
+    h.count[0][LEN_SYM[usize::from(match_len as u8)] as usize] += 1;
 }
 
 fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> bool {
@@ -1793,33 +1747,33 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
 
     while src_pos < in_buf.len() || (d.params.flush != TDEFLFlush::None && lookahead_size != 0) {
         let src_buf_left = in_buf.len() - src_pos;
-        let num_bytes_to_process = cmp::min(src_buf_left, MAX_MATCH_LEN - lookahead_size as usize);
+        let num_bytes_to_process = cmp::min(src_buf_left, MAX_MATCH_LEN - lookahead_size);
 
         if lookahead_size + d.dict.size >= usize::from(MIN_MATCH_LEN) - 1
             && num_bytes_to_process > 0
         {
             let dictb = &mut d.dict.b;
 
-            let mut dst_pos = (lookahead_pos + lookahead_size as usize) & LZ_DICT_SIZE_MASK;
-            let mut ins_pos = lookahead_pos + lookahead_size as usize - 2;
+            let mut dst_pos = (lookahead_pos + lookahead_size) & LZ_DICT_SIZE_MASK;
+            let mut ins_pos = lookahead_pos + lookahead_size - 2;
             // Start the hash value from the first two bytes
             let mut hash = update_hash(
-                u16::from(dictb.dict[(ins_pos & LZ_DICT_SIZE_MASK) as usize]),
-                dictb.dict[((ins_pos + 1) & LZ_DICT_SIZE_MASK) as usize],
+                u16::from(dictb.dict[ins_pos & LZ_DICT_SIZE_MASK]),
+                dictb.dict[(ins_pos + 1) & LZ_DICT_SIZE_MASK],
             );
 
             lookahead_size += num_bytes_to_process;
 
             for &c in &in_buf[src_pos..src_pos + num_bytes_to_process] {
                 // Add byte to input buffer.
-                dictb.dict[dst_pos as usize] = c;
-                if (dst_pos as usize) < MAX_MATCH_LEN - 1 {
-                    dictb.dict[LZ_DICT_SIZE + dst_pos as usize] = c;
+                dictb.dict[dst_pos] = c;
+                if dst_pos < MAX_MATCH_LEN - 1 {
+                    dictb.dict[LZ_DICT_SIZE + dst_pos] = c;
                 }
 
                 // Generate hash from the current byte,
                 hash = update_hash(hash, c);
-                dictb.next[(ins_pos & LZ_DICT_SIZE_MASK) as usize] = dictb.hash[hash as usize];
+                dictb.next[ins_pos & LZ_DICT_SIZE_MASK] = dictb.hash[hash as usize];
                 // and insert it into the hash chain.
                 dictb.hash[hash as usize] = ins_pos as u16;
                 dst_pos = (dst_pos + 1) & LZ_DICT_SIZE_MASK;
@@ -1830,22 +1784,22 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
             let dictb = &mut d.dict.b;
             for &c in &in_buf[src_pos..src_pos + num_bytes_to_process] {
                 let dst_pos = (lookahead_pos + lookahead_size) & LZ_DICT_SIZE_MASK;
-                dictb.dict[dst_pos as usize] = c;
-                if (dst_pos as usize) < MAX_MATCH_LEN - 1 {
-                    dictb.dict[LZ_DICT_SIZE + dst_pos as usize] = c;
+                dictb.dict[dst_pos] = c;
+                if dst_pos < MAX_MATCH_LEN - 1 {
+                    dictb.dict[LZ_DICT_SIZE + dst_pos] = c;
                 }
 
                 lookahead_size += 1;
                 if lookahead_size + d.dict.size >= MIN_MATCH_LEN.into() {
                     let ins_pos = lookahead_pos + lookahead_size - 3;
-                    let hash = ((u32::from(dictb.dict[(ins_pos & LZ_DICT_SIZE_MASK) as usize])
+                    let hash = ((u32::from(dictb.dict[ins_pos & LZ_DICT_SIZE_MASK])
                         << (LZ_HASH_SHIFT * 2))
-                        ^ ((u32::from(dictb.dict[((ins_pos + 1) & LZ_DICT_SIZE_MASK) as usize])
+                        ^ ((u32::from(dictb.dict[(ins_pos + 1) & LZ_DICT_SIZE_MASK])
                             << LZ_HASH_SHIFT)
                             ^ u32::from(c)))
                         & (LZ_HASH_SIZE as u32 - 1);
 
-                    dictb.next[(ins_pos & LZ_DICT_SIZE_MASK) as usize] = dictb.hash[hash as usize];
+                    dictb.next[ins_pos & LZ_DICT_SIZE_MASK] = dictb.hash[hash as usize];
                     dictb.hash[hash as usize] = ins_pos as u16;
                 }
             }
@@ -1854,7 +1808,7 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
         }
 
         d.dict.size = cmp::min(LZ_DICT_SIZE - lookahead_size, d.dict.size);
-        if d.params.flush == TDEFLFlush::None && (lookahead_size as usize) < MAX_MATCH_LEN {
+        if d.params.flush == TDEFLFlush::None && lookahead_size < MAX_MATCH_LEN {
             break;
         }
 
@@ -1866,11 +1820,11 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
             u32::from(MIN_MATCH_LEN) - 1
         };
         let cur_pos = lookahead_pos & LZ_DICT_SIZE_MASK;
-        if d.params.flags & (TDEFL_RLE_MATCHES | TDEFL_FORCE_ALL_RAW_BLOCKS) != 0 {
+        if d.params.flags & TDEFL_RLE_MATCHES != 0 {
             // If TDEFL_RLE_MATCHES is set, we only look for repeating sequences of the current byte.
-            if d.dict.size != 0 && d.params.flags & TDEFL_FORCE_ALL_RAW_BLOCKS == 0 {
-                let c = d.dict.b.dict[((cur_pos.wrapping_sub(1)) & LZ_DICT_SIZE_MASK) as usize];
-                cur_match_len = d.dict.b.dict[cur_pos as usize..(cur_pos + lookahead_size) as usize]
+            if d.dict.size != 0 {
+                let c = d.dict.b.dict[(cur_pos.wrapping_sub(1)) & LZ_DICT_SIZE_MASK];
+                cur_match_len = d.dict.b.dict[cur_pos..(cur_pos + lookahead_size)]
                     .iter()
                     .take_while(|&x| *x == c)
                     .count() as u32;
@@ -1908,7 +1862,7 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
                     saved_match_len = 0;
                     len_to_move = cur_match_len as usize;
                 } else {
-                    saved_lit = d.dict.b.dict[cur_pos as usize];
+                    saved_lit = d.dict.b.dict[cur_pos];
                     saved_match_dist = cur_match_dist;
                     saved_match_len = cur_match_len;
                 }
@@ -1921,7 +1875,7 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
             record_literal(
                 &mut d.huff,
                 &mut d.lz,
-                d.dict.b.dict[cmp::min(cur_pos as usize, d.dict.b.dict.len() - 1)],
+                d.dict.b.dict[cmp::min(cur_pos, d.dict.b.dict.len() - 1)],
             );
         } else if d.params.greedy_parsing
             || (d.params.flags & TDEFL_RLE_MATCHES != 0)
@@ -1932,7 +1886,7 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
             record_match(&mut d.huff, &mut d.lz, cur_match_len, cur_match_dist);
             len_to_move = cur_match_len as usize;
         } else {
-            saved_lit = d.dict.b.dict[cmp::min(cur_pos as usize, d.dict.b.dict.len() - 1)];
+            saved_lit = d.dict.b.dict[cmp::min(cur_pos, d.dict.b.dict.len() - 1)];
             saved_match_dist = cur_match_dist;
             saved_match_len = cur_match_len;
         }
@@ -1943,11 +1897,10 @@ fn compress_normal(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> boo
         d.dict.size = cmp::min(d.dict.size + len_to_move, LZ_DICT_SIZE);
 
         let lz_buf_tight = d.lz.code_position > LZ_CODE_BUF_SIZE - 8;
-        let raw = d.params.flags & TDEFL_FORCE_ALL_RAW_BLOCKS != 0;
         let fat = ((d.lz.code_position * 115) >> 7) >= d.lz.total_bytes as usize;
-        let fat_or_raw = (d.lz.total_bytes > 31 * 1024) && (fat || raw);
+        let buf_fat = (d.lz.total_bytes > 31 * 1024) && fat;
 
-        if lz_buf_tight || fat_or_raw {
+        if lz_buf_tight || buf_fat {
             d.params.src_pos = src_pos;
             // These values are used in flush_block, so we need to write them back here.
             d.dict.lookahead_size = lookahead_size;
@@ -1989,10 +1942,10 @@ fn compress_fast(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> bool 
     debug_assert!(d.lz.code_position < LZ_CODE_BUF_SIZE - 2);
 
     while src_pos < in_buf.len() || (d.params.flush != TDEFLFlush::None && lookahead_size > 0) {
-        let mut dst_pos = ((lookahead_pos + lookahead_size) & LZ_DICT_SIZE_MASK) as usize;
+        let mut dst_pos = (lookahead_pos + lookahead_size) & LZ_DICT_SIZE_MASK;
         let mut num_bytes_to_process = cmp::min(
             in_buf.len() - src_pos,
-            (COMP_FAST_LOOKAHEAD_SIZE - lookahead_size) as usize,
+            COMP_FAST_LOOKAHEAD_SIZE - lookahead_size,
         );
         lookahead_size += num_bytes_to_process;
 
@@ -2007,7 +1960,7 @@ fn compress_fast(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> bool 
             }
 
             src_pos += n;
-            dst_pos = (dst_pos + n) & LZ_DICT_SIZE_MASK as usize;
+            dst_pos = (dst_pos + n) & LZ_DICT_SIZE_MASK;
             num_bytes_to_process -= n;
         }
 
@@ -2027,7 +1980,7 @@ fn compress_fast(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> bool 
             let mut probe_pos = usize::from(d.dict.b.hash[hash as usize]);
             d.dict.b.hash[hash as usize] = lookahead_pos as u16;
 
-            let mut cur_match_dist = (lookahead_pos - probe_pos as usize) as u16;
+            let mut cur_match_dist = (lookahead_pos - probe_pos) as u16;
             if cur_match_dist as usize <= d.dict.size {
                 probe_pos &= LZ_DICT_SIZE_MASK;
 
@@ -2130,7 +2083,7 @@ fn compress_fast(d: &mut CompressorOxide, callback: &mut CallbackOxide) -> bool 
         }
 
         while lookahead_size != 0 {
-            let lit = d.dict.b.dict[cur_pos as usize];
+            let lit = d.dict.b.dict[cur_pos];
             d.lz.total_bytes += 1;
             d.lz.write_code(lit);
             *d.lz.get_flag() >>= 1;
@@ -2177,7 +2130,7 @@ fn flush_output_buffer(c: &mut CallbackOxide, p: &mut ParamsOxide) -> (TDEFLStat
     if let CallbackOut::Buf(ref mut cb) = c.out {
         let n = cmp::min(cb.out_buf.len() - p.out_buf_ofs, p.flush_remaining as usize);
         if n != 0 {
-            (&mut cb.out_buf[p.out_buf_ofs..p.out_buf_ofs + n])
+            cb.out_buf[p.out_buf_ofs..p.out_buf_ofs + n]
                 .copy_from_slice(&p.local_buf.b[p.flush_ofs as usize..p.flush_ofs as usize + n]);
         }
         p.flush_ofs += n as u32;
@@ -2274,11 +2227,13 @@ fn compress_inner(
 
     let one_probe = d.params.flags & MAX_PROBES_MASK as u32 == 1;
     let greedy = d.params.flags & TDEFL_GREEDY_PARSING_FLAG != 0;
-    let filter_or_rle_or_raw = d.params.flags
-        & (TDEFL_FILTER_MATCHES | TDEFL_FORCE_ALL_RAW_BLOCKS | TDEFL_RLE_MATCHES)
-        != 0;
+    let filter_or_rle = d.params.flags & (TDEFL_FILTER_MATCHES | TDEFL_FORCE_ALL_RAW_BLOCKS) != 0;
 
-    let compress_success = if one_probe && greedy && !filter_or_rle_or_raw {
+    let raw = d.params.flags & TDEFL_FORCE_ALL_RAW_BLOCKS != 0;
+
+    let compress_success = if raw {
+        compress_stored(d, callback)
+    } else if one_probe && greedy && !filter_or_rle {
         compress_fast(d, callback)
     } else {
         compress_normal(d, callback)
@@ -2322,8 +2277,8 @@ fn compress_inner(
             _ => {
                 d.params.finished = d.params.flush == TDEFLFlush::Finish;
                 if d.params.flush == TDEFLFlush::Full {
-                    memset(&mut d.dict.b.hash[..], 0);
-                    memset(&mut d.dict.b.next[..], 0);
+                    d.dict.b.hash.fill(0);
+                    d.dict.b.next.fill(0);
                     d.dict.size = 0;
                 }
             }
@@ -2399,8 +2354,8 @@ mod test {
 
     #[test]
     fn u16_from_slice() {
-        let mut slice = [208, 7];
-        assert_eq!(read_u16_le(&mut slice, 0), 2000);
+        let slice = [208, 7];
+        assert_eq!(read_u16_le(&slice, 0), 2000);
     }
 
     #[test]
@@ -2459,5 +2414,46 @@ mod test {
 
         let decoded = decompress_to_vec(&encoded[..]).unwrap();
         assert_eq!(&decoded[..], &slice[..]);
+    }
+
+    #[test]
+    fn zlib_window_bits() {
+        use crate::inflate::stream::{inflate, InflateState};
+        use crate::DataFormat;
+        use alloc::boxed::Box;
+        let slice = [
+            1, 2, 3, 4, 1, 2, 3, 1, 2, 3, 1, 2, 6, 1, 2, 3, 1, 2, 3, 2, 3, 1, 2, 3, 35, 22, 22, 2,
+            6, 2, 6,
+        ];
+        let mut encoded = vec![];
+        let flags = create_comp_flags_from_zip_params(2, 1, CompressionStrategy::RLE.into());
+        let mut d = CompressorOxide::new(flags);
+        let (status, in_consumed) =
+            compress_to_output(&mut d, &slice, TDEFLFlush::Finish, |out: &[u8]| {
+                encoded.extend_from_slice(out);
+                true
+            });
+
+        assert_eq!(status, TDEFLStatus::Done);
+        assert_eq!(in_consumed, slice.len());
+
+        let mut output = vec![0; slice.len()];
+
+        let mut decompressor = Box::new(InflateState::new(DataFormat::Zlib));
+
+        let mut out_slice = output.as_mut_slice();
+        // Feed 1 byte at a time and no back buffer to test that RLE encoding has been used.
+        for i in 0..encoded.len() {
+            let result = inflate(
+                &mut decompressor,
+                &encoded[i..i + 1],
+                out_slice,
+                crate::MZFlush::None,
+            );
+            out_slice = &mut out_slice[result.bytes_written..];
+        }
+        let cmf = decompressor.decompressor().zlib_header().0;
+        assert_eq!(cmf, 8);
+        assert_eq!(output, slice)
     }
 }

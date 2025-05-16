@@ -2,9 +2,10 @@
 
 use core::mem;
 
+use crate::endian::{LittleEndian as LE, U32};
+use crate::pe;
 use crate::pod::bytes_of_slice;
-use crate::read::Bytes;
-use crate::{pe, LittleEndian as LE, ReadRef, U32};
+use crate::read::{Bytes, ReadRef};
 
 /// Parsed information about a Rich Header.
 #[derive(Debug, Clone, Copy)]
@@ -77,7 +78,7 @@ impl<'data> RichHeaderInfo<'data> {
     }
 }
 
-/// Find the offset of the first occurence of needle in the data.
+/// Find the offset of the first occurrence of needle in the data.
 ///
 /// The offset must have the given alignment.
 fn memmem(data: &[u8], needle: &[u8], align: usize) -> Option<usize> {

@@ -4,6 +4,9 @@
 
 #![stable(feature = "core_prelude", since = "1.4.0")]
 
+// No formatting: this file is nothing but re-exports, and their order is worth preserving.
+#![cfg_attr(rustfmt, rustfmt::skip)]
+
 // Re-exported core operators
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
@@ -11,11 +14,17 @@ pub use crate::marker::{Copy, Send, Sized, Sync, Unpin};
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
 pub use crate::ops::{Drop, Fn, FnMut, FnOnce};
+#[stable(feature = "async_closure", since = "1.85.0")]
+#[doc(no_inline)]
+pub use crate::ops::{AsyncFn, AsyncFnMut, AsyncFnOnce};
 
 // Re-exported functions
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
 pub use crate::mem::drop;
+#[stable(feature = "size_of_prelude", since = "1.80.0")]
+#[doc(no_inline)]
+pub use crate::mem::{align_of, align_of_val, size_of, size_of_val};
 
 // Re-exported types and traits
 #[stable(feature = "core_prelude", since = "1.4.0")]
@@ -32,10 +41,7 @@ pub use crate::convert::{AsMut, AsRef, From, Into};
 pub use crate::default::Default;
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
-pub use crate::iter::{DoubleEndedIterator, ExactSizeIterator};
-#[stable(feature = "core_prelude", since = "1.4.0")]
-#[doc(no_inline)]
-pub use crate::iter::{Extend, IntoIterator, Iterator};
+pub use crate::iter::{DoubleEndedIterator, ExactSizeIterator, Extend, IntoIterator, Iterator};
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
 pub use crate::option::Option::{self, None, Some};
@@ -68,11 +74,6 @@ pub use crate::{
 #[doc(no_inline)]
 pub use crate::concat_bytes;
 
-// Do not `doc(inline)` these `doc(hidden)` items.
-#[stable(feature = "builtin_macro_prelude", since = "1.38.0")]
-#[allow(deprecated)]
-pub use crate::macros::builtin::{RustcDecodable, RustcEncodable};
-
 // Do not `doc(no_inline)` so that they become doc items on their own
 // (no public module for them to be re-exported from).
 #[stable(feature = "builtin_macro_prelude", since = "1.38.0")]
@@ -103,3 +104,10 @@ pub use crate::macros::builtin::cfg_eval;
     reason = "placeholder syntax for type ascription"
 )]
 pub use crate::macros::builtin::type_ascribe;
+
+#[unstable(
+    feature = "deref_patterns",
+    issue = "87121",
+    reason = "placeholder syntax for deref patterns"
+)]
+pub use crate::macros::builtin::deref;

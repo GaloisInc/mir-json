@@ -2,17 +2,17 @@
 //!
 //! [`std::fs`]: crate::fs
 
-#![deny(unsafe_op_in_unsafe_fn)]
 #![unstable(feature = "wasi_ext", issue = "71213")]
+
+// Used for `File::read` on intra-doc links
+#[allow(unused_imports)]
+use io::{Read, Write};
 
 use crate::ffi::OsStr;
 use crate::fs::{self, File, Metadata, OpenOptions};
 use crate::io::{self, IoSlice, IoSliceMut};
 use crate::path::{Path, PathBuf};
 use crate::sys_common::{AsInner, AsInnerMut, FromInner};
-// Used for `File::read` on intra-doc links
-#[allow(unused_imports)]
-use io::{Read, Write};
 
 /// WASI-specific extensions to [`File`].
 pub trait FileExt {
@@ -82,15 +82,11 @@ pub trait FileExt {
                     buf = &mut tmp[n..];
                     offset += n as u64;
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(ref e) if e.is_interrupted() => {}
                 Err(e) => return Err(e),
             }
         }
-        if !buf.is_empty() {
-            Err(io::const_io_error!(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer"))
-        } else {
-            Ok(())
-        }
+        if !buf.is_empty() { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
     }
 
     /// Writes a number of bytes starting from a given offset.
@@ -153,16 +149,13 @@ pub trait FileExt {
         while !buf.is_empty() {
             match self.write_at(buf, offset) {
                 Ok(0) => {
-                    return Err(io::const_io_error!(
-                        io::ErrorKind::WriteZero,
-                        "failed to write whole buffer",
-                    ));
+                    return Err(io::Error::WRITE_ALL_EOF);
                 }
                 Ok(n) => {
                     buf = &buf[n..];
                     offset += n as u64
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(ref e) if e.is_interrupted() => {}
                 Err(e) => return Err(e),
             }
         }
@@ -173,51 +166,61 @@ pub trait FileExt {
     ///
     /// This corresponds to the `fd_tell` syscall and is similar to
     /// `seek` where you offset 0 bytes from the current position.
+    #[doc(alias = "fd_tell")]
     fn tell(&self) -> io::Result<u64>;
 
-    /// Adjust the flags associated with this file.
+    /// Adjusts the flags associated with this file.
     ///
     /// This corresponds to the `fd_fdstat_set_flags` syscall.
+    #[doc(alias = "fd_fdstat_set_flags")]
     fn fdstat_set_flags(&self, flags: u16) -> io::Result<()>;
 
-    /// Adjust the rights associated with this file.
+    /// Adjusts the rights associated with this file.
     ///
     /// This corresponds to the `fd_fdstat_set_rights` syscall.
+    #[doc(alias = "fd_fdstat_set_rights")]
     fn fdstat_set_rights(&self, rights: u64, inheriting: u64) -> io::Result<()>;
 
-    /// Provide file advisory information on a file descriptor.
+    /// Provides file advisory information on a file descriptor.
     ///
     /// This corresponds to the `fd_advise` syscall.
+    #[doc(alias = "fd_advise")]
     fn advise(&self, offset: u64, len: u64, advice: u8) -> io::Result<()>;
 
-    /// Force the allocation of space in a file.
+    /// Forces the allocation of space in a file.
     ///
     /// This corresponds to the `fd_allocate` syscall.
+    #[doc(alias = "fd_allocate")]
     fn allocate(&self, offset: u64, len: u64) -> io::Result<()>;
 
-    /// Create a directory.
+    /// Creates a directory.
     ///
     /// This corresponds to the `path_create_directory` syscall.
+    #[doc(alias = "path_create_directory")]
     fn create_directory<P: AsRef<Path>>(&self, dir: P) -> io::Result<()>;
 
-    /// Read the contents of a symbolic link.
+    /// Reads the contents of a symbolic link.
     ///
     /// This corresponds to the `path_readlink` syscall.
+    #[doc(alias = "path_readlink")]
     fn read_link<P: AsRef<Path>>(&self, path: P) -> io::Result<PathBuf>;
 
-    /// Return the attributes of a file or directory.
+    /// Returns the attributes of a file or directory.
     ///
     /// This corresponds to the `path_filestat_get` syscall.
+    #[doc(alias = "path_filestat_get")]
     fn metadata_at<P: AsRef<Path>>(&self, lookup_flags: u32, path: P) -> io::Result<Metadata>;
 
-    /// Unlink a file.
+    /// Unlinks a file.
     ///
     /// This corresponds to the `path_unlink_file` syscall.
+    #[doc(alias = "path_unlink_file")]
     fn remove_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()>;
 
-    /// Remove a directory.
+    /// Removes a directory.
     ///
     /// This corresponds to the `path_remove_directory` syscall.
+    #[doc(alias = "path_remove_directory")]
     fn remove_directory<P: AsRef<Path>>(&self, path: P) -> io::Result<()>;
 }
 
@@ -258,7 +261,7 @@ impl FileExt for fs::File {
             a if a == wasi::ADVICE_DONTNEED.raw() => wasi::ADVICE_DONTNEED,
             a if a == wasi::ADVICE_NOREUSE.raw() => wasi::ADVICE_NOREUSE,
             _ => {
-                return Err(io::const_io_error!(
+                return Err(io::const_error!(
                     io::ErrorKind::InvalidInput,
                     "invalid parameter 'advice'",
                 ));
@@ -359,6 +362,7 @@ pub trait OpenOptionsExt {
     /// Open a file or directory.
     ///
     /// This corresponds to the `path_open` syscall.
+    #[doc(alias = "path_open")]
     fn open_at<P: AsRef<Path>>(&self, file: &File, path: P) -> io::Result<File>;
 }
 
@@ -497,9 +501,10 @@ impl DirEntryExt for fs::DirEntry {
     }
 }
 
-/// Create a hard link.
+/// Creates a hard link.
 ///
 /// This corresponds to the `path_link` syscall.
+#[doc(alias = "path_link")]
 pub fn link<P: AsRef<Path>, U: AsRef<Path>>(
     old_fd: &File,
     old_flags: u32,
@@ -515,9 +520,10 @@ pub fn link<P: AsRef<Path>, U: AsRef<Path>>(
     )
 }
 
-/// Rename a file or directory.
+/// Renames a file or directory.
 ///
 /// This corresponds to the `path_rename` syscall.
+#[doc(alias = "path_rename")]
 pub fn rename<P: AsRef<Path>, U: AsRef<Path>>(
     old_fd: &File,
     old_path: P,
@@ -531,9 +537,10 @@ pub fn rename<P: AsRef<Path>, U: AsRef<Path>>(
     )
 }
 
-/// Create a symbolic link.
+/// Creates a symbolic link.
 ///
 /// This corresponds to the `path_symlink` syscall.
+#[doc(alias = "path_symlink")]
 pub fn symlink<P: AsRef<Path>, U: AsRef<Path>>(
     old_path: P,
     fd: &File,
@@ -544,7 +551,7 @@ pub fn symlink<P: AsRef<Path>, U: AsRef<Path>>(
         .symlink(osstr2str(old_path.as_ref().as_ref())?, osstr2str(new_path.as_ref().as_ref())?)
 }
 
-/// Create a symbolic link.
+/// Creates a symbolic link.
 ///
 /// This is a convenience API similar to `std::os::unix::fs::symlink` and
 /// `std::os::windows::fs::symlink_file` and `std::os::windows::fs::symlink_dir`.
@@ -553,6 +560,5 @@ pub fn symlink_path<P: AsRef<Path>, U: AsRef<Path>>(old_path: P, new_path: U) ->
 }
 
 fn osstr2str(f: &OsStr) -> io::Result<&str> {
-    f.to_str()
-        .ok_or_else(|| io::const_io_error!(io::ErrorKind::Uncategorized, "input must be utf-8"))
+    f.to_str().ok_or_else(|| io::const_error!(io::ErrorKind::Uncategorized, "input must be utf-8"))
 }

@@ -16,53 +16,52 @@
 
 #![unstable(feature = "test", issue = "50297")]
 #![doc(test(attr(deny(warnings))))]
+#![doc(rust_logo)]
+#![feature(rustdoc_internals)]
+#![feature(file_buffered)]
 #![feature(internal_output_capture)]
-#![feature(is_terminal)]
 #![feature(staged_api)]
 #![feature(process_exitcode_internals)]
 #![feature(panic_can_unwind)]
 #![feature(test)]
+#![feature(thread_spawn_hook)]
+#![allow(internal_features)]
+#![warn(rustdoc::unescaped_backticks)]
+#![warn(unreachable_pub)]
 
-// Public reexports
-pub use self::bench::{black_box, Bencher};
+pub use cli::TestOpts;
+
+pub use self::ColorConfig::*;
+pub use self::bench::{Bencher, black_box};
 pub use self::console::run_tests_console;
 pub use self::options::{ColorConfig, Options, OutputFormat, RunIgnored, ShouldPanic};
 pub use self::types::TestName::*;
 pub use self::types::*;
-pub use self::ColorConfig::*;
-pub use cli::TestOpts;
 
 // Module to be used by rustc to compile tests in libtest
 pub mod test {
-    pub use crate::{
-        assert_test_result,
-        bench::Bencher,
-        cli::{parse_opts, TestOpts},
-        filter_tests,
-        helpers::metrics::{Metric, MetricMap},
-        options::{Options, RunIgnored, RunStrategy, ShouldPanic},
-        run_test, test_main, test_main_static,
-        test_result::{TestResult, TrFailed, TrFailedMsg, TrIgnored, TrOk},
-        time::{TestExecTime, TestTimeOptions},
-        types::{
-            DynTestFn, DynTestName, StaticBenchFn, StaticTestFn, StaticTestName, TestDesc,
-            TestDescAndFn, TestId, TestName, TestType,
-        },
+    pub use crate::bench::Bencher;
+    pub use crate::cli::{TestOpts, parse_opts};
+    pub use crate::helpers::metrics::{Metric, MetricMap};
+    pub use crate::options::{Options, RunIgnored, RunStrategy, ShouldPanic};
+    pub use crate::test_result::{TestResult, TrFailed, TrFailedMsg, TrIgnored, TrOk};
+    pub use crate::time::{TestExecTime, TestTimeOptions};
+    pub use crate::types::{
+        DynTestFn, DynTestName, StaticBenchFn, StaticTestFn, StaticTestName, TestDesc,
+        TestDescAndFn, TestId, TestName, TestType,
     };
+    pub use crate::{assert_test_result, filter_tests, run_test, test_main, test_main_static};
 }
 
-use std::{
-    collections::VecDeque,
-    env, io,
-    io::prelude::Write,
-    mem::ManuallyDrop,
-    panic::{self, catch_unwind, AssertUnwindSafe, PanicInfo},
-    process::{self, Command, Termination},
-    sync::mpsc::{channel, Sender},
-    sync::{Arc, Mutex},
-    thread,
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::io::prelude::Write;
+use std::mem::ManuallyDrop;
+use std::panic::{self, AssertUnwindSafe, PanicHookInfo, catch_unwind};
+use std::process::{self, Command, Termination};
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use std::{env, io, thread};
 
 pub mod bench;
 mod cli;
@@ -81,9 +80,9 @@ mod types;
 mod tests;
 
 use core::any::Any;
+
 use event::{CompletedTest, TestEvent};
 use helpers::concurrency::get_concurrency;
-use helpers::exit_code::get_exit_code;
 use helpers::shuffle::{get_shuffle_seed, shuffle_tests};
 use options::RunStrategy;
 use test_result::*;
@@ -93,6 +92,7 @@ use time::TestExecTime;
 const ERROR_EXIT_CODE: i32 = 101;
 
 const SECONDARY_TEST_INVOKER_VAR: &str = "__RUST_TEST_INVOKE";
+const SECONDARY_TEST_BENCH_BENCHMARKS_VAR: &str = "__RUST_TEST_BENCH_BENCHMARKS";
 
 // The default console test runner. It accepts the command line
 // arguments and a vector of test_descs.
@@ -121,7 +121,7 @@ pub fn test_main(args: &[String], tests: Vec<TestDescAndFn>, options: Option<Opt
             // from interleaving with the panic message or appearing after it.
             let builtin_panic_hook = panic::take_hook();
             let hook = Box::new({
-                move |info: &'_ PanicInfo<'_>| {
+                move |info: &'_ PanicHookInfo<'_>| {
                     if !info.can_unwind() {
                         std::mem::forget(std::io::stderr().lock());
                         let mut stdout = ManuallyDrop::new(std::io::stdout().lock());
@@ -136,8 +136,21 @@ pub fn test_main(args: &[String], tests: Vec<TestDescAndFn>, options: Option<Opt
                 }
             });
             panic::set_hook(hook);
+            // Use a thread spawning hook to make new threads inherit output capturing.
+            std::thread::add_spawn_hook(|_| {
+                // Get and clone the output capture of the current thread.
+                let output_capture = io::set_output_capture(None);
+                io::set_output_capture(output_capture.clone());
+                // Set the output capture of the new thread.
+                || {
+                    io::set_output_capture(output_capture);
+                }
+            });
         }
-        match console::run_tests_console(&opts, tests) {
+        let res = console::run_tests_console(&opts, tests);
+        // Prevent Valgrind from reporting reachable blocks in users' unit tests.
+        drop(panic::take_hook());
+        match res {
             Ok(true) => {}
             Ok(false) => process::exit(ERROR_EXIT_CODE),
             Err(e) => {
@@ -171,19 +184,36 @@ pub fn test_main_static_abort(tests: &[&TestDescAndFn]) {
     // If we're being run in SpawnedSecondary mode, run the test here. run_test
     // will then exit the process.
     if let Ok(name) = env::var(SECONDARY_TEST_INVOKER_VAR) {
-        env::remove_var(SECONDARY_TEST_INVOKER_VAR);
+        unsafe {
+            env::remove_var(SECONDARY_TEST_INVOKER_VAR);
+        }
+
+        // Convert benchmarks to tests if we're not benchmarking.
+        let mut tests = tests.iter().map(make_owned_test).collect::<Vec<_>>();
+        if env::var(SECONDARY_TEST_BENCH_BENCHMARKS_VAR).is_ok() {
+            unsafe {
+                env::remove_var(SECONDARY_TEST_BENCH_BENCHMARKS_VAR);
+            }
+        } else {
+            tests = convert_benchmarks_to_tests(tests);
+        };
+
         let test = tests
-            .iter()
-            .filter(|test| test.desc.name.as_slice() == name)
-            .map(make_owned_test)
-            .next()
+            .into_iter()
+            .find(|test| test.desc.name.as_slice() == name)
             .unwrap_or_else(|| panic!("couldn't find a test with the provided name '{name}'"));
         let TestDescAndFn { desc, testfn } = test;
-        let testfn = match testfn {
-            StaticTestFn(f) => f,
-            _ => panic!("only static tests are supported"),
-        };
-        run_test_in_spawned_subprocess(desc, Box::new(testfn));
+        match testfn.into_runnable() {
+            Runnable::Test(runnable_test) => {
+                if runnable_test.is_dynamic() {
+                    panic!("only static tests are supported");
+                }
+                run_test_in_spawned_subprocess(desc, runnable_test);
+            }
+            Runnable::Bench(_) => {
+                panic!("benchmarks should not be executed into child processes")
+            }
+        }
     }
 
     let args = env::args().collect::<Vec<_>>();
@@ -204,7 +234,7 @@ fn make_owned_test(test: &&TestDescAndFn) -> TestDescAndFn {
 }
 
 /// Invoked when unit tests terminate. Returns `Result::Err` if the test is
-/// considered a failure. By default, invokes `report() and checks for a `0`
+/// considered a failure. By default, invokes `report()` and checks for a `0`
 /// result.
 pub fn assert_test_result<T: Termination>(result: T) -> Result<(), String> {
     let code = result.report().to_i32();
@@ -220,14 +250,14 @@ pub fn assert_test_result<T: Termination>(result: T) -> Result<(), String> {
 
 struct FilteredTests {
     tests: Vec<(TestId, TestDescAndFn)>,
-    benchs: Vec<(TestId, TestDescAndFn)>,
+    benches: Vec<(TestId, TestDescAndFn)>,
     next_id: usize,
 }
 
 impl FilteredTests {
     fn add_bench(&mut self, desc: TestDesc, testfn: TestFn) {
         let test = TestDescAndFn { desc, testfn };
-        self.benchs.push((TestId(self.next_id), test));
+        self.benches.push((TestId(self.next_id), test));
         self.next_id += 1;
     }
     fn add_test(&mut self, desc: TestDesc, testfn: TestFn) {
@@ -235,18 +265,8 @@ impl FilteredTests {
         self.tests.push((TestId(self.next_id), test));
         self.next_id += 1;
     }
-    fn add_bench_as_test(
-        &mut self,
-        desc: TestDesc,
-        benchfn: impl Fn(&mut Bencher) -> Result<(), String> + Send + 'static,
-    ) {
-        let testfn = DynTestFn(Box::new(move || {
-            bench::run_once(|b| __rust_begin_short_backtrace(|| benchfn(b)))
-        }));
-        self.add_test(desc, testfn);
-    }
     fn total_len(&self) -> usize {
-        self.tests.len() + self.benchs.len()
+        self.tests.len() + self.benches.len()
     }
 }
 
@@ -258,8 +278,8 @@ pub fn run_tests<F>(
 where
     F: FnMut(TestEvent) -> io::Result<()>,
 {
-    use std::collections::{self, HashMap};
-    use std::hash::BuildHasherDefault;
+    use std::collections::HashMap;
+    use std::hash::{BuildHasherDefault, DefaultHasher};
     use std::sync::mpsc::RecvTimeoutError;
 
     struct RunningTest {
@@ -280,8 +300,7 @@ where
     }
 
     // Use a deterministic hasher
-    type TestMap =
-        HashMap<TestId, RunningTest, BuildHasherDefault<collections::hash_map::DefaultHasher>>;
+    type TestMap = HashMap<TestId, RunningTest, BuildHasherDefault<DefaultHasher>>;
 
     struct TimeoutEntry {
         id: TestId,
@@ -291,26 +310,20 @@ where
 
     let tests_len = tests.len();
 
-    let mut filtered = FilteredTests { tests: Vec::new(), benchs: Vec::new(), next_id: 0 };
+    let mut filtered = FilteredTests { tests: Vec::new(), benches: Vec::new(), next_id: 0 };
 
-    for test in filter_tests(opts, tests) {
+    let mut filtered_tests = filter_tests(opts, tests);
+    if !opts.bench_benchmarks {
+        filtered_tests = convert_benchmarks_to_tests(filtered_tests);
+    }
+
+    for test in filtered_tests {
         let mut desc = test.desc;
         desc.name = desc.name.with_padding(test.testfn.padding());
 
         match test.testfn {
-            DynBenchFn(benchfn) => {
-                if opts.bench_benchmarks {
-                    filtered.add_bench(desc, DynBenchFn(benchfn));
-                } else {
-                    filtered.add_bench_as_test(desc, benchfn);
-                }
-            }
-            StaticBenchFn(benchfn) => {
-                if opts.bench_benchmarks {
-                    filtered.add_bench(desc, StaticBenchFn(benchfn));
-                } else {
-                    filtered.add_bench_as_test(desc, benchfn);
-                }
+            DynBenchFn(_) | StaticBenchFn(_) => {
+                filtered.add_bench(desc, test.testfn);
             }
             testfn => {
                 filtered.add_test(desc, testfn);
@@ -458,7 +471,7 @@ where
 
     if opts.bench_benchmarks {
         // All benchmarks run at the end, in serial.
-        for (id, b) in filtered.benchs {
+        for (id, b) in filtered.benches {
             let event = TestEvent::TeWait(b.desc.clone());
             notify_about_test_event(event)?;
             let join_handle = run_test(opts, false, id, b, run_strategy, tx.clone());
@@ -520,12 +533,8 @@ pub fn convert_benchmarks_to_tests(tests: Vec<TestDescAndFn>) -> Vec<TestDescAnd
         .into_iter()
         .map(|x| {
             let testfn = match x.testfn {
-                DynBenchFn(benchfn) => DynTestFn(Box::new(move || {
-                    bench::run_once(|b| __rust_begin_short_backtrace(|| benchfn(b)))
-                })),
-                StaticBenchFn(benchfn) => DynTestFn(Box::new(move || {
-                    bench::run_once(|b| __rust_begin_short_backtrace(|| benchfn(b)))
-                })),
+                DynBenchFn(benchfn) => DynBenchAsTestFn(benchfn),
+                StaticBenchFn(benchfn) => StaticBenchAsTestFn(benchfn),
                 f => f,
             };
             TestDescAndFn { desc: x.desc, testfn }
@@ -545,7 +554,7 @@ pub fn run_test(
 
     // Emscripten can catch panics but other wasm targets cannot
     let ignore_because_no_process_support = desc.should_panic != ShouldPanic::No
-        && cfg!(target_family = "wasm")
+        && (cfg!(target_family = "wasm") || cfg!(target_os = "zkvm"))
         && !cfg!(target_os = "emscripten");
 
     if force_ignore || desc.ignore || ignore_because_no_process_support {
@@ -554,99 +563,71 @@ pub fn run_test(
         return None;
     }
 
-    struct TestRunOpts {
-        pub strategy: RunStrategy,
-        pub nocapture: bool,
-        pub time: Option<time::TestTimeOptions>,
-    }
-
-    fn run_test_inner(
-        id: TestId,
-        desc: TestDesc,
-        monitor_ch: Sender<CompletedTest>,
-        testfn: Box<dyn FnOnce() -> Result<(), String> + Send>,
-        opts: TestRunOpts,
-    ) -> Option<thread::JoinHandle<()>> {
-        let name = desc.name.clone();
-
-        let runtest = move || match opts.strategy {
-            RunStrategy::InProcess => run_test_in_process(
-                id,
-                desc,
-                opts.nocapture,
-                opts.time.is_some(),
-                testfn,
-                monitor_ch,
-                opts.time,
-            ),
-            RunStrategy::SpawnPrimary => spawn_test_subprocess(
-                id,
-                desc,
-                opts.nocapture,
-                opts.time.is_some(),
-                monitor_ch,
-                opts.time,
-            ),
-        };
-
-        // If the platform is single-threaded we're just going to run
-        // the test synchronously, regardless of the concurrency
-        // level.
-        let supports_threads = !cfg!(target_os = "emscripten") && !cfg!(target_family = "wasm");
-        if supports_threads {
-            let cfg = thread::Builder::new().name(name.as_slice().to_owned());
-            let mut runtest = Arc::new(Mutex::new(Some(runtest)));
-            let runtest2 = runtest.clone();
-            match cfg.spawn(move || runtest2.lock().unwrap().take().unwrap()()) {
-                Ok(handle) => Some(handle),
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    // `ErrorKind::WouldBlock` means hitting the thread limit on some
-                    // platforms, so run the test synchronously here instead.
-                    Arc::get_mut(&mut runtest).unwrap().get_mut().unwrap().take().unwrap()();
-                    None
-                }
-                Err(e) => panic!("failed to spawn thread to run test: {e}"),
+    match testfn.into_runnable() {
+        Runnable::Test(runnable_test) => {
+            if runnable_test.is_dynamic() {
+                match strategy {
+                    RunStrategy::InProcess => (),
+                    _ => panic!("Cannot run dynamic test fn out-of-process"),
+                };
             }
-        } else {
-            runtest();
-            None
-        }
-    }
 
-    let test_run_opts =
-        TestRunOpts { strategy, nocapture: opts.nocapture, time: opts.time_options };
+            let name = desc.name.clone();
+            let nocapture = opts.nocapture;
+            let time_options = opts.time_options;
+            let bench_benchmarks = opts.bench_benchmarks;
 
-    match testfn {
-        DynBenchFn(benchfn) => {
-            // Benchmarks aren't expected to panic, so we run them all in-process.
-            crate::bench::benchmark(id, desc, monitor_ch, opts.nocapture, benchfn);
-            None
-        }
-        StaticBenchFn(benchfn) => {
-            // Benchmarks aren't expected to panic, so we run them all in-process.
-            crate::bench::benchmark(id, desc, monitor_ch, opts.nocapture, benchfn);
-            None
-        }
-        DynTestFn(f) => {
-            match strategy {
-                RunStrategy::InProcess => (),
-                _ => panic!("Cannot run dynamic test fn out-of-process"),
+            let runtest = move || match strategy {
+                RunStrategy::InProcess => run_test_in_process(
+                    id,
+                    desc,
+                    nocapture,
+                    time_options.is_some(),
+                    runnable_test,
+                    monitor_ch,
+                    time_options,
+                ),
+                RunStrategy::SpawnPrimary => spawn_test_subprocess(
+                    id,
+                    desc,
+                    nocapture,
+                    time_options.is_some(),
+                    monitor_ch,
+                    time_options,
+                    bench_benchmarks,
+                ),
             };
-            run_test_inner(
-                id,
-                desc,
-                monitor_ch,
-                Box::new(move || __rust_begin_short_backtrace(f)),
-                test_run_opts,
-            )
+
+            // If the platform is single-threaded we're just going to run
+            // the test synchronously, regardless of the concurrency
+            // level.
+            let supports_threads = !cfg!(target_os = "emscripten")
+                && !cfg!(target_family = "wasm")
+                && !cfg!(target_os = "zkvm");
+            if supports_threads {
+                let cfg = thread::Builder::new().name(name.as_slice().to_owned());
+                let mut runtest = Arc::new(Mutex::new(Some(runtest)));
+                let runtest2 = runtest.clone();
+                match cfg.spawn(move || runtest2.lock().unwrap().take().unwrap()()) {
+                    Ok(handle) => Some(handle),
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        // `ErrorKind::WouldBlock` means hitting the thread limit on some
+                        // platforms, so run the test synchronously here instead.
+                        Arc::get_mut(&mut runtest).unwrap().get_mut().unwrap().take().unwrap()();
+                        None
+                    }
+                    Err(e) => panic!("failed to spawn thread to run test: {e}"),
+                }
+            } else {
+                runtest();
+                None
+            }
         }
-        StaticTestFn(f) => run_test_inner(
-            id,
-            desc,
-            monitor_ch,
-            Box::new(move || __rust_begin_short_backtrace(f)),
-            test_run_opts,
-        ),
+        Runnable::Bench(runnable_bench) => {
+            // Benchmarks aren't expected to panic, so we run them all in-process.
+            runnable_bench.run(id, &desc, &monitor_ch, opts.nocapture);
+            None
+        }
     }
 }
 
@@ -664,7 +645,7 @@ fn run_test_in_process(
     desc: TestDesc,
     nocapture: bool,
     report_time: bool,
-    testfn: Box<dyn FnOnce() -> Result<(), String> + Send>,
+    runnable_test: RunnableTest,
     monitor_ch: Sender<CompletedTest>,
     time_opts: Option<time::TestTimeOptions>,
 ) {
@@ -676,7 +657,7 @@ fn run_test_in_process(
     }
 
     let start = report_time.then(Instant::now);
-    let result = fold_err(catch_unwind(AssertUnwindSafe(testfn)));
+    let result = fold_err(catch_unwind(AssertUnwindSafe(|| runnable_test.run())));
     let exec_time = start.map(|start| {
         let duration = start.elapsed();
         TestExecTime(duration)
@@ -685,8 +666,8 @@ fn run_test_in_process(
     io::set_output_capture(None);
 
     let test_result = match result {
-        Ok(()) => calc_result(&desc, Ok(()), &time_opts, &exec_time),
-        Err(e) => calc_result(&desc, Err(e.as_ref()), &time_opts, &exec_time),
+        Ok(()) => calc_result(&desc, Ok(()), time_opts.as_ref(), exec_time.as_ref()),
+        Err(e) => calc_result(&desc, Err(e.as_ref()), time_opts.as_ref(), exec_time.as_ref()),
     };
     let stdout = data.lock().unwrap_or_else(|e| e.into_inner()).to_vec();
     let message = CompletedTest::new(id, desc, test_result, exec_time, stdout);
@@ -713,6 +694,7 @@ fn spawn_test_subprocess(
     report_time: bool,
     monitor_ch: Sender<CompletedTest>,
     time_opts: Option<time::TestTimeOptions>,
+    bench_benchmarks: bool,
 ) {
     let (result, test_output, exec_time) = (|| {
         let args = env::args().collect::<Vec<_>>();
@@ -720,6 +702,9 @@ fn spawn_test_subprocess(
 
         let mut command = Command::new(current_exe);
         command.env(SECONDARY_TEST_INVOKER_VAR, desc.name.as_slice());
+        if bench_benchmarks {
+            command.env(SECONDARY_TEST_BENCH_BENCHMARKS_VAR, "1");
+        }
         if nocapture {
             command.stdout(process::Stdio::inherit());
             command.stderr(process::Stdio::inherit());
@@ -743,17 +728,8 @@ fn spawn_test_subprocess(
         formatters::write_stderr_delimiter(&mut test_output, &desc.name);
         test_output.extend_from_slice(&stderr);
 
-        let result = match (|| -> Result<TestResult, String> {
-            let exit_code = get_exit_code(status)?;
-            Ok(get_result_from_exit_code(&desc, exit_code, &time_opts, &exec_time))
-        })() {
-            Ok(r) => r,
-            Err(e) => {
-                write!(&mut test_output, "Unexpected error: {e}").unwrap();
-                TrFailed
-            }
-        };
-
+        let result =
+            get_result_from_exit_code(&desc, status, time_opts.as_ref(), exec_time.as_ref());
         (result, test_output, exec_time)
     })();
 
@@ -761,15 +737,12 @@ fn spawn_test_subprocess(
     monitor_ch.send(message).unwrap();
 }
 
-fn run_test_in_spawned_subprocess(
-    desc: TestDesc,
-    testfn: Box<dyn FnOnce() -> Result<(), String> + Send>,
-) -> ! {
+fn run_test_in_spawned_subprocess(desc: TestDesc, runnable_test: RunnableTest) -> ! {
     let builtin_panic_hook = panic::take_hook();
-    let record_result = Arc::new(move |panic_info: Option<&'_ PanicInfo<'_>>| {
+    let record_result = Arc::new(move |panic_info: Option<&'_ PanicHookInfo<'_>>| {
         let test_result = match panic_info {
-            Some(info) => calc_result(&desc, Err(info.payload()), &None, &None),
-            None => calc_result(&desc, Ok(()), &None, &None),
+            Some(info) => calc_result(&desc, Err(info.payload()), None, None),
+            None => calc_result(&desc, Ok(()), None, None),
         };
 
         // We don't support serializing TrFailedMsg, so just
@@ -785,12 +758,12 @@ fn run_test_in_spawned_subprocess(
         if let TrOk = test_result {
             process::exit(test_result::TR_OK);
         } else {
-            process::exit(test_result::TR_FAILED);
+            process::abort();
         }
     });
     let record_result2 = record_result.clone();
     panic::set_hook(Box::new(move |info| record_result2(Some(info))));
-    if let Err(message) = testfn() {
+    if let Err(message) = runnable_test.run() {
         panic!("{}", message);
     }
     record_result(None);

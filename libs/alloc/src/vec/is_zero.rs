@@ -1,4 +1,4 @@
-use core::num::{Saturating, Wrapping};
+use core::num::{NonZero, Saturating, Wrapping};
 
 use crate::boxed::Box;
 
@@ -40,19 +40,8 @@ impl_is_zero!(char, |x| x == '\0');
 impl_is_zero!(f32, |x: f32| x.to_bits() == 0);
 impl_is_zero!(f64, |x: f64| x.to_bits() == 0);
 
-unsafe impl<T> IsZero for *const T {
-    #[inline]
-    fn is_zero(&self) -> bool {
-        (*self).is_null()
-    }
-}
-
-unsafe impl<T> IsZero for *mut T {
-    #[inline]
-    fn is_zero(&self) -> bool {
-        (*self).is_null()
-    }
-}
+// `IsZero` cannot be soundly implemented for pointers because of provenance
+// (see #135338).
 
 unsafe impl<T: IsZero, const N: usize> IsZero for [T; N] {
     #[inline]
@@ -69,7 +58,7 @@ unsafe impl<T: IsZero, const N: usize> IsZero for [T; N] {
 }
 
 // This is recursive macro.
-macro_rules! impl_for_tuples {
+macro_rules! impl_is_zero_tuples {
     // Stopper
     () => {
         // No use for implementing for empty tuple because it is ZST.
@@ -88,11 +77,11 @@ macro_rules! impl_for_tuples {
             }
         }
 
-        impl_for_tuples!($($rest),*);
+        impl_is_zero_tuples!($($rest),*);
     }
 }
 
-impl_for_tuples!(A, B, C, D, E, F, G, H);
+impl_is_zero_tuples!(A, B, C, D, E, F, G, H);
 
 // `Option<&T>` and `Option<Box<T>>` are guaranteed to represent `None` as null.
 // For fat pointers, the bytes that would be the pointer metadata in the `Some`
@@ -115,16 +104,15 @@ unsafe impl<T: ?Sized> IsZero for Option<Box<T>> {
     }
 }
 
-// `Option<num::NonZeroU32>` and similar have a representation guarantee that
+// `Option<NonZero<u32>>` and similar have a representation guarantee that
 // they're the same size as the corresponding `u32` type, as well as a guarantee
-// that transmuting between `NonZeroU32` and `Option<num::NonZeroU32>` works.
+// that transmuting between `NonZero<u32>` and `Option<NonZero<u32>>` works.
 // While the documentation officially makes it UB to transmute from `None`,
 // we're the standard library so we can make extra inferences, and we know that
 // the only niche available to represent `None` is the one that's all zeros.
-
-macro_rules! impl_is_zero_option_of_nonzero {
-    ($($t:ident,)+) => {$(
-        unsafe impl IsZero for Option<core::num::$t> {
+macro_rules! impl_is_zero_option_of_nonzero_int {
+    ($($t:ty),+ $(,)?) => {$(
+        unsafe impl IsZero for Option<NonZero<$t>> {
             #[inline]
             fn is_zero(&self) -> bool {
                 self.is_none()
@@ -133,23 +121,10 @@ macro_rules! impl_is_zero_option_of_nonzero {
     )+};
 }
 
-impl_is_zero_option_of_nonzero!(
-    NonZeroU8,
-    NonZeroU16,
-    NonZeroU32,
-    NonZeroU64,
-    NonZeroU128,
-    NonZeroI8,
-    NonZeroI16,
-    NonZeroI32,
-    NonZeroI64,
-    NonZeroI128,
-    NonZeroUsize,
-    NonZeroIsize,
-);
+impl_is_zero_option_of_nonzero_int!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
-macro_rules! impl_is_zero_option_of_num {
-    ($($t:ty,)+) => {$(
+macro_rules! impl_is_zero_option_of_int {
+    ($($t:ty),+ $(,)?) => {$(
         unsafe impl IsZero for Option<$t> {
             #[inline]
             fn is_zero(&self) -> bool {
@@ -163,7 +138,7 @@ macro_rules! impl_is_zero_option_of_num {
     )+};
 }
 
-impl_is_zero_option_of_num!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, usize, isize,);
+impl_is_zero_option_of_int!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, usize, isize);
 
 unsafe impl<T: IsZero> IsZero for Wrapping<T> {
     #[inline]
@@ -179,14 +154,14 @@ unsafe impl<T: IsZero> IsZero for Saturating<T> {
     }
 }
 
-macro_rules! impl_for_optional_bool {
-    ($($t:ty,)+) => {$(
+macro_rules! impl_is_zero_option_of_bool {
+    ($($t:ty),+ $(,)?) => {$(
         unsafe impl IsZero for $t {
             #[inline]
             fn is_zero(&self) -> bool {
                 // SAFETY: This is *not* a stable layout guarantee, but
                 // inside `core` we're allowed to rely on the current rustc
-                // behaviour that options of bools will be one byte with
+                // behavior that options of bools will be one byte with
                 // no padding, so long as they're nested less than 254 deep.
                 let raw: u8 = unsafe { core::mem::transmute(*self) };
                 raw == 0
@@ -194,9 +169,10 @@ macro_rules! impl_for_optional_bool {
         }
     )+};
 }
-impl_for_optional_bool! {
+
+impl_is_zero_option_of_bool! {
     Option<bool>,
     Option<Option<bool>>,
     Option<Option<Option<bool>>>,
-    // Could go further, but not worth the metadata overhead
+    // Could go further, but not worth the metadata overhead.
 }

@@ -1,7 +1,7 @@
-use crate::convert::From;
 use crate::fmt;
 use crate::marker::{PhantomData, Unsize};
 use crate::ops::{CoerceUnsized, DispatchFromDyn};
+use crate::pin::PinCoerceUnsized;
 use crate::ptr::NonNull;
 
 /// A wrapper around a raw non-null `*mut T` that indicates that the possessor
@@ -32,6 +32,8 @@ use crate::ptr::NonNull;
 )]
 #[doc(hidden)]
 #[repr(transparent)]
+// Lang item used experimentally by Miri to define the semantics of `Unique`.
+#[lang = "ptr_unique"]
 pub struct Unique<T: ?Sized> {
     pointer: NonNull<T>,
     // NOTE: this marker has no consequences for variance, but is necessary
@@ -70,7 +72,8 @@ impl<T: Sized> Unique<T> {
     #[must_use]
     #[inline]
     pub const fn dangling() -> Self {
-        Self::from(NonNull::dangling())
+        // FIXME(const-hack) replace with `From`
+        Unique { pointer: NonNull::dangling(), _marker: PhantomData }
     }
 }
 
@@ -104,6 +107,13 @@ impl<T: ?Sized> Unique<T> {
         self.pointer.as_ptr()
     }
 
+    /// Acquires the underlying `*mut` pointer.
+    #[must_use = "`self` will be dropped if the result is not used"]
+    #[inline]
+    pub const fn as_non_null_ptr(self) -> NonNull<T> {
+        self.pointer
+    }
+
     /// Dereferences the content.
     ///
     /// The resulting lifetime is bound to self so this behaves "as if"
@@ -134,13 +144,14 @@ impl<T: ?Sized> Unique<T> {
     #[must_use = "`self` will be dropped if the result is not used"]
     #[inline]
     pub const fn cast<U>(self) -> Unique<U> {
-        Unique::from(self.pointer.cast())
+        // FIXME(const-hack): replace with `From`
+        // SAFETY: is `NonNull`
+        Unique { pointer: self.pointer.cast(), _marker: PhantomData }
     }
 }
 
 #[unstable(feature = "ptr_internals", issue = "none")]
-#[rustc_const_unstable(feature = "const_clone", issue = "91805")]
-impl<T: ?Sized> const Clone for Unique<T> {
+impl<T: ?Sized> Clone for Unique<T> {
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -155,6 +166,9 @@ impl<T: ?Sized, U: ?Sized> CoerceUnsized<Unique<U>> for Unique<T> where T: Unsiz
 
 #[unstable(feature = "ptr_internals", issue = "none")]
 impl<T: ?Sized, U: ?Sized> DispatchFromDyn<Unique<U>> for Unique<T> where T: Unsize<U> {}
+
+#[unstable(feature = "pin_coerce_unsized_trait", issue = "123430")]
+unsafe impl<T: ?Sized> PinCoerceUnsized for Unique<T> {}
 
 #[unstable(feature = "ptr_internals", issue = "none")]
 impl<T: ?Sized> fmt::Debug for Unique<T> {
@@ -171,7 +185,7 @@ impl<T: ?Sized> fmt::Pointer for Unique<T> {
 }
 
 #[unstable(feature = "ptr_internals", issue = "none")]
-impl<T: ?Sized> const From<&mut T> for Unique<T> {
+impl<T: ?Sized> From<&mut T> for Unique<T> {
     /// Converts a `&mut T` to a `Unique<T>`.
     ///
     /// This conversion is infallible since references cannot be null.
@@ -182,7 +196,7 @@ impl<T: ?Sized> const From<&mut T> for Unique<T> {
 }
 
 #[unstable(feature = "ptr_internals", issue = "none")]
-impl<T: ?Sized> const From<NonNull<T>> for Unique<T> {
+impl<T: ?Sized> From<NonNull<T>> for Unique<T> {
     /// Converts a `NonNull<T>` to a `Unique<T>`.
     ///
     /// This conversion is infallible since `NonNull` cannot be null.

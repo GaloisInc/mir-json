@@ -1,8 +1,6 @@
 use super::*;
-use crate::sys_common::{AsInner, IntoInner};
-
-use crate::rc::Rc;
-use crate::sync::Arc;
+use crate::mem::MaybeUninit;
+use crate::ptr;
 
 #[test]
 fn test_os_string_with_capacity() {
@@ -25,6 +23,15 @@ fn test_os_string_clear() {
     os_string.clear();
     assert_eq!(&os_string, "");
     assert_eq!(0, os_string.inner.as_inner().len());
+}
+
+#[test]
+fn test_os_string_leak() {
+    let os_string = OsString::from("have a cake");
+    let (len, cap) = (os_string.len(), os_string.capacity());
+    let leaked = os_string.leak();
+    assert_eq!(leaked.as_encoded_bytes(), b"have a cake");
+    unsafe { drop(String::from_raw_parts(leaked as *mut OsStr as _, len, cap)) }
 }
 
 #[test]
@@ -176,4 +183,123 @@ fn into_rc() {
 
     assert_eq!(&*rc2, os_str);
     assert_eq!(&*arc2, os_str);
+}
+
+#[test]
+fn slice_encoded_bytes() {
+    let os_str = OsStr::new("123θგ🦀");
+    // ASCII
+    let digits = os_str.slice_encoded_bytes(..3);
+    assert_eq!(digits, "123");
+    let three = os_str.slice_encoded_bytes(2..3);
+    assert_eq!(three, "3");
+    // 2-byte UTF-8
+    let theta = os_str.slice_encoded_bytes(3..5);
+    assert_eq!(theta, "θ");
+    // 3-byte UTF-8
+    let gani = os_str.slice_encoded_bytes(5..8);
+    assert_eq!(gani, "გ");
+    // 4-byte UTF-8
+    let crab = os_str.slice_encoded_bytes(8..);
+    assert_eq!(crab, "🦀");
+}
+
+#[test]
+#[should_panic]
+fn slice_out_of_bounds() {
+    let crab = OsStr::new("🦀");
+    let _ = crab.slice_encoded_bytes(..5);
+}
+
+#[test]
+#[should_panic]
+fn slice_mid_char() {
+    let crab = OsStr::new("🦀");
+    let _ = crab.slice_encoded_bytes(..2);
+}
+
+#[cfg(unix)]
+#[test]
+#[should_panic(expected = "byte index 1 is not an OsStr boundary")]
+fn slice_invalid_data() {
+    use crate::os::unix::ffi::OsStrExt;
+
+    let os_string = OsStr::from_bytes(b"\xFF\xFF");
+    let _ = os_string.slice_encoded_bytes(1..);
+}
+
+#[cfg(unix)]
+#[test]
+#[should_panic(expected = "byte index 1 is not an OsStr boundary")]
+fn slice_partial_utf8() {
+    use crate::os::unix::ffi::{OsStrExt, OsStringExt};
+
+    let part_crab = OsStr::from_bytes(&"🦀".as_bytes()[..3]);
+    let mut os_string = OsString::from_vec(vec![0xFF]);
+    os_string.push(part_crab);
+    let _ = os_string.slice_encoded_bytes(1..);
+}
+
+#[cfg(unix)]
+#[test]
+fn slice_invalid_edge() {
+    use crate::os::unix::ffi::{OsStrExt, OsStringExt};
+
+    let os_string = OsStr::from_bytes(b"a\xFFa");
+    assert_eq!(os_string.slice_encoded_bytes(..1), "a");
+    assert_eq!(os_string.slice_encoded_bytes(1..), OsStr::from_bytes(b"\xFFa"));
+    assert_eq!(os_string.slice_encoded_bytes(..2), OsStr::from_bytes(b"a\xFF"));
+    assert_eq!(os_string.slice_encoded_bytes(2..), "a");
+
+    let os_string = OsStr::from_bytes(&"abc🦀".as_bytes()[..6]);
+    assert_eq!(os_string.slice_encoded_bytes(..3), "abc");
+    assert_eq!(os_string.slice_encoded_bytes(3..), OsStr::from_bytes(b"\xF0\x9F\xA6"));
+
+    let mut os_string = OsString::from_vec(vec![0xFF]);
+    os_string.push("🦀");
+    assert_eq!(os_string.slice_encoded_bytes(..1), OsStr::from_bytes(b"\xFF"));
+    assert_eq!(os_string.slice_encoded_bytes(1..), "🦀");
+}
+
+#[cfg(windows)]
+#[test]
+#[should_panic(expected = "byte index 3 lies between surrogate codepoints")]
+fn slice_between_surrogates() {
+    use crate::os::windows::ffi::OsStringExt;
+
+    let os_string = OsString::from_wide(&[0xD800, 0xD800]);
+    assert_eq!(os_string.as_encoded_bytes(), &[0xED, 0xA0, 0x80, 0xED, 0xA0, 0x80]);
+    let _ = os_string.slice_encoded_bytes(..3);
+}
+
+#[cfg(windows)]
+#[test]
+fn slice_surrogate_edge() {
+    use crate::os::windows::ffi::OsStringExt;
+
+    let surrogate = OsString::from_wide(&[0xD800]);
+    let mut pre_crab = surrogate.clone();
+    pre_crab.push("🦀");
+    assert_eq!(pre_crab.slice_encoded_bytes(..3), surrogate);
+    assert_eq!(pre_crab.slice_encoded_bytes(3..), "🦀");
+
+    let mut post_crab = OsString::from("🦀");
+    post_crab.push(&surrogate);
+    assert_eq!(post_crab.slice_encoded_bytes(..4), "🦀");
+    assert_eq!(post_crab.slice_encoded_bytes(4..), surrogate);
+}
+
+#[test]
+fn clone_to_uninit() {
+    let a = OsStr::new("hello.txt");
+
+    let mut storage = vec![MaybeUninit::<u8>::uninit(); size_of_val::<OsStr>(a)];
+    unsafe { a.clone_to_uninit(ptr::from_mut::<[_]>(storage.as_mut_slice()).cast()) };
+    assert_eq!(a.as_encoded_bytes(), unsafe { storage.assume_init_ref() });
+
+    let mut b: Box<OsStr> = OsStr::new("world.exe").into();
+    assert_eq!(size_of_val::<OsStr>(a), size_of_val::<OsStr>(&b));
+    assert_ne!(a, &*b);
+    unsafe { a.clone_to_uninit(ptr::from_mut::<OsStr>(&mut b).cast()) };
+    assert_eq!(a, &*b);
 }

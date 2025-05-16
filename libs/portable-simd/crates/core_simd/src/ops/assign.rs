@@ -1,4 +1,5 @@
 //! Assignment operators
+
 use super::*;
 use core::ops::{AddAssign, MulAssign}; // commutative binary op-assignment
 use core::ops::{BitAndAssign, BitOrAssign, BitXorAssign}; // commutative bit binary op-assignment
@@ -8,7 +9,7 @@ use core::ops::{ShlAssign, ShrAssign}; // non-commutative bit binary op-assignme
 // Arithmetic
 
 macro_rules! assign_ops {
-    ($(impl<T, U, const LANES: usize> $assignTrait:ident<U> for Simd<T, LANES>
+    ($(impl<T, U, const N: usize> $assignTrait:ident<U> for Simd<T, N>
         where
             Self: $trait:ident,
         {
@@ -16,11 +17,11 @@ macro_rules! assign_ops {
                 $call:ident
             }
         })*) => {
-        $(impl<T, U, const LANES: usize> $assignTrait<U> for Simd<T, LANES>
+        $(impl<T, U, const N: usize> $assignTrait<U> for Simd<T, N>
         where
             Self: $trait<U, Output = Self>,
             T: SimdElement,
-            LaneCount<LANES>: SupportedLaneCount,
+            LaneCount<N>: SupportedLaneCount,
         {
             #[inline]
             fn $assign_call(&mut self, rhs: U) {
@@ -32,7 +33,7 @@ macro_rules! assign_ops {
 
 assign_ops! {
     // Arithmetic
-    impl<T, U, const LANES: usize> AddAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> AddAssign<U> for Simd<T, N>
     where
         Self: Add,
     {
@@ -41,7 +42,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> MulAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> MulAssign<U> for Simd<T, N>
     where
         Self: Mul,
     {
@@ -50,7 +51,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> SubAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> SubAssign<U> for Simd<T, N>
     where
         Self: Sub,
     {
@@ -59,7 +60,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> DivAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> DivAssign<U> for Simd<T, N>
     where
         Self: Div,
     {
@@ -67,7 +68,7 @@ assign_ops! {
             div
         }
     }
-    impl<T, U, const LANES: usize> RemAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> RemAssign<U> for Simd<T, N>
     where
         Self: Rem,
     {
@@ -77,7 +78,7 @@ assign_ops! {
     }
 
     // Bitops
-    impl<T, U, const LANES: usize> BitAndAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> BitAndAssign<U> for Simd<T, N>
     where
         Self: BitAnd,
     {
@@ -86,7 +87,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> BitOrAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> BitOrAssign<U> for Simd<T, N>
     where
         Self: BitOr,
     {
@@ -95,7 +96,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> BitXorAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> BitXorAssign<U> for Simd<T, N>
     where
         Self: BitXor,
     {
@@ -104,7 +105,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> ShlAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> ShlAssign<U> for Simd<T, N>
     where
         Self: Shl,
     {
@@ -113,7 +114,7 @@ assign_ops! {
         }
     }
 
-    impl<T, U, const LANES: usize> ShrAssign<U> for Simd<T, LANES>
+    impl<T, U, const N: usize> ShrAssign<U> for Simd<T, N>
     where
         Self: Shr,
     {

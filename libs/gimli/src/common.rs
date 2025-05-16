@@ -27,6 +27,16 @@ impl Format {
     }
 }
 
+/// Which vendor extensions to support.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Vendor {
+    /// A default set of extensions, including some common GNU extensions.
+    Default,
+    /// AAarch64 extensions.
+    AArch64,
+}
+
 /// Encoding parameters that are commonly used for multiple DWARF sections.
 ///
 /// This is intended to be small enough to pass by value.
@@ -38,8 +48,6 @@ pub struct Encoding {
     /// The size of an address.
     pub address_size: u8,
 
-    // The size of a segment selector.
-    // TODO: pub segment_size: u8,
     /// Whether the DWARF format is 32- or 64-bit.
     pub format: Format,
 
@@ -329,6 +337,7 @@ impl SectionId {
             // GNU split-dwarf extension to DWARF4.
             SectionId::DebugLoc => ".debug_loc.dwo",
             SectionId::DebugLocLists => ".debug_loclists.dwo",
+            SectionId::DebugMacinfo => ".debug_macinfo.dwo",
             SectionId::DebugMacro => ".debug_macro.dwo",
             SectionId::DebugRngLists => ".debug_rnglists.dwo",
             SectionId::DebugStr => ".debug_str.dwo",
@@ -337,6 +346,31 @@ impl SectionId {
             SectionId::DebugTypes => ".debug_types.dwo",
             _ => return None,
         })
+    }
+
+    /// Returns the XCOFF section name for this kind.
+    pub fn xcoff_name(self) -> Option<&'static str> {
+        Some(match self {
+            SectionId::DebugAbbrev => ".dwabrev",
+            SectionId::DebugAranges => ".dwarnge",
+            SectionId::DebugFrame => ".dwframe",
+            SectionId::DebugInfo => ".dwinfo",
+            SectionId::DebugLine => ".dwline",
+            SectionId::DebugLoc => ".dwloc",
+            SectionId::DebugMacinfo => ".dwmac",
+            SectionId::DebugPubNames => ".dwpbnms",
+            SectionId::DebugPubTypes => ".dwpbtyp",
+            SectionId::DebugRanges => ".dwrnges",
+            SectionId::DebugStr => ".dwstr",
+            _ => return None,
+        })
+    }
+
+    /// Returns true if this is a mergeable string section.
+    ///
+    /// This is useful for determining the correct section flags.
+    pub fn is_string(self) -> bool {
+        matches!(self, SectionId::DebugStr | SectionId::DebugLineStr)
     }
 }
 

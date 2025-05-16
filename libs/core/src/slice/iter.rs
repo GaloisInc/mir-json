@@ -3,17 +3,19 @@
 #[macro_use] // import iterator! and forward_iterator!
 mod macros;
 
-use crate::cmp;
-use crate::cmp::Ordering;
-use crate::fmt;
-use crate::intrinsics::assume;
-use crate::iter::{FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce};
-use crate::marker::{PhantomData, Send, Sized, Sync};
-use crate::mem::{self, SizedTypeProperties};
-use crate::num::NonZeroUsize;
-use crate::ptr::NonNull;
-
 use super::{from_raw_parts, from_raw_parts_mut};
+use crate::hint::assert_unchecked;
+use crate::iter::{
+    FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce, UncheckedIterator,
+};
+use crate::marker::PhantomData;
+use crate::mem::{self, SizedTypeProperties};
+use crate::num::NonZero;
+use crate::ptr::{NonNull, without_provenance, without_provenance_mut};
+use crate::{cmp, fmt};
+
+#[stable(feature = "boxed_slice_into_iter", since = "1.80.0")]
+impl<T> !Iterator for [T] {}
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T> IntoIterator for &'a [T] {
@@ -44,11 +46,17 @@ impl<'a, T> IntoIterator for &'a mut [T] {
 /// Basic usage:
 ///
 /// ```
-/// // First, we declare a type which has `iter` method to get the `Iter` struct (`&[usize]` here):
+/// // First, we need a slice to call the `iter` method on:
 /// let slice = &[1, 2, 3];
 ///
-/// // Then, we iterate over it:
+/// // Then we call `iter` on the slice to get the `Iter` iterator,
+/// // and iterate over it:
 /// for element in slice.iter() {
+///     println!("{element}");
+/// }
+///
+/// // This for loop actually already works without calling `iter`:
+/// for element in slice {
 ///     println!("{element}");
 /// }
 /// ```
@@ -57,11 +65,13 @@ impl<'a, T> IntoIterator for &'a mut [T] {
 /// [slices]: slice
 #[stable(feature = "rust1", since = "1.0.0")]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
+#[rustc_diagnostic_item = "SliceIter"]
 pub struct Iter<'a, T: 'a> {
+    /// The pointer to the next element to return, or the past-the-end location
+    /// if the iterator is empty.
+    ///
+    /// This address will be used for all ZST elements, never changed.
     ptr: NonNull<T>,
-    end: *const T, // If T is a ZST, this is actually ptr+len. This encoding is picked so that
-    // ptr == end is a quick test for the Iterator being empty, that works
-    // for both ZST and non-ZST.
     len: usize,
     _marker: PhantomData<&'a T>,
 }
@@ -81,46 +91,39 @@ unsafe impl<T: Sync> Send for Iter<'_, T> {}
 impl<'a, T> Iter<'a, T> {
     #[inline]
     pub(super) fn new(slice: &'a [T]) -> Self {
-        let ptr = slice.as_ptr();
+        let len = slice.len();
+        let ptr: NonNull<T> = NonNull::from(slice).cast();
         // SAFETY: Similar to `IterMut::new`.
         unsafe {
-            assume(!ptr.is_null());
-
-            let end =
-                if T::IS_ZST { ptr.wrapping_byte_add(slice.len()) } else { ptr.add(slice.len()) };
-
-            Self {
-                ptr: NonNull::new_unchecked(ptr as *mut T),
-                end,
-                len: slice.len(),
-                _marker: PhantomData,
-            }
+            Self { ptr, len, _marker: PhantomData }
         }
     }
 
     /// Views the underlying data as a subslice of the original data.
-    ///
-    /// This has the same lifetime as the original slice, and so the
-    /// iterator can continue to be used while this exists.
     ///
     /// # Examples
     ///
     /// Basic usage:
     ///
     /// ```
-    /// // First, we declare a type which has the `iter` method to get the `Iter`
-    /// // struct (`&[usize]` here):
+    /// // First, we need a slice to call the `iter` method on:
     /// let slice = &[1, 2, 3];
     ///
-    /// // Then, we get the iterator:
+    /// // Then we call `iter` on the slice to get the `Iter` iterator:
     /// let mut iter = slice.iter();
-    /// // So if we print what `as_slice` method returns here, we have "[1, 2, 3]":
+    /// // Here `as_slice` still returns the whole slice, so this prints "[1, 2, 3]":
     /// println!("{:?}", iter.as_slice());
     ///
-    /// // Next, we move to the second element of the slice:
+    /// // Now, we call the `next` method to remove the first element from the iterator:
     /// iter.next();
-    /// // Now `as_slice` returns "[2, 3]":
+    /// // Here the iterator does not contain the first element of the slice any more,
+    /// // so `as_slice` only returns the last two elements of the slice,
+    /// // and so this prints "[2, 3]":
     /// println!("{:?}", iter.as_slice());
+    ///
+    /// // The underlying slice has not been modified and still contains three elements,
+    /// // so this prints "[1, 2, 3]":
+    /// println!("{:?}", slice);
     /// ```
     #[must_use]
     #[stable(feature = "iter_to_slice", since = "1.4.0")]
@@ -130,15 +133,13 @@ impl<'a, T> Iter<'a, T> {
     }
 }
 
-iterator! {struct Iter -> *const T, &'a T, const, {/* no mut */}, {
+iterator! {struct Iter -> *const T, &'a T, const, {/* no mut */}, as_ref, {
     fn is_sorted_by<F>(self, mut compare: F) -> bool
     where
         Self: Sized,
-        F: FnMut(&Self::Item, &Self::Item) -> Option<Ordering>,
+        F: FnMut(&Self::Item, &Self::Item) -> bool,
     {
-        self.as_slice().windows(2).all(|w| {
-            compare(&&w[0], &&w[1]).map(|o| o != Ordering::Greater).unwrap_or(false)
-        })
+        self.as_slice().is_sorted_by(|a, b| compare(&a, &b))
     }
 }}
 
@@ -146,7 +147,7 @@ iterator! {struct Iter -> *const T, &'a T, const, {/* no mut */}, {
 impl<T> Clone for Iter<'_, T> {
     #[inline]
     fn clone(&self) -> Self {
-        Iter { ptr: self.ptr, end: self.end, len: self.len, _marker: self._marker }
+        Iter { ptr: self.ptr, len: self.len, _marker: self._marker }
     }
 }
 
@@ -167,11 +168,11 @@ impl<T> AsRef<[T]> for Iter<'_, T> {
 /// Basic usage:
 ///
 /// ```
-/// // First, we declare a type which has `iter_mut` method to get the `IterMut`
-/// // struct (`&[usize]` here):
-/// let mut slice = &mut [1, 2, 3];
+/// // First, we need a slice to call the `iter_mut` method on:
+/// let slice = &mut [1, 2, 3];
 ///
-/// // Then, we iterate over it and increment each element value:
+/// // Then we call `iter_mut` on the slice to get the `IterMut` iterator,
+/// // iterate over it and increment each element value:
 /// for element in slice.iter_mut() {
 ///     *element += 1;
 /// }
@@ -185,10 +186,11 @@ impl<T> AsRef<[T]> for Iter<'_, T> {
 #[stable(feature = "rust1", since = "1.0.0")]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct IterMut<'a, T: 'a> {
+    /// The pointer to the next element to return, or the past-the-end location
+    /// if the iterator is empty.
+    ///
+    /// This address will be used for all ZST elements, never changed.
     ptr: NonNull<T>,
-    end: *mut T, // If T is a ZST, this is actually ptr+len. This encoding is picked so that
-    // ptr == end is a quick test for the Iterator being empty, that works
-    // for both ZST and non-ZST.
     len: usize,
     _marker: PhantomData<&'a mut T>,
 }
@@ -208,7 +210,8 @@ unsafe impl<T: Send> Send for IterMut<'_, T> {}
 impl<'a, T> IterMut<'a, T> {
     #[inline]
     pub(super) fn new(slice: &'a mut [T]) -> Self {
-        let ptr = slice.as_mut_ptr();
+        let len = slice.len();
+        let ptr: NonNull<T> = NonNull::from(slice).cast();
         // SAFETY: There are several things here:
         //
         // `ptr` has been obtained by `slice.as_ptr()` where `slice` is a valid
@@ -220,23 +223,13 @@ impl<'a, T> IterMut<'a, T> {
         // for direct pointer equality with `ptr` to check if the iterator is
         // done.
         //
-        // In the case of a ZST, the end pointer is just the start pointer plus
-        // the length, to also allows for the fast `ptr == end` check.
+        // In the case of a ZST, the end pointer is just the length.  It's never
+        // used as a pointer at all, and thus it's fine to have no provenance.
         //
         // See the `next_unchecked!` and `is_empty!` macros as well as the
         // `post_inc_start` method for more information.
         unsafe {
-            assume(!ptr.is_null());
-
-            let end =
-                if T::IS_ZST { ptr.wrapping_byte_add(slice.len()) } else { ptr.add(slice.len()) };
-
-            Self {
-                ptr: NonNull::new_unchecked(ptr),
-                end,
-                len: slice.len(),
-                _marker: PhantomData,
-            }
+            Self { ptr, len, _marker: PhantomData }
         }
     }
 
@@ -250,28 +243,21 @@ impl<'a, T> IterMut<'a, T> {
     /// Basic usage:
     ///
     /// ```
-    /// // First, we declare a type which has `iter_mut` method to get the `IterMut`
-    /// // struct (`&[usize]` here):
+    /// // First, we need a slice to call the `iter_mut` method on:
     /// let mut slice = &mut [1, 2, 3];
     ///
-    /// {
-    ///     // Then, we get the iterator:
-    ///     let mut iter = slice.iter_mut();
-    ///     // We move to next element:
-    ///     iter.next();
-    ///     // So if we print what `into_slice` method returns here, we have "[2, 3]":
-    ///     println!("{:?}", iter.into_slice());
-    /// }
-    ///
-    /// // Now let's modify a value of the slice:
-    /// {
-    ///     // First we get back the iterator:
-    ///     let mut iter = slice.iter_mut();
-    ///     // We change the value of the first element of the slice returned by the `next` method:
-    ///     *iter.next().unwrap() += 1;
-    /// }
-    /// // Now slice is "[2, 2, 3]":
-    /// println!("{slice:?}");
+    /// // Then we call `iter_mut` on the slice to get the `IterMut` struct:
+    /// let mut iter = slice.iter_mut();
+    /// // Now, we call the `next` method to remove the first element of the iterator,
+    /// // unwrap and dereference what we get from `next` and increase its value by 1:
+    /// *iter.next().unwrap() += 1;
+    /// // Here the iterator does not contain the first element of the slice any more,
+    /// // so `into_slice` only returns the last two elements of the slice,
+    /// // and so this prints "[2, 3]":
+    /// println!("{:?}", iter.into_slice());
+    /// // The underlying slice still contains three elements, but its first element
+    /// // was increased by 1, so this prints "[2, 2, 3]":
+    /// println!("{:?}", slice);
     /// ```
     #[must_use = "`self` will be dropped if the result is not used"]
     #[stable(feature = "iter_to_slice", since = "1.4.0")]
@@ -284,25 +270,30 @@ impl<'a, T> IterMut<'a, T> {
 
     /// Views the underlying data as a subslice of the original data.
     ///
-    /// To avoid creating `&mut [T]` references that alias, the returned slice
-    /// borrows its lifetime from the iterator the method is applied on.
-    ///
     /// # Examples
     ///
     /// Basic usage:
     ///
     /// ```
-    /// let mut slice: &mut [usize] = &mut [1, 2, 3];
+    /// // First, we need a slice to call the `iter_mut` method on:
+    /// let slice = &mut [1, 2, 3];
     ///
-    /// // First, we get the iterator:
+    /// // Then we call `iter_mut` on the slice to get the `IterMut` iterator:
     /// let mut iter = slice.iter_mut();
-    /// // So if we check what the `as_slice` method returns here, we have "[1, 2, 3]":
-    /// assert_eq!(iter.as_slice(), &[1, 2, 3]);
+    /// // Here `as_slice` still returns the whole slice, so this prints "[1, 2, 3]":
+    /// println!("{:?}", iter.as_slice());
     ///
-    /// // Next, we move to the second element of the slice:
-    /// iter.next();
-    /// // Now `as_slice` returns "[2, 3]":
-    /// assert_eq!(iter.as_slice(), &[2, 3]);
+    /// // Now, we call the `next` method to remove the first element from the iterator
+    /// // and increment its value:
+    /// *iter.next().unwrap() += 1;
+    /// // Here the iterator does not contain the first element of the slice any more,
+    /// // so `as_slice` only returns the last two elements of the slice,
+    /// // and so this prints "[2, 3]":
+    /// println!("{:?}", iter.as_slice());
+    ///
+    /// // The underlying slice still contains three elements, but its first element
+    /// // was increased by 1, so this prints "[2, 2, 3]":
+    /// println!("{:?}", slice);
     /// ```
     #[must_use]
     #[stable(feature = "slice_iter_mut_as_slice", since = "1.53.0")]
@@ -312,9 +303,6 @@ impl<'a, T> IterMut<'a, T> {
     }
 
     /// Views the underlying data as a mutable subslice of the original data.
-    ///
-    /// To avoid creating `&mut [T]` references that alias, the returned slice
-    /// borrows its lifetime from the iterator the method is applied on.
     ///
     /// # Examples
     ///
@@ -368,7 +356,7 @@ impl<T> AsRef<[T]> for IterMut<'_, T> {
 //     }
 // }
 
-iterator! {struct IterMut -> *mut T, &'a mut T, mut, {mut}, {}}
+iterator! {struct IterMut -> *mut T, &'a mut T, mut, {mut}, as_mut, {}}
 
 /// An internal abstraction over the splitting iterators, so that
 /// splitn, splitn_mut etc can be implemented once.
@@ -389,6 +377,9 @@ pub(super) trait SplitIter: DoubleEndedIterator {
 /// ```
 /// let slice = [10, 40, 33, 20];
 /// let mut iter = slice.split(|num| num % 3 == 0);
+/// assert_eq!(iter.next(), Some(&[10, 40][..]));
+/// assert_eq!(iter.next(), Some(&[20][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`split`]: slice::split
@@ -464,8 +455,12 @@ where
         match self.v.iter().position(|x| (self.pred)(x)) {
             None => self.finish(),
             Some(idx) => {
-                let ret = Some(&self.v[..idx]);
-                self.v = &self.v[idx + 1..];
+                let (left, right) =
+                    // SAFETY: if v.iter().position returns Some(idx), that
+                    // idx is definitely a valid index for v
+                    unsafe { (self.v.get_unchecked(..idx), self.v.get_unchecked(idx + 1..)) };
+                let ret = Some(left);
+                self.v = right;
                 ret
             }
         }
@@ -497,8 +492,12 @@ where
         match self.v.iter().rposition(|x| (self.pred)(x)) {
             None => self.finish(),
             Some(idx) => {
-                let ret = Some(&self.v[idx + 1..]);
-                self.v = &self.v[..idx];
+                let (left, right) =
+                    // SAFETY: if v.iter().rposition returns Some(idx), then
+                    // idx is definitely a valid index for v
+                    unsafe { (self.v.get_unchecked(..idx), self.v.get_unchecked(idx + 1..)) };
+                let ret = Some(right);
+                self.v = left;
                 ret
             }
         }
@@ -534,6 +533,9 @@ impl<T, P> FusedIterator for Split<'_, T, P> where P: FnMut(&T) -> bool {}
 /// ```
 /// let slice = [10, 40, 33, 20];
 /// let mut iter = slice.split_inclusive(|num| num % 3 == 0);
+/// assert_eq!(iter.next(), Some(&[10, 40, 33][..]));
+/// assert_eq!(iter.next(), Some(&[20][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`split_inclusive`]: slice::split_inclusive
@@ -697,7 +699,7 @@ where
             None
         } else {
             self.finished = true;
-            Some(mem::replace(&mut self.v, &mut []))
+            Some(mem::take(&mut self.v))
         }
     }
 }
@@ -761,7 +763,7 @@ where
         match idx_opt {
             None => self.finish(),
             Some(idx) => {
-                let tmp = mem::replace(&mut self.v, &mut []);
+                let tmp = mem::take(&mut self.v);
                 let (head, tail) = tmp.split_at_mut(idx);
                 self.v = head;
                 Some(&mut tail[1..])
@@ -842,7 +844,7 @@ where
         if idx == self.v.len() {
             self.finished = true;
         }
-        let tmp = mem::replace(&mut self.v, &mut []);
+        let tmp = mem::take(&mut self.v);
         let (head, tail) = tmp.split_at_mut(idx);
         self.v = tail;
         Some(head)
@@ -888,7 +890,7 @@ where
         if idx == 0 {
             self.finished = true;
         }
-        let tmp = mem::replace(&mut self.v, &mut []);
+        let tmp = mem::take(&mut self.v);
         let (head, tail) = tmp.split_at_mut(idx);
         self.v = head;
         Some(tail)
@@ -907,7 +909,10 @@ impl<T, P> FusedIterator for SplitInclusiveMut<'_, T, P> where P: FnMut(&T) -> b
 ///
 /// ```
 /// let slice = [11, 22, 33, 0, 44, 55];
-/// let iter = slice.rsplit(|num| *num == 0);
+/// let mut iter = slice.rsplit(|num| *num == 0);
+/// assert_eq!(iter.next(), Some(&[44, 55][..]));
+/// assert_eq!(iter.next(), Some(&[11, 22, 33][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`rsplit`]: slice::rsplit
@@ -1127,7 +1132,10 @@ impl<T, I: SplitIter<Item = T>> Iterator for GenericSplitN<I> {
 ///
 /// ```
 /// let slice = [10, 40, 30, 20, 60, 50];
-/// let iter = slice.splitn(2, |num| *num % 3 == 0);
+/// let mut iter = slice.splitn(2, |num| *num % 3 == 0);
+/// assert_eq!(iter.next(), Some(&[10, 40][..]));
+/// assert_eq!(iter.next(), Some(&[20, 60, 50][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`splitn`]: slice::splitn
@@ -1168,7 +1176,10 @@ where
 ///
 /// ```
 /// let slice = [10, 40, 30, 20, 60, 50];
-/// let iter = slice.rsplitn(2, |num| *num % 3 == 0);
+/// let mut iter = slice.rsplitn(2, |num| *num % 3 == 0);
+/// assert_eq!(iter.next(), Some(&[50][..]));
+/// assert_eq!(iter.next(), Some(&[10, 40, 30, 20][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`rsplitn`]: slice::rsplitn
@@ -1293,7 +1304,11 @@ forward_iterator! { RSplitNMut: T, &'a mut [T] }
 ///
 /// ```
 /// let slice = ['r', 'u', 's', 't'];
-/// let iter = slice.windows(2);
+/// let mut iter = slice.windows(2);
+/// assert_eq!(iter.next(), Some(&['r', 'u'][..]));
+/// assert_eq!(iter.next(), Some(&['u', 's'][..]));
+/// assert_eq!(iter.next(), Some(&['s', 't'][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`windows`]: slice::windows
@@ -1303,12 +1318,12 @@ forward_iterator! { RSplitNMut: T, &'a mut [T] }
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct Windows<'a, T: 'a> {
     v: &'a [T],
-    size: NonZeroUsize,
+    size: NonZero<usize>,
 }
 
 impl<'a, T: 'a> Windows<'a, T> {
     #[inline]
-    pub(super) fn new(slice: &'a [T], size: NonZeroUsize) -> Self {
+    pub(super) fn new(slice: &'a [T], size: NonZero<usize>) -> Self {
         Self { v: slice, size }
     }
 }
@@ -1441,7 +1456,11 @@ unsafe impl<'a, T> TrustedRandomAccessNoCoerce for Windows<'a, T> {
 ///
 /// ```
 /// let slice = ['l', 'o', 'r', 'e', 'm'];
-/// let iter = slice.chunks(2);
+/// let mut iter = slice.chunks(2);
+/// assert_eq!(iter.next(), Some(&['l', 'o'][..]));
+/// assert_eq!(iter.next(), Some(&['r', 'e'][..]));
+/// assert_eq!(iter.next(), Some(&['m'][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`chunks`]: slice::chunks
@@ -1812,7 +1831,10 @@ unsafe impl<T> Sync for ChunksMut<'_, T> where T: Sync {}
 ///
 /// ```
 /// let slice = ['l', 'o', 'r', 'e', 'm'];
-/// let iter = slice.chunks_exact(2);
+/// let mut iter = slice.chunks_exact(2);
+/// assert_eq!(iter.next(), Some(&['l', 'o'][..]));
+/// assert_eq!(iter.next(), Some(&['r', 'e'][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`chunks_exact`]: slice::chunks_exact
@@ -2156,7 +2178,11 @@ unsafe impl<T> Sync for ChunksExactMut<'_, T> where T: Sync {}
 /// #![feature(array_windows)]
 ///
 /// let slice = [0, 1, 2, 3];
-/// let iter = slice.array_windows::<2>();
+/// let mut iter = slice.array_windows::<2>();
+/// assert_eq!(iter.next(), Some(&[0, 1]));
+/// assert_eq!(iter.next(), Some(&[1, 2]));
+/// assert_eq!(iter.next(), Some(&[2, 3]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`array_windows`]: slice::array_windows
@@ -2278,7 +2304,10 @@ impl<T, const N: usize> ExactSizeIterator for ArrayWindows<'_, T, N> {
 /// #![feature(array_chunks)]
 ///
 /// let slice = ['l', 'o', 'r', 'e', 'm'];
-/// let iter = slice.array_chunks::<2>();
+/// let mut iter = slice.array_chunks::<2>();
+/// assert_eq!(iter.next(), Some(&['l', 'o']));
+/// assert_eq!(iter.next(), Some(&['r', 'e']));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`array_chunks`]: slice::array_chunks
@@ -2519,7 +2548,11 @@ unsafe impl<'a, T, const N: usize> TrustedRandomAccessNoCoerce for ArrayChunksMu
 ///
 /// ```
 /// let slice = ['l', 'o', 'r', 'e', 'm'];
-/// let iter = slice.rchunks(2);
+/// let mut iter = slice.rchunks(2);
+/// assert_eq!(iter.next(), Some(&['e', 'm'][..]));
+/// assert_eq!(iter.next(), Some(&['o', 'r'][..]));
+/// assert_eq!(iter.next(), Some(&['l'][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`rchunks`]: slice::rchunks
@@ -2885,7 +2918,10 @@ unsafe impl<T> Sync for RChunksMut<'_, T> where T: Sync {}
 ///
 /// ```
 /// let slice = ['l', 'o', 'r', 'e', 'm'];
-/// let iter = slice.rchunks_exact(2);
+/// let mut iter = slice.rchunks_exact(2);
+/// assert_eq!(iter.next(), Some(&['e', 'm'][..]));
+/// assert_eq!(iter.next(), Some(&['o', 'r'][..]));
+/// assert_eq!(iter.next(), None);
 /// ```
 ///
 /// [`rchunks_exact`]: slice::rchunks_exact
@@ -3247,26 +3283,26 @@ unsafe impl<'a, T> TrustedRandomAccessNoCoerce for IterMut<'a, T> {
 
 /// An iterator over slice in (non-overlapping) chunks separated by a predicate.
 ///
-/// This struct is created by the [`group_by`] method on [slices].
+/// This struct is created by the [`chunk_by`] method on [slices].
 ///
-/// [`group_by`]: slice::group_by
+/// [`chunk_by`]: slice::chunk_by
 /// [slices]: slice
-#[unstable(feature = "slice_group_by", issue = "80552")]
+#[stable(feature = "slice_group_by", since = "1.77.0")]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct GroupBy<'a, T: 'a, P> {
+pub struct ChunkBy<'a, T: 'a, P> {
     slice: &'a [T],
     predicate: P,
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> GroupBy<'a, T, P> {
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> ChunkBy<'a, T, P> {
     pub(super) fn new(slice: &'a [T], predicate: P) -> Self {
-        GroupBy { slice, predicate }
+        ChunkBy { slice, predicate }
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> Iterator for GroupBy<'a, T, P>
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> Iterator for ChunkBy<'a, T, P>
 where
     P: FnMut(&T, &T) -> bool,
 {
@@ -3299,8 +3335,8 @@ where
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> DoubleEndedIterator for GroupBy<'a, T, P>
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> DoubleEndedIterator for ChunkBy<'a, T, P>
 where
     P: FnMut(&T, &T) -> bool,
 {
@@ -3321,39 +3357,39 @@ where
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> FusedIterator for GroupBy<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> FusedIterator for ChunkBy<'a, T, P> where P: FnMut(&T, &T) -> bool {}
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupBy<'a, T, P> {
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for ChunkBy<'a, T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GroupBy").field("slice", &self.slice).finish()
+        f.debug_struct("ChunkBy").field("slice", &self.slice).finish()
     }
 }
 
 /// An iterator over slice in (non-overlapping) mutable chunks separated
 /// by a predicate.
 ///
-/// This struct is created by the [`group_by_mut`] method on [slices].
+/// This struct is created by the [`chunk_by_mut`] method on [slices].
 ///
-/// [`group_by_mut`]: slice::group_by_mut
+/// [`chunk_by_mut`]: slice::chunk_by_mut
 /// [slices]: slice
-#[unstable(feature = "slice_group_by", issue = "80552")]
+#[stable(feature = "slice_group_by", since = "1.77.0")]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct GroupByMut<'a, T: 'a, P> {
+pub struct ChunkByMut<'a, T: 'a, P> {
     slice: &'a mut [T],
     predicate: P,
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> GroupByMut<'a, T, P> {
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> ChunkByMut<'a, T, P> {
     pub(super) fn new(slice: &'a mut [T], predicate: P) -> Self {
-        GroupByMut { slice, predicate }
+        ChunkByMut { slice, predicate }
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> Iterator for GroupByMut<'a, T, P>
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> Iterator for ChunkByMut<'a, T, P>
 where
     P: FnMut(&T, &T) -> bool,
 {
@@ -3387,8 +3423,8 @@ where
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> DoubleEndedIterator for GroupByMut<'a, T, P>
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> DoubleEndedIterator for ChunkByMut<'a, T, P>
 where
     P: FnMut(&T, &T) -> bool,
 {
@@ -3410,12 +3446,12 @@ where
     }
 }
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a, P> FusedIterator for GroupByMut<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a, P> FusedIterator for ChunkByMut<'a, T, P> where P: FnMut(&T, &T) -> bool {}
 
-#[unstable(feature = "slice_group_by", issue = "80552")]
-impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupByMut<'a, T, P> {
+#[stable(feature = "slice_group_by", since = "1.77.0")]
+impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for ChunkByMut<'a, T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GroupByMut").field("slice", &self.slice).finish()
+        f.debug_struct("ChunkByMut").field("slice", &self.slice).finish()
     }
 }

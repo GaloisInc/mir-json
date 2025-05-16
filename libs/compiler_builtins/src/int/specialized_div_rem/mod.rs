@@ -95,8 +95,9 @@ const USE_LZ: bool = {
         // LZD or LZCNT on SPARC only exists for the VIS 3 extension and later.
         cfg!(target_feature = "vis3")
     } else if cfg!(any(target_arch = "riscv32", target_arch = "riscv64")) {
-        // The `B` extension on RISC-V determines if a CLZ assembly instruction exists
-        cfg!(target_feature = "b")
+        // The 'Zbb' Basic Bit-Manipulation extension on RISC-V
+        // determines if a CLZ assembly instruction exists
+        cfg!(target_feature = "zbb")
     } else {
         // All other common targets Rust supports should have CLZ instructions
         true
@@ -135,9 +136,15 @@ fn u64_by_u64_div_rem(duo: u64, div: u64) -> (u64, u64) {
 
 // Whether `trifecta` or `delegate` is faster for 128 bit division depends on the speed at which a
 // microarchitecture can multiply and divide. We decide to be optimistic and assume `trifecta` is
-// faster if the target pointer width is at least 64.
+// faster if the target pointer width is at least 64. Note that this
+// implementation is additionally included on WebAssembly despite the typical
+// pointer width there being 32 because it's typically run on a 64-bit machine
+// that has access to faster 64-bit operations.
 #[cfg(all(
-    not(any(target_pointer_width = "16", target_pointer_width = "32")),
+    any(
+        target_family = "wasm",
+        not(any(target_pointer_width = "16", target_pointer_width = "32")),
+    ),
     not(all(not(feature = "no-asm"), target_arch = "x86_64")),
     not(any(target_arch = "sparc", target_arch = "sparc64"))
 ))]
@@ -151,10 +158,14 @@ impl_trifecta!(
     u128
 );
 
-// If the pointer width less than 64, then the target architecture almost certainly does not have
-// the fast 64 to 128 bit widening multiplication needed for `trifecta` to be faster.
+// If the pointer width less than 64 and this isn't wasm, then the target
+// architecture almost certainly does not have the fast 64 to 128 bit widening
+// multiplication needed for `trifecta` to be faster.
 #[cfg(all(
-    any(target_pointer_width = "16", target_pointer_width = "32"),
+    not(any(
+        target_family = "wasm",
+        not(any(target_pointer_width = "16", target_pointer_width = "32")),
+    )),
     not(all(not(feature = "no-asm"), target_arch = "x86_64")),
     not(any(target_arch = "sparc", target_arch = "sparc64"))
 ))]
@@ -305,5 +316,6 @@ impl_binary_long!(
     u32_normalization_shift,
     32,
     u32,
-    i32
+    i32,
+    allow(dead_code)
 );

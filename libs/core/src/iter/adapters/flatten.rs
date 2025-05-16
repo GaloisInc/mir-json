@@ -1,6 +1,11 @@
-use crate::fmt;
-use crate::iter::{DoubleEndedIterator, Fuse, FusedIterator, Iterator, Map, TrustedLen};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{
+    Cloned, Copied, Empty, Filter, FilterMap, Fuse, FusedIterator, Map, Once, OnceWith,
+    TrustedFused, TrustedLen,
+};
+use crate::num::NonZero;
 use crate::ops::{ControlFlow, Try};
+use crate::{array, fmt, option, result};
 
 /// An iterator that maps each element to an iterator, and yields the elements
 /// of the produced iterators.
@@ -16,6 +21,14 @@ pub struct FlatMap<I, U: IntoIterator, F> {
 impl<I: Iterator, U: IntoIterator, F: FnMut(I::Item) -> U> FlatMap<I, U, F> {
     pub(in crate::iter) fn new(iter: I, f: F) -> FlatMap<I, U, F> {
         FlatMap { inner: FlattenCompat::new(iter.map(f)) }
+    }
+
+    pub(crate) fn into_parts(self) -> (Option<U::IntoIter>, Option<I>, Option<U::IntoIter>) {
+        (
+            self.inner.frontiter,
+            self.inner.iter.into_inner().map(Map::into_inner),
+            self.inner.backiter,
+        )
     }
 }
 
@@ -75,7 +88,7 @@ where
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.inner.advance_by(n)
     }
 
@@ -120,7 +133,7 @@ where
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.inner.advance_back_by(n)
     }
 }
@@ -135,27 +148,83 @@ where
 }
 
 #[unstable(feature = "trusted_len", issue = "37572")]
-unsafe impl<T, I, F, const N: usize> TrustedLen for FlatMap<I, [T; N], F>
+unsafe impl<I, U, F> TrustedLen for FlatMap<I, U, F>
 where
-    I: TrustedLen,
-    F: FnMut(I::Item) -> [T; N],
+    I: Iterator,
+    U: IntoIterator,
+    F: FnMut(I::Item) -> U,
+    FlattenCompat<Map<I, F>, <U as IntoIterator>::IntoIter>: TrustedLen,
 {
 }
 
-#[unstable(feature = "trusted_len", issue = "37572")]
-unsafe impl<'a, T, I, F, const N: usize> TrustedLen for FlatMap<I, &'a [T; N], F>
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I, U, F> SourceIter for FlatMap<I, U, F>
 where
-    I: TrustedLen,
-    F: FnMut(I::Item) -> &'a [T; N],
+    I: SourceIter + TrustedFused,
+    U: IntoIterator,
 {
+    type Source = I::Source;
+
+    #[inline]
+    unsafe fn as_inner(&mut self) -> &mut I::Source {
+        // SAFETY: unsafe function forwarding to unsafe function with the same requirements
+        unsafe { SourceIter::as_inner(&mut self.inner.iter) }
+    }
 }
 
-#[unstable(feature = "trusted_len", issue = "37572")]
-unsafe impl<'a, T, I, F, const N: usize> TrustedLen for FlatMap<I, &'a mut [T; N], F>
-where
-    I: TrustedLen,
-    F: FnMut(I::Item) -> &'a mut [T; N],
-{
+/// Marker trait for iterators/iterables which have a statically known upper
+/// bound of the number of items they can produce.
+///
+/// # Safety
+///
+/// Implementations must not yield more elements than indicated by UPPER_BOUND if it is `Some`.
+/// Used in specializations.  Implementations must not be conditional on lifetimes or
+/// user-implementable traits.
+#[rustc_specialization_trait]
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe trait BoundedSize {
+    const UPPER_BOUND: Option<NonZero<usize>> = NonZero::new(1);
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T> BoundedSize for Option<T> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T> BoundedSize for option::IntoIter<T> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T, U> BoundedSize for Result<T, U> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T> BoundedSize for result::IntoIter<T> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T> BoundedSize for Once<T> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T> BoundedSize for OnceWith<T> {}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T, const N: usize> BoundedSize for [T; N] {
+    const UPPER_BOUND: Option<NonZero<usize>> = NonZero::new(N);
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<T, const N: usize> BoundedSize for array::IntoIter<T, N> {
+    const UPPER_BOUND: Option<NonZero<usize>> = NonZero::new(N);
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: BoundedSize, P> BoundedSize for Filter<I, P> {
+    const UPPER_BOUND: Option<NonZero<usize>> = I::UPPER_BOUND;
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: BoundedSize, P> BoundedSize for FilterMap<I, P> {
+    const UPPER_BOUND: Option<NonZero<usize>> = I::UPPER_BOUND;
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: BoundedSize, F> BoundedSize for Map<I, F> {
+    const UPPER_BOUND: Option<NonZero<usize>> = I::UPPER_BOUND;
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: BoundedSize> BoundedSize for Copied<I> {
+    const UPPER_BOUND: Option<NonZero<usize>> = I::UPPER_BOUND;
+}
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: BoundedSize> BoundedSize for Cloned<I> {
+    const UPPER_BOUND: Option<NonZero<usize>> = I::UPPER_BOUND;
 }
 
 /// An iterator that flattens one level of nesting in an iterator of things
@@ -236,7 +305,7 @@ where
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.inner.advance_by(n)
     }
 
@@ -281,7 +350,7 @@ where
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.inner.advance_back_by(n)
     }
 }
@@ -297,14 +366,48 @@ where
 #[unstable(feature = "trusted_len", issue = "37572")]
 unsafe impl<I> TrustedLen for Flatten<I>
 where
-    I: TrustedLen,
-    <I as Iterator>::Item: TrustedConstSize,
+    I: Iterator<Item: IntoIterator>,
+    FlattenCompat<I, <I::Item as IntoIterator>::IntoIter>: TrustedLen,
 {
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I> SourceIter for Flatten<I>
+where
+    I: SourceIter + TrustedFused + Iterator,
+    <I as Iterator>::Item: IntoIterator,
+{
+    type Source = I::Source;
+
+    #[inline]
+    unsafe fn as_inner(&mut self) -> &mut I::Source {
+        // SAFETY: unsafe function forwarding to unsafe function with the same requirements
+        unsafe { SourceIter::as_inner(&mut self.inner.iter) }
+    }
+}
+
+#[stable(feature = "default_iters", since = "1.70.0")]
+impl<I> Default for Flatten<I>
+where
+    I: Default + Iterator<Item: IntoIterator>,
+{
+    /// Creates a `Flatten` iterator from the default value of `I`.
+    ///
+    /// ```
+    /// # use core::slice;
+    /// # use std::iter::Flatten;
+    /// let iter: Flatten<slice::Iter<'_, [u8; 4]>> = Default::default();
+    /// assert_eq!(iter.count(), 0);
+    /// ```
+    fn default() -> Self {
+        Flatten::new(Default::default())
+    }
 }
 
 /// Real logic of both `Flatten` and `FlatMap` which simply delegate to
 /// this type.
 #[derive(Clone, Debug)]
+#[unstable(feature = "trusted_len", issue = "37572")]
 struct FlattenCompat<I, U> {
     iter: Fuse<I>,
     frontiter: Option<U>,
@@ -458,6 +561,7 @@ where
     }
 }
 
+// See also the `OneShot` specialization below.
 impl<I, U> Iterator for FlattenCompat<I, U>
 where
     I: Iterator<Item: IntoIterator<IntoIter = U, Item = U::Item>>,
@@ -466,7 +570,7 @@ where
     type Item = U::Item;
 
     #[inline]
-    fn next(&mut self) -> Option<U::Item> {
+    default fn next(&mut self) -> Option<U::Item> {
         loop {
             if let elt @ Some(_) = and_then_or_clear(&mut self.frontiter, Iterator::next) {
                 return elt;
@@ -479,7 +583,7 @@ where
     }
 
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
+    default fn size_hint(&self) -> (usize, Option<usize>) {
         let (flo, fhi) = self.frontiter.as_ref().map_or((0, Some(0)), U::size_hint);
         let (blo, bhi) = self.backiter.as_ref().map_or((0, Some(0)), U::size_hint);
         let lo = flo.saturating_add(blo);
@@ -501,7 +605,7 @@ where
     }
 
     #[inline]
-    fn try_fold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
+    default fn try_fold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
     where
         Self: Sized,
         Fold: FnMut(Acc, Self::Item) -> R,
@@ -518,7 +622,7 @@ where
     }
 
     #[inline]
-    fn fold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    default fn fold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
     where
         Fold: FnMut(Acc, Self::Item) -> Acc,
     {
@@ -534,24 +638,24 @@ where
 
     #[inline]
     #[rustc_inherit_overflow_checks]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    default fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         #[inline]
         #[rustc_inherit_overflow_checks]
         fn advance<U: Iterator>(n: usize, iter: &mut U) -> ControlFlow<(), usize> {
             match iter.advance_by(n) {
-                Ok(()) => ControlFlow::BREAK,
-                Err(advanced) => ControlFlow::Continue(n - advanced),
+                Ok(()) => ControlFlow::Break(()),
+                Err(remaining) => ControlFlow::Continue(remaining.get()),
             }
         }
 
         match self.iter_try_fold(n, advance) {
-            ControlFlow::Continue(remaining) if remaining > 0 => Err(n - remaining),
+            ControlFlow::Continue(remaining) => NonZero::new(remaining).map_or(Ok(()), Err),
             _ => Ok(()),
         }
     }
 
     #[inline]
-    fn count(self) -> usize {
+    default fn count(self) -> usize {
         #[inline]
         #[rustc_inherit_overflow_checks]
         fn count<U: Iterator>(acc: usize, iter: U) -> usize {
@@ -562,7 +666,7 @@ where
     }
 
     #[inline]
-    fn last(self) -> Option<Self::Item> {
+    default fn last(self) -> Option<Self::Item> {
         #[inline]
         fn last<U: Iterator>(last: Option<U::Item>, iter: U) -> Option<U::Item> {
             iter.last().or(last)
@@ -572,13 +676,14 @@ where
     }
 }
 
+// See also the `OneShot` specialization below.
 impl<I, U> DoubleEndedIterator for FlattenCompat<I, U>
 where
     I: DoubleEndedIterator<Item: IntoIterator<IntoIter = U, Item = U::Item>>,
     U: DoubleEndedIterator,
 {
     #[inline]
-    fn next_back(&mut self) -> Option<U::Item> {
+    default fn next_back(&mut self) -> Option<U::Item> {
         loop {
             if let elt @ Some(_) = and_then_or_clear(&mut self.backiter, |b| b.next_back()) {
                 return elt;
@@ -591,7 +696,7 @@ where
     }
 
     #[inline]
-    fn try_rfold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
+    default fn try_rfold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
     where
         Self: Sized,
         Fold: FnMut(Acc, Self::Item) -> R,
@@ -608,7 +713,7 @@ where
     }
 
     #[inline]
-    fn rfold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    default fn rfold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
     where
         Fold: FnMut(Acc, Self::Item) -> Acc,
     {
@@ -624,21 +729,42 @@ where
 
     #[inline]
     #[rustc_inherit_overflow_checks]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    default fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         #[inline]
         #[rustc_inherit_overflow_checks]
         fn advance<U: DoubleEndedIterator>(n: usize, iter: &mut U) -> ControlFlow<(), usize> {
             match iter.advance_back_by(n) {
-                Ok(()) => ControlFlow::BREAK,
-                Err(advanced) => ControlFlow::Continue(n - advanced),
+                Ok(()) => ControlFlow::Break(()),
+                Err(remaining) => ControlFlow::Continue(remaining.get()),
             }
         }
 
         match self.iter_try_rfold(n, advance) {
-            ControlFlow::Continue(remaining) if remaining > 0 => Err(n - remaining),
+            ControlFlow::Continue(remaining) => NonZero::new(remaining).map_or(Ok(()), Err),
             _ => Ok(()),
         }
     }
+}
+
+unsafe impl<const N: usize, I, T> TrustedLen
+    for FlattenCompat<I, <[T; N] as IntoIterator>::IntoIter>
+where
+    I: TrustedLen<Item = [T; N]>,
+{
+}
+
+unsafe impl<'a, const N: usize, I, T> TrustedLen
+    for FlattenCompat<I, <&'a [T; N] as IntoIterator>::IntoIter>
+where
+    I: TrustedLen<Item = &'a [T; N]>,
+{
+}
+
+unsafe impl<'a, const N: usize, I, T> TrustedLen
+    for FlattenCompat<I, <&'a mut [T; N] as IntoIterator>::IntoIter>
+where
+    I: TrustedLen<Item = &'a mut [T; N]>,
+{
 }
 
 trait ConstSizeIntoIterator: IntoIterator {
@@ -677,19 +803,6 @@ impl<T, const N: usize> ConstSizeIntoIterator for &mut [T; N] {
     }
 }
 
-#[doc(hidden)]
-#[unstable(feature = "std_internals", issue = "none")]
-// FIXME(#20400): Instead of this helper trait there should be multiple impl TrustedLen for Flatten<>
-//   blocks with different bounds on Iterator::Item but the compiler erroneously considers them overlapping
-pub unsafe trait TrustedConstSize: IntoIterator {}
-
-#[unstable(feature = "std_internals", issue = "none")]
-unsafe impl<T, const N: usize> TrustedConstSize for [T; N] {}
-#[unstable(feature = "std_internals", issue = "none")]
-unsafe impl<T, const N: usize> TrustedConstSize for &'_ [T; N] {}
-#[unstable(feature = "std_internals", issue = "none")]
-unsafe impl<T, const N: usize> TrustedConstSize for &'_ mut [T; N] {}
-
 #[inline]
 fn and_then_or_clear<T, U>(opt: &mut Option<T>, f: impl FnOnce(&mut T) -> Option<U>) -> Option<U> {
     let x = f(opt.as_mut()?);
@@ -697,4 +810,199 @@ fn and_then_or_clear<T, U>(opt: &mut Option<T>, f: impl FnOnce(&mut T) -> Option
         *opt = None;
     }
     x
+}
+
+/// Specialization trait for iterator types that never return more than one item.
+///
+/// Note that we still have to deal with the possibility that the iterator was
+/// already exhausted before it came into our control.
+#[rustc_specialization_trait]
+trait OneShot {}
+
+// These all have exactly one item, if not already consumed.
+impl<T> OneShot for Once<T> {}
+impl<F> OneShot for OnceWith<F> {}
+impl<T> OneShot for array::IntoIter<T, 1> {}
+impl<T> OneShot for option::IntoIter<T> {}
+impl<T> OneShot for option::Iter<'_, T> {}
+impl<T> OneShot for option::IterMut<'_, T> {}
+impl<T> OneShot for result::IntoIter<T> {}
+impl<T> OneShot for result::Iter<'_, T> {}
+impl<T> OneShot for result::IterMut<'_, T> {}
+
+// These are always empty, which is fine to optimize too.
+impl<T> OneShot for Empty<T> {}
+impl<T> OneShot for array::IntoIter<T, 0> {}
+
+// These adaptors never increase the number of items.
+// (There are more possible, but for now this matches BoundedSize above.)
+impl<I: OneShot> OneShot for Cloned<I> {}
+impl<I: OneShot> OneShot for Copied<I> {}
+impl<I: OneShot, P> OneShot for Filter<I, P> {}
+impl<I: OneShot, P> OneShot for FilterMap<I, P> {}
+impl<I: OneShot, F> OneShot for Map<I, F> {}
+
+// Blanket impls pass this property through as well
+// (but we can't do `Box<I>` unless we expose this trait to alloc)
+impl<I: OneShot> OneShot for &mut I {}
+
+#[inline]
+fn into_item<I>(inner: I) -> Option<I::Item>
+where
+    I: IntoIterator<IntoIter: OneShot>,
+{
+    inner.into_iter().next()
+}
+
+#[inline]
+fn flatten_one<I: IntoIterator<IntoIter: OneShot>, Acc>(
+    mut fold: impl FnMut(Acc, I::Item) -> Acc,
+) -> impl FnMut(Acc, I) -> Acc {
+    move |acc, inner| match inner.into_iter().next() {
+        Some(item) => fold(acc, item),
+        None => acc,
+    }
+}
+
+#[inline]
+fn try_flatten_one<I: IntoIterator<IntoIter: OneShot>, Acc, R: Try<Output = Acc>>(
+    mut fold: impl FnMut(Acc, I::Item) -> R,
+) -> impl FnMut(Acc, I) -> R {
+    move |acc, inner| match inner.into_iter().next() {
+        Some(item) => fold(acc, item),
+        None => try { acc },
+    }
+}
+
+#[inline]
+fn advance_by_one<I>(n: NonZero<usize>, inner: I) -> Option<NonZero<usize>>
+where
+    I: IntoIterator<IntoIter: OneShot>,
+{
+    match inner.into_iter().next() {
+        Some(_) => NonZero::new(n.get() - 1),
+        None => Some(n),
+    }
+}
+
+// Specialization: When the inner iterator `U` never returns more than one item, the `frontiter` and
+// `backiter` states are a waste, because they'll always have already consumed their item. So in
+// this impl, we completely ignore them and just focus on `self.iter`, and we only call the inner
+// `U::next()` one time.
+//
+// It's mostly fine if we accidentally mix this with the more generic impls, e.g. by forgetting to
+// specialize one of the methods. If the other impl did set the front or back, we wouldn't see it
+// here, but it would be empty anyway; and if the other impl looked for a front or back that we
+// didn't bother setting, it would just see `None` (or a previous empty) and move on.
+//
+// An exception to that is `advance_by(0)` and `advance_back_by(0)`, where the generic impls may set
+// `frontiter` or `backiter` without consuming the item, so we **must** override those.
+impl<I, U> Iterator for FlattenCompat<I, U>
+where
+    I: Iterator<Item: IntoIterator<IntoIter = U, Item = U::Item>>,
+    U: Iterator + OneShot,
+{
+    #[inline]
+    fn next(&mut self) -> Option<U::Item> {
+        while let Some(inner) = self.iter.next() {
+            if let item @ Some(_) = inner.into_iter().next() {
+                return item;
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (lower, upper) = self.iter.size_hint();
+        match <I::Item as ConstSizeIntoIterator>::size() {
+            Some(0) => (0, Some(0)),
+            Some(1) => (lower, upper),
+            _ => (0, upper),
+        }
+    }
+
+    #[inline]
+    fn try_fold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
+    where
+        Self: Sized,
+        Fold: FnMut(Acc, Self::Item) -> R,
+        R: Try<Output = Acc>,
+    {
+        self.iter.try_fold(init, try_flatten_one(fold))
+    }
+
+    #[inline]
+    fn fold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    where
+        Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        self.iter.fold(init, flatten_one(fold))
+    }
+
+    #[inline]
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        if let Some(n) = NonZero::new(n) {
+            self.iter.try_fold(n, advance_by_one).map_or(Ok(()), Err)
+        } else {
+            // Just advance the outer iterator
+            self.iter.advance_by(0)
+        }
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.iter.filter_map(into_item).count()
+    }
+
+    #[inline]
+    fn last(self) -> Option<Self::Item> {
+        self.iter.filter_map(into_item).last()
+    }
+}
+
+// Note: We don't actually care about `U: DoubleEndedIterator`, since forward and backward are the
+// same for a one-shot iterator, but we have to keep that to match the default specialization.
+impl<I, U> DoubleEndedIterator for FlattenCompat<I, U>
+where
+    I: DoubleEndedIterator<Item: IntoIterator<IntoIter = U, Item = U::Item>>,
+    U: DoubleEndedIterator + OneShot,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<U::Item> {
+        while let Some(inner) = self.iter.next_back() {
+            if let item @ Some(_) = inner.into_iter().next() {
+                return item;
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn try_rfold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
+    where
+        Self: Sized,
+        Fold: FnMut(Acc, Self::Item) -> R,
+        R: Try<Output = Acc>,
+    {
+        self.iter.try_rfold(init, try_flatten_one(fold))
+    }
+
+    #[inline]
+    fn rfold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    where
+        Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        self.iter.rfold(init, flatten_one(fold))
+    }
+
+    #[inline]
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        if let Some(n) = NonZero::new(n) {
+            self.iter.try_rfold(n, advance_by_one).map_or(Ok(()), Err)
+        } else {
+            // Just advance the outer iterator
+            self.iter.advance_back_by(0)
+        }
+    }
 }

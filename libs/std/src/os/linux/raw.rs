@@ -26,12 +26,11 @@ pub use self::arch::{blkcnt_t, blksize_t, ino_t, nlink_t, off_t, stat, time_t};
 
 #[cfg(any(
     target_arch = "x86",
-    target_arch = "le32",
     target_arch = "m68k",
+    target_arch = "csky",
     target_arch = "powerpc",
     target_arch = "sparc",
     target_arch = "arm",
-    target_arch = "asmjs",
     target_arch = "wasm32"
 ))]
 mod arch {
@@ -95,7 +94,7 @@ mod arch {
     }
 }
 
-#[cfg(target_arch = "mips")]
+#[cfg(any(target_arch = "mips", target_arch = "mips32r6"))]
 mod arch {
     use crate::os::raw::{c_long, c_ulong};
 
@@ -232,7 +231,9 @@ mod arch {
 }
 
 #[cfg(any(
+    target_arch = "loongarch64",
     target_arch = "mips64",
+    target_arch = "mips64r6",
     target_arch = "s390x",
     target_arch = "sparc64",
     target_arch = "riscv64",
@@ -243,7 +244,11 @@ mod arch {
     pub use libc::{blkcnt_t, blksize_t, ino_t, nlink_t, off_t, stat, time_t};
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(
+    target_arch = "aarch64",
+    // Arm64EC is Windows-only, but docs are always build as Linux, so re-use AArch64 for Arm64EC.
+    all(doc, target_arch = "arm64ec")
+))]
 mod arch {
     use crate::os::raw::{c_int, c_long};
 

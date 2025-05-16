@@ -6,14 +6,31 @@ use crate::detect::{bit, cache, Feature};
 /// Try to read the features from the auxiliary vector, and if that fails, try
 /// to read them from /proc/cpuinfo.
 pub(crate) fn detect_features() -> cache::Initializer {
+    #[cfg(target_os = "android")]
+    let is_exynos9810 = {
+        // Samsung Exynos 9810 has a bug that big and little cores have different
+        // ISAs. And on older Android (pre-9), the kernel incorrectly reports
+        // that features available only on some cores are available on all cores.
+        // https://reviews.llvm.org/D114523
+        let mut arch = [0_u8; libc::PROP_VALUE_MAX as usize];
+        let len = unsafe {
+            libc::__system_property_get(c"ro.arch".as_ptr(), arch.as_mut_ptr() as *mut libc::c_char)
+        };
+        // On Exynos, ro.arch is not available on Android 12+, but it is fine
+        // because Android 9+ includes the fix.
+        len > 0 && arch.starts_with(b"exynos9810")
+    };
+    #[cfg(not(target_os = "android"))]
+    let is_exynos9810 = false;
+
     if let Ok(auxv) = auxvec::auxv() {
         let hwcap: AtHwcap = auxv.into();
-        return hwcap.cache();
+        return hwcap.cache(is_exynos9810);
     }
     #[cfg(feature = "std_detect_file_io")]
     if let Ok(c) = super::cpuinfo::CpuInfo::new() {
         let hwcap: AtHwcap = c.into();
-        return hwcap.cache();
+        return hwcap.cache(is_exynos9810);
     }
     cache::Initializer::default()
 }
@@ -63,11 +80,11 @@ struct AtHwcap {
     dcpodp: bool,
     sve2: bool,
     sveaes: bool,
-    // svepmull: No LLVM support.
+    svepmull: bool,
     svebitperm: bool,
     svesha3: bool,
     svesm4: bool,
-    // flagm2: No LLVM support.
+    flagm2: bool,
     frint: bool,
     // svei8mm: See i8mm feature.
     svef32mm: bool,
@@ -79,6 +96,51 @@ struct AtHwcap {
     rng: bool,
     bti: bool,
     mte: bool,
+    ecv: bool,
+    // afp: bool,
+    // rpres: bool,
+    // mte3: bool,
+    sme: bool,
+    smei16i64: bool,
+    smef64f64: bool,
+    // smei8i32: bool,
+    // smef16f32: bool,
+    // smeb16f32: bool,
+    // smef32f32: bool,
+    smefa64: bool,
+    wfxt: bool,
+    // ebf16: bool,
+    // sveebf16: bool,
+    cssc: bool,
+    // rprfm: bool,
+    sve2p1: bool,
+    sme2: bool,
+    sme2p1: bool,
+    // smei16i32: bool,
+    // smebi32i32: bool,
+    smeb16b16: bool,
+    smef16f16: bool,
+    mops: bool,
+    hbc: bool,
+    sveb16b16: bool,
+    lrcpc3: bool,
+    lse128: bool,
+    fpmr: bool,
+    lut: bool,
+    faminmax: bool,
+    f8cvt: bool,
+    f8fma: bool,
+    f8dp4: bool,
+    f8dp2: bool,
+    f8e4m3: bool,
+    f8e5m2: bool,
+    smelutv2: bool,
+    smef8f16: bool,
+    smef8f32: bool,
+    smesf8fma: bool,
+    smesf8dp4: bool,
+    smesf8dp2: bool,
+    // pauthlr: bool,
 }
 
 impl From<auxvec::AuxVec> for AtHwcap {
@@ -117,14 +179,16 @@ impl From<auxvec::AuxVec> for AtHwcap {
             sb: bit::test(auxv.hwcap, 29),
             paca: bit::test(auxv.hwcap, 30),
             pacg: bit::test(auxv.hwcap, 31),
+
+            // AT_HWCAP2
             dcpodp: bit::test(auxv.hwcap2, 0),
             sve2: bit::test(auxv.hwcap2, 1),
             sveaes: bit::test(auxv.hwcap2, 2),
-            // svepmull: bit::test(auxv.hwcap2, 3),
+            svepmull: bit::test(auxv.hwcap2, 3),
             svebitperm: bit::test(auxv.hwcap2, 4),
             svesha3: bit::test(auxv.hwcap2, 5),
             svesm4: bit::test(auxv.hwcap2, 6),
-            // flagm2: bit::test(auxv.hwcap2, 7),
+            flagm2: bit::test(auxv.hwcap2, 7),
             frint: bit::test(auxv.hwcap2, 8),
             // svei8mm: bit::test(auxv.hwcap2, 9),
             svef32mm: bit::test(auxv.hwcap2, 10),
@@ -136,6 +200,51 @@ impl From<auxvec::AuxVec> for AtHwcap {
             rng: bit::test(auxv.hwcap2, 16),
             bti: bit::test(auxv.hwcap2, 17),
             mte: bit::test(auxv.hwcap2, 18),
+            ecv: bit::test(auxv.hwcap2, 19),
+            // afp: bit::test(auxv.hwcap2, 20),
+            // rpres: bit::test(auxv.hwcap2, 21),
+            // mte3: bit::test(auxv.hwcap2, 22),
+            sme: bit::test(auxv.hwcap2, 23),
+            smei16i64: bit::test(auxv.hwcap2, 24),
+            smef64f64: bit::test(auxv.hwcap2, 25),
+            // smei8i32: bit::test(auxv.hwcap2, 26),
+            // smef16f32: bit::test(auxv.hwcap2, 27),
+            // smeb16f32: bit::test(auxv.hwcap2, 28),
+            // smef32f32: bit::test(auxv.hwcap2, 29),
+            smefa64: bit::test(auxv.hwcap2, 30),
+            wfxt: bit::test(auxv.hwcap2, 31),
+            // ebf16: bit::test(auxv.hwcap2, 32),
+            // sveebf16: bit::test(auxv.hwcap2, 33),
+            cssc: bit::test(auxv.hwcap2, 34),
+            // rprfm: bit::test(auxv.hwcap2, 35),
+            sve2p1: bit::test(auxv.hwcap2, 36),
+            sme2: bit::test(auxv.hwcap2, 37),
+            sme2p1: bit::test(auxv.hwcap2, 38),
+            // smei16i32: bit::test(auxv.hwcap2, 39),
+            // smebi32i32: bit::test(auxv.hwcap2, 40),
+            smeb16b16: bit::test(auxv.hwcap2, 41),
+            smef16f16: bit::test(auxv.hwcap2, 42),
+            mops: bit::test(auxv.hwcap2, 43),
+            hbc: bit::test(auxv.hwcap2, 44),
+            sveb16b16: bit::test(auxv.hwcap2, 45),
+            lrcpc3: bit::test(auxv.hwcap2, 46),
+            lse128: bit::test(auxv.hwcap2, 47),
+            fpmr: bit::test(auxv.hwcap2, 48),
+            lut: bit::test(auxv.hwcap2, 49),
+            faminmax: bit::test(auxv.hwcap2, 50),
+            f8cvt: bit::test(auxv.hwcap2, 51),
+            f8fma: bit::test(auxv.hwcap2, 52),
+            f8dp4: bit::test(auxv.hwcap2, 53),
+            f8dp2: bit::test(auxv.hwcap2, 54),
+            f8e4m3: bit::test(auxv.hwcap2, 55),
+            f8e5m2: bit::test(auxv.hwcap2, 56),
+            smelutv2: bit::test(auxv.hwcap2, 57),
+            smef8f16: bit::test(auxv.hwcap2, 58),
+            smef8f32: bit::test(auxv.hwcap2, 59),
+            smesf8fma: bit::test(auxv.hwcap2, 60),
+            smesf8dp4: bit::test(auxv.hwcap2, 61),
+            smesf8dp2: bit::test(auxv.hwcap2, 62),
+            // pauthlr: bit::test(auxv.hwcap2, ??),
         }
     }
 }
@@ -181,14 +290,16 @@ impl From<super::cpuinfo::CpuInfo> for AtHwcap {
             sb: f.has("sb"),
             paca: f.has("paca"),
             pacg: f.has("pacg"),
+
+            // AT_HWCAP2
             dcpodp: f.has("dcpodp"),
             sve2: f.has("sve2"),
             sveaes: f.has("sveaes"),
-            // svepmull: f.has("svepmull"),
+            svepmull: f.has("svepmull"),
             svebitperm: f.has("svebitperm"),
             svesha3: f.has("svesha3"),
             svesm4: f.has("svesm4"),
-            // flagm2: f.has("flagm2"),
+            flagm2: f.has("flagm2"),
             frint: f.has("frint"),
             // svei8mm: f.has("svei8mm"),
             svef32mm: f.has("svef32mm"),
@@ -200,6 +311,51 @@ impl From<super::cpuinfo::CpuInfo> for AtHwcap {
             rng: f.has("rng"),
             bti: f.has("bti"),
             mte: f.has("mte"),
+            ecv: f.has("ecv"),
+            // afp: f.has("afp"),
+            // rpres: f.has("rpres"),
+            // mte3: f.has("mte3"),
+            sme: f.has("sme"),
+            smei16i64: f.has("smei16i64"),
+            smef64f64: f.has("smef64f64"),
+            // smei8i32: f.has("smei8i32"),
+            // smef16f32: f.has("smef16f32"),
+            // smeb16f32: f.has("smeb16f32"),
+            // smef32f32: f.has("smef32f32"),
+            smefa64: f.has("smefa64"),
+            wfxt: f.has("wfxt"),
+            // ebf16: f.has("ebf16"),
+            // sveebf16: f.has("sveebf16"),
+            cssc: f.has("cssc"),
+            // rprfm: f.has("rprfm"),
+            sve2p1: f.has("sve2p1"),
+            sme2: f.has("sme2"),
+            sme2p1: f.has("sme2p1"),
+            // smei16i32: f.has("smei16i32"),
+            // smebi32i32: f.has("smebi32i32"),
+            smeb16b16: f.has("smeb16b16"),
+            smef16f16: f.has("smef16f16"),
+            mops: f.has("mops"),
+            hbc: f.has("hbc"),
+            sveb16b16: f.has("sveb16b16"),
+            lrcpc3: f.has("lrcpc3"),
+            lse128: f.has("lse128"),
+            fpmr: f.has("fpmr"),
+            lut: f.has("lut"),
+            faminmax: f.has("faminmax"),
+            f8cvt: f.has("f8cvt"),
+            f8fma: f.has("f8fma"),
+            f8dp4: f.has("f8dp4"),
+            f8dp2: f.has("f8dp2"),
+            f8e4m3: f.has("f8e4m3"),
+            f8e5m2: f.has("f8e5m2"),
+            smelutv2: f.has("smelutv2"),
+            smef8f16: f.has("smef8f16"),
+            smef8f32: f.has("smef8f32"),
+            smesf8fma: f.has("smesf8fma"),
+            smesf8dp4: f.has("smesf8dp4"),
+            smesf8dp2: f.has("smesf8dp2"),
+            // pauthlr: f.has("pauthlr"),
         }
     }
 }
@@ -207,9 +363,9 @@ impl From<super::cpuinfo::CpuInfo> for AtHwcap {
 impl AtHwcap {
     /// Initializes the cache from the feature -bits.
     ///
-    /// The feature dependencies here come directly from LLVM's feature definintions:
+    /// The feature dependencies here come directly from LLVM's feature definitions:
     /// https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/AArch64/AArch64.td
-    fn cache(self) -> cache::Initializer {
+    fn cache(self, is_exynos9810: bool) -> cache::Initializer {
         let mut value = cache::Initializer::default();
         {
             let mut enable_feature = |f, enable| {
@@ -217,6 +373,26 @@ impl AtHwcap {
                     value.set(f as u32);
                 }
             };
+
+            // Samsung Exynos 9810 has a bug that big and little cores have different
+            // ISAs. And on older Android (pre-9), the kernel incorrectly reports
+            // that features available only on some cores are available on all cores.
+            // So, only check features that are known to be available on exynos-m3:
+            // $ rustc --print cfg --target aarch64-linux-android -C target-cpu=exynos-m3 | grep target_feature
+            // See also https://github.com/rust-lang/stdarch/pull/1378#discussion_r1103748342.
+            if is_exynos9810 {
+                enable_feature(Feature::fp, self.fp);
+                enable_feature(Feature::crc, self.crc32);
+                // ASIMD support requires float support - if half-floats are
+                // supported, it also requires half-float support:
+                let asimd = self.fp && self.asimd && (!self.fphp | self.asimdhp);
+                enable_feature(Feature::asimd, asimd);
+                // Cryptographic extensions require ASIMD
+                // AES also covers FEAT_PMULL
+                enable_feature(Feature::aes, self.aes && self.pmull && asimd);
+                enable_feature(Feature::sha2, self.sha1 && self.sha2 && asimd);
+                return value;
+            }
 
             enable_feature(Feature::fp, self.fp);
             // Half-float support requires float support
@@ -227,15 +403,20 @@ impl AtHwcap {
             enable_feature(Feature::crc, self.crc32);
             enable_feature(Feature::lse, self.atomics);
             enable_feature(Feature::lse2, self.uscat);
+            enable_feature(Feature::lse128, self.lse128 && self.atomics);
             enable_feature(Feature::rcpc, self.lrcpc);
             // RCPC2 (rcpc-immo in LLVM) requires RCPC support
-            enable_feature(Feature::rcpc2, self.ilrcpc && self.lrcpc);
+            let rcpc2 = self.ilrcpc && self.lrcpc;
+            enable_feature(Feature::rcpc2, rcpc2);
+            enable_feature(Feature::rcpc3, self.lrcpc3 && rcpc2);
             enable_feature(Feature::dit, self.dit);
             enable_feature(Feature::flagm, self.flagm);
+            enable_feature(Feature::flagm2, self.flagm2);
             enable_feature(Feature::ssbs, self.ssbs);
             enable_feature(Feature::sb, self.sb);
             enable_feature(Feature::paca, self.paca);
             enable_feature(Feature::pacg, self.pacg);
+            // enable_feature(Feature::pauth_lr, self.pauthlr);
             enable_feature(Feature::dpb, self.dcpop);
             enable_feature(Feature::dpb2, self.dcpodp);
             enable_feature(Feature::rand, self.rng);
@@ -277,8 +458,12 @@ impl AtHwcap {
             // SVE2 requires SVE
             let sve2 = self.sve2 && self.sve && asimd;
             enable_feature(Feature::sve2, sve2);
+            enable_feature(Feature::sve2p1, self.sve2p1 && sve2);
             // SVE2 extensions require SVE2 and crypto features
-            enable_feature(Feature::sve2_aes, self.sveaes && sve2 && self.aes);
+            enable_feature(
+                Feature::sve2_aes,
+                self.sveaes && self.svepmull && sve2 && self.aes,
+            );
             enable_feature(
                 Feature::sve2_sm4,
                 self.svesm4 && sve2 && self.sm3 && self.sm4,
@@ -288,6 +473,44 @@ impl AtHwcap {
                 self.svesha3 && sve2 && self.sha512 && self.sha3 && self.sha1 && self.sha2,
             );
             enable_feature(Feature::sve2_bitperm, self.svebitperm && self.sve2);
+            enable_feature(Feature::sve_b16b16, self.bf16 && self.sveb16b16);
+            enable_feature(Feature::hbc, self.hbc);
+            enable_feature(Feature::mops, self.mops);
+            enable_feature(Feature::ecv, self.ecv);
+            enable_feature(Feature::lut, self.lut);
+            enable_feature(Feature::cssc, self.cssc);
+            enable_feature(Feature::fpmr, self.fpmr);
+            enable_feature(Feature::faminmax, self.faminmax);
+            let fp8 = self.f8cvt && self.faminmax && self.lut && self.bf16;
+            enable_feature(Feature::fp8, fp8);
+            let fp8fma = self.f8fma && fp8;
+            enable_feature(Feature::fp8fma, fp8fma);
+            let fp8dot4 = self.f8dp4 && fp8fma;
+            enable_feature(Feature::fp8dot4, fp8dot4);
+            enable_feature(Feature::fp8dot2, self.f8dp2 && fp8dot4);
+            enable_feature(Feature::wfxt, self.wfxt);
+            let sme = self.sme && self.bf16;
+            enable_feature(Feature::sme, sme);
+            enable_feature(Feature::sme_i16i64, self.smei16i64 && sme);
+            enable_feature(Feature::sme_f64f64, self.smef64f64 && sme);
+            enable_feature(Feature::sme_fa64, self.smefa64 && sme && sve2);
+            let sme2 = self.sme2 && sme;
+            enable_feature(Feature::sme2, sme2);
+            enable_feature(Feature::sme2p1, self.sme2p1 && sme2);
+            enable_feature(
+                Feature::sme_b16b16,
+                sme2 && self.bf16 && self.sveb16b16 && self.smeb16b16,
+            );
+            enable_feature(Feature::sme_f16f16, self.smef16f16 && sme2);
+            enable_feature(Feature::sme_lutv2, self.smelutv2);
+            let sme_f8f32 = self.smef8f32 && sme2 && fp8;
+            enable_feature(Feature::sme_f8f32, sme_f8f32);
+            enable_feature(Feature::sme_f8f16, self.smef8f16 && sme_f8f32);
+            let ssve_fp8fma = self.smesf8fma && sme2 && fp8;
+            enable_feature(Feature::ssve_fp8fma, ssve_fp8fma);
+            let ssve_fp8dot4 = self.smesf8dp4 && ssve_fp8fma;
+            enable_feature(Feature::ssve_fp8dot4, ssve_fp8dot4);
+            enable_feature(Feature::ssve_fp8dot2, self.smesf8dp2 && ssve_fp8dot4);
         }
         value
     }
@@ -329,7 +552,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 "/src/detect/test_data/linux-empty-hwcap2-aarch64.auxv"
             );
-            println!("file: {}", file);
+            println!("file: {file}");
             let v = auxv_from_file(file).unwrap();
             println!("HWCAP : 0x{:0x}", v.hwcap);
             println!("HWCAP2: 0x{:0x}", v.hwcap2);
@@ -341,7 +564,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 "/src/detect/test_data/linux-no-hwcap2-aarch64.auxv"
             );
-            println!("file: {}", file);
+            println!("file: {file}");
             let v = auxv_from_file(file).unwrap();
             println!("HWCAP : 0x{:0x}", v.hwcap);
             println!("HWCAP2: 0x{:0x}", v.hwcap2);
@@ -353,7 +576,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 "/src/detect/test_data/linux-hwcap2-aarch64.auxv"
             );
-            println!("file: {}", file);
+            println!("file: {file}");
             let v = auxv_from_file(file).unwrap();
             println!("HWCAP : 0x{:0x}", v.hwcap);
             println!("HWCAP2: 0x{:0x}", v.hwcap2);

@@ -8,10 +8,9 @@
 
 use alloc::boxed::Box;
 use core::any::Any;
-use core::intrinsics;
-use core::mem;
-use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::{intrinsics, mem, ptr};
+
 use unwind as uw;
 
 // This matches the layout of std::type_info in C++
@@ -22,7 +21,7 @@ struct TypeInfo {
 }
 unsafe impl Sync for TypeInfo {}
 
-extern "C" {
+unsafe extern "C" {
     // The leading `\x01` byte here is actually a magical signal to LLVM to
     // *not* apply any other mangling like prefixing with a `_` character.
     //
@@ -47,7 +46,7 @@ static EXCEPTION_TYPE_INFO: TypeInfo = TypeInfo {
     name: b"rust_panic\0".as_ptr(),
 };
 
-// NOTE(nbdd0121): The `canary` field will be part of stable ABI after `c_unwind` stabilization.
+// NOTE(nbdd0121): The `canary` field is part of stable ABI.
 #[repr(C)]
 struct Exception {
     // See `gcc.rs` on why this is present. We already have a static here so just use it.
@@ -65,7 +64,7 @@ struct Exception {
     data: Option<Box<dyn Any + Send>>,
 }
 
-pub unsafe fn cleanup(ptr: *mut u8) -> Box<dyn Any + Send> {
+pub(crate) unsafe fn cleanup(ptr: *mut u8) -> Box<dyn Any + Send> {
     // intrinsics::try actually gives us a pointer to this structure.
     #[repr(C)]
     struct CatchData {
@@ -79,12 +78,12 @@ pub unsafe fn cleanup(ptr: *mut u8) -> Box<dyn Any + Send> {
         super::__rust_foreign_exception();
     }
 
-    let canary = ptr::addr_of!((*adjusted_ptr).canary).read();
+    let canary = (&raw const (*adjusted_ptr).canary).read();
     if !ptr::eq(canary, &EXCEPTION_TYPE_INFO) {
         super::__rust_foreign_exception();
     }
 
-    let was_caught = (*adjusted_ptr).caught.swap(true, Ordering::SeqCst);
+    let was_caught = (*adjusted_ptr).caught.swap(true, Ordering::Relaxed);
     if was_caught {
         // Since cleanup() isn't allowed to panic, we just abort instead.
         intrinsics::abort();
@@ -94,7 +93,7 @@ pub unsafe fn cleanup(ptr: *mut u8) -> Box<dyn Any + Send> {
     out
 }
 
-pub unsafe fn panic(data: Box<dyn Any + Send>) -> u32 {
+pub(crate) unsafe fn panic(data: Box<dyn Any + Send>) -> u32 {
     let exception = __cxa_allocate_exception(mem::size_of::<Exception>()) as *mut Exception;
     if exception.is_null() {
         return uw::_URC_FATAL_PHASE1_ERROR as u32;
@@ -120,7 +119,7 @@ extern "C" fn exception_cleanup(ptr: *mut libc::c_void) -> *mut libc::c_void {
     }
 }
 
-extern "C" {
+unsafe extern "C" {
     fn __cxa_allocate_exception(thrown_size: libc::size_t) -> *mut libc::c_void;
     fn __cxa_begin_catch(thrown_exception: *mut libc::c_void) -> *mut libc::c_void;
     fn __cxa_end_catch();

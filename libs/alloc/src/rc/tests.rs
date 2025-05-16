@@ -1,12 +1,7 @@
-use super::*;
-
-use std::boxed::Box;
 use std::cell::RefCell;
 use std::clone::Clone;
-use std::convert::{From, TryInto};
-use std::mem::drop;
-use std::option::Option::{self, None, Some};
-use std::result::Result::{Err, Ok};
+
+use super::*;
 
 #[test]
 fn test_clone() {
@@ -149,6 +144,21 @@ fn try_unwrap() {
     let x = Rc::new(5);
     let _w = Rc::downgrade(&x);
     assert_eq!(Rc::try_unwrap(x), Ok(5));
+}
+
+#[test]
+fn into_inner() {
+    let x = Rc::new(3);
+    assert_eq!(Rc::into_inner(x), Some(3));
+
+    let x = Rc::new(4);
+    let y = Rc::clone(&x);
+    assert_eq!(Rc::into_inner(x), None);
+    assert_eq!(Rc::into_inner(y), Some(4));
+
+    let x = Rc::new(5);
+    let _w = Rc::downgrade(&x);
+    assert_eq!(Rc::into_inner(x), Some(5));
 }
 
 #[test]
@@ -306,6 +316,24 @@ fn test_cowrc_clone_weak() {
     assert!(cow1_weak.upgrade().is_none());
 }
 
+/// This is similar to the doc-test for `Rc::make_mut()`, but on an unsized type (slice).
+#[test]
+fn test_cowrc_unsized() {
+    use std::rc::Rc;
+
+    let mut data: Rc<[i32]> = Rc::new([10, 20, 30]);
+
+    Rc::make_mut(&mut data)[0] += 1; // Won't clone anything
+    let mut other_data = Rc::clone(&data); // Won't clone inner data
+    Rc::make_mut(&mut data)[1] += 1; // Clones inner data
+    Rc::make_mut(&mut data)[2] += 1; // Won't clone anything
+    Rc::make_mut(&mut other_data)[0] *= 10; // Won't clone anything
+
+    // Now `data` and `other_data` point to different allocations.
+    assert_eq!(*data, [11, 21, 31]);
+    assert_eq!(*other_data, [110, 20, 30]);
+}
+
 #[test]
 fn test_show() {
     let foo = Rc::new(75);
@@ -321,9 +349,9 @@ fn test_unsized() {
 #[test]
 fn test_maybe_thin_unsized() {
     // If/when custom thin DSTs exist, this test should be updated to use one
-    use std::ffi::{CStr, CString};
+    use std::ffi::CStr;
 
-    let x: Rc<CStr> = Rc::from(CString::new("swordfish").unwrap().into_boxed_c_str());
+    let x: Rc<CStr> = Rc::from(c"swordfish");
     assert_eq!(format!("{x:?}"), "\"swordfish\"");
     let y: Weak<CStr> = Rc::downgrade(&x);
     drop(x);
@@ -420,7 +448,11 @@ fn test_from_box_str() {
     use std::string::String;
 
     let s = String::from("foo").into_boxed_str();
+    assert_eq!((&&&s).as_str(), "foo");
+
     let r: Rc<str> = Rc::from(s);
+    assert_eq!((&r).as_str(), "foo");
+    assert_eq!(r.as_str(), "foo");
 
     assert_eq!(&r[..], "foo");
 }
@@ -558,4 +590,75 @@ fn test_rc_cyclic_with_two_ref() {
 
     assert_eq!(Rc::strong_count(&two_refs), 3);
     assert_eq!(Rc::weak_count(&two_refs), 2);
+}
+
+#[test]
+fn test_unique_rc_weak() {
+    let rc = UniqueRc::new(42);
+    let weak = UniqueRc::downgrade(&rc);
+    assert!(weak.upgrade().is_none());
+
+    let _rc = UniqueRc::into_rc(rc);
+    assert_eq!(*weak.upgrade().unwrap(), 42);
+}
+
+#[test]
+fn test_unique_rc_drop_weak() {
+    let rc = UniqueRc::new(42);
+    let weak = UniqueRc::downgrade(&rc);
+    mem::drop(weak);
+
+    let rc = UniqueRc::into_rc(rc);
+    assert_eq!(*rc, 42);
+}
+
+#[test]
+fn test_unique_rc_drops_contents() {
+    let mut dropped = false;
+    struct DropMe<'a>(&'a mut bool);
+    impl Drop for DropMe<'_> {
+        fn drop(&mut self) {
+            *self.0 = true;
+        }
+    }
+    {
+        let rc = UniqueRc::new(DropMe(&mut dropped));
+        drop(rc);
+    }
+    assert!(dropped);
+}
+
+/// Exercise the non-default allocator usage.
+#[test]
+fn test_unique_rc_with_alloc_drops_contents() {
+    let mut dropped = false;
+    struct DropMe<'a>(&'a mut bool);
+    impl Drop for DropMe<'_> {
+        fn drop(&mut self) {
+            *self.0 = true;
+        }
+    }
+    {
+        let rc = UniqueRc::new_in(DropMe(&mut dropped), std::alloc::System);
+        drop(rc);
+    }
+    assert!(dropped);
+}
+
+#[test]
+fn test_unique_rc_weak_clone_holding_ref() {
+    let mut v = UniqueRc::new(0u8);
+    let w = UniqueRc::downgrade(&v);
+    let r = &mut *v;
+    let _ = w.clone(); // touch weak count
+    *r = 123;
+}
+
+#[test]
+fn test_unique_rc_unsizing_coercion() {
+    let mut rc: UniqueRc<[u8]> = UniqueRc::new([0u8; 3]);
+    assert_eq!(rc.len(), 3);
+    rc[0] = 123;
+    let rc: Rc<[u8]> = UniqueRc::into_rc(rc);
+    assert_eq!(*rc, [123, 0, 0]);
 }

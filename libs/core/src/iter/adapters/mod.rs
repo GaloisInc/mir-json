@@ -1,4 +1,5 @@
-use crate::iter::{InPlaceIterable, Iterator};
+use crate::iter::InPlaceIterable;
+use crate::num::NonZero;
 use crate::ops::{ChangeOutputType, ControlFlow, FromResidual, Residual, Try};
 
 mod array_chunks;
@@ -16,6 +17,7 @@ mod inspect;
 mod intersperse;
 mod map;
 mod map_while;
+mod map_windows;
 mod peekable;
 mod rev;
 mod scan;
@@ -26,45 +28,38 @@ mod take;
 mod take_while;
 mod zip;
 
+#[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
+pub use self::array_chunks::ArrayChunks;
+#[unstable(feature = "std_internals", issue = "none")]
+pub use self::by_ref_sized::ByRefSized;
+#[unstable(feature = "iter_chain", reason = "recently added", issue = "125964")]
+pub use self::chain::chain;
+#[stable(feature = "iter_cloned", since = "1.1.0")]
+pub use self::cloned::Cloned;
+#[stable(feature = "iter_copied", since = "1.36.0")]
+pub use self::copied::Copied;
+#[stable(feature = "iterator_flatten", since = "1.29.0")]
+pub use self::flatten::Flatten;
+#[unstable(feature = "iter_intersperse", reason = "recently added", issue = "79524")]
+pub use self::intersperse::{Intersperse, IntersperseWith};
+#[stable(feature = "iter_map_while", since = "1.57.0")]
+pub use self::map_while::MapWhile;
+#[unstable(feature = "iter_map_windows", reason = "recently added", issue = "87155")]
+pub use self::map_windows::MapWindows;
+#[stable(feature = "iterator_step_by", since = "1.28.0")]
+pub use self::step_by::StepBy;
+#[unstable(feature = "trusted_random_access", issue = "none")]
+pub use self::zip::TrustedRandomAccess;
+#[unstable(feature = "trusted_random_access", issue = "none")]
+pub use self::zip::TrustedRandomAccessNoCoerce;
+#[stable(feature = "iter_zip", since = "1.59.0")]
+pub use self::zip::zip;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use self::{
     chain::Chain, cycle::Cycle, enumerate::Enumerate, filter::Filter, filter_map::FilterMap,
     flatten::FlatMap, fuse::Fuse, inspect::Inspect, map::Map, peekable::Peekable, rev::Rev,
     scan::Scan, skip::Skip, skip_while::SkipWhile, take::Take, take_while::TakeWhile, zip::Zip,
 };
-
-#[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
-pub use self::array_chunks::ArrayChunks;
-
-#[unstable(feature = "std_internals", issue = "none")]
-pub use self::by_ref_sized::ByRefSized;
-
-#[stable(feature = "iter_cloned", since = "1.1.0")]
-pub use self::cloned::Cloned;
-
-#[stable(feature = "iterator_step_by", since = "1.28.0")]
-pub use self::step_by::StepBy;
-
-#[stable(feature = "iterator_flatten", since = "1.29.0")]
-pub use self::flatten::Flatten;
-
-#[stable(feature = "iter_copied", since = "1.36.0")]
-pub use self::copied::Copied;
-
-#[unstable(feature = "iter_intersperse", reason = "recently added", issue = "79524")]
-pub use self::intersperse::{Intersperse, IntersperseWith};
-
-#[stable(feature = "iter_map_while", since = "1.57.0")]
-pub use self::map_while::MapWhile;
-
-#[unstable(feature = "trusted_random_access", issue = "none")]
-pub use self::zip::TrustedRandomAccess;
-
-#[unstable(feature = "trusted_random_access", issue = "none")]
-pub use self::zip::TrustedRandomAccessNoCoerce;
-
-#[stable(feature = "iter_zip", since = "1.59.0")]
-pub use self::zip::zip;
 
 /// This trait provides transitive access to source-stage in an iterator-adapter pipeline
 /// under the conditions that
@@ -76,7 +71,7 @@ pub use self::zip::zip;
 /// this can be useful for specializing [`FromIterator`] implementations or recovering the
 /// remaining elements after an iterator has been partially exhausted.
 ///
-/// Note that implementations do not necessarily have to provide access to the inner-most
+/// Note that implementations do not necessarily have to provide access to the innermost
 /// source of a pipeline. A stateful intermediate adapter might eagerly evaluate a part
 /// of the pipeline and expose its internal storage as source.
 ///
@@ -115,8 +110,9 @@ pub unsafe trait SourceIter {
     ///
     /// # Safety
     ///
-    /// Implementations of must return the same mutable reference for their lifetime, unless
+    /// Implementations must return the same mutable reference for their lifetime, unless
     /// replaced by a caller.
+    ///
     /// Callers may only replace the reference when they stopped iteration and drop the
     /// iterator pipeline after extracting the source.
     ///
@@ -150,7 +146,7 @@ pub(crate) struct GenericShunt<'a, I, R> {
     residual: &'a mut Option<R>,
 }
 
-/// Process the given iterator as if it yielded a the item's `Try::Output`
+/// Process the given iterator as if it yielded the item's `Try::Output`
 /// type instead. Any `Try::Residual`s encountered will stop the inner iterator
 /// and be propagated back to the overall result.
 pub(crate) fn try_process<I, T, R, F, U>(iter: I, mut f: F) -> ChangeOutputType<I::Item, U>
@@ -224,7 +220,10 @@ where
 // in order to return `Some(_)`. Since `iter` has type `I: InPlaceIterable` it's
 // guaranteed that at least one item will be moved out from the underlying source.
 #[unstable(issue = "none", feature = "inplace_iteration")]
-unsafe impl<I, T, R> InPlaceIterable for GenericShunt<'_, I, R> where
-    I: Iterator<Item: Try<Output = T, Residual = R>> + InPlaceIterable
+unsafe impl<I, R> InPlaceIterable for GenericShunt<'_, I, R>
+where
+    I: InPlaceIterable,
 {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = I::MERGE_BY;
 }

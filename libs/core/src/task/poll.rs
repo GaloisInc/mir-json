@@ -2,11 +2,11 @@
 
 use crate::convert;
 use crate::ops::{self, ControlFlow};
-use crate::result::Result;
-use crate::task::Ready;
 
 /// Indicates whether a value is available or if the current task has been
 /// scheduled to receive a wakeup instead.
+///
+/// This is returned by [`Future::poll`](core::future::Future::poll).
 #[must_use = "this `Poll` may be a `Pending` variant, which should be handled"]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[lang = "Poll"]
@@ -45,6 +45,7 @@ impl<T> Poll<T> {
     /// assert_eq!(poll_some_len, Poll::Ready(13));
     /// ```
     #[stable(feature = "futures_api", since = "1.36.0")]
+    #[inline]
     pub fn map<U, F>(self, f: F) -> Poll<U>
     where
         F: FnOnce(T) -> U,
@@ -94,38 +95,6 @@ impl<T> Poll<T> {
     pub const fn is_pending(&self) -> bool {
         !self.is_ready()
     }
-
-    /// Extracts the successful type of a [`Poll<T>`].
-    ///
-    /// When combined with the `?` operator, this function will
-    /// propagate any [`Poll::Pending`] values to the caller, and
-    /// extract the `T` from [`Poll::Ready`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// #![feature(poll_ready)]
-    ///
-    /// use std::task::{Context, Poll};
-    /// use std::future::{self, Future};
-    /// use std::pin::Pin;
-    ///
-    /// pub fn do_poll(cx: &mut Context<'_>) -> Poll<()> {
-    ///     let mut fut = future::ready(42);
-    ///     let fut = Pin::new(&mut fut);
-    ///
-    ///     let num = fut.poll(cx).ready()?;
-    ///     # drop(num);
-    ///     // ... use num
-    ///
-    ///     Poll::Ready(())
-    /// }
-    /// ```
-    #[inline]
-    #[unstable(feature = "poll_ready", issue = "89780")]
-    pub fn ready(self) -> Ready<T> {
-        Ready(self)
-    }
 }
 
 impl<T, E> Poll<Result<T, E>> {
@@ -144,6 +113,7 @@ impl<T, E> Poll<Result<T, E>> {
     /// assert_eq!(squared, Poll::Ready(Ok(144)));
     /// ```
     #[stable(feature = "futures_api", since = "1.36.0")]
+    #[inline]
     pub fn map_ok<U, F>(self, f: F) -> Poll<Result<U, E>>
     where
         F: FnOnce(T) -> U,
@@ -171,6 +141,7 @@ impl<T, E> Poll<Result<T, E>> {
     /// assert_eq!(res, Poll::Ready(Err(0)));
     /// ```
     #[stable(feature = "futures_api", since = "1.36.0")]
+    #[inline]
     pub fn map_err<U, F>(self, f: F) -> Poll<Result<T, U>>
     where
         F: FnOnce(E) -> U,
@@ -199,6 +170,7 @@ impl<T, E> Poll<Option<Result<T, E>>> {
     /// assert_eq!(squared, Poll::Ready(Some(Ok(144))));
     /// ```
     #[stable(feature = "poll_map", since = "1.51.0")]
+    #[inline]
     pub fn map_ok<U, F>(self, f: F) -> Poll<Option<Result<U, E>>>
     where
         F: FnOnce(T) -> U,
@@ -228,6 +200,7 @@ impl<T, E> Poll<Option<Result<T, E>>> {
     /// assert_eq!(res, Poll::Ready(Some(Err(0))));
     /// ```
     #[stable(feature = "poll_map", since = "1.51.0")]
+    #[inline]
     pub fn map_err<U, F>(self, f: F) -> Poll<Option<Result<T, U>>>
     where
         F: FnOnce(E) -> U,
@@ -242,8 +215,7 @@ impl<T, E> Poll<Option<Result<T, E>>> {
 }
 
 #[stable(feature = "futures_api", since = "1.36.0")]
-#[rustc_const_unstable(feature = "const_convert", issue = "88674")]
-impl<T> const From<T> for Poll<T> {
+impl<T> From<T> for Poll<T> {
     /// Moves the value into a [`Poll::Ready`] to make a `Poll<T>`.
     ///
     /// # Example

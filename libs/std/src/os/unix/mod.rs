@@ -37,8 +37,12 @@ use crate::os::linux as platform;
 
 #[cfg(not(doc))]
 mod platform {
+    #[cfg(target_os = "aix")]
+    pub use crate::os::aix::*;
     #[cfg(target_os = "android")]
     pub use crate::os::android::*;
+    #[cfg(target_vendor = "apple")]
+    pub use crate::os::darwin::*;
     #[cfg(target_os = "dragonfly")]
     pub use crate::os::dragonfly::*;
     #[cfg(target_os = "emscripten")]
@@ -53,28 +57,32 @@ mod platform {
     pub use crate::os::haiku::*;
     #[cfg(target_os = "horizon")]
     pub use crate::os::horizon::*;
+    #[cfg(target_os = "hurd")]
+    pub use crate::os::hurd::*;
     #[cfg(target_os = "illumos")]
     pub use crate::os::illumos::*;
-    #[cfg(target_os = "ios")]
-    pub use crate::os::ios::*;
     #[cfg(target_os = "l4re")]
     pub use crate::os::l4re::*;
     #[cfg(target_os = "linux")]
     pub use crate::os::linux::*;
-    #[cfg(target_os = "macos")]
-    pub use crate::os::macos::*;
     #[cfg(target_os = "netbsd")]
     pub use crate::os::netbsd::*;
+    #[cfg(target_os = "nto")]
+    pub use crate::os::nto::*;
+    #[cfg(target_os = "nuttx")]
+    pub use crate::os::nuttx::*;
     #[cfg(target_os = "openbsd")]
     pub use crate::os::openbsd::*;
     #[cfg(target_os = "redox")]
     pub use crate::os::redox::*;
+    #[cfg(target_os = "rtems")]
+    pub use crate::os::rtems::*;
     #[cfg(target_os = "solaris")]
     pub use crate::os::solaris::*;
+    #[cfg(target_os = "vita")]
+    pub use crate::os::vita::*;
     #[cfg(target_os = "vxworks")]
     pub use crate::os::vxworks::*;
-    #[cfg(target_os = "watchos")]
-    pub use crate::os::watchos::*;
 }
 
 pub mod ffi;
@@ -84,20 +92,6 @@ pub mod net;
 pub mod process;
 pub mod raw;
 pub mod thread;
-
-#[unstable(feature = "peer_credentials_unix_socket", issue = "42839", reason = "unstable")]
-#[cfg(any(
-    target_os = "android",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "ios",
-    target_os = "watchos",
-    target_os = "macos",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
-pub mod ucred;
 
 /// A prelude for conveniently writing platform-specific code.
 ///
