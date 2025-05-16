@@ -569,8 +569,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "func": func.to_json(mir),
                     "args": args.to_json(mir),
                     "destination": destination,
-                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
-                    "from_hir_call": (), //from_hir_call
                 })
             }
             // See https://github.com/GaloisInc/mir-json/issues/110
