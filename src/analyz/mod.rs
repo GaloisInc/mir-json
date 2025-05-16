@@ -231,8 +231,6 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "R": ops.1.to_json(mir)
                 })
             }
-            // RUSTUP_TODO: remove support for CheckedBinaryOp from crucible-mir (checked arith is
-            // now implemented with Rvalue::BinaryOp(BinOp::AddWithOvereflow) etc.)
             &mir::Rvalue::NullaryOp(ref no, ref t) => {
                 json!({
                     "kind": "NullaryOp",
