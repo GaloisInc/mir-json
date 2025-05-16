@@ -924,8 +924,6 @@ fn emit_instance<'tcx>(
     };
 
     // Look up and monomorphize the MIR for this instance.
-    // RUSTUP_TODO: check whether this is correct.  It's based on the implementation of
-    // rustc_smir's BodyBuilder::build, which has a separate case for non-polymorphic functions.
     let mir: Body = ty_inst.instantiate_mir_and_normalize_erasing_regions(
         tcx,
         ty::TypingEnv::fully_monomorphized(),
