@@ -115,7 +115,7 @@ impl<'tcx> TraitInst<'tcx> {
         let mut projs = preds.projection_bounds()
             .map(|proj| tcx.instantiate_bound_regions_with_erased(proj))
             .collect::<Vec<_>>();
-        projs.sort_by_key(|p| (p.def_id.krate, p.def_id.index));
+        projs.sort_by_key(|p| tcx.def_path_hash(p.def_id));
         TraitInst { trait_ref, projs }
     }
 
