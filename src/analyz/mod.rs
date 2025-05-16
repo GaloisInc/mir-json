@@ -552,7 +552,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
-            // RUSTUP_TODO: remove support for DropAndReplace from crucible-mir
             &mir::TerminatorKind::Call {
                 ref func,
                 ref args,
