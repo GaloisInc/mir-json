@@ -546,9 +546,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "kind": "Drop",
                     "location": location.to_json(mir),
                     "target" : target.to_json(mir),
-                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
-                    // remove this field (we probably don't use it for anything in crucible-mir)
-                    "unwind": (), //unwind.to_json(mir),
                     "drop_fn": get_drop_fn_name(mir, ty),
                 })
             }
@@ -572,9 +569,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "func": func.to_json(mir),
                     "args": args.to_json(mir),
                     "destination": destination,
-                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
-                    // remove this field (we probably don't use it for anything in crucible-mir)
-                    "cleanup": (), //unwind.to_json(mir),
                     // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
                     "from_hir_call": (), //from_hir_call
                 })
@@ -608,9 +602,6 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "expected": expected,
                     "msg": msg.to_json(mir),
                     "target": target.to_json(mir),
-                    // RUSTUP_TODO: decide what to do with the new expanded UnwindAction enum, or
-                    // remove this field (we probably don't use it for anything in crucible-mir)
-                    "cleanup": (), //unwind.to_json(mir)
                 })
             }
             &mir::TerminatorKind::Yield { .. } => {
