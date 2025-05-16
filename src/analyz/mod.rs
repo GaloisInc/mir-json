@@ -573,21 +573,13 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                     "from_hir_call": (), //from_hir_call
                 })
             }
+            // See https://github.com/GaloisInc/mir-json/issues/110
             &mir::TerminatorKind::TailCall {
-                ref func,
-                ref args,
+                func: _,
+                args: _,
                 fn_span: _,
             } => {
-                // RUSTUP_TODO: decide whether we need to support TailCall in crucible-mir.  Check
-                // whether it can appear in normal code or only through the unstable `become`
-                // expression.  Or, implement by treating as `Call` + `Return` (see rustc docs)
-                json!({
-                    "kind": "TailCall",
-                    "func": func.to_json(mir),
-                    "args": args.to_json(mir),
-                    // RUSTUP_TODO: fix, or remove if from_hir_call is unused in crucible-mir
-                    "from_hir_call": (), //from_hir_call
-                })
+                json!({"kind": "Unsupported"})
             }
             &mir::TerminatorKind::Assert {
                 ref cond,
