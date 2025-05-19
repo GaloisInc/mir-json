@@ -491,7 +491,7 @@ fn main() {
     // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
     let temp_dir =
-        TempDir::with_prefix_in(EMPTY_PROJECT_NAME.to_owned() + "-", out_dir)
+        TempDir::with_prefix_in(EMPTY_PROJECT_NAME.to_owned() + "-", &cwd)
             .expect("temporary directory should be able to be created");
     let empty_project_dir = if keep_temp_build {
         let path = temp_dir.into_path();
