@@ -106,13 +106,29 @@ unmodified version is not supported by Crucible, the resulting JSON output
 ## Other binaries
 
 Besides the main binaries above, `mir-json` also provides a variety of other
-binaries for specialized purposes:
+binaries for specialized purposes.
+
+### `cargo` subcommands
 
 * `cargo-mir-json`: This invokes `cargo rustc`, but replacing `rustc` with
   `mir-json`.
+
+### `rustc` replacements
+
 * `crux-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
   `cargo-crux-test` would run it. This is useful for testing a single file,
   e.g., `crux-rustc --test foo.rs`.
+* `saw-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
+  `cargo-saw-build` would run it. This is useful for building a single file,
+  e.g., `saw-rustc foo.rs`.
+
+It is recommended that you invoke `{crux,saw}-rustc` with `--edition 2021` or
+later. Invoking them with `--edition 2015` in particular has been observed to
+produce undesirably large MIR JSON files (see [this
+issue](https://github.com/GaloisInc/mir-json/issues/94) for more details).
+
+### `mir-json` utilities
+
 * `mir-json-callgraph`: This prints the reverse callgraph of a function, which
   can be helpful for debugging.
 * `mir-json-dce`: This takes in several `.mir` files, combines them, and then
@@ -125,9 +141,6 @@ binaries for specialized purposes:
   do anything else, such as testing with `crux-mir`. It is unlikely that you
   will need to use this binary directly, as producing `.mir` files is performed
   as an intermediate step in other binaries.
-* `saw-rustc`: A helper that invokes `mir-json-rustc-wrapper` the same way that
-  `cargo-saw-build` would run it. This is useful for building a single file,
-  e.g., `saw-rustc foo.rs`.
 
 ## `TyCtxt` usage
 
