@@ -647,7 +647,13 @@ fn main() {
                         .remove(&path_info.artifact.package_id)
                     {
                         Some(bs) => {
-                            (bs.linked_libs, bs.linked_paths, bs.cfgs, bs.env)
+                            // Certain packages rely on `cargo` defining the
+                            // `OUT_DIR` environment variable (e.g.,
+                            // compiler_builtins on AArch64 Linux) in order to
+                            // compile.
+                            let mut env = bs.env;
+                            env.push(("OUT_DIR".into(), bs.out_dir.into()));
+                            (bs.linked_libs, bs.linked_paths, bs.cfgs, env)
                         }
                         None => (vec![], vec![], vec![], vec![]),
                     };
