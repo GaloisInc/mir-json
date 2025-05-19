@@ -19,6 +19,8 @@ macro_rules! bt {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittest64)
 #[inline]
 #[cfg_attr(test, assert_instr(bt))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -36,6 +38,8 @@ pub unsafe fn _bittest64(p: *const i64, b: i64) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then sets the bit to `1`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandset64)
 #[inline]
 #[cfg_attr(test, assert_instr(bts))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -53,6 +57,8 @@ pub unsafe fn _bittestandset64(p: *mut i64, b: i64) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then resets that bit to `0`.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandreset64)
 #[inline]
 #[cfg_attr(test, assert_instr(btr))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -70,6 +76,8 @@ pub unsafe fn _bittestandreset64(p: *mut i64, b: i64) -> u8 {
 }
 
 /// Returns the bit in position `b` of the memory addressed by `p`, then inverts that bit.
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_bittestandcomplement64)
 #[inline]
 #[cfg_attr(test, assert_instr(btc))]
 #[stable(feature = "simd_x86_bittest", since = "1.55.0")]
@@ -91,6 +99,7 @@ mod tests {
     use crate::core_arch::x86_64::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittest64() {
         unsafe {
             let a = 0b0101_0000i64;
@@ -100,6 +109,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandset64() {
         unsafe {
             let mut a = 0b0101_0000i64;
@@ -111,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandreset64() {
         unsafe {
             let mut a = 0b0101_0000i64;
@@ -122,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Uses inline assembly
     fn test_bittestandcomplement64() {
         unsafe {
             let mut a = 0b0101_0000i64;

@@ -4,12 +4,16 @@ use crate::simd::*;
 #[cfg(target_arch = "arm")]
 use core::arch::arm::*;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm64ec"))]
 use core::arch::aarch64::*;
 
-#[cfg(any(
-    target_arch = "aarch64",
-    all(target_arch = "arm", target_feature = "v7"),
+#[cfg(all(
+    any(
+        target_arch = "aarch64",
+        target_arch = "arm64ec",
+        all(target_arch = "arm", target_feature = "v7"),
+    ),
+    target_endian = "little"
 ))]
 mod neon {
     use super::*;
@@ -45,17 +49,6 @@ mod neon {
 }
 
 #[cfg(any(
-    all(target_feature = "v5te", not(target_feature = "mclass")),
-    all(target_feature = "mclass", target_feature = "dsp"),
-))]
-mod dsp {
-    use super::*;
-
-    from_transmute! { unsafe Simd<u16, 2> => uint16x2_t }
-    from_transmute! { unsafe Simd<i16, 2> => int16x2_t }
-}
-
-#[cfg(any(
     all(target_feature = "v6", not(target_feature = "mclass")),
     all(target_feature = "mclass", target_feature = "dsp"),
 ))]
@@ -64,9 +57,14 @@ mod simd32 {
 
     from_transmute! { unsafe Simd<u8, 4> => uint8x4_t }
     from_transmute! { unsafe Simd<i8, 4> => int8x4_t }
+    from_transmute! { unsafe Simd<u16, 2> => uint16x2_t }
+    from_transmute! { unsafe Simd<i16, 2> => int16x2_t }
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(
+    any(target_arch = "aarch64", target_arch = "arm64ec"),
+    target_endian = "little"
+))]
 mod aarch64 {
     use super::neon::*;
     use super::*;

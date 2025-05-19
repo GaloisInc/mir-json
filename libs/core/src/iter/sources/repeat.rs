@@ -1,4 +1,5 @@
 use crate::iter::{FusedIterator, TrustedLen};
+use crate::num::NonZero;
 
 /// Creates a new iterator that endlessly repeats a single element.
 ///
@@ -7,11 +8,15 @@ use crate::iter::{FusedIterator, TrustedLen};
 /// Infinite iterators like `repeat()` are often used with adapters like
 /// [`Iterator::take()`], in order to make them finite.
 ///
+/// Use [`str::repeat()`] instead of this function if you just want to repeat
+/// a char/string `n`th times.
+///
 /// If the element type of the iterator you need does not implement `Clone`,
 /// or if you do not want to keep the repeated element in memory, you can
 /// instead use the [`repeat_with()`] function.
 ///
 /// [`repeat_with()`]: crate::iter::repeat_with
+/// [`str::repeat()`]: ../../std/primitive.str.html#method.repeat
 ///
 /// # Examples
 ///
@@ -80,7 +85,7 @@ impl<A: Clone> Iterator for Repeat<A> {
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         // Advancing an infinite iterator of a single element is a no-op.
         let _ = n;
         Ok(())
@@ -109,7 +114,7 @@ impl<A: Clone> DoubleEndedIterator for Repeat<A> {
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         // Advancing an infinite iterator of a single element is a no-op.
         let _ = n;
         Ok(())

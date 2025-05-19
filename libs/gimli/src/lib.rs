@@ -9,31 +9,34 @@
 //! Cargo features that can be enabled with `gimli`:
 //!
 //! * `std`: Enabled by default. Use the `std` library. Disabling this feature
-//! allows using `gimli` in embedded environments that do not have access to
-//! `std`. Note that even when `std` is disabled, `gimli` still requires an
-//! implementation of the `alloc` crate.
+//!   allows using `gimli` in embedded environments that do not have access to
+//!   `std`. Note that even when `std` is disabled, `gimli` still requires an
+//!   implementation of the `alloc` crate.
 //!
 //! * `read`: Enabled by default. Enables the `read` module. Use of `std` is
-//! optional.
+//!   optional.
 //!
 //! * `write`: Enabled by default. Enables the `write` module. Always uses
-//! the `std` library.
+//!   the `std` library.
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 // Selectively enable rust 2018 warnings
 #![warn(bare_trait_objects)]
 #![warn(unused_extern_crates)]
 #![warn(ellipsis_inclusive_range_patterns)]
-//#![warn(elided_lifetimes_in_paths)]
+#![warn(elided_lifetimes_in_paths)]
 #![warn(explicit_outlives_requirements)]
-// Allow clippy warnings when we aren't building with clippy.
-#![allow(unknown_lints)]
+// Style.
+#![allow(clippy::bool_to_int_with_if)]
+#![allow(clippy::collapsible_else_if)]
+#![allow(clippy::comparison_chain)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::needless_late_init)]
+#![allow(clippy::too_many_arguments)]
 // False positives with `fallible_iterator`.
 #![allow(clippy::should_implement_trait)]
-// Many false positives involving `continue`.
-#![allow(clippy::never_loop)]
-// False positives when block expressions are used inside an assertion.
-#![allow(clippy::panic_params)]
+// False positives.
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![no_std]
 
 #[allow(unused_imports)]
@@ -45,7 +48,7 @@ extern crate alloc;
 #[macro_use]
 extern crate std;
 
-#[cfg(feature = "stable_deref_trait")]
+#[cfg(feature = "endian-reader")]
 pub use stable_deref_trait::{CloneStableDeref, StableDeref};
 
 mod common;
@@ -59,7 +62,7 @@ pub mod constants;
 pub use crate::constants::*;
 
 mod endianity;
-pub use crate::endianity::{BigEndian, Endianity, LittleEndian, NativeEndian, RunTimeEndian};
+pub use crate::endianity::*;
 
 pub mod leb128;
 

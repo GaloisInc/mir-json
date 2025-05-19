@@ -1,11 +1,15 @@
 //! `x86` and `x86_64` intrinsics.
 
-use crate::{intrinsics, marker::Sized, mem::transmute};
+#[allow(unused_imports)]
+use crate::marker::Sized;
+use crate::mem::transmute;
 
 #[macro_use]
 mod macros;
 
 types! {
+    #![stable(feature = "simd_x86", since = "1.27.0")]
+
     /// 128-bit wide integer vector type, x86-specific
     ///
     /// This type is the same as the `__m128i` type defined by Intel,
@@ -22,6 +26,12 @@ types! {
     /// (as well as unsigned versions). Each intrinsic may interpret the
     /// internal bits differently, check the documentation of the intrinsic
     /// to see how it's being used.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
     ///
     /// Note that this means that an instance of `__m128i` typically just means
     /// a "bag of bits" which is left up to interpretation at the point of use.
@@ -47,8 +57,7 @@ types! {
     /// # if is_x86_feature_detected!("sse2") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m128i(i64, i64);
+    pub struct __m128i(2 x i64);
 
     /// 128-bit wide set of four `f32` types, x86-specific
     ///
@@ -61,6 +70,12 @@ types! {
     /// registers, this `__m128` type has *one* interpretation. Each instance
     /// of `__m128` always corresponds to `f32x4`, or four `f32` types packed
     /// together.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
     ///
     /// Most intrinsics using `__m128` are prefixed with `_mm_` and are
     /// suffixed with "ps" (or otherwise contain "ps"). Not to be confused with
@@ -84,8 +99,7 @@ types! {
     /// # if is_x86_feature_detected!("sse") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m128(f32, f32, f32, f32);
+    pub struct __m128(4 x f32);
 
     /// 128-bit wide set of two `f64` types, x86-specific
     ///
@@ -98,6 +112,12 @@ types! {
     /// registers, this `__m128d` type has *one* interpretation. Each instance
     /// of `__m128d` always corresponds to `f64x2`, or two `f64` types packed
     /// together.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
     ///
     /// Most intrinsics using `__m128d` are prefixed with `_mm_` and are
     /// suffixed with "pd" (or otherwise contain "pd"). Not to be confused with
@@ -121,8 +141,7 @@ types! {
     /// # if is_x86_feature_detected!("sse") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m128d(f64, f64);
+    pub struct __m128d(2 x f64);
 
     /// 256-bit wide integer vector type, x86-specific
     ///
@@ -140,6 +159,12 @@ types! {
     /// (as well as unsigned versions). Each intrinsic may interpret the
     /// internal bits differently, check the documentation of the intrinsic
     /// to see how it's being used.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
     ///
     /// Note that this means that an instance of `__m256i` typically just means
     /// a "bag of bits" which is left up to interpretation at the point of use.
@@ -162,8 +187,7 @@ types! {
     /// # if is_x86_feature_detected!("avx") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m256i(i64, i64, i64, i64);
+    pub struct __m256i(4 x i64);
 
     /// 256-bit wide set of eight `f32` types, x86-specific
     ///
@@ -176,6 +200,12 @@ types! {
     /// registers, this `__m256` type has *one* interpretation. Each instance
     /// of `__m256` always corresponds to `f32x8`, or eight `f32` types packed
     /// together.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding  between two consecutive elements); however, the
+    /// alignment is different and equal to the size of the type. Note that the
+    /// ABI for function calls may *not* be the same.
     ///
     /// Most intrinsics using `__m256` are prefixed with `_mm256_` and are
     /// suffixed with "ps" (or otherwise contain "ps"). Not to be confused with
@@ -199,8 +229,7 @@ types! {
     /// # if is_x86_feature_detected!("avx") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m256(f32, f32, f32, f32, f32, f32, f32, f32);
+    pub struct __m256(8 x f32);
 
     /// 256-bit wide set of four `f64` types, x86-specific
     ///
@@ -213,6 +242,12 @@ types! {
     /// registers, this `__m256d` type has *one* interpretation. Each instance
     /// of `__m256d` always corresponds to `f64x4`, or four `f64` types packed
     /// together.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
     ///
     /// Most intrinsics using `__m256d` are prefixed with `_mm256_` and are
     /// suffixed with "pd" (or otherwise contain "pd"). Not to be confused with
@@ -236,8 +271,11 @@ types! {
     /// # if is_x86_feature_detected!("avx") { unsafe { foo() } }
     /// # }
     /// ```
-    #[stable(feature = "simd_x86", since = "1.27.0")]
-    pub struct __m256d(f64, f64, f64, f64);
+    pub struct __m256d(4 x f64);
+}
+
+types! {
+    #![stable(feature = "simd_avx512_types", since = "1.72.0")]
 
     /// 512-bit wide integer vector type, x86-specific
     ///
@@ -256,9 +294,15 @@ types! {
     /// internal bits differently, check the documentation of the intrinsic
     /// to see how it's being used.
     ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    ///
     /// Note that this means that an instance of `__m512i` typically just means
     /// a "bag of bits" which is left up to interpretation at the point of use.
-    pub struct __m512i(i64, i64, i64, i64, i64, i64, i64, i64);
+    pub struct __m512i(8 x i64);
 
     /// 512-bit wide set of sixteen `f32` types, x86-specific
     ///
@@ -272,13 +316,16 @@ types! {
     /// of `__m512` always corresponds to `f32x16`, or sixteen `f32` types
     /// packed together.
     ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding  between two consecutive elements); however, the
+    /// alignment is different and equal to the size of the type. Note that the
+    /// ABI for function calls may *not* be the same.
+    ///
     /// Most intrinsics using `__m512` are prefixed with `_mm512_` and are
     /// suffixed with "ps" (or otherwise contain "ps"). Not to be confused with
     /// "pd" which is used for `__m512d`.
-    pub struct __m512(
-        f32, f32, f32, f32, f32, f32, f32, f32,
-        f32, f32, f32, f32, f32, f32, f32, f32,
-    );
+    pub struct __m512(16 x f32);
 
     /// 512-bit wide set of eight `f64` types, x86-specific
     ///
@@ -292,73 +339,172 @@ types! {
     /// of `__m512d` always corresponds to `f64x4`, or eight `f64` types packed
     /// together.
     ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding  between two consecutive elements); however, the
+    /// alignment is different and equal to the size of the type. Note that the
+    /// ABI for function calls may *not* be the same.
+    ///
     /// Most intrinsics using `__m512d` are prefixed with `_mm512_` and are
     /// suffixed with "pd" (or otherwise contain "pd"). Not to be confused with
     /// "ps" which is used for `__m512`.
-    pub struct __m512d(f64, f64, f64, f64, f64, f64, f64, f64);
+    pub struct __m512d(8 x f64);
+}
 
-    /// 128-bit wide set of eight 'u16' types, x86-specific
+types! {
+    #![unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+
+    /// 128-bit wide set of eight `u16` types, x86-specific
     ///
     /// This type is representing a 128-bit SIMD register which internally is consisted of
     /// eight packed `u16` instances. Its purpose is for bf16 related intrinsic
     /// implementations.
-    pub struct __m128bh(u16, u16, u16, u16, u16, u16, u16, u16);
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m128bh(8 x u16);
 
-    /// 256-bit wide set of 16 'u16' types, x86-specific
+    /// 256-bit wide set of 16 `u16` types, x86-specific
     ///
     /// This type is the same as the `__m256bh` type defined by Intel,
     /// representing a 256-bit SIMD register which internally is consisted of
     /// 16 packed `u16` instances. Its purpose is for bf16 related intrinsic
     /// implementations.
-    pub struct __m256bh(
-        u16, u16, u16, u16, u16, u16, u16, u16,
-        u16, u16, u16, u16, u16, u16, u16, u16
-    );
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m256bh(16 x u16);
 
-    /// 512-bit wide set of 32 'u16' types, x86-specific
+    /// 512-bit wide set of 32 `u16` types, x86-specific
     ///
     /// This type is the same as the `__m512bh` type defined by Intel,
     /// representing a 512-bit SIMD register which internally is consisted of
     /// 32 packed `u16` instances. Its purpose is for bf16 related intrinsic
     /// implementations.
-    pub struct __m512bh(
-        u16, u16, u16, u16, u16, u16, u16, u16,
-        u16, u16, u16, u16, u16, u16, u16, u16,
-        u16, u16, u16, u16, u16, u16, u16, u16,
-        u16, u16, u16, u16, u16, u16, u16, u16
-    );
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m512bh(32 x u16);
+}
+
+types! {
+    #![unstable(feature = "stdarch_x86_avx512_f16", issue = "127213")]
+
+    /// 128-bit wide set of 8 `f16` types, x86-specific
+    ///
+    /// This type is the same as the `__m128h` type defined by Intel,
+    /// representing a 128-bit SIMD register which internally is consisted of
+    /// 8 packed `f16` instances. its purpose is for f16 related intrinsic
+    /// implementations.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m128h(8 x f16);
+
+    /// 256-bit wide set of 16 `f16` types, x86-specific
+    ///
+    /// This type is the same as the `__m256h` type defined by Intel,
+    /// representing a 256-bit SIMD register which internally is consisted of
+    /// 16 packed `f16` instances. its purpose is for f16 related intrinsic
+    /// implementations.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m256h(16 x f16);
+
+    /// 512-bit wide set of 32 `f16` types, x86-specific
+    ///
+    /// This type is the same as the `__m512h` type defined by Intel,
+    /// representing a 512-bit SIMD register which internally is consisted of
+    /// 32 packed `f16` instances. its purpose is for f16 related intrinsic
+    /// implementations.
+    ///
+    /// The in-memory representation of this type is the same as the one of an
+    /// equivalent array (i.e. the in-memory order of elements is the same, and
+    /// there is no padding); however, the alignment is different and equal to
+    /// the size of the type. Note that the ABI for function calls may *not* be
+    /// the same.
+    pub struct __m512h(32 x f16);
+}
+
+/// The BFloat16 type used in AVX-512 intrinsics.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
+#[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512_bf16", issue = "127356")]
+pub struct bf16(u16);
+
+impl bf16 {
+    /// Raw transmutation from `u16`
+    #[inline]
+    #[must_use]
+    #[unstable(feature = "stdarch_x86_avx512_bf16", issue = "127356")]
+    pub const fn from_bits(bits: u16) -> bf16 {
+        bf16(bits)
+    }
+
+    /// Raw transmutation to `u16`
+    #[inline]
+    #[must_use = "this returns the result of the operation, without modifying the original"]
+    #[unstable(feature = "stdarch_x86_avx512_bf16", issue = "127356")]
+    pub const fn to_bits(self) -> u16 {
+        self.0
+    }
 }
 
 /// The `__mmask64` type used in AVX-512 intrinsics, a 64-bit integer
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type __mmask64 = u64;
 
 /// The `__mmask32` type used in AVX-512 intrinsics, a 32-bit integer
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type __mmask32 = u32;
 
 /// The `__mmask16` type used in AVX-512 intrinsics, a 16-bit integer
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type __mmask16 = u16;
 
 /// The `__mmask8` type used in AVX-512 intrinsics, a 8-bit integer
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type __mmask8 = u8;
 
 /// The `_MM_CMPINT_ENUM` type used to specify comparison operations in AVX-512 intrinsics.
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type _MM_CMPINT_ENUM = i32;
 
 /// The `MM_MANTISSA_NORM_ENUM` type used to specify mantissa normalized operations in AVX-512 intrinsics.
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type _MM_MANTISSA_NORM_ENUM = i32;
 
 /// The `MM_MANTISSA_SIGN_ENUM` type used to specify mantissa signed operations in AVX-512 intrinsics.
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type _MM_MANTISSA_SIGN_ENUM = i32;
 
 /// The `MM_PERM_ENUM` type used to specify shuffle operations in AVX-512 intrinsics.
 #[allow(non_camel_case_types)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub type _MM_PERM_ENUM = i32;
 
 #[cfg(test)]
@@ -367,7 +513,6 @@ mod test;
 pub use self::test::*;
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m128iExt: Sized {
     fn as_m128i(self) -> __m128i;
 
@@ -420,7 +565,6 @@ impl m128iExt for __m128i {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m256iExt: Sized {
     fn as_m256i(self) -> __m256i;
 
@@ -473,7 +617,6 @@ impl m256iExt for __m256i {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m128Ext: Sized {
     fn as_m128(self) -> __m128;
 
@@ -491,7 +634,6 @@ impl m128Ext for __m128 {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m128dExt: Sized {
     fn as_m128d(self) -> __m128d;
 
@@ -509,7 +651,6 @@ impl m128dExt for __m128d {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m256Ext: Sized {
     fn as_m256(self) -> __m256;
 
@@ -527,7 +668,6 @@ impl m256Ext for __m256 {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m256dExt: Sized {
     fn as_m256d(self) -> __m256d;
 
@@ -545,7 +685,6 @@ impl m256dExt for __m256d {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m512iExt: Sized {
     fn as_m512i(self) -> __m512i;
 
@@ -598,7 +737,6 @@ impl m512iExt for __m512i {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m512Ext: Sized {
     fn as_m512(self) -> __m512;
 
@@ -616,7 +754,6 @@ impl m512Ext for __m512 {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m512dExt: Sized {
     fn as_m512d(self) -> __m512d;
 
@@ -634,7 +771,6 @@ impl m512dExt for __m512d {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m128bhExt: Sized {
     fn as_m128bh(self) -> __m128bh;
 
@@ -667,7 +803,6 @@ impl m128bhExt for __m128bh {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m256bhExt: Sized {
     fn as_m256bh(self) -> __m256bh;
 
@@ -700,7 +835,6 @@ impl m256bhExt for __m256bh {
 }
 
 #[allow(non_camel_case_types)]
-#[unstable(feature = "stdsimd_internal", issue = "none")]
 pub(crate) trait m512bhExt: Sized {
     fn as_m512bh(self) -> __m512bh;
 
@@ -732,129 +866,215 @@ impl m512bhExt for __m512bh {
     }
 }
 
+#[allow(non_camel_case_types)]
+pub(crate) trait m128hExt: Sized {
+    fn as_m128h(self) -> __m128h;
+
+    #[inline]
+    fn as_f16x8(self) -> crate::core_arch::simd::f16x8 {
+        unsafe { transmute(self.as_m128h()) }
+    }
+}
+
+impl m128hExt for __m128h {
+    #[inline]
+    fn as_m128h(self) -> Self {
+        self
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub(crate) trait m256hExt: Sized {
+    fn as_m256h(self) -> __m256h;
+
+    #[inline]
+    fn as_f16x16(self) -> crate::core_arch::simd::f16x16 {
+        unsafe { transmute(self.as_m256h()) }
+    }
+}
+
+impl m256hExt for __m256h {
+    #[inline]
+    fn as_m256h(self) -> Self {
+        self
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub(crate) trait m512hExt: Sized {
+    fn as_m512h(self) -> __m512h;
+
+    #[inline]
+    fn as_f16x32(self) -> crate::core_arch::simd::f16x32 {
+        unsafe { transmute(self.as_m512h()) }
+    }
+}
+
 mod eflags;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::eflags::*;
 
 mod fxsr;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::fxsr::*;
 
 mod bswap;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::bswap::*;
 
 mod rdtsc;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::rdtsc::*;
 
 mod cpuid;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::cpuid::*;
 mod xsave;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::xsave::*;
 
 mod sse;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse::*;
 mod sse2;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse2::*;
 mod sse3;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse3::*;
 mod ssse3;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::ssse3::*;
 mod sse41;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse41::*;
 mod sse42;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse42::*;
 mod avx;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::avx::*;
 mod avx2;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::avx2::*;
 mod fma;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::fma::*;
 
 mod abm;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::abm::*;
 mod bmi1;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::bmi1::*;
 
 mod bmi2;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::bmi2::*;
 
-#[cfg(not(stdarch_intel_sde))]
 mod sse4a;
-#[cfg(not(stdarch_intel_sde))]
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sse4a::*;
 
-#[cfg(not(stdarch_intel_sde))]
 mod tbm;
-#[cfg(not(stdarch_intel_sde))]
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::tbm::*;
 
 mod pclmulqdq;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::pclmulqdq::*;
 
 mod aes;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::aes::*;
 
 mod rdrand;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::rdrand::*;
 
 mod sha;
+#[stable(feature = "simd_x86", since = "1.27.0")]
 pub use self::sha::*;
 
 mod adx;
+#[stable(feature = "simd_x86_adx", since = "1.33.0")]
 pub use self::adx::*;
 
 #[cfg(test)]
 use stdarch_test::assert_instr;
 
-/// Generates the trap instruction `UD2`
-#[cfg_attr(test, assert_instr(ud2))]
-#[inline]
-pub unsafe fn ud2() -> ! {
-    intrinsics::abort()
-}
-
 mod avx512f;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512f::*;
 
 mod avx512bw;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512bw::*;
 
 mod avx512cd;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512cd::*;
 
+mod avx512dq;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub use self::avx512dq::*;
+
 mod avx512ifma;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512ifma::*;
 
 mod avx512vbmi;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512vbmi::*;
 
 mod avx512vbmi2;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512vbmi2::*;
 
 mod avx512vnni;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512vnni::*;
 
 mod avx512bitalg;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512bitalg::*;
 
-mod avx512gfni;
-pub use self::avx512gfni::*;
+mod gfni;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub use self::gfni::*;
 
 mod avx512vpopcntdq;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512vpopcntdq::*;
 
-mod avx512vaes;
-pub use self::avx512vaes::*;
+mod vaes;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub use self::vaes::*;
 
-mod avx512vpclmulqdq;
-pub use self::avx512vpclmulqdq::*;
+mod vpclmulqdq;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub use self::vpclmulqdq::*;
 
 mod bt;
+#[stable(feature = "simd_x86_bittest", since = "1.55.0")]
 pub use self::bt::*;
 
 mod rtm;
+#[unstable(feature = "stdarch_x86_rtm", issue = "111138")]
 pub use self::rtm::*;
 
 mod f16c;
+#[stable(feature = "x86_f16c_intrinsics", since = "1.68.0")]
 pub use self::f16c::*;
 
 mod avx512bf16;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub use self::avx512bf16::*;
+
+mod avxneconvert;
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub use self::avxneconvert::*;
+
+mod avx512fp16;
+#[unstable(feature = "stdarch_x86_avx512_f16", issue = "127213")]
+pub use self::avx512fp16::*;

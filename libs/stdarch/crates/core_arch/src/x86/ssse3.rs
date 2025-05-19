@@ -1,8 +1,8 @@
 //! Supplemental Streaming SIMD Extensions 3 (SSSE3)
 
 use crate::{
-    core_arch::{simd::*, simd_llvm::*, x86::*},
-    mem::transmute,
+    core_arch::{simd::*, x86::*},
+    intrinsics::simd::*,
 };
 
 #[cfg(test)]
@@ -11,39 +11,48 @@ use stdarch_test::assert_instr;
 /// Computes the absolute value of packed 8-bit signed integers in `a` and
 /// return the unsigned results.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_abs_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_abs_epi8)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pabsb))]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_abs_epi8(a: __m128i) -> __m128i {
-    transmute(pabsb128(a.as_i8x16()))
+    let a = a.as_i8x16();
+    let zero = i8x16::ZERO;
+    let r = simd_select::<m8x16, _>(simd_lt(a, zero), simd_neg(a), a);
+    transmute(r)
 }
 
 /// Computes the absolute value of each of the packed 16-bit signed integers in
 /// `a` and
 /// return the 16-bit unsigned integer
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_abs_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_abs_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pabsw))]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_abs_epi16(a: __m128i) -> __m128i {
-    transmute(pabsw128(a.as_i16x8()))
+    let a = a.as_i16x8();
+    let zero = i16x8::ZERO;
+    let r = simd_select::<m16x8, _>(simd_lt(a, zero), simd_neg(a), a);
+    transmute(r)
 }
 
 /// Computes the absolute value of each of the packed 32-bit signed integers in
 /// `a` and
 /// return the 32-bit unsigned integer
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_abs_epi32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_abs_epi32)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pabsd))]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_abs_epi32(a: __m128i) -> __m128i {
-    transmute(pabsd128(a.as_i32x4()))
+    let a = a.as_i32x4();
+    let zero = i32x4::ZERO;
+    let r = simd_select::<m32x4, _>(simd_lt(a, zero), simd_neg(a), a);
+    transmute(r)
 }
 
 /// Shuffles bytes from `a` according to the content of `b`.
@@ -71,7 +80,7 @@ pub unsafe fn _mm_abs_epi32(a: __m128i) -> __m128i {
 /// }
 /// ```
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_shuffle_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_shuffle_epi8)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pshufb))]
@@ -83,23 +92,23 @@ pub unsafe fn _mm_shuffle_epi8(a: __m128i, b: __m128i) -> __m128i {
 /// Concatenate 16-byte blocks in `a` and `b` into a 32-byte temporary result,
 /// shift the result right by `n` bytes, and returns the low 16 bytes.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_alignr_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_alignr_epi8)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(palignr, IMM8 = 15))]
 #[rustc_legacy_const_generics(2)]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_alignr_epi8<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     // If palignr is shifting the pair of vectors more than the size of two
     // lanes, emit zero.
     if IMM8 > 32 {
-        return _mm_set1_epi8(0);
+        return _mm_setzero_si128();
     }
     // If palignr is shifting the pair of input vectors more than one lane,
     // but less than two lanes, convert to shifting in zeroes.
     let (a, b) = if IMM8 > 16 {
-        (_mm_set1_epi8(0), a)
+        (_mm_setzero_si128(), a)
     } else {
         (a, b)
     };
@@ -113,10 +122,10 @@ pub unsafe fn _mm_alignr_epi8<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128
             shift + i
         }
     }
-    let r: i8x16 = simd_shuffle16!(
+    let r: i8x16 = simd_shuffle!(
         b.as_i8x16(),
         a.as_i8x16(),
-        <const IMM8: i32> [
+        [
             mask(IMM8 as u32, 0),
             mask(IMM8 as u32, 1),
             mask(IMM8 as u32, 2),
@@ -141,7 +150,7 @@ pub unsafe fn _mm_alignr_epi8<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128
 /// Horizontally adds the adjacent pairs of values contained in 2 packed
 /// 128-bit vectors of `[8 x i16]`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hadd_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hadd_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phaddw))]
@@ -154,7 +163,7 @@ pub unsafe fn _mm_hadd_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// 128-bit vectors of `[8 x i16]`. Positive sums greater than 7FFFh are
 /// saturated to 7FFFh. Negative sums less than 8000h are saturated to 8000h.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hadds_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hadds_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phaddsw))]
@@ -166,7 +175,7 @@ pub unsafe fn _mm_hadds_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// Horizontally adds the adjacent pairs of values contained in 2 packed
 /// 128-bit vectors of `[4 x i32]`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hadd_epi32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hadd_epi32)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phaddd))]
@@ -178,7 +187,7 @@ pub unsafe fn _mm_hadd_epi32(a: __m128i, b: __m128i) -> __m128i {
 /// Horizontally subtract the adjacent pairs of values contained in 2
 /// packed 128-bit vectors of `[8 x i16]`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hsub_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hsub_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phsubw))]
@@ -192,7 +201,7 @@ pub unsafe fn _mm_hsub_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// 7FFFh are saturated to 7FFFh. Negative differences less than 8000h are
 /// saturated to 8000h.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hsubs_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hsubs_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phsubsw))]
@@ -204,7 +213,7 @@ pub unsafe fn _mm_hsubs_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// Horizontally subtract the adjacent pairs of values contained in 2
 /// packed 128-bit vectors of `[4 x i32]`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hsub_epi32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_hsub_epi32)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(phsubd))]
@@ -219,7 +228,7 @@ pub unsafe fn _mm_hsub_epi32(a: __m128i, b: __m128i) -> __m128i {
 /// contiguous products with signed saturation, and writes the 16-bit sums to
 /// the corresponding bits in the destination.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maddubs_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maddubs_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pmaddubsw))]
@@ -232,7 +241,7 @@ pub unsafe fn _mm_maddubs_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// product to the 18 most significant bits by right-shifting, round the
 /// truncated value by adding 1, and write bits `[16:1]` to the destination.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mulhrs_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mulhrs_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(pmulhrsw))]
@@ -246,7 +255,7 @@ pub unsafe fn _mm_mulhrs_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// Elements in result are zeroed out when the corresponding element in `b`
 /// is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sign_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sign_epi8)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(psignb))]
@@ -260,7 +269,7 @@ pub unsafe fn _mm_sign_epi8(a: __m128i, b: __m128i) -> __m128i {
 /// Elements in result are zeroed out when the corresponding element in `b`
 /// is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sign_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sign_epi16)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(psignw))]
@@ -274,7 +283,7 @@ pub unsafe fn _mm_sign_epi16(a: __m128i, b: __m128i) -> __m128i {
 /// Element in result are zeroed out when the corresponding element in `b`
 /// is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sign_epi32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sign_epi32)
 #[inline]
 #[target_feature(enable = "ssse3")]
 #[cfg_attr(test, assert_instr(psignd))]
@@ -285,15 +294,6 @@ pub unsafe fn _mm_sign_epi32(a: __m128i, b: __m128i) -> __m128i {
 
 #[allow(improper_ctypes)]
 extern "C" {
-    #[link_name = "llvm.x86.ssse3.pabs.b.128"]
-    fn pabsb128(a: i8x16) -> u8x16;
-
-    #[link_name = "llvm.x86.ssse3.pabs.w.128"]
-    fn pabsw128(a: i16x8) -> u16x8;
-
-    #[link_name = "llvm.x86.ssse3.pabs.d.128"]
-    fn pabsd128(a: i32x4) -> u32x4;
-
     #[link_name = "llvm.x86.ssse3.pshuf.b.128"]
     fn pshufb128(a: u8x16, b: u8x16) -> u8x16;
 
@@ -372,6 +372,11 @@ mod tests {
         let expected = _mm_setr_epi8(5, 0, 5, 4, 9, 13, 7, 4, 13, 6, 6, 11, 5, 2, 9, 1);
         let r = _mm_shuffle_epi8(a, b);
         assert_eq_m128i(r, expected);
+
+        // Test indices greater than 15 wrapping around
+        let b = _mm_add_epi8(b, _mm_set1_epi8(32));
+        let r = _mm_shuffle_epi8(a, b);
+        assert_eq_m128i(r, expected);
     }
 
     #[simd_test(enable = "ssse3")]
@@ -421,6 +426,22 @@ mod tests {
         let expected = _mm_setr_epi16(3, 7, 11, 15, 132, 7, 36, 25);
         let r = _mm_hadd_epi16(a, b);
         assert_eq_m128i(r, expected);
+
+        // Test wrapping on overflow
+        let a = _mm_setr_epi16(i16::MAX, 1, i16::MAX, 2, i16::MAX, 3, i16::MAX, 4);
+        let b = _mm_setr_epi16(i16::MIN, -1, i16::MIN, -2, i16::MIN, -3, i16::MIN, -4);
+        let expected = _mm_setr_epi16(
+            i16::MIN,
+            i16::MIN + 1,
+            i16::MIN + 2,
+            i16::MIN + 3,
+            i16::MAX,
+            i16::MAX - 1,
+            i16::MAX - 2,
+            i16::MAX - 3,
+        );
+        let r = _mm_hadd_epi16(a, b);
+        assert_eq_m128i(r, expected);
     }
 
     #[simd_test(enable = "ssse3")]
@@ -428,6 +449,22 @@ mod tests {
         let a = _mm_setr_epi16(1, 2, 3, 4, 5, 6, 7, 8);
         let b = _mm_setr_epi16(4, 128, 4, 3, 32767, 1, -32768, -1);
         let expected = _mm_setr_epi16(3, 7, 11, 15, 132, 7, 32767, -32768);
+        let r = _mm_hadds_epi16(a, b);
+        assert_eq_m128i(r, expected);
+
+        // Test saturating on overflow
+        let a = _mm_setr_epi16(i16::MAX, 1, i16::MAX, 2, i16::MAX, 3, i16::MAX, 4);
+        let b = _mm_setr_epi16(i16::MIN, -1, i16::MIN, -2, i16::MIN, -3, i16::MIN, -4);
+        let expected = _mm_setr_epi16(
+            i16::MAX,
+            i16::MAX,
+            i16::MAX,
+            i16::MAX,
+            i16::MIN,
+            i16::MIN,
+            i16::MIN,
+            i16::MIN,
+        );
         let r = _mm_hadds_epi16(a, b);
         assert_eq_m128i(r, expected);
     }
@@ -439,6 +476,13 @@ mod tests {
         let expected = _mm_setr_epi32(3, 7, 132, 7);
         let r = _mm_hadd_epi32(a, b);
         assert_eq_m128i(r, expected);
+
+        // Test wrapping on overflow
+        let a = _mm_setr_epi32(i32::MAX, 1, i32::MAX, 2);
+        let b = _mm_setr_epi32(i32::MIN, -1, i32::MIN, -2);
+        let expected = _mm_setr_epi32(i32::MIN, i32::MIN + 1, i32::MAX, i32::MAX - 1);
+        let r = _mm_hadd_epi32(a, b);
+        assert_eq_m128i(r, expected);
     }
 
     #[simd_test(enable = "ssse3")]
@@ -446,6 +490,22 @@ mod tests {
         let a = _mm_setr_epi16(1, 2, 3, 4, 5, 6, 7, 8);
         let b = _mm_setr_epi16(4, 128, 4, 3, 24, 12, 6, 19);
         let expected = _mm_setr_epi16(-1, -1, -1, -1, -124, 1, 12, -13);
+        let r = _mm_hsub_epi16(a, b);
+        assert_eq_m128i(r, expected);
+
+        // Test wrapping on overflow
+        let a = _mm_setr_epi16(i16::MAX, -1, i16::MAX, -2, i16::MAX, -3, i16::MAX, -4);
+        let b = _mm_setr_epi16(i16::MIN, 1, i16::MIN, 2, i16::MIN, 3, i16::MIN, 4);
+        let expected = _mm_setr_epi16(
+            i16::MIN,
+            i16::MIN + 1,
+            i16::MIN + 2,
+            i16::MIN + 3,
+            i16::MAX,
+            i16::MAX - 1,
+            i16::MAX - 2,
+            i16::MAX - 3,
+        );
         let r = _mm_hsub_epi16(a, b);
         assert_eq_m128i(r, expected);
     }
@@ -457,6 +517,22 @@ mod tests {
         let expected = _mm_setr_epi16(-1, -1, -1, -1, -124, 1, 32767, -32768);
         let r = _mm_hsubs_epi16(a, b);
         assert_eq_m128i(r, expected);
+
+        // Test saturating on overflow
+        let a = _mm_setr_epi16(i16::MAX, -1, i16::MAX, -2, i16::MAX, -3, i16::MAX, -4);
+        let b = _mm_setr_epi16(i16::MIN, 1, i16::MIN, 2, i16::MIN, 3, i16::MIN, 4);
+        let expected = _mm_setr_epi16(
+            i16::MAX,
+            i16::MAX,
+            i16::MAX,
+            i16::MAX,
+            i16::MIN,
+            i16::MIN,
+            i16::MIN,
+            i16::MIN,
+        );
+        let r = _mm_hsubs_epi16(a, b);
+        assert_eq_m128i(r, expected);
     }
 
     #[simd_test(enable = "ssse3")]
@@ -464,6 +540,13 @@ mod tests {
         let a = _mm_setr_epi32(1, 2, 3, 4);
         let b = _mm_setr_epi32(4, 128, 4, 3);
         let expected = _mm_setr_epi32(-1, -1, -124, 1);
+        let r = _mm_hsub_epi32(a, b);
+        assert_eq_m128i(r, expected);
+
+        // Test wrapping on overflow
+        let a = _mm_setr_epi32(i32::MAX, -1, i32::MAX, -2);
+        let b = _mm_setr_epi32(i32::MIN, 1, i32::MIN, 2);
+        let expected = _mm_setr_epi32(i32::MIN, i32::MIN + 1, i32::MAX, i32::MAX - 1);
         let r = _mm_hsub_epi32(a, b);
         assert_eq_m128i(r, expected);
     }
@@ -485,6 +568,27 @@ mod tests {
         let expected = _mm_setr_epi16(130, 24, 192, 194, 158, 175, 66, 120);
         let r = _mm_maddubs_epi16(a, b);
         assert_eq_m128i(r, expected);
+
+        // Test widening and saturation
+        #[rustfmt::skip]
+        let a = _mm_setr_epi8(
+            u8::MAX as i8, u8::MAX as i8,
+            u8::MAX as i8, u8::MAX as i8,
+            u8::MAX as i8, u8::MAX as i8,
+            100, 100, 0, 0,
+            0, 0, 0, 0, 0, 0,
+        );
+        #[rustfmt::skip]
+        let b = _mm_setr_epi8(
+            i8::MAX, i8::MAX,
+            i8::MAX, i8::MIN,
+            i8::MIN, i8::MIN,
+            50, 15, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        );
+        let expected = _mm_setr_epi16(i16::MAX, -255, i16::MIN, 6500, 0, 0, 0, 0);
+        let r = _mm_maddubs_epi16(a, b);
+        assert_eq_m128i(r, expected);
     }
 
     #[simd_test(enable = "ssse3")]
@@ -492,6 +596,13 @@ mod tests {
         let a = _mm_setr_epi16(1, 2, 3, 4, 5, 6, 7, 8);
         let b = _mm_setr_epi16(4, 128, 4, 3, 32767, -1, -32768, 1);
         let expected = _mm_setr_epi16(0, 0, 0, 0, 5, 0, -7, 0);
+        let r = _mm_mulhrs_epi16(a, b);
+        assert_eq_m128i(r, expected);
+
+        // Test extreme values
+        let a = _mm_setr_epi16(i16::MAX, i16::MIN, i16::MIN, 0, 0, 0, 0, 0);
+        let b = _mm_setr_epi16(i16::MAX, i16::MIN, i16::MAX, 0, 0, 0, 0, 0);
+        let expected = _mm_setr_epi16(i16::MAX - 1, i16::MIN, -i16::MAX, 0, 0, 0, 0, 0);
         let r = _mm_mulhrs_epi16(a, b);
         assert_eq_m128i(r, expected);
     }

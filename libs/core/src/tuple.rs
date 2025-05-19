@@ -1,7 +1,7 @@
-// See src/libstd/primitive_docs.rs for documentation.
+// See core/src/primitive_docs.rs for documentation.
 
-use crate::cmp::Ordering::*;
-use crate::cmp::*;
+use crate::cmp::Ordering::{self, *};
+use crate::marker::{ConstParamTy_, StructuralPartialEq, UnsizedConstParamTy};
 
 // Recursive macro for implementing n-ary tuple functions and operations
 //
@@ -22,18 +22,17 @@ macro_rules! tuple_impls {
         maybe_tuple_doc! {
             $($T)+ @
             #[stable(feature = "rust1", since = "1.0.0")]
-            #[rustc_const_unstable(feature = "const_cmp", issue = "92391")]
-            impl<$($T: ~const PartialEq),+> const PartialEq for ($($T,)+)
+            impl<$($T: PartialEq),+> PartialEq for ($($T,)+)
             where
                 last_type!($($T,)+): ?Sized
             {
                 #[inline]
                 fn eq(&self, other: &($($T,)+)) -> bool {
-                    $( ${ignore(T)} self.${index()} == other.${index()} )&&+
+                    $( ${ignore($T)} self.${index()} == other.${index()} )&&+
                 }
                 #[inline]
                 fn ne(&self, other: &($($T,)+)) -> bool {
-                    $( ${ignore(T)} self.${index()} != other.${index()} )||+
+                    $( ${ignore($T)} self.${index()} != other.${index()} )||+
                 }
             }
         }
@@ -49,31 +48,51 @@ macro_rules! tuple_impls {
 
         maybe_tuple_doc! {
             $($T)+ @
+            #[unstable(feature = "adt_const_params", issue = "95174")]
+            impl<$($T: ConstParamTy_),+> ConstParamTy_ for ($($T,)+)
+            {}
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
+            #[unstable(feature = "unsized_const_params", issue = "95174")]
+            impl<$($T: UnsizedConstParamTy),+> UnsizedConstParamTy for ($($T,)+)
+            {}
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
+            #[unstable(feature = "structural_match", issue = "31434")]
+            impl<$($T),+> StructuralPartialEq for ($($T,)+)
+            {}
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
             #[stable(feature = "rust1", since = "1.0.0")]
-            #[rustc_const_unstable(feature = "const_cmp", issue = "92391")]
-            impl<$($T: ~const PartialOrd + ~const PartialEq),+> const PartialOrd for ($($T,)+)
+            impl<$($T: PartialOrd),+> PartialOrd for ($($T,)+)
             where
                 last_type!($($T,)+): ?Sized
             {
                 #[inline]
                 fn partial_cmp(&self, other: &($($T,)+)) -> Option<Ordering> {
-                    lexical_partial_cmp!($( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_partial_cmp!($( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
                 #[inline]
                 fn lt(&self, other: &($($T,)+)) -> bool {
-                    lexical_ord!(lt, $( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_ord!(lt, Less, $( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
                 #[inline]
                 fn le(&self, other: &($($T,)+)) -> bool {
-                    lexical_ord!(le, $( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_ord!(le, Less, $( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
                 #[inline]
                 fn ge(&self, other: &($($T,)+)) -> bool {
-                    lexical_ord!(ge, $( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_ord!(ge, Greater, $( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
                 #[inline]
                 fn gt(&self, other: &($($T,)+)) -> bool {
-                    lexical_ord!(gt, $( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_ord!(gt, Greater, $( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
             }
         }
@@ -81,14 +100,13 @@ macro_rules! tuple_impls {
         maybe_tuple_doc! {
             $($T)+ @
             #[stable(feature = "rust1", since = "1.0.0")]
-            #[rustc_const_unstable(feature = "const_cmp", issue = "92391")]
-            impl<$($T: ~const Ord),+> const Ord for ($($T,)+)
+            impl<$($T: Ord),+> Ord for ($($T,)+)
             where
                 last_type!($($T,)+): ?Sized
             {
                 #[inline]
                 fn cmp(&self, other: &($($T,)+)) -> Ordering {
-                    lexical_cmp!($( ${ignore(T)} self.${index()}, other.${index()} ),+)
+                    lexical_cmp!($( ${ignore($T)} self.${index()}, other.${index()} ),+)
                 }
             }
         }
@@ -96,11 +114,36 @@ macro_rules! tuple_impls {
         maybe_tuple_doc! {
             $($T)+ @
             #[stable(feature = "rust1", since = "1.0.0")]
-            #[rustc_const_unstable(feature = "const_default_impls", issue = "87864")]
-            impl<$($T: ~const Default),+> const Default for ($($T,)+) {
+            impl<$($T: Default),+> Default for ($($T,)+) {
                 #[inline]
                 fn default() -> ($($T,)+) {
                     ($({ let x: $T = Default::default(); x},)+)
+                }
+            }
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
+            #[stable(feature = "array_tuple_conv", since = "1.71.0")]
+            impl<T> From<[T; ${count($T)}]> for ($(${ignore($T)} T,)+) {
+                #[inline]
+                #[allow(non_snake_case)]
+                fn from(array: [T; ${count($T)}]) -> Self {
+                    let [$($T,)+] = array;
+                    ($($T,)+)
+                }
+            }
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
+            #[stable(feature = "array_tuple_conv", since = "1.71.0")]
+            impl<T> From<($(${ignore($T)} T,)+)> for [T; ${count($T)}] {
+                #[inline]
+                #[allow(non_snake_case)]
+                fn from(tuple: ($(${ignore($T)} T,)+)) -> Self {
+                    let ($($T,)+) = tuple;
+                    [$($T,)+]
                 }
             }
         }
@@ -123,23 +166,30 @@ macro_rules! maybe_tuple_doc {
     };
 }
 
-// Constructs an expression that performs a lexical ordering using method $rel.
+// Constructs an expression that performs a lexical ordering using method `$rel`.
 // The values are interleaved, so the macro invocation for
-// `(a1, a2, a3) < (b1, b2, b3)` would be `lexical_ord!(lt, a1, b1, a2, b2,
-// a3, b3)` (and similarly for `lexical_cmp`)
+// `(a1, a2, a3) < (b1, b2, b3)` would be `lexical_ord!(lt, opt_is_lt, a1, b1,
+// a2, b2, a3, b3)` (and similarly for `lexical_cmp`)
+//
+// `$ne_rel` is only used to determine the result after checking that they're
+// not equal, so `lt` and `le` can both just use `Less`.
 macro_rules! lexical_ord {
-    ($rel: ident, $a:expr, $b:expr, $($rest_a:expr, $rest_b:expr),+) => {
-        if $a != $b { lexical_ord!($rel, $a, $b) }
-        else { lexical_ord!($rel, $($rest_a, $rest_b),+) }
+    ($rel: ident, $ne_rel: ident, $a:expr, $b:expr, $($rest_a:expr, $rest_b:expr),+) => {{
+        let c = PartialOrd::partial_cmp(&$a, &$b);
+        if c != Some(Equal) { c == Some($ne_rel) }
+        else { lexical_ord!($rel, $ne_rel, $($rest_a, $rest_b),+) }
+    }};
+    ($rel: ident, $ne_rel: ident, $a:expr, $b:expr) => {
+        // Use the specific method for the last element
+        PartialOrd::$rel(&$a, &$b)
     };
-    ($rel: ident, $a:expr, $b:expr) => { ($a) . $rel (& $b) };
 }
 
 macro_rules! lexical_partial_cmp {
     ($a:expr, $b:expr, $($rest_a:expr, $rest_b:expr),+) => {
         match ($a).partial_cmp(&$b) {
             Some(Equal) => lexical_partial_cmp!($($rest_a, $rest_b),+),
-            ordering   => ordering
+            ordering => ordering
         }
     };
     ($a:expr, $b:expr) => { ($a).partial_cmp(&$b) };
@@ -149,7 +199,7 @@ macro_rules! lexical_cmp {
     ($a:expr, $b:expr, $($rest_a:expr, $rest_b:expr),+) => {
         match ($a).cmp(&$b) {
             Equal => lexical_cmp!($($rest_a, $rest_b),+),
-            ordering   => ordering
+            ordering => ordering
         }
     };
     ($a:expr, $b:expr) => { ($a).cmp(&$b) };

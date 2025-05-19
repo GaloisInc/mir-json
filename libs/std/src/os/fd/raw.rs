@@ -2,8 +2,12 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use crate::fs;
-use crate::io;
+#[cfg(target_os = "hermit")]
+use hermit_abi as libc;
+
+#[cfg(target_os = "hermit")]
+use crate::os::hermit::io::OwnedFd;
+#[cfg(not(target_os = "hermit"))]
 use crate::os::raw;
 #[cfg(all(doc, not(target_arch = "wasm32")))]
 use crate::os::unix::io::AsFd;
@@ -12,18 +16,21 @@ use crate::os::unix::io::OwnedFd;
 #[cfg(target_os = "wasi")]
 use crate::os::wasi::io::OwnedFd;
 use crate::sys_common::{AsInner, IntoInner};
+use crate::{fs, io};
 
 /// Raw file descriptors.
-#[rustc_allowed_through_unstable_modules]
 #[stable(feature = "rust1", since = "1.0.0")]
+#[cfg(not(target_os = "hermit"))]
 pub type RawFd = raw::c_int;
+#[stable(feature = "rust1", since = "1.0.0")]
+#[cfg(target_os = "hermit")]
+pub type RawFd = i32;
 
 /// A trait to extract the raw file descriptor from an underlying object.
 ///
 /// This is only available on unix and WASI platforms and must be imported in
 /// order to call the method. Windows platforms have a corresponding
 /// `AsRawHandle` and `AsRawSocket` set of traits.
-#[rustc_allowed_through_unstable_modules]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub trait AsRawFd {
     /// Extracts the raw file descriptor.
@@ -57,7 +64,6 @@ pub trait AsRawFd {
 
 /// A trait to express the ability to construct an object from a raw file
 /// descriptor.
-#[rustc_allowed_through_unstable_modules]
 #[stable(feature = "from_raw_os", since = "1.1.0")]
 pub trait FromRawFd {
     /// Constructs a new instance of `Self` from the given raw file
@@ -74,7 +80,10 @@ pub trait FromRawFd {
     ///
     /// # Safety
     ///
-    /// The `fd` passed in must be a valid and open file descriptor.
+    /// The `fd` passed in must be an [owned file descriptor][io-safety];
+    /// in particular, it must be open.
+    ///
+    /// [io-safety]: io#io-safety
     ///
     /// # Example
     ///
@@ -99,7 +108,6 @@ pub trait FromRawFd {
 
 /// A trait to express the ability to consume an object and acquire ownership of
 /// its raw file descriptor.
-#[rustc_allowed_through_unstable_modules]
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 pub trait IntoRawFd {
     /// Consumes this object, returning the raw underlying file descriptor.
@@ -125,6 +133,7 @@ pub trait IntoRawFd {
     /// let raw_fd: RawFd = f.into_raw_fd();
     /// # Ok::<(), io::Error>(())
     /// ```
+    #[must_use = "losing the raw file descriptor may leak resources"]
     #[stable(feature = "into_raw_os", since = "1.4.0")]
     fn into_raw_fd(self) -> RawFd;
 }
@@ -238,6 +247,22 @@ impl<'a> AsRawFd for io::StderrLock<'a> {
 /// ```
 #[stable(feature = "asrawfd_ptrs", since = "1.63.0")]
 impl<T: AsRawFd> AsRawFd for crate::sync::Arc<T> {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        (**self).as_raw_fd()
+    }
+}
+
+#[stable(feature = "asfd_rc", since = "1.69.0")]
+impl<T: AsRawFd> AsRawFd for crate::rc::Rc<T> {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        (**self).as_raw_fd()
+    }
+}
+
+#[unstable(feature = "unique_rc_arc", issue = "112566")]
+impl<T: AsRawFd + ?Sized> AsRawFd for crate::rc::UniqueRc<T> {
     #[inline]
     fn as_raw_fd(&self) -> RawFd {
         (**self).as_raw_fd()

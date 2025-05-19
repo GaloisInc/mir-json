@@ -1,5 +1,7 @@
 use crate::cmp;
-use crate::iter::{adapters::SourceIter, FusedIterator, InPlaceIterable, TrustedLen};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{FusedIterator, InPlaceIterable, TrustedFused, TrustedLen, TrustedRandomAccess};
+use crate::num::NonZero;
 use crate::ops::{ControlFlow, Try};
 
 /// An iterator that only iterates over the first `n` iterations of `iter`.
@@ -97,42 +99,31 @@ where
         }
     }
 
-    impl_fold_via_try_fold! { fold -> try_fold }
+    #[inline]
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        Self: Sized,
+        F: FnMut(B, Self::Item) -> B,
+    {
+        Self::spec_fold(self, init, f)
+    }
 
     #[inline]
-    fn for_each<F: FnMut(Self::Item)>(mut self, f: F) {
-        // The default implementation would use a unit accumulator, so we can
-        // avoid a stateful closure by folding over the remaining number
-        // of items we wish to return instead.
-        fn check<'a, Item>(
-            mut action: impl FnMut(Item) + 'a,
-        ) -> impl FnMut(usize, Item) -> Option<usize> + 'a {
-            move |more, x| {
-                action(x);
-                more.checked_sub(1)
-            }
-        }
-
-        let remaining = self.n;
-        if remaining > 0 {
-            self.iter.try_fold(remaining - 1, check(f));
-        }
+    fn for_each<F: FnMut(Self::Item)>(self, f: F) {
+        Self::spec_for_each(self, f)
     }
 
     #[inline]
     #[rustc_inherit_overflow_checks]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         let min = self.n.min(n);
-        match self.iter.advance_by(min) {
-            Ok(_) => {
-                self.n -= min;
-                if min < n { Err(min) } else { Ok(()) }
-            }
-            ret @ Err(advanced) => {
-                self.n -= advanced;
-                ret
-            }
-        }
+        let rem = match self.iter.advance_by(min) {
+            Ok(()) => 0,
+            Err(rem) => rem.get(),
+        };
+        let advanced = min - rem;
+        self.n -= advanced;
+        NonZero::new(n - advanced).map_or(Ok(()), Err)
     }
 }
 
@@ -151,7 +142,10 @@ where
 }
 
 #[unstable(issue = "none", feature = "inplace_iteration")]
-unsafe impl<I: InPlaceIterable> InPlaceIterable for Take<I> {}
+unsafe impl<I: InPlaceIterable> InPlaceIterable for Take<I> {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = I::MERGE_BY;
+}
 
 #[stable(feature = "double_ended_take_iterator", since = "1.38.0")]
 impl<I> DoubleEndedIterator for Take<I>
@@ -223,7 +217,7 @@ where
 
     #[inline]
     #[rustc_inherit_overflow_checks]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         // The amount by which the inner iterator needs to be shortened for it to be
         // at most as long as the take() amount.
         let trim_inner = self.iter.len().saturating_sub(self.n);
@@ -232,12 +226,14 @@ where
         // about having to advance more than usize::MAX here.
         let advance_by = trim_inner.saturating_add(n);
 
-        let advanced = match self.iter.advance_back_by(advance_by) {
-            Ok(_) => advance_by - trim_inner,
-            Err(advanced) => advanced - trim_inner,
+        let remainder = match self.iter.advance_back_by(advance_by) {
+            Ok(()) => 0,
+            Err(rem) => rem.get(),
         };
-        self.n -= advanced;
-        return if advanced < n { Err(advanced) } else { Ok(()) };
+        let advanced_by_inner = advance_by - remainder;
+        let advanced_by = advanced_by_inner - trim_inner;
+        self.n -= advanced_by;
+        NonZero::new(n - advanced_by).map_or(Ok(()), Err)
     }
 }
 
@@ -247,5 +243,134 @@ impl<I> ExactSizeIterator for Take<I> where I: ExactSizeIterator {}
 #[stable(feature = "fused", since = "1.26.0")]
 impl<I> FusedIterator for Take<I> where I: FusedIterator {}
 
+#[unstable(issue = "none", feature = "trusted_fused")]
+unsafe impl<I: TrustedFused> TrustedFused for Take<I> {}
+
 #[unstable(feature = "trusted_len", issue = "37572")]
 unsafe impl<I: TrustedLen> TrustedLen for Take<I> {}
+
+trait SpecTake: Iterator {
+    fn spec_fold<B, F>(self, init: B, f: F) -> B
+    where
+        Self: Sized,
+        F: FnMut(B, Self::Item) -> B;
+
+    fn spec_for_each<F: FnMut(Self::Item)>(self, f: F);
+}
+
+impl<I: Iterator> SpecTake for Take<I> {
+    #[inline]
+    default fn spec_fold<B, F>(mut self, init: B, f: F) -> B
+    where
+        Self: Sized,
+        F: FnMut(B, Self::Item) -> B,
+    {
+        use crate::ops::NeverShortCircuit;
+        self.try_fold(init, NeverShortCircuit::wrap_mut_2(f)).0
+    }
+
+    #[inline]
+    default fn spec_for_each<F: FnMut(Self::Item)>(mut self, f: F) {
+        // The default implementation would use a unit accumulator, so we can
+        // avoid a stateful closure by folding over the remaining number
+        // of items we wish to return instead.
+        fn check<'a, Item>(
+            mut action: impl FnMut(Item) + 'a,
+        ) -> impl FnMut(usize, Item) -> Option<usize> + 'a {
+            move |more, x| {
+                action(x);
+                more.checked_sub(1)
+            }
+        }
+
+        let remaining = self.n;
+        if remaining > 0 {
+            self.iter.try_fold(remaining - 1, check(f));
+        }
+    }
+}
+
+impl<I: Iterator + TrustedRandomAccess> SpecTake for Take<I> {
+    #[inline]
+    fn spec_fold<B, F>(mut self, init: B, mut f: F) -> B
+    where
+        Self: Sized,
+        F: FnMut(B, Self::Item) -> B,
+    {
+        let mut acc = init;
+        let end = self.n.min(self.iter.size());
+        for i in 0..end {
+            // SAFETY: i < end <= self.iter.size() and we discard the iterator at the end
+            let val = unsafe { self.iter.__iterator_get_unchecked(i) };
+            acc = f(acc, val);
+        }
+        acc
+    }
+
+    #[inline]
+    fn spec_for_each<F: FnMut(Self::Item)>(mut self, mut f: F) {
+        let end = self.n.min(self.iter.size());
+        for i in 0..end {
+            // SAFETY: i < end <= self.iter.size() and we discard the iterator at the end
+            let val = unsafe { self.iter.__iterator_get_unchecked(i) };
+            f(val);
+        }
+    }
+}
+
+#[stable(feature = "exact_size_take_repeat", since = "1.82.0")]
+impl<T: Clone> DoubleEndedIterator for Take<crate::iter::Repeat<T>> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.next()
+    }
+
+    #[inline]
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        self.nth(n)
+    }
+
+    #[inline]
+    fn try_rfold<Acc, Fold, R>(&mut self, init: Acc, fold: Fold) -> R
+    where
+        Self: Sized,
+        Fold: FnMut(Acc, Self::Item) -> R,
+        R: Try<Output = Acc>,
+    {
+        self.try_fold(init, fold)
+    }
+
+    #[inline]
+    fn rfold<Acc, Fold>(self, init: Acc, fold: Fold) -> Acc
+    where
+        Self: Sized,
+        Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        self.fold(init, fold)
+    }
+
+    #[inline]
+    #[rustc_inherit_overflow_checks]
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        self.advance_by(n)
+    }
+}
+
+// Note: It may be tempting to impl DoubleEndedIterator for Take<RepeatWith>.
+// One must fight that temptation since such implementation wouldn’t be correct
+// because we have no way to return value of nth invocation of repeater followed
+// by n-1st without remembering all results.
+
+#[stable(feature = "exact_size_take_repeat", since = "1.82.0")]
+impl<T: Clone> ExactSizeIterator for Take<crate::iter::Repeat<T>> {
+    fn len(&self) -> usize {
+        self.n
+    }
+}
+
+#[stable(feature = "exact_size_take_repeat", since = "1.82.0")]
+impl<F: FnMut() -> A, A> ExactSizeIterator for Take<crate::iter::RepeatWith<F>> {
+    fn len(&self) -> usize {
+        self.n
+    }
+}

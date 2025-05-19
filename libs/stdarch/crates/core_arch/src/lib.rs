@@ -2,41 +2,46 @@
 #![allow(improper_ctypes_definitions)]
 #![allow(dead_code)]
 #![allow(unused_features)]
+#![allow(internal_features)]
 #![deny(rust_2018_idioms)]
 #![feature(
     custom_inner_attributes,
     link_llvm_intrinsics,
-    platform_intrinsics,
     repr_simd,
     simd_ffi,
     proc_macro_hygiene,
     stmt_expr_attributes,
     core_intrinsics,
+    intrinsics,
     no_core,
+    fmt_helpers_for_derive,
     rustc_attrs,
-    stdsimd,
     staged_api,
     doc_cfg,
     tbm_target_feature,
     sse4a_target_feature,
     riscv_target_feature,
     arm_target_feature,
-    cmpxchg16b_target_feature,
     avx512_target_feature,
     mips_target_feature,
     powerpc_target_feature,
+    loongarch_target_feature,
     wasm_target_feature,
     abi_unadjusted,
     rtm_target_feature,
-    f16c_target_feature,
     allow_internal_unstable,
     decl_macro,
-    asm_const,
-    target_feature_11
+    target_feature_11,
+    generic_arg_infer,
+    asm_experimental_arch,
+    sha512_sm_x86,
+    x86_amx_intrinsics,
+    f16
 )]
-#![cfg_attr(test, feature(test, abi_vectorcall))]
+#![cfg_attr(test, feature(test, abi_vectorcall, stdarch_internal))]
 #![deny(clippy::missing_inline_in_public_items)]
 #![allow(
+    clippy::identity_op,
     clippy::inline_always,
     clippy::too_many_arguments,
     clippy::cast_sign_loss,
@@ -44,17 +49,28 @@
     clippy::cast_possible_wrap,
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
-    clippy::shadow_reuse,
     clippy::cognitive_complexity,
+    clippy::many_single_char_names,
+    clippy::missing_safety_doc,
+    clippy::shadow_reuse,
     clippy::similar_names,
-    clippy::many_single_char_names
+    clippy::unusual_byte_groupings,
+    clippy::wrong_self_convention
 )]
 #![cfg_attr(test, allow(unused_imports))]
 #![no_std]
-#![unstable(feature = "stdsimd", issue = "27731")]
+#![stable(feature = "stdsimd", since = "1.27.0")]
 #![doc(
     test(attr(deny(warnings))),
     test(attr(allow(dead_code, deprecated, unused_variables, unused_mut)))
+)]
+#![cfg_attr(
+    test,
+    feature(
+        stdarch_arm_feature_detection,
+        stdarch_powerpc_feature_detection,
+        stdarch_loongarch_feature_detection
+    )
 )]
 
 #[cfg(test)]
@@ -66,10 +82,14 @@ extern crate std_detect;
 #[path = "mod.rs"]
 mod core_arch;
 
+#[stable(feature = "stdsimd", since = "1.27.0")]
 pub mod arch {
+    #[stable(feature = "stdsimd", since = "1.27.0")]
+    #[allow(unused_imports)]
     pub use crate::core_arch::arch::*;
+    #[stable(feature = "stdsimd", since = "1.27.0")]
     pub use core::arch::asm;
 }
 
 #[allow(unused_imports)]
-use core::{convert, ffi, hint, intrinsics, marker, mem, ops, ptr, sync};
+use core::{array, convert, ffi, fmt, hint, intrinsics, marker, mem, ops, ptr, sync};

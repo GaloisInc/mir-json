@@ -6,60 +6,28 @@ use core::intrinsics;
 // calling convention which can't be implemented using a normal Rust function
 
 // NOTE These functions are never mangled as they are not tested against compiler-rt
-// and mangling ___chkstk would break the `jmp ___chkstk` instruction in __alloca
 
 intrinsics! {
     #[naked]
     #[cfg(all(
-        windows,
-        target_env = "gnu",
+        any(all(windows, target_env = "gnu"), target_os = "uefi"),
         not(feature = "no-asm")
     ))]
-    pub unsafe extern "C" fn ___chkstk_ms() {
-        core::arch::asm!(
-            "push   %ecx",
-            "push   %eax",
-            "cmp    $0x1000,%eax",
-            "lea    12(%esp),%ecx",
-            "jb     1f",
-            "2:",
-            "sub    $0x1000,%ecx",
-            "test   %ecx,(%ecx)",
-            "sub    $0x1000,%eax",
-            "cmp    $0x1000,%eax",
-            "ja     2b",
-            "1:",
-            "sub    %eax,%ecx",
-            "test   %ecx,(%ecx)",
-            "pop    %eax",
-            "pop    %ecx",
-            "ret",
-            options(noreturn, att_syntax)
-        );
-    }
-
-    // FIXME: __alloca should be an alias to __chkstk
-    #[naked]
-    #[cfg(all(
-        windows,
-        target_env = "gnu",
-        not(feature = "no-asm")
-    ))]
-    pub unsafe extern "C" fn __alloca() {
-        core::arch::asm!(
-            "jmp ___chkstk", // Jump to ___chkstk since fallthrough may be unreliable"
-            options(noreturn, att_syntax)
+    pub unsafe extern "C" fn __chkstk() {
+        core::arch::naked_asm!(
+            "jmp __alloca", // Jump to __alloca since fallthrough may be unreliable"
+            options(att_syntax)
         );
     }
 
     #[naked]
     #[cfg(all(
-        windows,
-        target_env = "gnu",
+        any(all(windows, target_env = "gnu"), target_os = "uefi"),
         not(feature = "no-asm")
     ))]
-    pub unsafe extern "C" fn ___chkstk() {
-        core::arch::asm!(
+    pub unsafe extern "C" fn _alloca() {
+        // __chkstk and _alloca are the same function
+        core::arch::naked_asm!(
             "push   %ecx",
             "cmp    $0x1000,%eax",
             "lea    8(%esp),%ecx", // esp before calling this routine -> ecx
@@ -79,7 +47,7 @@ intrinsics! {
             "push   (%eax)",        // push return address onto the stack
             "sub    %esp,%eax",     // restore the original value in eax
             "ret",
-            options(noreturn, att_syntax)
+            options(att_syntax)
         );
     }
 }

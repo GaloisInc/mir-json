@@ -232,11 +232,11 @@ impl<K: Eq + Hash, V: fmt::Debug> fmt::Debug for ParValuesMut<'_, K, V> {
 /// [`into_par_iter`]: /hashbrown/struct.HashMap.html#method.into_par_iter
 /// [`HashMap`]: /hashbrown/struct.HashMap.html
 /// [`IntoParallelIterator`]: https://docs.rs/rayon/1.0/rayon/iter/trait.IntoParallelIterator.html
-pub struct IntoParIter<K, V, A: Allocator + Clone = Global> {
+pub struct IntoParIter<K, V, A: Allocator = Global> {
     inner: RawIntoParIter<(K, V), A>,
 }
 
-impl<K: Send, V: Send, A: Allocator + Clone + Send> ParallelIterator for IntoParIter<K, V, A> {
+impl<K: Send, V: Send, A: Allocator + Send> ParallelIterator for IntoParIter<K, V, A> {
     type Item = (K, V);
 
     #[cfg_attr(feature = "inline-more", inline)]
@@ -248,9 +248,7 @@ impl<K: Send, V: Send, A: Allocator + Clone + Send> ParallelIterator for IntoPar
     }
 }
 
-impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator + Clone> fmt::Debug
-    for IntoParIter<K, V, A>
-{
+impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator> fmt::Debug for IntoParIter<K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ParIter {
             inner: unsafe { self.inner.par_iter() },
@@ -267,11 +265,11 @@ impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator + Clone> fmt::Debug
 ///
 /// [`par_drain`]: /hashbrown/struct.HashMap.html#method.par_drain
 /// [`HashMap`]: /hashbrown/struct.HashMap.html
-pub struct ParDrain<'a, K, V, A: Allocator + Clone = Global> {
+pub struct ParDrain<'a, K, V, A: Allocator = Global> {
     inner: RawParDrain<'a, (K, V), A>,
 }
 
-impl<K: Send, V: Send, A: Allocator + Clone + Sync> ParallelIterator for ParDrain<'_, K, V, A> {
+impl<K: Send, V: Send, A: Allocator + Sync> ParallelIterator for ParDrain<'_, K, V, A> {
     type Item = (K, V);
 
     #[cfg_attr(feature = "inline-more", inline)]
@@ -283,9 +281,7 @@ impl<K: Send, V: Send, A: Allocator + Clone + Sync> ParallelIterator for ParDrai
     }
 }
 
-impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator + Clone> fmt::Debug
-    for ParDrain<'_, K, V, A>
-{
+impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator> fmt::Debug for ParDrain<'_, K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ParIter {
             inner: unsafe { self.inner.par_iter() },
@@ -295,7 +291,7 @@ impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, A: Allocator + Clone> fmt::Debug
     }
 }
 
-impl<K: Sync, V: Sync, S, A: Allocator + Clone> HashMap<K, V, S, A> {
+impl<K: Sync, V: Sync, S, A: Allocator> HashMap<K, V, S, A> {
     /// Visits (potentially in parallel) immutably borrowed keys in an arbitrary order.
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn par_keys(&self) -> ParKeys<'_, K, V> {
@@ -315,7 +311,7 @@ impl<K: Sync, V: Sync, S, A: Allocator + Clone> HashMap<K, V, S, A> {
     }
 }
 
-impl<K: Send, V: Send, S, A: Allocator + Clone> HashMap<K, V, S, A> {
+impl<K: Send, V: Send, S, A: Allocator> HashMap<K, V, S, A> {
     /// Visits (potentially in parallel) mutably borrowed values in an arbitrary order.
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn par_values_mut(&mut self) -> ParValuesMut<'_, K, V> {
@@ -340,7 +336,7 @@ where
     K: Eq + Hash + Sync,
     V: PartialEq + Sync,
     S: BuildHasher + Sync,
-    A: Allocator + Clone + Sync,
+    A: Allocator + Sync,
 {
     /// Returns `true` if the map is equal to another,
     /// i.e. both maps contain the same keys mapped to the same values.
@@ -354,9 +350,7 @@ where
     }
 }
 
-impl<K: Send, V: Send, S, A: Allocator + Clone + Send> IntoParallelIterator
-    for HashMap<K, V, S, A>
-{
+impl<K: Send, V: Send, S, A: Allocator + Send> IntoParallelIterator for HashMap<K, V, S, A> {
     type Item = (K, V);
     type Iter = IntoParIter<K, V, A>;
 
@@ -368,9 +362,7 @@ impl<K: Send, V: Send, S, A: Allocator + Clone + Send> IntoParallelIterator
     }
 }
 
-impl<'a, K: Sync, V: Sync, S, A: Allocator + Clone> IntoParallelIterator
-    for &'a HashMap<K, V, S, A>
-{
+impl<'a, K: Sync, V: Sync, S, A: Allocator> IntoParallelIterator for &'a HashMap<K, V, S, A> {
     type Item = (&'a K, &'a V);
     type Iter = ParIter<'a, K, V>;
 
@@ -383,9 +375,7 @@ impl<'a, K: Sync, V: Sync, S, A: Allocator + Clone> IntoParallelIterator
     }
 }
 
-impl<'a, K: Sync, V: Send, S, A: Allocator + Clone> IntoParallelIterator
-    for &'a mut HashMap<K, V, S, A>
-{
+impl<'a, K: Sync, V: Send, S, A: Allocator> IntoParallelIterator for &'a mut HashMap<K, V, S, A> {
     type Item = (&'a K, &'a mut V);
     type Iter = ParIterMut<'a, K, V>;
 
@@ -424,7 +414,7 @@ where
     K: Eq + Hash + Send,
     V: Send,
     S: BuildHasher,
-    A: Allocator + Clone,
+    A: Allocator,
 {
     fn par_extend<I>(&mut self, par_iter: I)
     where
@@ -440,7 +430,7 @@ where
     K: Copy + Eq + Hash + Sync,
     V: Copy + Sync,
     S: BuildHasher,
-    A: Allocator + Clone,
+    A: Allocator,
 {
     fn par_extend<I>(&mut self, par_iter: I)
     where
@@ -456,7 +446,7 @@ where
     K: Eq + Hash,
     S: BuildHasher,
     I: IntoParallelIterator,
-    A: Allocator + Clone,
+    A: Allocator,
     HashMap<K, V, S, A>: Extend<I::Item>,
 {
     let (list, len) = super::helpers::collect(par_iter);
@@ -482,32 +472,32 @@ mod test_par_map {
 
     use crate::hash_map::HashMap;
 
-    struct Dropable<'a> {
+    struct Droppable<'a> {
         k: usize,
         counter: &'a AtomicUsize,
     }
 
-    impl Dropable<'_> {
-        fn new(k: usize, counter: &AtomicUsize) -> Dropable<'_> {
+    impl Droppable<'_> {
+        fn new(k: usize, counter: &AtomicUsize) -> Droppable<'_> {
             counter.fetch_add(1, Ordering::Relaxed);
 
-            Dropable { k, counter }
+            Droppable { k, counter }
         }
     }
 
-    impl Drop for Dropable<'_> {
+    impl Drop for Droppable<'_> {
         fn drop(&mut self) {
             self.counter.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
-    impl Clone for Dropable<'_> {
+    impl Clone for Droppable<'_> {
         fn clone(&self) -> Self {
-            Dropable::new(self.k, self.counter)
+            Droppable::new(self.k, self.counter)
         }
     }
 
-    impl Hash for Dropable<'_> {
+    impl Hash for Droppable<'_> {
         fn hash<H>(&self, state: &mut H)
         where
             H: Hasher,
@@ -516,13 +506,13 @@ mod test_par_map {
         }
     }
 
-    impl PartialEq for Dropable<'_> {
+    impl PartialEq for Droppable<'_> {
         fn eq(&self, other: &Self) -> bool {
             self.k == other.k
         }
     }
 
-    impl Eq for Dropable<'_> {}
+    impl Eq for Droppable<'_> {}
 
     #[test]
     fn test_into_iter_drops() {
@@ -536,8 +526,8 @@ mod test_par_map {
             assert_eq!(value.load(Ordering::Relaxed), 0);
 
             for i in 0..100 {
-                let d1 = Dropable::new(i, &key);
-                let d2 = Dropable::new(i + 100, &value);
+                let d1 = Droppable::new(i, &key);
+                let d2 = Droppable::new(i + 100, &value);
                 hm.insert(d1, d2);
             }
 
@@ -561,10 +551,7 @@ mod test_par_map {
             assert_eq!(value.load(Ordering::Relaxed), 100);
 
             // retain only half
-            let _v: Vec<_> = hm
-                .into_par_iter()
-                .filter(|&(ref key, _)| key.k < 50)
-                .collect();
+            let _v: Vec<_> = hm.into_par_iter().filter(|(key, _)| key.k < 50).collect();
 
             assert_eq!(key.load(Ordering::Relaxed), 50);
             assert_eq!(value.load(Ordering::Relaxed), 50);
@@ -586,8 +573,8 @@ mod test_par_map {
             assert_eq!(value.load(Ordering::Relaxed), 0);
 
             for i in 0..100 {
-                let d1 = Dropable::new(i, &key);
-                let d2 = Dropable::new(i + 100, &value);
+                let d1 = Droppable::new(i, &key);
+                let d2 = Droppable::new(i + 100, &value);
                 hm.insert(d1, d2);
             }
 
@@ -611,7 +598,7 @@ mod test_par_map {
             assert_eq!(value.load(Ordering::Relaxed), 100);
 
             // retain only half
-            let _v: Vec<_> = hm.drain().filter(|&(ref key, _)| key.k < 50).collect();
+            let _v: Vec<_> = hm.drain().filter(|(key, _)| key.k < 50).collect();
             assert!(hm.is_empty());
 
             assert_eq!(key.load(Ordering::Relaxed), 50);

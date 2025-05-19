@@ -1,4 +1,5 @@
 use core::iter::{FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce};
+use core::num::NonZero;
 use core::ops::Try;
 use core::{fmt, mem, slice};
 
@@ -18,12 +19,60 @@ impl<'a, T> Iter<'a, T> {
     pub(super) fn new(i1: slice::Iter<'a, T>, i2: slice::Iter<'a, T>) -> Self {
         Self { i1, i2 }
     }
+
+    /// Views the underlying data as a pair of subslices of the original data.
+    ///
+    /// The slices contain, in order, the contents of the deque not yet yielded
+    /// by the iterator.
+    ///
+    /// This has the same lifetime as the original `VecDeque`, and so the
+    /// iterator can continue to be used while this exists.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(vec_deque_iter_as_slices)]
+    ///
+    /// use std::collections::VecDeque;
+    ///
+    /// let mut deque = VecDeque::new();
+    /// deque.push_back(0);
+    /// deque.push_back(1);
+    /// deque.push_back(2);
+    /// deque.push_front(10);
+    /// deque.push_front(9);
+    /// deque.push_front(8);
+    ///
+    /// let mut iter = deque.iter();
+    /// iter.next();
+    /// iter.next_back();
+    ///
+    /// assert_eq!(iter.as_slices(), (&[9, 10][..], &[0, 1][..]));
+    /// ```
+    #[unstable(feature = "vec_deque_iter_as_slices", issue = "123947")]
+    pub fn as_slices(&self) -> (&'a [T], &'a [T]) {
+        (self.i1.as_slice(), self.i2.as_slice())
+    }
 }
 
 #[stable(feature = "collection_debug", since = "1.17.0")]
 impl<T: fmt::Debug> fmt::Debug for Iter<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Iter").field(&self.i1.as_slice()).field(&self.i2.as_slice()).finish()
+    }
+}
+
+#[stable(feature = "default_iters_sequel", since = "1.82.0")]
+impl<T> Default for Iter<'_, T> {
+    /// Creates an empty `vec_deque::Iter`.
+    ///
+    /// ```
+    /// # use std::collections::vec_deque;
+    /// let iter: vec_deque::Iter<'_, u8> = Default::default();
+    /// assert_eq!(iter.len(), 0);
+    /// ```
+    fn default() -> Self {
+        Iter { i1: Default::default(), i2: Default::default() }
     }
 }
 
@@ -55,13 +104,15 @@ impl<'a, T> Iterator for Iter<'a, T> {
         }
     }
 
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
-        let m = match self.i1.advance_by(n) {
-            Ok(_) => return Ok(()),
-            Err(m) => m,
-        };
-        mem::swap(&mut self.i1, &mut self.i2);
-        self.i1.advance_by(n - m).map_err(|o| o + m)
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        let remaining = self.i1.advance_by(n);
+        match remaining {
+            Ok(()) => Ok(()),
+            Err(n) => {
+                mem::swap(&mut self.i1, &mut self.i2);
+                self.i1.advance_by(n.get())
+            }
+        }
     }
 
     #[inline]
@@ -125,14 +176,14 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
         }
     }
 
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
-        let m = match self.i2.advance_back_by(n) {
-            Ok(_) => return Ok(()),
-            Err(m) => m,
-        };
-
-        mem::swap(&mut self.i1, &mut self.i2);
-        self.i2.advance_back_by(n - m).map_err(|o| m + o)
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+        match self.i2.advance_back_by(n) {
+            Ok(()) => Ok(()),
+            Err(n) => {
+                mem::swap(&mut self.i1, &mut self.i2);
+                self.i2.advance_back_by(n.get())
+            }
+        }
     }
 
     fn rfold<Acc, F>(self, accum: Acc, mut f: F) -> Acc

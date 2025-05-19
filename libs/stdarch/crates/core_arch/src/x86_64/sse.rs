@@ -25,7 +25,7 @@ extern "C" {
 ///
 /// This corresponds to the `CVTSS2SI` instruction (with 64 bit output).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtss_si64)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtss_si64)
 #[inline]
 #[target_feature(enable = "sse")]
 #[cfg_attr(test, assert_instr(cvtss2si))]
@@ -44,7 +44,7 @@ pub unsafe fn _mm_cvtss_si64(a: __m128) -> i64 {
 ///
 /// This corresponds to the `CVTTSS2SI` instruction (with 64 bit output).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvttss_si64)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvttss_si64)
 #[inline]
 #[target_feature(enable = "sse")]
 #[cfg_attr(test, assert_instr(cvttss2si))]
@@ -59,7 +59,7 @@ pub unsafe fn _mm_cvttss_si64(a: __m128) -> i64 {
 /// This intrinsic corresponds to the `CVTSI2SS` instruction (with 64 bit
 /// input).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtsi64_ss)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtsi64_ss)
 #[inline]
 #[target_feature(enable = "sse")]
 #[cfg_attr(test, assert_instr(cvtsi2ss))]
@@ -86,8 +86,7 @@ mod tests {
             (2147483500.1, 2147483520),
             (9.223371e18, 9223370937343148032),
         ];
-        for i in 0..inputs.len() {
-            let (xi, e) = inputs[i];
+        for (i, &(xi, e)) in inputs.iter().enumerate() {
             let x = _mm_setr_ps(xi, 1.0, 3.0, 4.0);
             let r = _mm_cvtss_si64(x);
             assert_eq!(
@@ -114,8 +113,7 @@ mod tests {
             (9.223371e18, 9223370937343148032),
             (9.223372e18, i64::MIN),
         ];
-        for i in 0..inputs.len() {
-            let (xi, e) = inputs[i];
+        for (i, &(xi, e)) in inputs.iter().enumerate() {
             let x = _mm_setr_ps(xi, 1.0, 3.0, 4.0);
             let r = _mm_cvttss_si64(x);
             assert_eq!(
@@ -137,8 +135,7 @@ mod tests {
             (-9223372036854775808, -9.223372e18),
         ];
 
-        for i in 0..inputs.len() {
-            let (x, f) = inputs[i];
+        for &(x, f) in inputs {
             let a = _mm_setr_ps(5.0, 6.0, 7.0, 8.0);
             let r = _mm_cvtsi64_ss(a, x);
             let e = _mm_setr_ps(f, 6.0, 7.0, 8.0);

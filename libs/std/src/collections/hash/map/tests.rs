@@ -1,11 +1,12 @@
-use super::Entry::{Occupied, Vacant};
-use super::HashMap;
-use super::RandomState;
-use crate::assert_matches::assert_matches;
-use crate::cell::RefCell;
-use crate::test_helpers::test_rng;
 use rand::Rng;
 use realstd::collections::TryReserveErrorKind::*;
+
+use super::Entry::{Occupied, Vacant};
+use super::HashMap;
+use crate::assert_matches::assert_matches;
+use crate::cell::RefCell;
+use crate::hash::{BuildHasher, BuildHasherDefault, DefaultHasher, RandomState};
+use crate::test_helpers::test_rng;
 
 // https://github.com/rust-lang/rust/issues/62301
 fn _assert_hashmap_is_unwind_safe() {
@@ -273,7 +274,7 @@ fn test_lots_of_insertions() {
     for _ in 0..loops {
         assert!(m.is_empty());
 
-        let count = if cfg!(miri) { 101 } else { 1001 };
+        let count = if cfg!(miri) { 66 } else { 1001 };
 
         for i in 1..count {
             assert!(m.insert(i, i).is_none());
@@ -944,10 +945,9 @@ fn test_raw_entry() {
     }
 }
 
-mod test_drain_filter {
+mod test_extract_if {
     use super::*;
-
-    use crate::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::panic::{AssertUnwindSafe, catch_unwind};
     use crate::sync::atomic::{AtomicUsize, Ordering};
 
     trait EqSorted: Iterator {
@@ -968,7 +968,7 @@ mod test_drain_filter {
     #[test]
     fn empty() {
         let mut map: HashMap<i32, i32> = HashMap::new();
-        map.drain_filter(|_, _| unreachable!("there's nothing to decide on"));
+        map.extract_if(|_, _| unreachable!("there's nothing to decide on")).for_each(drop);
         assert!(map.is_empty());
     }
 
@@ -976,7 +976,7 @@ mod test_drain_filter {
     fn consuming_nothing() {
         let pairs = (0..3).map(|i| (i, i));
         let mut map: HashMap<_, _> = pairs.collect();
-        assert!(map.drain_filter(|_, _| false).eq_sorted(crate::iter::empty()));
+        assert!(map.extract_if(|_, _| false).eq_sorted(crate::iter::empty()));
         assert_eq!(map.len(), 3);
     }
 
@@ -984,7 +984,7 @@ mod test_drain_filter {
     fn consuming_all() {
         let pairs = (0..3).map(|i| (i, i));
         let mut map: HashMap<_, _> = pairs.clone().collect();
-        assert!(map.drain_filter(|_, _| true).eq_sorted(pairs));
+        assert!(map.extract_if(|_, _| true).eq_sorted(pairs));
         assert!(map.is_empty());
     }
 
@@ -993,7 +993,7 @@ mod test_drain_filter {
         let pairs = (0..3).map(|i| (i, i));
         let mut map: HashMap<_, _> = pairs.collect();
         assert!(
-            map.drain_filter(|_, v| {
+            map.extract_if(|_, v| {
                 *v += 6;
                 false
             })
@@ -1008,7 +1008,7 @@ mod test_drain_filter {
         let pairs = (0..3).map(|i| (i, i));
         let mut map: HashMap<_, _> = pairs.collect();
         assert!(
-            map.drain_filter(|_, v| {
+            map.extract_if(|_, v| {
                 *v += 6;
                 true
             })
@@ -1018,6 +1018,7 @@ mod test_drain_filter {
     }
 
     #[test]
+    #[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
     fn drop_panic_leak() {
         static PREDS: AtomicUsize = AtomicUsize::new(0);
         static DROPS: AtomicUsize = AtomicUsize::new(0);
@@ -1034,18 +1035,20 @@ mod test_drain_filter {
         let mut map = (0..3).map(|i| (i, D)).collect::<HashMap<_, _>>();
 
         catch_unwind(move || {
-            drop(map.drain_filter(|_, _| {
+            map.extract_if(|_, _| {
                 PREDS.fetch_add(1, Ordering::SeqCst);
                 true
-            }))
+            })
+            .for_each(drop)
         })
         .unwrap_err();
 
-        assert_eq!(PREDS.load(Ordering::SeqCst), 3);
+        assert_eq!(PREDS.load(Ordering::SeqCst), 2);
         assert_eq!(DROPS.load(Ordering::SeqCst), 3);
     }
 
     #[test]
+    #[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
     fn pred_panic_leak() {
         static PREDS: AtomicUsize = AtomicUsize::new(0);
         static DROPS: AtomicUsize = AtomicUsize::new(0);
@@ -1060,10 +1063,11 @@ mod test_drain_filter {
         let mut map = (0..3).map(|i| (i, D)).collect::<HashMap<_, _>>();
 
         catch_unwind(AssertUnwindSafe(|| {
-            drop(map.drain_filter(|_, _| match PREDS.fetch_add(1, Ordering::SeqCst) {
+            map.extract_if(|_, _| match PREDS.fetch_add(1, Ordering::SeqCst) {
                 0 => true,
                 _ => panic!(),
-            }))
+            })
+            .for_each(drop)
         }))
         .unwrap_err();
 
@@ -1074,6 +1078,7 @@ mod test_drain_filter {
 
     // Same as above, but attempt to use the iterator again after the panic in the predicate
     #[test]
+    #[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
     fn pred_panic_reuse() {
         static PREDS: AtomicUsize = AtomicUsize::new(0);
         static DROPS: AtomicUsize = AtomicUsize::new(0);
@@ -1088,12 +1093,12 @@ mod test_drain_filter {
         let mut map = (0..3).map(|i| (i, D)).collect::<HashMap<_, _>>();
 
         {
-            let mut it = map.drain_filter(|_, _| match PREDS.fetch_add(1, Ordering::SeqCst) {
+            let mut it = map.extract_if(|_, _| match PREDS.fetch_add(1, Ordering::SeqCst) {
                 0 => true,
                 _ => panic!(),
             });
             catch_unwind(AssertUnwindSafe(|| while it.next().is_some() {})).unwrap_err();
-            // Iterator behaviour after a panic is explicitly unspecified,
+            // Iterator behavior after a panic is explicitly unspecified,
             // so this is just the current implementation:
             let result = catch_unwind(AssertUnwindSafe(|| it.next()));
             assert!(result.is_err());
@@ -1119,6 +1124,26 @@ fn from_array() {
 
 #[test]
 fn const_with_hasher() {
-    const X: HashMap<(), (), ()> = HashMap::with_hasher(());
-    assert_eq!(X.len(), 0);
+    const X: HashMap<(), (), BuildHasherDefault<DefaultHasher>> =
+        HashMap::with_hasher(BuildHasherDefault::new());
+    let mut x = X;
+    assert_eq!(x.len(), 0);
+    x.insert((), ());
+    assert_eq!(x.len(), 1);
+
+    // It *is* possible to do this without using the `BuildHasherDefault` type.
+    struct MyBuildDefaultHasher;
+    impl BuildHasher for MyBuildDefaultHasher {
+        type Hasher = DefaultHasher;
+
+        fn build_hasher(&self) -> Self::Hasher {
+            DefaultHasher::new()
+        }
+    }
+
+    const Y: HashMap<(), (), MyBuildDefaultHasher> = HashMap::with_hasher(MyBuildDefaultHasher);
+    let mut y = Y;
+    assert_eq!(y.len(), 0);
+    y.insert((), ());
+    assert_eq!(y.len(), 1);
 }

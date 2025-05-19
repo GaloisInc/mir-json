@@ -17,8 +17,8 @@ The following are the primary interfaces of the panic system and the
 responsibilities they cover:
 
 * [`panic!`] and [`panic_any`] (Constructing, Propagated automatically)
-* [`PanicInfo`] (Reporting)
-* [`set_hook`], [`take_hook`], and [`#[panic_handler]`][panic-handler] (Reporting)
+* [`set_hook`], [`take_hook`], and [`PanicHookInfo`] (Reporting)
+* [`#[panic_handler]`][panic-handler] and [`PanicInfo`] (Reporting in no_std)
 * [`catch_unwind`] and [`resume_unwind`] (Discarding, Propagating)
 
 The following are the primary interfaces of the error system and the
@@ -37,7 +37,7 @@ responsibilities they cover:
 The panic and error systems are not entirely distinct. Often times errors
 that are anticipated runtime failures in an API might instead represent bugs
 to a caller. For these situations the standard library provides APIs for
-constructing panics with an `Error` as it's source.
+constructing panics with an `Error` as its source.
 
 * [`Result::unwrap`]
 * [`Result::expect`]
@@ -93,7 +93,8 @@ information that is already communicated by the source error being
 unwrapped:
 
 ```text
-thread 'main' panicked at 'env variable `IMPORTANT_PATH` is not set: NotPresent', src/main.rs:4:6
+thread 'main' panicked at src/main.rs:4:6:
+env variable `IMPORTANT_PATH` is not set: NotPresent
 ```
 
 In this example we end up mentioning that an env variable is not set,
@@ -109,7 +110,8 @@ prevent the source error, we end up introducing new information that is
 independent from our source error.
 
 ```text
-thread 'main' panicked at 'env variable `IMPORTANT_PATH` should be set by `wrapper_script.sh`: NotPresent', src/main.rs:4:6
+thread 'main' panicked at src/main.rs:4:6:
+env variable `IMPORTANT_PATH` should be set by `wrapper_script.sh`: NotPresent
 ```
 
 In this example we are communicating not only the name of the
@@ -123,6 +125,7 @@ expect-as-precondition style error messages remember to focus on the word
 should be available and executable by the current user".
 
 [`panic_any`]: ../../std/panic/fn.panic_any.html
+[`PanicHookInfo`]: ../../std/panic/struct.PanicHookInfo.html
 [`PanicInfo`]: crate::panic::PanicInfo
 [`catch_unwind`]: ../../std/panic/fn.catch_unwind.html
 [`resume_unwind`]: ../../std/panic/fn.resume_unwind.html

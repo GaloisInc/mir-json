@@ -6,14 +6,16 @@ extern "unadjusted" {
     #[link_name = "llvm.x86.addcarry.64"]
     fn llvm_addcarry_u64(a: u8, b: u64, c: u64) -> (u8, u64);
     #[link_name = "llvm.x86.addcarryx.u64"]
-    fn llvm_addcarryx_u64(a: u8, b: u64, c: u64, d: *mut u8) -> u8;
+    fn llvm_addcarryx_u64(a: u8, b: u64, c: u64, d: *mut u64) -> u8;
     #[link_name = "llvm.x86.subborrow.64"]
     fn llvm_subborrow_u64(a: u8, b: u64, c: u64) -> (u8, u64);
 }
 
 /// Adds unsigned 64-bit integers `a` and `b` with unsigned 8-bit carry-in `c_in`
-/// (carry flag), and store the unsigned 64-bit result in `out`, and the carry-out
+/// (carry or overflow flag), and store the unsigned 64-bit result in `out`, and the carry-out
 /// is returned (carry or overflow flag).
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_addcarry_u64)
 #[inline]
 #[cfg_attr(test, assert_instr(adc))]
 #[stable(feature = "simd_x86_adx", since = "1.33.0")]
@@ -26,17 +28,21 @@ pub unsafe fn _addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
 /// Adds unsigned 64-bit integers `a` and `b` with unsigned 8-bit carry-in `c_in`
 /// (carry or overflow flag), and store the unsigned 64-bit result in `out`, and
 /// the carry-out is returned (carry or overflow flag).
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_addcarryx_u64)
 #[inline]
 #[target_feature(enable = "adx")]
 #[cfg_attr(test, assert_instr(adc))]
 #[stable(feature = "simd_x86_adx", since = "1.33.0")]
 pub unsafe fn _addcarryx_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
-    llvm_addcarryx_u64(c_in, a, b, out as *mut _ as *mut u8)
+    llvm_addcarryx_u64(c_in, a, b, out as *mut _)
 }
 
 /// Adds unsigned 64-bit integers `a` and `b` with unsigned 8-bit carry-in `c_in`.
 /// (carry or overflow flag), and store the unsigned 64-bit result in `out`, and
 /// the carry-out is returned (carry or overflow flag).
+///
+/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_subborrow_u64)
 #[inline]
 #[cfg_attr(test, assert_instr(sbb))]
 #[stable(feature = "simd_x86_adx", since = "1.33.0")]

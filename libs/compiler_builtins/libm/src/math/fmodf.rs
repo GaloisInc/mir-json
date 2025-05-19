@@ -1,12 +1,11 @@
 use core::f32;
-use core::u32;
 
 #[cfg_attr(all(test, assert_no_panic), no_panic::no_panic)]
 pub fn fmodf(x: f32, y: f32) -> f32 {
     let mut uxi = x.to_bits();
     let mut uyi = y.to_bits();
-    let mut ex = (uxi >> 23 & 0xff) as i32;
-    let mut ey = (uyi >> 23 & 0xff) as i32;
+    let mut ex = ((uxi >> 23) & 0xff) as i32;
+    let mut ey = ((uyi >> 23) & 0xff) as i32;
     let sx = uxi & 0x80000000;
     let mut i;
 

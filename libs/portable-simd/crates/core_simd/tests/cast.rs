@@ -2,7 +2,8 @@
 macro_rules! cast_types {
     ($start:ident, $($target:ident),*) => {
         mod $start {
-            use core_simd::simd::Simd;
+            #[allow(unused)]
+            use core_simd::simd::prelude::*;
             type Vector<const N: usize> = Simd<$start, N>;
             $(
                 mod $target {

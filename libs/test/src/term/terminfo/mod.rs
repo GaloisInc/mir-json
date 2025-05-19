@@ -1,19 +1,16 @@
 //! Terminfo database interface.
 
 use std::collections::HashMap;
-use std::env;
-use std::error;
-use std::fmt;
 use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
+use std::io::prelude::*;
 use std::path::Path;
+use std::{env, error, fmt, io};
 
-use super::color;
-use super::Terminal;
-
-use parm::{expand, Param, Variables};
+use parm::{Param, Variables, expand};
 use parser::compiled::{msys_terminfo, parse};
 use searcher::get_dbpath_for_term;
+
+use super::{Terminal, color};
 
 /// A parsed terminfo database entry.
 #[allow(unused)]
@@ -104,8 +101,7 @@ impl TermInfo {
     }
     // Keep the metadata small
     fn _from_path(path: &Path) -> Result<TermInfo, Error> {
-        let file = File::open(path).map_err(Error::IoError)?;
-        let mut reader = BufReader::new(file);
+        let mut reader = File::open_buffered(path).map_err(Error::IoError)?;
         parse(&mut reader, false).map_err(Error::MalformedTerminfo)
     }
 }

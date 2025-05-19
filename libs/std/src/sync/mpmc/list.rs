@@ -5,7 +5,6 @@ use super::error::*;
 use super::select::{Operation, Selected, Token};
 use super::utils::{Backoff, CachePadded};
 use super::waker::SyncWaker;
-
 use crate::cell::UnsafeCell;
 use crate::marker::PhantomData;
 use crate::mem::MaybeUninit;
@@ -64,14 +63,14 @@ struct Block<T> {
 
 impl<T> Block<T> {
     /// Creates an empty block.
-    fn new() -> Block<T> {
+    fn new() -> Box<Block<T>> {
         // SAFETY: This is safe because:
         //  [1] `Block::next` (AtomicPtr) may be safely zero initialized.
         //  [2] `Block::slots` (Array) may be safely zero initialized because of [3, 4].
         //  [3] `Slot::msg` (UnsafeCell) may be safely zero initialized because it
         //       holds a MaybeUninit.
         //  [4] `Slot::state` (AtomicUsize) may be safely zero initialized.
-        unsafe { MaybeUninit::zeroed().assume_init() }
+        unsafe { Box::new_zeroed().assume_init() }
     }
 
     /// Waits until the next pointer is set.
@@ -91,7 +90,7 @@ impl<T> Block<T> {
         // It is not necessary to set the `DESTROY` bit in the last slot because that slot has
         // begun destruction of the block.
         for i in start..BLOCK_CAP - 1 {
-            let slot = (*this).slots.get_unchecked(i);
+            let slot = unsafe { (*this).slots.get_unchecked(i) };
 
             // Mark the `DESTROY` bit if a thread is still using the slot.
             if slot.state.load(Ordering::Acquire) & READ == 0
@@ -103,7 +102,7 @@ impl<T> Block<T> {
         }
 
         // No thread is using the block, now it is safe to destroy it.
-        drop(Box::from_raw(this));
+        drop(unsafe { Box::from_raw(this) });
     }
 }
 
@@ -200,13 +199,13 @@ impl<T> Channel<T> {
             // If we're going to have to install the next block, allocate it in advance in order to
             // make the wait for other threads as short as possible.
             if offset + 1 == BLOCK_CAP && next_block.is_none() {
-                next_block = Some(Box::new(Block::<T>::new()));
+                next_block = Some(Block::<T>::new());
             }
 
             // If this is the first message to be sent into the channel, we need to allocate the
             // first block and install it.
             if block.is_null() {
-                let new = Box::into_raw(Box::new(Block::<T>::new()));
+                let new = Box::into_raw(Block::<T>::new());
 
                 if self
                     .tail
@@ -265,9 +264,11 @@ impl<T> Channel<T> {
         // Write the message into the slot.
         let block = token.list.block as *mut Block<T>;
         let offset = token.list.offset;
-        let slot = (*block).slots.get_unchecked(offset);
-        slot.msg.get().write(MaybeUninit::new(msg));
-        slot.state.fetch_or(WRITE, Ordering::Release);
+        unsafe {
+            let slot = (*block).slots.get_unchecked(offset);
+            slot.msg.get().write(MaybeUninit::new(msg));
+            slot.state.fetch_or(WRITE, Ordering::Release);
+        }
 
         // Wake a sleeping receiver.
         self.receivers.notify();
@@ -369,19 +370,21 @@ impl<T> Channel<T> {
         // Read the message.
         let block = token.list.block as *mut Block<T>;
         let offset = token.list.offset;
-        let slot = (*block).slots.get_unchecked(offset);
-        slot.wait_write();
-        let msg = slot.msg.get().read().assume_init();
+        unsafe {
+            let slot = (*block).slots.get_unchecked(offset);
+            slot.wait_write();
+            let msg = slot.msg.get().read().assume_init();
 
-        // Destroy the block if we've reached the end, or if another thread wanted to destroy but
-        // couldn't because we were busy reading from the slot.
-        if offset + 1 == BLOCK_CAP {
-            Block::destroy(block, 0);
-        } else if slot.state.fetch_or(READ, Ordering::AcqRel) & DESTROY != 0 {
-            Block::destroy(block, offset + 1);
+            // Destroy the block if we've reached the end, or if another thread wanted to destroy but
+            // couldn't because we were busy reading from the slot.
+            if offset + 1 == BLOCK_CAP {
+                Block::destroy(block, 0);
+            } else if slot.state.fetch_or(READ, Ordering::AcqRel) & DESTROY != 0 {
+                Block::destroy(block, offset + 1);
+            }
+
+            Ok(msg)
         }
-
-        Ok(msg)
     }
 
     /// Attempts to send a message into the channel.
@@ -441,7 +444,8 @@ impl<T> Channel<T> {
                 }
 
                 // Block the current thread.
-                let sel = cx.wait_until(deadline);
+                // SAFETY: the context belongs to the current thread.
+                let sel = unsafe { cx.wait_until(deadline) };
 
                 match sel {
                     Selected::Waiting => unreachable!(),
@@ -547,7 +551,22 @@ impl<T> Channel<T> {
         }
 
         let mut head = self.head.index.load(Ordering::Acquire);
-        let mut block = self.head.block.load(Ordering::Acquire);
+        // The channel may be uninitialized, so we have to swap to avoid overwriting any sender's attempts
+        // to initialize the first block before noticing that the receivers disconnected. Late allocations
+        // will be deallocated by the sender in Drop.
+        let mut block = self.head.block.swap(ptr::null_mut(), Ordering::AcqRel);
+
+        // If we're going to be dropping messages we need to synchronize with initialization
+        if head >> SHIFT != tail >> SHIFT {
+            // The block can be null here only if a sender is in the process of initializing the
+            // channel while another sender managed to send a message by inserting it into the
+            // semi-initialized channel and advanced the tail.
+            // In that case, just wait until it gets initialized.
+            while block.is_null() {
+                backoff.spin_heavy();
+                block = self.head.block.load(Ordering::Acquire);
+            }
+        }
 
         unsafe {
             // Drop all messages between head and tail and deallocate the heap-allocated blocks.
@@ -576,8 +595,8 @@ impl<T> Channel<T> {
                 drop(Box::from_raw(block));
             }
         }
+
         head &= !MARK_BIT;
-        self.head.block.store(ptr::null_mut(), Ordering::Release);
         self.head.index.store(head, Ordering::Release);
     }
 

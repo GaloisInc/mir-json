@@ -1,10 +1,11 @@
-use crate::iter::{DoubleEndedIterator, FusedIterator, Iterator, TrustedLen};
+use crate::iter::{FusedIterator, TrustedLen};
+use crate::num::NonZero;
 use crate::ops::Try;
 
 /// An iterator that links two iterators together, in a chain.
 ///
-/// This `struct` is created by [`Iterator::chain`]. See its documentation
-/// for more.
+/// This `struct` is created by [`chain`] or [`Iterator::chain`]. See their
+/// documentation for more.
 ///
 /// # Examples
 ///
@@ -14,7 +15,7 @@ use crate::ops::Try;
 ///
 /// let a1 = [1, 2, 3];
 /// let a2 = [4, 5, 6];
-/// let iter: Chain<Iter<_>, Iter<_>> = a1.iter().chain(a2.iter());
+/// let iter: Chain<Iter<'_, _>, Iter<'_, _>> = a1.iter().chain(a2.iter());
 /// ```
 #[derive(Clone, Debug)]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
@@ -35,6 +36,39 @@ impl<A, B> Chain<A, B> {
     pub(in super::super) fn new(a: A, b: B) -> Chain<A, B> {
         Chain { a: Some(a), b: Some(b) }
     }
+}
+
+/// Converts the arguments to iterators and links them together, in a chain.
+///
+/// See the documentation of [`Iterator::chain`] for more.
+///
+/// # Examples
+///
+/// ```
+/// #![feature(iter_chain)]
+///
+/// use std::iter::chain;
+///
+/// let a = [1, 2, 3];
+/// let b = [4, 5, 6];
+///
+/// let mut iter = chain(a, b);
+///
+/// assert_eq!(iter.next(), Some(1));
+/// assert_eq!(iter.next(), Some(2));
+/// assert_eq!(iter.next(), Some(3));
+/// assert_eq!(iter.next(), Some(4));
+/// assert_eq!(iter.next(), Some(5));
+/// assert_eq!(iter.next(), Some(6));
+/// assert_eq!(iter.next(), None);
+/// ```
+#[unstable(feature = "iter_chain", reason = "recently added", issue = "125964")]
+pub fn chain<A, B>(a: A, b: B) -> Chain<A::IntoIter, B::IntoIter>
+where
+    A: IntoIterator,
+    B: IntoIterator<Item = A::Item>,
+{
+    Chain::new(a.into_iter(), b.into_iter())
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -95,38 +129,33 @@ where
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
-        let mut rem = n;
-
+    fn advance_by(&mut self, mut n: usize) -> Result<(), NonZero<usize>> {
         if let Some(ref mut a) = self.a {
-            match a.advance_by(rem) {
+            n = match a.advance_by(n) {
                 Ok(()) => return Ok(()),
-                Err(k) => rem -= k,
-            }
+                Err(k) => k.get(),
+            };
             self.a = None;
         }
 
         if let Some(ref mut b) = self.b {
-            match b.advance_by(rem) {
-                Ok(()) => return Ok(()),
-                Err(k) => rem -= k,
-            }
+            return b.advance_by(n);
             // we don't fuse the second iterator
         }
 
-        if rem == 0 { Ok(()) } else { Err(n - rem) }
+        NonZero::new(n).map_or(Ok(()), Err)
     }
 
     #[inline]
     fn nth(&mut self, mut n: usize) -> Option<Self::Item> {
         if let Some(ref mut a) = self.a {
-            match a.advance_by(n) {
+            n = match a.advance_by(n) {
                 Ok(()) => match a.next() {
-                    None => n = 0,
+                    None => 0,
                     x => return x,
                 },
-                Err(k) => n -= k,
-            }
+                Err(k) => k.get(),
+            };
 
             self.a = None;
         }
@@ -186,38 +215,33 @@ where
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
-        let mut rem = n;
-
+    fn advance_back_by(&mut self, mut n: usize) -> Result<(), NonZero<usize>> {
         if let Some(ref mut b) = self.b {
-            match b.advance_back_by(rem) {
+            n = match b.advance_back_by(n) {
                 Ok(()) => return Ok(()),
-                Err(k) => rem -= k,
-            }
+                Err(k) => k.get(),
+            };
             self.b = None;
         }
 
         if let Some(ref mut a) = self.a {
-            match a.advance_back_by(rem) {
-                Ok(()) => return Ok(()),
-                Err(k) => rem -= k,
-            }
+            return a.advance_back_by(n);
             // we don't fuse the second iterator
         }
 
-        if rem == 0 { Ok(()) } else { Err(n - rem) }
+        NonZero::new(n).map_or(Ok(()), Err)
     }
 
     #[inline]
     fn nth_back(&mut self, mut n: usize) -> Option<Self::Item> {
         if let Some(ref mut b) = self.b {
-            match b.advance_back_by(n) {
+            n = match b.advance_back_by(n) {
                 Ok(()) => match b.next_back() {
-                    None => n = 0,
+                    None => 0,
                     x => return x,
                 },
-                Err(k) => n -= k,
-            }
+                Err(k) => k.get(),
+            };
 
             self.b = None;
         }
@@ -280,6 +304,28 @@ where
     A: TrustedLen,
     B: TrustedLen<Item = A::Item>,
 {
+}
+
+#[stable(feature = "default_iters", since = "1.70.0")]
+impl<A: Default, B: Default> Default for Chain<A, B> {
+    /// Creates a `Chain` from the default values for `A` and `B`.
+    ///
+    /// ```
+    /// # use core::iter::Chain;
+    /// # use core::slice;
+    /// # use std::collections::{btree_set, BTreeSet};
+    /// # use std::mem;
+    /// struct Foo<'a>(Chain<slice::Iter<'a, u8>, btree_set::Iter<'a, u8>>);
+    ///
+    /// let set = BTreeSet::<u8>::new();
+    /// let slice: &[u8] = &[];
+    /// let mut foo = Foo(slice.iter().chain(set.iter()));
+    ///
+    /// // take requires `Default`
+    /// let _: Chain<_, _> = mem::take(&mut foo.0);
+    fn default() -> Self {
+        Chain::new(Default::default(), Default::default())
+    }
 }
 
 #[inline]

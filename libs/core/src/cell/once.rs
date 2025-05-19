@@ -1,11 +1,15 @@
 use crate::cell::UnsafeCell;
-use crate::fmt;
-use crate::mem;
+use crate::{fmt, mem};
 
-/// A cell which can be written to only once.
+/// A cell which can nominally be written to only once.
 ///
-/// Unlike [`RefCell`], a `OnceCell` only provides shared `&T` references to its value.
-/// Unlike [`Cell`], a `OnceCell` doesn't require copying or replacing the value to access it.
+/// This allows obtaining a shared `&T` reference to its inner value without copying or replacing
+/// it (unlike [`Cell`]), and without runtime borrow checks (unlike [`RefCell`]). However,
+/// only immutable references can be obtained unless one has a mutable reference to the cell
+/// itself. In the same vein, the cell can only be re-initialized with such a mutable reference.
+///
+/// A `OnceCell` can be thought of as a safe abstraction over uninitialized data that becomes
+/// initialized once written.
 ///
 /// For a thread-safe version of this struct, see [`std::sync::OnceLock`].
 ///
@@ -16,8 +20,6 @@ use crate::mem;
 /// # Examples
 ///
 /// ```
-/// #![feature(once_cell)]
-///
 /// use std::cell::OnceCell;
 ///
 /// let cell = OnceCell::new();
@@ -29,26 +31,27 @@ use crate::mem;
 /// assert_eq!(value, "Hello, World!");
 /// assert!(cell.get().is_some());
 /// ```
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 pub struct OnceCell<T> {
     // Invariant: written to at most once.
     inner: UnsafeCell<Option<T>>,
 }
 
 impl<T> OnceCell<T> {
-    /// Creates a new empty cell.
+    /// Creates a new uninitialized cell.
     #[inline]
     #[must_use]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
+    #[rustc_const_stable(feature = "once_cell", since = "1.70.0")]
     pub const fn new() -> OnceCell<T> {
         OnceCell { inner: UnsafeCell::new(None) }
     }
 
     /// Gets the reference to the underlying value.
     ///
-    /// Returns `None` if the cell is empty.
+    /// Returns `None` if the cell is uninitialized.
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
     pub fn get(&self) -> Option<&T> {
         // SAFETY: Safe due to `inner`'s invariant
         unsafe { &*self.inner.get() }.as_ref()
@@ -56,25 +59,23 @@ impl<T> OnceCell<T> {
 
     /// Gets the mutable reference to the underlying value.
     ///
-    /// Returns `None` if the cell is empty.
+    /// Returns `None` if the cell is uninitialized.
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
     pub fn get_mut(&mut self) -> Option<&mut T> {
         self.inner.get_mut().as_mut()
     }
 
-    /// Sets the contents of the cell to `value`.
+    /// Initializes the contents of the cell to `value`.
     ///
     /// # Errors
     ///
-    /// This method returns `Ok(())` if the cell was empty and `Err(value)` if
-    /// it was full.
+    /// This method returns `Ok(())` if the cell was uninitialized
+    /// and `Err(value)` if it was already initialized.
     ///
     /// # Examples
     ///
     /// ```
-    /// #![feature(once_cell)]
-    ///
     /// use std::cell::OnceCell;
     ///
     /// let cell = OnceCell::new();
@@ -86,12 +87,42 @@ impl<T> OnceCell<T> {
     /// assert!(cell.get().is_some());
     /// ```
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
     pub fn set(&self, value: T) -> Result<(), T> {
-        // SAFETY: Safe because we cannot have overlapping mutable borrows
-        let slot = unsafe { &*self.inner.get() };
-        if slot.is_some() {
-            return Err(value);
+        match self.try_insert(value) {
+            Ok(_) => Ok(()),
+            Err((_, value)) => Err(value),
+        }
+    }
+
+    /// Initializes the contents of the cell to `value` if the cell was
+    /// uninitialized, then returns a reference to it.
+    ///
+    /// # Errors
+    ///
+    /// This method returns `Ok(&value)` if the cell was uninitialized
+    /// and `Err((&current_value, value))` if it was already initialized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(once_cell_try_insert)]
+    ///
+    /// use std::cell::OnceCell;
+    ///
+    /// let cell = OnceCell::new();
+    /// assert!(cell.get().is_none());
+    ///
+    /// assert_eq!(cell.try_insert(92), Ok(&92));
+    /// assert_eq!(cell.try_insert(62), Err((&92, 62)));
+    ///
+    /// assert!(cell.get().is_some());
+    /// ```
+    #[inline]
+    #[unstable(feature = "once_cell_try_insert", issue = "116693")]
+    pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
+        if let Some(old) = self.get() {
+            return Err((old, value));
         }
 
         // SAFETY: This is the only place where we set the slot, no races
@@ -99,16 +130,15 @@ impl<T> OnceCell<T> {
         // checked that slot is currently `None`, so this write
         // maintains the `inner`'s invariant.
         let slot = unsafe { &mut *self.inner.get() };
-        *slot = Some(value);
-        Ok(())
+        Ok(slot.insert(value))
     }
 
-    /// Gets the contents of the cell, initializing it with `f`
-    /// if the cell was empty.
+    /// Gets the contents of the cell, initializing it to `f()`
+    /// if the cell was uninitialized.
     ///
     /// # Panics
     ///
-    /// If `f` panics, the panic is propagated to the caller, and the cell
+    /// If `f()` panics, the panic is propagated to the caller, and the cell
     /// remains uninitialized.
     ///
     /// It is an error to reentrantly initialize the cell from `f`. Doing
@@ -117,8 +147,6 @@ impl<T> OnceCell<T> {
     /// # Examples
     ///
     /// ```
-    /// #![feature(once_cell)]
-    ///
     /// use std::cell::OnceCell;
     ///
     /// let cell = OnceCell::new();
@@ -128,7 +156,7 @@ impl<T> OnceCell<T> {
     /// assert_eq!(value, &92);
     /// ```
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
     pub fn get_or_init<F>(&self, f: F) -> &T
     where
         F: FnOnce() -> T,
@@ -138,13 +166,49 @@ impl<T> OnceCell<T> {
         }
     }
 
-    /// Gets the contents of the cell, initializing it with `f` if
-    /// the cell was empty. If the cell was empty and `f` failed, an
-    /// error is returned.
+    /// Gets the mutable reference of the contents of the cell,
+    /// initializing it to `f()` if the cell was uninitialized.
     ///
     /// # Panics
     ///
-    /// If `f` panics, the panic is propagated to the caller, and the cell
+    /// If `f()` panics, the panic is propagated to the caller, and the cell
+    /// remains uninitialized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(once_cell_get_mut)]
+    ///
+    /// use std::cell::OnceCell;
+    ///
+    /// let mut cell = OnceCell::new();
+    /// let value = cell.get_mut_or_init(|| 92);
+    /// assert_eq!(*value, 92);
+    ///
+    /// *value += 2;
+    /// assert_eq!(*value, 94);
+    ///
+    /// let value = cell.get_mut_or_init(|| unreachable!());
+    /// assert_eq!(*value, 94);
+    /// ```
+    #[inline]
+    #[unstable(feature = "once_cell_get_mut", issue = "121641")]
+    pub fn get_mut_or_init<F>(&mut self, f: F) -> &mut T
+    where
+        F: FnOnce() -> T,
+    {
+        match self.get_mut_or_try_init(|| Ok::<T, !>(f())) {
+            Ok(val) => val,
+        }
+    }
+
+    /// Gets the contents of the cell, initializing it to `f()` if
+    /// the cell was uninitialized. If the cell was uninitialized
+    /// and `f()` failed, an error is returned.
+    ///
+    /// # Panics
+    ///
+    /// If `f()` panics, the panic is propagated to the caller, and the cell
     /// remains uninitialized.
     ///
     /// It is an error to reentrantly initialize the cell from `f`. Doing
@@ -153,7 +217,7 @@ impl<T> OnceCell<T> {
     /// # Examples
     ///
     /// ```
-    /// #![feature(once_cell)]
+    /// #![feature(once_cell_try)]
     ///
     /// use std::cell::OnceCell;
     ///
@@ -166,7 +230,7 @@ impl<T> OnceCell<T> {
     /// assert_eq!(value, Ok(&92));
     /// assert_eq!(cell.get(), Some(&92))
     /// ```
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[unstable(feature = "once_cell_try", issue = "109737")]
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
@@ -174,45 +238,85 @@ impl<T> OnceCell<T> {
         if let Some(val) = self.get() {
             return Ok(val);
         }
-        /// Avoid inlining the initialization closure into the common path that fetches
-        /// the already initialized value
-        #[cold]
-        fn outlined_call<F, T, E>(f: F) -> Result<T, E>
-        where
-            F: FnOnce() -> Result<T, E>,
-        {
-            f()
-        }
-        let val = outlined_call(f)?;
-        // Note that *some* forms of reentrant initialization might lead to
-        // UB (see `reentrant_init` test). I believe that just removing this
-        // `assert`, while keeping `set/get` would be sound, but it seems
-        // better to panic, rather than to silently use an old value.
-        assert!(self.set(val).is_ok(), "reentrant init");
-        Ok(self.get().unwrap())
+        self.try_init(f)
     }
 
-    /// Consumes the cell, returning the wrapped value.
+    /// Gets the mutable reference of the contents of the cell, initializing
+    /// it to `f()` if the cell was uninitialized. If the cell was uninitialized
+    /// and `f()` failed, an error is returned.
     ///
-    /// Returns `None` if the cell was empty.
+    /// # Panics
+    ///
+    /// If `f()` panics, the panic is propagated to the caller, and the cell
+    /// remains uninitialized.
     ///
     /// # Examples
     ///
     /// ```
-    /// #![feature(once_cell)]
+    /// #![feature(once_cell_get_mut)]
     ///
+    /// use std::cell::OnceCell;
+    ///
+    /// let mut cell: OnceCell<u32> = OnceCell::new();
+    ///
+    /// // Failed attempts to initialize the cell do not change its contents
+    /// assert!(cell.get_mut_or_try_init(|| "not a number!".parse()).is_err());
+    /// assert!(cell.get().is_none());
+    ///
+    /// let value = cell.get_mut_or_try_init(|| "1234".parse());
+    /// assert_eq!(value, Ok(&mut 1234));
+    ///
+    /// let Ok(value) = value else { return; };
+    /// *value += 2;
+    /// assert_eq!(cell.get(), Some(&1236))
+    /// ```
+    #[unstable(feature = "once_cell_get_mut", issue = "121641")]
+    pub fn get_mut_or_try_init<F, E>(&mut self, f: F) -> Result<&mut T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+    {
+        if self.get().is_none() {
+            self.try_init(f)?;
+        }
+        Ok(self.get_mut().unwrap())
+    }
+
+    // Avoid inlining the initialization closure into the common path that fetches
+    // the already initialized value
+    #[cold]
+    fn try_init<F, E>(&self, f: F) -> Result<&T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+    {
+        let val = f()?;
+        // Note that *some* forms of reentrant initialization might lead to
+        // UB (see `reentrant_init` test). I believe that just removing this
+        // `panic`, while keeping `try_insert` would be sound, but it seems
+        // better to panic, rather than to silently use an old value.
+        if let Ok(val) = self.try_insert(val) { Ok(val) } else { panic!("reentrant init") }
+    }
+
+    /// Consumes the cell, returning the wrapped value.
+    ///
+    /// Returns `None` if the cell was uninitialized.
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// use std::cell::OnceCell;
     ///
     /// let cell: OnceCell<String> = OnceCell::new();
     /// assert_eq!(cell.into_inner(), None);
     ///
     /// let cell = OnceCell::new();
-    /// cell.set("hello".to_string()).unwrap();
-    /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
+    /// let _ = cell.set("hello".to_owned());
+    /// assert_eq!(cell.into_inner(), Some("hello".to_owned()));
     /// ```
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
-    pub fn into_inner(self) -> Option<T> {
+    #[stable(feature = "once_cell", since = "1.70.0")]
+    #[rustc_const_stable(feature = "const_cell_into_inner", since = "1.83.0")]
+    #[rustc_allow_const_fn_unstable(const_precise_live_drops)]
+    pub const fn into_inner(self) -> Option<T> {
         // Because `into_inner` takes `self` by value, the compiler statically verifies
         // that it is not currently borrowed. So it is safe to move out `Option<T>`.
         self.inner.into_inner()
@@ -220,33 +324,31 @@ impl<T> OnceCell<T> {
 
     /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
     ///
-    /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
+    /// Has no effect and returns `None` if the `OnceCell` is uninitialized.
     ///
     /// Safety is guaranteed by requiring a mutable reference.
     ///
     /// # Examples
     ///
     /// ```
-    /// #![feature(once_cell)]
-    ///
     /// use std::cell::OnceCell;
     ///
     /// let mut cell: OnceCell<String> = OnceCell::new();
     /// assert_eq!(cell.take(), None);
     ///
     /// let mut cell = OnceCell::new();
-    /// cell.set("hello".to_string()).unwrap();
-    /// assert_eq!(cell.take(), Some("hello".to_string()));
+    /// let _ = cell.set("hello".to_owned());
+    /// assert_eq!(cell.take(), Some("hello".to_owned()));
     /// assert_eq!(cell.get(), None);
     /// ```
     #[inline]
-    #[unstable(feature = "once_cell", issue = "74465")]
+    #[stable(feature = "once_cell", since = "1.70.0")]
     pub fn take(&mut self) -> Option<T> {
         mem::take(self).into_inner()
     }
 }
 
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 impl<T> Default for OnceCell<T> {
     #[inline]
     fn default() -> Self {
@@ -254,17 +356,19 @@ impl<T> Default for OnceCell<T> {
     }
 }
 
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 impl<T: fmt::Debug> fmt::Debug for OnceCell<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut d = f.debug_tuple("OnceCell");
         match self.get() {
-            Some(v) => f.debug_tuple("OnceCell").field(v).finish(),
-            None => f.write_str("OnceCell(Uninit)"),
-        }
+            Some(v) => d.field(v),
+            None => d.field(&format_args!("<uninit>")),
+        };
+        d.finish()
     }
 }
 
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 impl<T: Clone> Clone for OnceCell<T> {
     #[inline]
     fn clone(&self) -> OnceCell<T> {
@@ -279,7 +383,7 @@ impl<T: Clone> Clone for OnceCell<T> {
     }
 }
 
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 impl<T: PartialEq> PartialEq for OnceCell<T> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
@@ -287,14 +391,18 @@ impl<T: PartialEq> PartialEq for OnceCell<T> {
     }
 }
 
-#[unstable(feature = "once_cell", issue = "74465")]
+#[stable(feature = "once_cell", since = "1.70.0")]
 impl<T: Eq> Eq for OnceCell<T> {}
 
-#[unstable(feature = "once_cell", issue = "74465")]
-impl<T> const From<T> for OnceCell<T> {
+#[stable(feature = "once_cell", since = "1.70.0")]
+impl<T> From<T> for OnceCell<T> {
     /// Creates a new `OnceCell<T>` which already contains the given `value`.
     #[inline]
     fn from(value: T) -> Self {
         OnceCell { inner: UnsafeCell::new(Some(value)) }
     }
 }
+
+// Just like for `Cell<T>` this isn't needed, but results in nicer error messages.
+#[stable(feature = "once_cell", since = "1.70.0")]
+impl<T> !Sync for OnceCell<T> {}

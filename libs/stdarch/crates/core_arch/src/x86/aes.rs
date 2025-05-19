@@ -30,7 +30,7 @@ extern "C" {
 
 /// Performs one round of an AES decryption flow on data (state) in `a`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdec_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aesdec_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aesdec))]
@@ -41,7 +41,7 @@ pub unsafe fn _mm_aesdec_si128(a: __m128i, round_key: __m128i) -> __m128i {
 
 /// Performs the last round of an AES decryption flow on data (state) in `a`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdeclast_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aesdeclast_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aesdeclast))]
@@ -52,7 +52,7 @@ pub unsafe fn _mm_aesdeclast_si128(a: __m128i, round_key: __m128i) -> __m128i {
 
 /// Performs one round of an AES encryption flow on data (state) in `a`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesenc_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aesenc_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aesenc))]
@@ -63,7 +63,7 @@ pub unsafe fn _mm_aesenc_si128(a: __m128i, round_key: __m128i) -> __m128i {
 
 /// Performs the last round of an AES encryption flow on data (state) in `a`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesenclast_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aesenclast_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aesenclast))]
@@ -74,7 +74,7 @@ pub unsafe fn _mm_aesenclast_si128(a: __m128i, round_key: __m128i) -> __m128i {
 
 /// Performs the `InvMixColumns` transformation on `a`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesimc_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aesimc_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aesimc))]
@@ -89,14 +89,14 @@ pub unsafe fn _mm_aesimc_si128(a: __m128i) -> __m128i {
 /// generating a round key for encryption cipher using data from `a` and an
 /// 8-bit round constant `IMM8`.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aeskeygenassist_si128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aeskeygenassist_si128)
 #[inline]
 #[target_feature(enable = "aes")]
 #[cfg_attr(test, assert_instr(aeskeygenassist, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
 #[stable(feature = "simd_x86", since = "1.27.0")]
 pub unsafe fn _mm_aeskeygenassist_si128<const IMM8: i32>(a: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     aeskeygenassist(a, IMM8 as u8)
 }
 

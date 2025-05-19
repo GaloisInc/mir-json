@@ -1,9 +1,10 @@
 #![stable(feature = "core_hint", since = "1.27.0")]
 
 //! Hints to compiler that affects how code should be emitted or optimized.
+//!
 //! Hints may be compile time or runtime.
 
-use crate::intrinsics;
+use crate::{intrinsics, ub_checks};
 
 /// Informs the compiler that the site which is calling this function is not
 /// reachable, possibly enabling further optimizations.
@@ -73,8 +74,8 @@ use crate::intrinsics;
 /// ```
 ///
 /// While using `unreachable_unchecked()` is perfectly sound in the following
-/// example, the compiler is able to prove that a division by zero is not
-/// possible. Benchmarking reveals that `unreachable_unchecked()` provides
+/// example, as the compiler is able to prove that a division by zero is not
+/// possible, benchmarking reveals that `unreachable_unchecked()` provides
 /// no benefit over using [`unreachable!`], while the latter does not introduce
 /// the possibility of Undefined Behavior.
 ///
@@ -98,11 +99,113 @@ use crate::intrinsics;
 #[rustc_const_stable(feature = "const_unreachable_unchecked", since = "1.57.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 pub const unsafe fn unreachable_unchecked() -> ! {
+    ub_checks::assert_unsafe_precondition!(
+        check_language_ub,
+        "hint::unreachable_unchecked must never be reached",
+        () => false
+    );
     // SAFETY: the safety contract for `intrinsics::unreachable` must
     // be upheld by the caller.
+    unsafe { intrinsics::unreachable() }
+}
+
+/// Makes a *soundness* promise to the compiler that `cond` holds.
+///
+/// This may allow the optimizer to simplify things, but it might also make the generated code
+/// slower. Either way, calling it will most likely make compilation take longer.
+///
+/// You may know this from other places as
+/// [`llvm.assume`](https://llvm.org/docs/LangRef.html#llvm-assume-intrinsic) or, in C,
+/// [`__builtin_assume`](https://clang.llvm.org/docs/LanguageExtensions.html#builtin-assume).
+///
+/// This promotes a correctness requirement to a soundness requirement. Don't do that without
+/// very good reason.
+///
+/// # Usage
+///
+/// This is a situational tool for micro-optimization, and is allowed to do nothing. Any use
+/// should come with a repeatable benchmark to show the value, with the expectation to drop it
+/// later should the optimizer get smarter and no longer need it.
+///
+/// The more complicated the condition, the less likely this is to be useful. For example,
+/// `assert_unchecked(foo.is_sorted())` is a complex enough value that the compiler is unlikely
+/// to be able to take advantage of it.
+///
+/// There's also no need to `assert_unchecked` basic properties of things.  For example, the
+/// compiler already knows the range of `count_ones`, so there is no benefit to
+/// `let n = u32::count_ones(x); assert_unchecked(n <= u32::BITS);`.
+///
+/// `assert_unchecked` is logically equivalent to `if !cond { unreachable_unchecked(); }`. If
+/// ever you are tempted to write `assert_unchecked(false)`, you should instead use
+/// [`unreachable_unchecked()`] directly.
+///
+/// # Safety
+///
+/// `cond` must be `true`. It is immediate UB to call this with `false`.
+///
+/// # Example
+///
+/// ```
+/// use core::hint;
+///
+/// /// # Safety
+/// ///
+/// /// `p` must be nonnull and valid
+/// pub unsafe fn next_value(p: *const i32) -> i32 {
+///     // SAFETY: caller invariants guarantee that `p` is not null
+///     unsafe { hint::assert_unchecked(!p.is_null()) }
+///
+///     if p.is_null() {
+///         return -1;
+///     } else {
+///         // SAFETY: caller invariants guarantee that `p` is valid
+///         unsafe { *p + 1 }
+///     }
+/// }
+/// ```
+///
+/// Without the `assert_unchecked`, the above function produces the following with optimizations
+/// enabled:
+///
+/// ```asm
+/// next_value:
+///         test    rdi, rdi
+///         je      .LBB0_1
+///         mov     eax, dword ptr [rdi]
+///         inc     eax
+///         ret
+/// .LBB0_1:
+///         mov     eax, -1
+///         ret
+/// ```
+///
+/// Adding the assertion allows the optimizer to remove the extra check:
+///
+/// ```asm
+/// next_value:
+///         mov     eax, dword ptr [rdi]
+///         inc     eax
+///         ret
+/// ```
+///
+/// This example is quite unlike anything that would be used in the real world: it is redundant
+/// to put an assertion right next to code that checks the same thing, and dereferencing a
+/// pointer already has the builtin assumption that it is nonnull. However, it illustrates the
+/// kind of changes the optimizer can make even when the behavior is less obviously related.
+#[track_caller]
+#[inline(always)]
+#[doc(alias = "assume")]
+#[stable(feature = "hint_assert_unchecked", since = "1.81.0")]
+#[rustc_const_stable(feature = "hint_assert_unchecked", since = "1.81.0")]
+pub const unsafe fn assert_unchecked(cond: bool) {
+    // SAFETY: The caller promised `cond` is true.
     unsafe {
-        intrinsics::assert_unsafe_precondition!("hint::unreachable_unchecked must never be reached", () => false);
-        intrinsics::unreachable()
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
+            "hint::assert_unchecked must never be called when the condition is false",
+            (cond: bool = cond) => cond,
+        );
+        crate::intrinsics::assume(cond);
     }
 }
 
@@ -175,34 +278,27 @@ pub fn spin_loop() {
         unsafe { crate::arch::x86_64::_mm_pause() };
     }
 
-    // RISC-V platform spin loop hint implementation
+    #[cfg(target_arch = "riscv32")]
     {
-        // RISC-V RV32 and RV64 share the same PAUSE instruction, but they are located in different
-        // modules in `core::arch`.
-        // In this case, here we call `pause` function in each core arch module.
-        #[cfg(target_arch = "riscv32")]
-        {
-            crate::arch::riscv32::pause();
-        }
-        #[cfg(target_arch = "riscv64")]
-        {
-            crate::arch::riscv64::pause();
-        }
+        crate::arch::riscv32::pause();
     }
 
-    #[cfg(any(target_arch = "aarch64", all(target_arch = "arm", target_feature = "v6")))]
+    #[cfg(target_arch = "riscv64")]
     {
-        #[cfg(target_arch = "aarch64")]
-        {
-            // SAFETY: the `cfg` attr ensures that we only execute this on aarch64 targets.
-            unsafe { crate::arch::aarch64::__isb(crate::arch::aarch64::SY) };
-        }
-        #[cfg(target_arch = "arm")]
-        {
-            // SAFETY: the `cfg` attr ensures that we only execute this on arm targets
-            // with support for the v6 feature.
-            unsafe { crate::arch::arm::__yield() };
-        }
+        crate::arch::riscv64::pause();
+    }
+
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm64ec"))]
+    {
+        // SAFETY: the `cfg` attr ensures that we only execute this on aarch64 targets.
+        unsafe { crate::arch::aarch64::__isb(crate::arch::aarch64::SY) };
+    }
+
+    #[cfg(all(target_arch = "arm", target_feature = "v6"))]
+    {
+        // SAFETY: the `cfg` attr ensures that we only execute this on arm targets
+        // with support for the v6 feature.
+        unsafe { crate::arch::arm::__yield() };
     }
 }
 
@@ -214,20 +310,22 @@ pub fn spin_loop() {
 /// behavior in the calling code. This property makes `black_box` useful for writing code in which
 /// certain optimizations are not desired, such as benchmarks.
 ///
+/// <div class="warning">
+///
 /// Note however, that `black_box` is only (and can only be) provided on a "best-effort" basis. The
 /// extent to which it can block optimisations may vary depending upon the platform and code-gen
-/// backend used. Programs cannot rely on `black_box` for *correctness* in any way.
+/// backend used. Programs cannot rely on `black_box` for *correctness*, beyond it behaving as the
+/// identity function. As such, it **must not be relied upon to control critical program behavior.**
+/// This also means that this function does not offer any guarantees for cryptographic or security
+/// purposes.
+///
+/// </div>
 ///
 /// [`std::convert::identity`]: crate::convert::identity
 ///
 /// # When is this useful?
 ///
-/// First and foremost: `black_box` does _not_ guarantee any exact behavior and, in some cases, may
-/// do nothing at all. As such, it **must not be relied upon to control critical program behavior.**
-/// This _immediately_ precludes any direct use of this function for cryptographic or security
-/// purposes.
-///
-/// While not suitable in those mission-critical cases, `back_box`'s functionality can generally be
+/// While not suitable in those mission-critical cases, `black_box`'s functionality can generally be
 /// relied upon for benchmarking, and should be used there. It will try to ensure that the
 /// compiler doesn't optimize away part of the intended test code based on context. For
 /// example:
@@ -248,7 +346,7 @@ pub fn spin_loop() {
 ///
 /// The compiler could theoretically make optimizations like the following:
 ///
-/// - `needle` and `haystack` are always the same, move the call to `contains` outside the loop and
+/// - The `needle` and `haystack` do not change, move the call to `contains` outside the loop and
 ///   delete the loop
 /// - Inline `contains`
 /// - `needle` and `haystack` have values known at compile time, `contains` is always true. Remove
@@ -263,7 +361,7 @@ pub fn spin_loop() {
 /// ```
 /// use std::hint::black_box;
 ///
-/// // Same `contains` function
+/// // Same `contains` function.
 /// fn contains(haystack: &[&str], needle: &str) -> bool {
 ///     haystack.iter().any(|x| x == &needle)
 /// }
@@ -272,8 +370,13 @@ pub fn spin_loop() {
 ///     let haystack = vec!["abc", "def", "ghi", "jkl", "mno"];
 ///     let needle = "ghi";
 ///     for _ in 0..10 {
-///         // Adjust our benchmark loop contents
-///         black_box(contains(black_box(&haystack), black_box(needle)));
+///         // Force the compiler to run `contains`, even though it is a pure function whose
+///         // results are unused.
+///         black_box(contains(
+///             // Prevent the compiler from making assumptions about the input.
+///             black_box(&haystack),
+///             black_box(needle),
+///         ));
 ///     }
 /// }
 /// ```
@@ -286,11 +389,90 @@ pub fn spin_loop() {
 /// - Treats the call to `contains` and its result as volatile: the body of `benchmark` cannot
 ///   optimize this away
 ///
-/// This makes our benchmark much more realistic to how the function would be used in situ, where
+/// This makes our benchmark much more realistic to how the function would actually be used, where
 /// arguments are usually not known at compile time and the result is used in some way.
+///
+/// # How to use this
+///
+/// In practice, `black_box` serves two purposes:
+///
+/// 1. It prevents the compiler from making optimizations related to the value returned by `black_box`
+/// 2. It forces the value passed to `black_box` to be calculated, even if the return value of `black_box` is unused
+///
+/// ```
+/// use std::hint::black_box;
+///
+/// let zero = 0;
+/// let five = 5;
+///
+/// // The compiler will see this and remove the `* five` call, because it knows that multiplying
+/// // any integer by 0 will result in 0.
+/// let c = zero * five;
+///
+/// // Adding `black_box` here disables the compiler's ability to reason about the first operand in the multiplication.
+/// // It is forced to assume that it can be any possible number, so it cannot remove the `* five`
+/// // operation.
+/// let c = black_box(zero) * five;
+/// ```
+///
+/// While most cases will not be as clear-cut as the above example, it still illustrates how
+/// `black_box` can be used. When benchmarking a function, you usually want to wrap its inputs in
+/// `black_box` so the compiler cannot make optimizations that would be unrealistic in real-life
+/// use.
+///
+/// ```
+/// use std::hint::black_box;
+///
+/// // This is a simple function that increments its input by 1. Note that it is pure, meaning it
+/// // has no side-effects. This function has no effect if its result is unused. (An example of a
+/// // function *with* side-effects is `println!()`.)
+/// fn increment(x: u8) -> u8 {
+///     x + 1
+/// }
+///
+/// // Here, we call `increment` but discard its result. The compiler, seeing this and knowing that
+/// // `increment` is pure, will eliminate this function call entirely. This may not be desired,
+/// // though, especially if we're trying to track how much time `increment` takes to execute.
+/// let _ = increment(black_box(5));
+///
+/// // Here, we force `increment` to be executed. This is because the compiler treats `black_box`
+/// // as if it has side-effects, and thus must compute its input.
+/// let _ = black_box(increment(black_box(5)));
+/// ```
+///
+/// There may be additional situations where you want to wrap the result of a function in
+/// `black_box` to force its execution. This is situational though, and may not have any effect
+/// (such as when the function returns a zero-sized type such as [`()` unit][unit]).
+///
+/// Note that `black_box` has no effect on how its input is treated, only its output. As such,
+/// expressions passed to `black_box` may still be optimized:
+///
+/// ```
+/// use std::hint::black_box;
+///
+/// // The compiler sees this...
+/// let y = black_box(5 * 10);
+///
+/// // ...as this. As such, it will likely simplify `5 * 10` to just `50`.
+/// let _0 = 5 * 10;
+/// let y = black_box(_0);
+/// ```
+///
+/// In the above example, the `5 * 10` expression is considered distinct from the `black_box` call,
+/// and thus is still optimized by the compiler. You can prevent this by moving the multiplication
+/// operation outside of `black_box`:
+///
+/// ```
+/// use std::hint::black_box;
+///
+/// // No assumptions can be made about either operand, so the multiplication is not optimized out.
+/// let y = black_box(5) * black_box(10);
+/// ```
+///
+/// During constant evaluation, `black_box` is treated as a no-op.
 #[inline]
 #[stable(feature = "bench_black_box", since = "1.66.0")]
-#[rustc_const_unstable(feature = "const_black_box", issue = "none")]
+#[rustc_const_stable(feature = "const_black_box", since = "CURRENT_RUSTC_VERSION")]
 pub const fn black_box<T>(dummy: T) -> T {
     crate::intrinsics::black_box(dummy)
 }
@@ -412,9 +594,143 @@ pub const fn black_box<T>(dummy: T) -> T {
 ///   # }
 ///   ```
 #[unstable(feature = "hint_must_use", issue = "94745")]
-#[rustc_const_unstable(feature = "hint_must_use", issue = "94745")]
 #[must_use] // <-- :)
 #[inline(always)]
 pub const fn must_use<T>(value: T) -> T {
     value
+}
+
+/// Hints to the compiler that a branch condition is likely to be true.
+/// Returns the value passed to it.
+///
+/// It can be used with `if` or boolean `match` expressions.
+///
+/// When used outside of a branch condition, it may still influence a nearby branch, but
+/// probably will not have any effect.
+///
+/// It can also be applied to parts of expressions, such as `likely(a) && unlikely(b)`, or to
+/// compound expressions, such as `likely(a && b)`. When applied to compound expressions, it has
+/// the following effect:
+/// ```text
+///     likely(!a) => !unlikely(a)
+///     likely(a && b) => likely(a) && likely(b)
+///     likely(a || b) => a || likely(b)
+/// ```
+///
+/// See also the function [`cold_path()`] which may be more appropriate for idiomatic Rust code.
+///
+/// # Examples
+///
+/// ```
+/// #![feature(likely_unlikely)]
+/// use core::hint::likely;
+///
+/// fn foo(x: i32) {
+///     if likely(x > 0) {
+///         println!("this branch is likely to be taken");
+///     } else {
+///         println!("this branch is unlikely to be taken");
+///     }
+///
+///     match likely(x > 0) {
+///         true => println!("this branch is likely to be taken"),
+///         false => println!("this branch is unlikely to be taken"),
+///     }
+///
+///     // Use outside of a branch condition may still influence a nearby branch
+///     let cond = likely(x != 0);
+///     if cond {
+///         println!("this branch is likely to be taken");
+///     }
+/// }
+/// ```
+///
+///
+#[unstable(feature = "likely_unlikely", issue = "136873")]
+#[inline(always)]
+pub const fn likely(b: bool) -> bool {
+    crate::intrinsics::likely(b)
+}
+
+/// Hints to the compiler that a branch condition is unlikely to be true.
+/// Returns the value passed to it.
+///
+/// It can be used with `if` or boolean `match` expressions.
+///
+/// When used outside of a branch condition, it may still influence a nearby branch, but
+/// probably will not have any effect.
+///
+/// It can also be applied to parts of expressions, such as `likely(a) && unlikely(b)`, or to
+/// compound expressions, such as `unlikely(a && b)`. When applied to compound expressions, it has
+/// the following effect:
+/// ```text
+///     unlikely(!a) => !likely(a)
+///     unlikely(a && b) => a && unlikely(b)
+///     unlikely(a || b) => unlikely(a) || unlikely(b)
+/// ```
+///
+/// See also the function [`cold_path()`] which may be more appropriate for idiomatic Rust code.
+///
+/// # Examples
+///
+/// ```
+/// #![feature(likely_unlikely)]
+/// use core::hint::unlikely;
+///
+/// fn foo(x: i32) {
+///     if unlikely(x > 0) {
+///         println!("this branch is unlikely to be taken");
+///     } else {
+///         println!("this branch is likely to be taken");
+///     }
+///
+///     match unlikely(x > 0) {
+///         true => println!("this branch is unlikely to be taken"),
+///         false => println!("this branch is likely to be taken"),
+///     }
+///
+///     // Use outside of a branch condition may still influence a nearby branch
+///     let cond = unlikely(x != 0);
+///     if cond {
+///         println!("this branch is likely to be taken");
+///     }
+/// }
+/// ```
+#[unstable(feature = "likely_unlikely", issue = "136873")]
+#[inline(always)]
+pub const fn unlikely(b: bool) -> bool {
+    crate::intrinsics::unlikely(b)
+}
+
+/// Hints to the compiler that given path is cold, i.e., unlikely to be taken. The compiler may
+/// choose to optimize paths that are not cold at the expense of paths that are cold.
+///
+/// # Examples
+///
+/// ```
+/// #![feature(cold_path)]
+/// use core::hint::cold_path;
+///
+/// fn foo(x: &[i32]) {
+///     if let Some(first) = x.get(0) {
+///         // this is the fast path
+///     } else {
+///         // this path is unlikely
+///         cold_path();
+///     }
+/// }
+///
+/// fn bar(x: i32) -> i32 {
+///     match x {
+///         1 => 10,
+///         2 => 100,
+///         3 => { cold_path(); 1000 }, // this branch is unlikely
+///         _ => { cold_path(); 10000 }, // this is also unlikely
+///     }
+/// }
+/// ```
+#[unstable(feature = "cold_path", issue = "136873")]
+#[inline(always)]
+pub const fn cold_path() {
+    crate::intrinsics::cold_path()
 }

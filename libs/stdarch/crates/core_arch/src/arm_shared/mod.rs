@@ -53,68 +53,99 @@
 // 8, 7 and 6-M are supported via dedicated instructions like DMB. All other arches are supported
 // via CP15 instructions. See Section 10.1 of ACLE
 mod barrier;
-
+#[unstable(feature = "stdarch_arm_barrier", issue = "117219")]
 pub use self::barrier::*;
 
 mod hints;
+#[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub use self::hints::*;
 
-mod registers;
-pub use self::registers::*;
-
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
 mod crc;
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+#[cfg_attr(
+    target_arch = "arm",
+    unstable(feature = "stdarch_aarch32_crc32", issue = "125085")
+)]
+#[cfg_attr(
+    not(target_arch = "arm"),
+    stable(feature = "stdarch_aarch64_crc32", since = "1.80.0")
+)]
 pub use crc::*;
 
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
+#[cfg(target_endian = "little")]
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_feature = "v7",
+    doc
+))]
 mod crypto;
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
+#[cfg(target_endian = "little")]
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_feature = "v7",
+    doc
+))]
+#[cfg_attr(
+    target_arch = "arm",
+    unstable(feature = "stdarch_arm_neon_intrinsics", issue = "111800")
+)]
+#[cfg_attr(
+    not(target_arch = "arm"),
+    stable(feature = "aarch64_neon_crypto_intrinsics", since = "1.72.0")
+)]
 pub use self::crypto::*;
 
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
+#[cfg(target_endian = "little")]
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_feature = "v7",
+    doc
+))]
 pub(crate) mod neon;
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+#[cfg(target_endian = "little")]
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_feature = "v7",
+    doc
+))]
+#[cfg_attr(
+    not(target_arch = "arm"),
+    stable(feature = "neon_intrinsics", since = "1.59.0")
+)]
+#[cfg_attr(
+    target_arch = "arm",
+    unstable(feature = "stdarch_arm_neon_intrinsics", issue = "111800")
+)]
 pub use self::neon::*;
 
 #[cfg(test)]
-#[cfg(any(target_arch = "aarch64", target_feature = "v7", doc))]
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_feature = "v7",
+    doc
+))]
 pub(crate) mod test_support;
 
 mod sealed {
+    #[unstable(feature = "stdarch_arm_barrier", issue = "117219")]
     pub trait Dmb {
         unsafe fn __dmb(&self);
     }
 
+    #[unstable(feature = "stdarch_arm_barrier", issue = "117219")]
     pub trait Dsb {
         unsafe fn __dsb(&self);
     }
 
+    #[unstable(feature = "stdarch_arm_barrier", issue = "117219")]
     pub trait Isb {
         unsafe fn __isb(&self);
-    }
-
-    pub trait Rsr {
-        unsafe fn __rsr(&self) -> u32;
-    }
-
-    pub trait Rsr64 {
-        unsafe fn __rsr64(&self) -> u64;
-    }
-
-    pub trait Rsrp {
-        unsafe fn __rsrp(&self) -> *const u8;
-    }
-
-    pub trait Wsr {
-        unsafe fn __wsr(&self, value: u32);
-    }
-
-    pub trait Wsr64 {
-        unsafe fn __wsr64(&self, value: u64);
-    }
-
-    pub trait Wsrp {
-        unsafe fn __wsrp(&self, value: *const u8);
     }
 }

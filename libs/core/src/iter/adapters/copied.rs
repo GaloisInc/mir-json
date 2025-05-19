@@ -1,9 +1,8 @@
-use crate::iter::adapters::{
-    zip::try_get_unchecked, TrustedRandomAccess, TrustedRandomAccessNoCoerce,
-};
-use crate::iter::{FusedIterator, TrustedLen};
-use crate::mem::MaybeUninit;
-use crate::mem::SizedTypeProperties;
+use crate::iter::adapters::zip::try_get_unchecked;
+use crate::iter::adapters::{SourceIter, TrustedRandomAccess, TrustedRandomAccessNoCoerce};
+use crate::iter::{FusedIterator, InPlaceIterable, TrustedLen};
+use crate::mem::{MaybeUninit, SizedTypeProperties};
+use crate::num::NonZero;
 use crate::ops::Try;
 use crate::{array, ptr};
 
@@ -89,7 +88,7 @@ where
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.it.advance_by(n)
     }
 
@@ -130,7 +129,7 @@ where
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         self.it.advance_back_by(n)
     }
 }
@@ -192,7 +191,7 @@ where
     T: Copy,
 {
     default fn spec_next_chunk(&mut self) -> Result<[T; N], array::IntoIter<T, N>> {
-        array::iter_next_chunk(&mut self.map(|e| *e))
+        array::iter_next_chunk(&mut self.copied())
     }
 }
 
@@ -201,7 +200,7 @@ where
     T: Copy,
 {
     fn spec_next_chunk(&mut self) -> Result<[T; N], array::IntoIter<T, N>> {
-        let mut raw_array = MaybeUninit::uninit_array();
+        let mut raw_array = [const { MaybeUninit::uninit() }; N];
 
         let len = self.len();
 
@@ -239,4 +238,38 @@ where
             Ok(MaybeUninit::array_assume_init(raw_array))
         }
     }
+}
+
+#[stable(feature = "default_iters", since = "1.70.0")]
+impl<I: Default> Default for Copied<I> {
+    /// Creates a `Copied` iterator from the default value of `I`
+    /// ```
+    /// # use core::slice;
+    /// # use core::iter::Copied;
+    /// let iter: Copied<slice::Iter<'_, u8>> = Default::default();
+    /// assert_eq!(iter.len(), 0);
+    /// ```
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I> SourceIter for Copied<I>
+where
+    I: SourceIter,
+{
+    type Source = I::Source;
+
+    #[inline]
+    unsafe fn as_inner(&mut self) -> &mut I::Source {
+        // SAFETY: unsafe function forwarding to unsafe function with the same requirements
+        unsafe { SourceIter::as_inner(&mut self.it) }
+    }
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: InPlaceIterable> InPlaceIterable for Copied<I> {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = I::MERGE_BY;
 }

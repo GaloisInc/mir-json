@@ -1,11 +1,19 @@
 #![allow(deprecated)]
 
-use super::mystd::ffi::{CStr, OsStr};
+use super::mystd::ffi::OsStr;
 use super::mystd::os::unix::prelude::*;
 use super::mystd::prelude::v1::*;
 use super::{Library, LibrarySegment};
 use core::convert::TryInto;
+use core::ffi::CStr;
 use core::mem;
+
+// FIXME: replace with ptr::from_ref once MSRV is high enough
+#[inline(always)]
+#[must_use]
+const fn ptr_from_ref<T: ?Sized>(r: &T) -> *const T {
+    r
+}
 
 pub(super) fn native_libraries() -> Vec<Library> {
     let mut ret = Vec::new();
@@ -42,18 +50,18 @@ fn native_library(i: u32) -> Option<Library> {
         match (*header).magic {
             macho::MH_MAGIC => {
                 let endian = NativeEndian;
-                let header = &*(header as *const macho::MachHeader32<NativeEndian>);
+                let header = &*header.cast::<macho::MachHeader32<NativeEndian>>();
                 let data = core::slice::from_raw_parts(
-                    header as *const _ as *const u8,
+                    ptr_from_ref(header).cast::<u8>(),
                     mem::size_of_val(header) + header.sizeofcmds.get(endian) as usize,
                 );
                 (header.load_commands(endian, data, 0).ok()?, endian)
             }
             macho::MH_MAGIC_64 => {
                 let endian = NativeEndian;
-                let header = &*(header as *const macho::MachHeader64<NativeEndian>);
+                let header = &*header.cast::<macho::MachHeader64<NativeEndian>>();
                 let data = core::slice::from_raw_parts(
-                    header as *const _ as *const u8,
+                    ptr_from_ref(header).cast::<u8>(),
                     mem::size_of_val(header) + header.sizeofcmds.get(endian) as usize,
                 );
                 (header.load_commands(endian, data, 0).ok()?, endian)
@@ -113,8 +121,8 @@ fn native_library(i: u32) -> Option<Library> {
     // file offset 0 with a nonzero size. For whatever reason when this
     // is present it appears to mean that the symbol table is relative
     // to just the vmaddr slide for the library. If it's *not* present
-    // then the symbol table is relative to the the vmaddr slide plus
-    // the segment's stated address.
+    // then the symbol table is relative to the vmaddr slide plus the
+    // segment's stated address.
     //
     // To handle this situation if we *don't* find a text section at
     // file offset zero then we increase the bias by the first text

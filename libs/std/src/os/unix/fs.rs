@@ -4,18 +4,22 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use super::platform::fs::MetadataExt as _;
-use crate::fs::{self, OpenOptions, Permissions};
-use crate::io;
-use crate::os::unix::io::{AsFd, AsRawFd};
-use crate::path::Path;
-use crate::sys;
-use crate::sys_common::{AsInner, AsInnerMut, FromInner};
-// Used for `File::read` on intra-doc links
-use crate::ffi::OsStr;
-use crate::sealed::Sealed;
 #[allow(unused_imports)]
 use io::{Read, Write};
+
+use super::platform::fs::MetadataExt as _;
+// Used for `File::read` on intra-doc links
+use crate::ffi::OsStr;
+use crate::fs::{self, OpenOptions, Permissions};
+use crate::os::unix::io::{AsFd, AsRawFd};
+use crate::path::Path;
+use crate::sealed::Sealed;
+use crate::sys_common::{AsInner, AsInnerMut, FromInner};
+use crate::{io, sys};
+
+// Tests for this module
+#[cfg(test)]
+mod tests;
 
 /// Unix-specific extensions to [`fs::File`].
 #[stable(feature = "file_offset", since = "1.15.0")]
@@ -54,7 +58,17 @@ pub trait FileExt {
     #[stable(feature = "file_offset", since = "1.15.0")]
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
 
-    /// Reads the exact number of byte required to fill `buf` from the given offset.
+    /// Like `read_at`, except that it reads into a slice of buffers.
+    ///
+    /// Data is copied to fill each buffer in order, with the final buffer
+    /// written to possibly being only partially filled. This method must behave
+    /// equivalently to a single call to read with concatenated buffers.
+    #[unstable(feature = "unix_file_vectored_at", issue = "89517")]
+    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
+        io::default_read_vectored(|b| self.read_at(b, offset), bufs)
+    }
+
+    /// Reads the exact number of bytes required to fill `buf` from the given offset.
     ///
     /// The offset is relative to the start of the file and thus independent
     /// from the current cursor.
@@ -109,15 +123,11 @@ pub trait FileExt {
                     buf = &mut tmp[n..];
                     offset += n as u64;
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(ref e) if e.is_interrupted() => {}
                 Err(e) => return Err(e),
             }
         }
-        if !buf.is_empty() {
-            Err(io::const_io_error!(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer",))
-        } else {
-            Ok(())
-        }
+        if !buf.is_empty() { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
     }
 
     /// Writes a number of bytes starting from a given offset.
@@ -135,7 +145,36 @@ pub trait FileExt {
     /// Note that similar to [`File::write`], it is not an error to return a
     /// short write.
     ///
+    /// # Bug
+    /// On some systems, `write_at` utilises [`pwrite64`] to write to files.
+    /// However, this syscall has a [bug] where files opened with the `O_APPEND`
+    /// flag fail to respect the offset parameter, always appending to the end
+    /// of the file instead.
+    ///
+    /// It is possible to inadvertently set this flag, like in the example below.
+    /// Therefore, it is important to be vigilant while changing options to mitigate
+    /// unexpected behavior.
+    ///
+    /// ```no_run
+    /// use std::fs::File;
+    /// use std::io;
+    /// use std::os::unix::prelude::FileExt;
+    ///
+    /// fn main() -> io::Result<()> {
+    ///     // Open a file with the append option (sets the `O_APPEND` flag)
+    ///     let file = File::options().append(true).open("foo.txt")?;
+    ///
+    ///     // We attempt to write at offset 10; instead appended to EOF
+    ///     file.write_at(b"sushi", 10)?;
+    ///
+    ///     // foo.txt is 5 bytes long instead of 15
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
     /// [`File::write`]: fs::File::write
+    /// [`pwrite64`]: https://man7.org/linux/man-pages/man2/pwrite.2.html
+    /// [bug]: https://man7.org/linux/man-pages/man2/pwrite.2.html#BUGS
     ///
     /// # Examples
     ///
@@ -145,7 +184,7 @@ pub trait FileExt {
     /// use std::os::unix::prelude::FileExt;
     ///
     /// fn main() -> io::Result<()> {
-    ///     let file = File::open("foo.txt")?;
+    ///     let file = File::create("foo.txt")?;
     ///
     ///     // We now write at the offset 10.
     ///     file.write_at(b"sushi", 10)?;
@@ -154,6 +193,16 @@ pub trait FileExt {
     /// ```
     #[stable(feature = "file_offset", since = "1.15.0")]
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
+
+    /// Like `write_at`, except that it writes from a slice of buffers.
+    ///
+    /// Data is copied from each buffer in order, with the final buffer read
+    /// from possibly being only partially consumed. This method must behave as
+    /// a call to `write_at` with the buffers concatenated would.
+    #[unstable(feature = "unix_file_vectored_at", issue = "89517")]
+    fn write_vectored_at(&self, bufs: &[io::IoSlice<'_>], offset: u64) -> io::Result<usize> {
+        io::default_write_vectored(|b| self.write_at(b, offset), bufs)
+    }
 
     /// Attempts to write an entire buffer starting from a given offset.
     ///
@@ -196,16 +245,13 @@ pub trait FileExt {
         while !buf.is_empty() {
             match self.write_at(buf, offset) {
                 Ok(0) => {
-                    return Err(io::const_io_error!(
-                        io::ErrorKind::WriteZero,
-                        "failed to write whole buffer",
-                    ));
+                    return Err(io::Error::WRITE_ALL_EOF);
                 }
                 Ok(n) => {
                     buf = &buf[n..];
                     offset += n as u64
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(ref e) if e.is_interrupted() => {}
                 Err(e) => return Err(e),
             }
         }
@@ -218,8 +264,14 @@ impl FileExt for fs::File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         self.as_inner().read_at(buf, offset)
     }
+    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
+        self.as_inner().read_vectored_at(bufs, offset)
+    }
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
         self.as_inner().write_at(buf, offset)
+    }
+    fn write_vectored_at(&self, bufs: &[io::IoSlice<'_>], offset: u64) -> io::Result<usize> {
+        self.as_inner().write_vectored_at(bufs, offset)
     }
 }
 
@@ -282,6 +334,7 @@ pub trait PermissionsExt {
     /// assert_eq!(permissions.mode(), 0o644);
     /// ```
     #[stable(feature = "fs_ext", since = "1.1.0")]
+    #[cfg_attr(not(test), rustc_diagnostic_item = "permissions_from_mode")]
     fn from_mode(mode: u32) -> Self;
 }
 
@@ -338,7 +391,6 @@ pub trait OpenOptionsExt {
     ///
     /// ```no_run
     /// # #![feature(rustc_private)]
-    /// extern crate libc;
     /// use std::fs::OpenOptions;
     /// use std::os::unix::fs::OpenOptionsExt;
     ///
@@ -935,13 +987,17 @@ impl DirBuilderExt for fs::DirBuilder {
 /// Changing the group typically requires either being the owner and a member of the group, or
 /// having privileges.
 ///
+/// Be aware that changing owner clears the `suid` and `sgid` permission bits in most cases
+/// according to POSIX, usually even if the user is root. The sgid is not cleared when
+/// the file is non-group-executable. See: <https://www.man7.org/linux/man-pages/man2/chown.2.html>
+/// This call may also clear file capabilities, if there was any.
+///
 /// If called on a symbolic link, this will change the owner and group of the link target. To
 /// change the owner and group of the link itself, see [`lchown`].
 ///
 /// # Examples
 ///
 /// ```no_run
-/// #![feature(unix_chown)]
 /// use std::os::unix::fs;
 ///
 /// fn main() -> std::io::Result<()> {
@@ -949,7 +1005,7 @@ impl DirBuilderExt for fs::DirBuilder {
 ///     Ok(())
 /// }
 /// ```
-#[unstable(feature = "unix_chown", issue = "88989")]
+#[stable(feature = "unix_chown", since = "1.73.0")]
 pub fn chown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
     sys::fs::chown(dir.as_ref(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
 }
@@ -961,7 +1017,6 @@ pub fn chown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::
 /// # Examples
 ///
 /// ```no_run
-/// #![feature(unix_chown)]
 /// use std::os::unix::fs;
 ///
 /// fn main() -> std::io::Result<()> {
@@ -970,7 +1025,7 @@ pub fn chown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::
 ///     Ok(())
 /// }
 /// ```
-#[unstable(feature = "unix_chown", issue = "88989")]
+#[stable(feature = "unix_chown", since = "1.73.0")]
 pub fn fchown<F: AsFd>(fd: F, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
     sys::fs::fchown(fd.as_fd().as_raw_fd(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
 }
@@ -983,7 +1038,6 @@ pub fn fchown<F: AsFd>(fd: F, uid: Option<u32>, gid: Option<u32>) -> io::Result<
 /// # Examples
 ///
 /// ```no_run
-/// #![feature(unix_chown)]
 /// use std::os::unix::fs;
 ///
 /// fn main() -> std::io::Result<()> {
@@ -991,7 +1045,7 @@ pub fn fchown<F: AsFd>(fd: F, uid: Option<u32>, gid: Option<u32>) -> io::Result<
 ///     Ok(())
 /// }
 /// ```
-#[unstable(feature = "unix_chown", issue = "88989")]
+#[stable(feature = "unix_chown", since = "1.73.0")]
 pub fn lchown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
     sys::fs::lchown(dir.as_ref(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
 }
@@ -1016,7 +1070,7 @@ pub fn lchown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io:
 /// }
 /// ```
 #[stable(feature = "unix_chroot", since = "1.56.0")]
-#[cfg(not(any(target_os = "fuchsia", target_os = "vxworks")))]
+#[cfg(not(target_os = "fuchsia"))]
 pub fn chroot<P: AsRef<Path>>(dir: P) -> io::Result<()> {
     sys::fs::chroot(dir.as_ref())
 }

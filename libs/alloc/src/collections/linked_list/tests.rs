@@ -1,11 +1,14 @@
-use super::*;
-use crate::testing::crash_test::{CrashTestDummy, Panic};
-use crate::vec::Vec;
+// FIXME(static_mut_refs): Do not allow `static_mut_refs` lint
+#![allow(static_mut_refs)]
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread;
 
 use rand::RngCore;
+
+use super::*;
+use crate::testing::crash_test::{CrashTestDummy, Panic};
+use crate::vec::Vec;
 
 #[test]
 fn test_basic() {
@@ -55,7 +58,7 @@ fn list_from<T: Clone>(v: &[T]) -> LinkedList<T> {
     v.iter().cloned().collect()
 }
 
-pub fn check_links<T>(list: &LinkedList<T>) {
+fn check_links<T>(list: &LinkedList<T>) {
     unsafe {
         let mut len = 0;
         let mut last_ptr: Option<&Node<T>> = None;
@@ -540,10 +543,10 @@ fn test_show() {
 }
 
 #[test]
-fn drain_filter_test() {
+fn extract_if_test() {
     let mut m: LinkedList<u32> = LinkedList::new();
     m.extend(&[1, 2, 3, 4, 5, 6]);
-    let deleted = m.drain_filter(|v| *v < 4).collect::<Vec<_>>();
+    let deleted = m.extract_if(|v| *v < 4).collect::<Vec<_>>();
 
     check_links(&m);
 
@@ -555,7 +558,7 @@ fn drain_filter_test() {
 fn drain_to_empty_test() {
     let mut m: LinkedList<u32> = LinkedList::new();
     m.extend(&[1, 2, 3, 4, 5, 6]);
-    let deleted = m.drain_filter(|_| true).collect::<Vec<_>>();
+    let deleted = m.extract_if(|_| true).collect::<Vec<_>>();
 
     check_links(&m);
 
@@ -811,11 +814,11 @@ fn test_contains() {
 }
 
 #[test]
-fn drain_filter_empty() {
+fn extract_if_empty() {
     let mut list: LinkedList<i32> = LinkedList::new();
 
     {
-        let mut iter = list.drain_filter(|_| true);
+        let mut iter = list.extract_if(|_| true);
         assert_eq!(iter.size_hint(), (0, Some(0)));
         assert_eq!(iter.next(), None);
         assert_eq!(iter.size_hint(), (0, Some(0)));
@@ -828,13 +831,13 @@ fn drain_filter_empty() {
 }
 
 #[test]
-fn drain_filter_zst() {
+fn extract_if_zst() {
     let mut list: LinkedList<_> = [(), (), (), (), ()].into_iter().collect();
     let initial_len = list.len();
     let mut count = 0;
 
     {
-        let mut iter = list.drain_filter(|_| true);
+        let mut iter = list.extract_if(|_| true);
         assert_eq!(iter.size_hint(), (0, Some(initial_len)));
         while let Some(_) = iter.next() {
             count += 1;
@@ -851,14 +854,14 @@ fn drain_filter_zst() {
 }
 
 #[test]
-fn drain_filter_false() {
+fn extract_if_false() {
     let mut list: LinkedList<_> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].into_iter().collect();
 
     let initial_len = list.len();
     let mut count = 0;
 
     {
-        let mut iter = list.drain_filter(|_| false);
+        let mut iter = list.extract_if(|_| false);
         assert_eq!(iter.size_hint(), (0, Some(initial_len)));
         for _ in iter.by_ref() {
             count += 1;
@@ -874,14 +877,14 @@ fn drain_filter_false() {
 }
 
 #[test]
-fn drain_filter_true() {
+fn extract_if_true() {
     let mut list: LinkedList<_> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].into_iter().collect();
 
     let initial_len = list.len();
     let mut count = 0;
 
     {
-        let mut iter = list.drain_filter(|_| true);
+        let mut iter = list.extract_if(|_| true);
         assert_eq!(iter.size_hint(), (0, Some(initial_len)));
         while let Some(_) = iter.next() {
             count += 1;
@@ -898,7 +901,7 @@ fn drain_filter_true() {
 }
 
 #[test]
-fn drain_filter_complex() {
+fn extract_if_complex() {
     {
         //                [+xxx++++++xxxxx++++x+x++]
         let mut list = [
@@ -908,7 +911,7 @@ fn drain_filter_complex() {
         .into_iter()
         .collect::<LinkedList<_>>();
 
-        let removed = list.drain_filter(|x| *x % 2 == 0).collect::<Vec<_>>();
+        let removed = list.extract_if(|x| *x % 2 == 0).collect::<Vec<_>>();
         assert_eq!(removed.len(), 10);
         assert_eq!(removed, vec![2, 4, 6, 18, 20, 22, 24, 26, 34, 36]);
 
@@ -926,7 +929,7 @@ fn drain_filter_complex() {
                 .into_iter()
                 .collect::<LinkedList<_>>();
 
-        let removed = list.drain_filter(|x| *x % 2 == 0).collect::<Vec<_>>();
+        let removed = list.extract_if(|x| *x % 2 == 0).collect::<Vec<_>>();
         assert_eq!(removed.len(), 10);
         assert_eq!(removed, vec![2, 4, 6, 18, 20, 22, 24, 26, 34, 36]);
 
@@ -944,7 +947,7 @@ fn drain_filter_complex() {
                 .into_iter()
                 .collect::<LinkedList<_>>();
 
-        let removed = list.drain_filter(|x| *x % 2 == 0).collect::<Vec<_>>();
+        let removed = list.extract_if(|x| *x % 2 == 0).collect::<Vec<_>>();
         assert_eq!(removed.len(), 10);
         assert_eq!(removed, vec![2, 4, 6, 18, 20, 22, 24, 26, 34, 36]);
 
@@ -961,7 +964,7 @@ fn drain_filter_complex() {
             .into_iter()
             .collect::<LinkedList<_>>();
 
-        let removed = list.drain_filter(|x| *x % 2 == 0).collect::<Vec<_>>();
+        let removed = list.extract_if(|x| *x % 2 == 0).collect::<Vec<_>>();
         assert_eq!(removed.len(), 10);
         assert_eq!(removed, vec![2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
 
@@ -975,7 +978,7 @@ fn drain_filter_complex() {
             .into_iter()
             .collect::<LinkedList<_>>();
 
-        let removed = list.drain_filter(|x| *x % 2 == 0).collect::<Vec<_>>();
+        let removed = list.extract_if(|x| *x % 2 == 0).collect::<Vec<_>>();
         assert_eq!(removed.len(), 10);
         assert_eq!(removed, vec![2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
 
@@ -985,7 +988,8 @@ fn drain_filter_complex() {
 }
 
 #[test]
-fn drain_filter_drop_panic_leak() {
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
+fn extract_if_drop_panic_leak() {
     let d0 = CrashTestDummy::new(0);
     let d1 = CrashTestDummy::new(1);
     let d2 = CrashTestDummy::new(2);
@@ -1004,21 +1008,28 @@ fn drain_filter_drop_panic_leak() {
     q.push_front(d1.spawn(Panic::InDrop));
     q.push_front(d0.spawn(Panic::Never));
 
-    catch_unwind(AssertUnwindSafe(|| drop(q.drain_filter(|_| true)))).unwrap_err();
+    catch_unwind(AssertUnwindSafe(|| q.extract_if(|_| true).for_each(drop))).unwrap_err();
 
     assert_eq!(d0.dropped(), 1);
     assert_eq!(d1.dropped(), 1);
+    assert_eq!(d2.dropped(), 0);
+    assert_eq!(d3.dropped(), 0);
+    assert_eq!(d4.dropped(), 0);
+    assert_eq!(d5.dropped(), 0);
+    assert_eq!(d6.dropped(), 0);
+    assert_eq!(d7.dropped(), 0);
+    drop(q);
     assert_eq!(d2.dropped(), 1);
     assert_eq!(d3.dropped(), 1);
     assert_eq!(d4.dropped(), 1);
     assert_eq!(d5.dropped(), 1);
     assert_eq!(d6.dropped(), 1);
     assert_eq!(d7.dropped(), 1);
-    assert!(q.is_empty());
 }
 
 #[test]
-fn drain_filter_pred_panic_leak() {
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
+fn extract_if_pred_panic_leak() {
     static mut DROPS: i32 = 0;
 
     #[derive(Debug)]
@@ -1043,7 +1054,7 @@ fn drain_filter_pred_panic_leak() {
     q.push_front(D(0));
 
     catch_unwind(AssertUnwindSafe(|| {
-        drop(q.drain_filter(|item| if item.0 >= 2 { panic!() } else { true }))
+        q.extract_if(|item| if item.0 >= 2 { panic!() } else { true }).for_each(drop)
     }))
     .ok();
 
@@ -1124,6 +1135,7 @@ fn test_drop_clear() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_drop_panic() {
     static mut DROPS: i32 = 0;
 
@@ -1154,4 +1166,41 @@ fn test_drop_panic() {
     catch_unwind(move || drop(q)).ok();
 
     assert_eq!(unsafe { DROPS }, 8);
+}
+
+#[test]
+fn test_allocator() {
+    use core::alloc::{AllocError, Allocator, Layout};
+    use core::cell::Cell;
+
+    struct A {
+        has_allocated: Cell<bool>,
+        has_deallocated: Cell<bool>,
+    }
+
+    unsafe impl Allocator for A {
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            assert!(!self.has_allocated.get());
+            self.has_allocated.set(true);
+
+            Global.allocate(layout)
+        }
+
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            assert!(!self.has_deallocated.get());
+            self.has_deallocated.set(true);
+
+            unsafe { Global.deallocate(ptr, layout) }
+        }
+    }
+
+    let alloc = &A { has_allocated: Cell::new(false), has_deallocated: Cell::new(false) };
+    {
+        let mut list = LinkedList::new_in(alloc);
+        list.push_back(5u32);
+        list.remove(0);
+    }
+
+    assert!(alloc.has_allocated.get());
+    assert!(alloc.has_deallocated.get());
 }

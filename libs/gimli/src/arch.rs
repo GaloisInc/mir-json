@@ -44,7 +44,8 @@ macro_rules! registers {
 
 /// ARM architecture specific definitions.
 ///
-/// See [DWARF for the ARM Architecture](https://developer.arm.com/documentation/ihi0040/c/).
+/// See [DWARF for the ARM Architecture](
+/// https://github.com/ARM-software/abi-aa/blob/main/aadwarf32/aadwarf32.rst).
 #[derive(Debug, Clone, Copy)]
 pub struct Arm;
 
@@ -98,6 +99,8 @@ registers!(Arm, {
     SPSR_ABT = (131, "SPSR_ABT"),
     SPSR_UND = (132, "SPSR_UND"),
     SPSR_SVC = (133, "SPSR_SVC"),
+
+    RA_AUTH_CODE = (143, "RA_AUTH_CODE"),
 
     R8_USR = (144, "R8_USR"),
     R9_USR = (145, "R9_USR"),
@@ -168,6 +171,11 @@ registers!(Arm, {
     D29 = (285, "D29"),
     D30 = (286, "D30"),
     D31 = (287, "D31"),
+
+    TPIDRURO = (320, "TPIDRURO"),
+    TPIDRURW = (321, "TPIDRURW"),
+    TPIDPR = (322, "TPIDPR"),
+    HTPIDPR = (323, "HTPIDPR"),
 },
 aliases {
     SP = (13, "SP"),
@@ -219,7 +227,8 @@ aliases {
 
 /// ARM 64-bit (AArch64) architecture specific definitions.
 ///
-/// See [DWARF for the ARM 64-bit Architecture](https://developer.arm.com/documentation/ihi0057/b/).
+/// See [DWARF for the ARM 64-bit Architecture](
+/// https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst).
 #[derive(Debug, Clone, Copy)]
 pub struct AArch64;
 
@@ -256,6 +265,34 @@ registers!(AArch64, {
     X29 = (29, "X29"),
     X30 = (30, "X30"),
     SP = (31, "SP"),
+    PC = (32, "PC"),
+    ELR_MODE = (33, "ELR_mode"),
+    RA_SIGN_STATE = (34, "RA_SIGN_STATE"),
+    TPIDRRO_EL0 = (35, "TPIDRRO_EL0"),
+    TPIDR_EL0 = (36, "TPIDR_EL0"),
+    TPIDR_EL1 = (37, "TPIDR_EL1"),
+    TPIDR_EL2 = (38, "TPIDR_EL2"),
+    TPIDR_EL3 = (39, "TPIDR_EL3"),
+
+    VG = (46, "VG"),
+    FFR = (47, "FFR"),
+
+    P0 = (48, "P0"),
+    P1 = (49, "P1"),
+    P2 = (50, "P2"),
+    P3 = (51, "P3"),
+    P4 = (52, "P4"),
+    P5 = (53, "P5"),
+    P6 = (54, "P6"),
+    P7 = (55, "P7"),
+    P8 = (56, "P8"),
+    P9 = (57, "P9"),
+    P10 = (58, "P10"),
+    P11 = (59, "P11"),
+    P12 = (60, "P12"),
+    P13 = (61, "P13"),
+    P14 = (62, "P14"),
+    P15 = (63, "P15"),
 
     V0 = (64, "V0"),
     V1 = (65, "V1"),
@@ -289,6 +326,300 @@ registers!(AArch64, {
     V29 = (93, "V29"),
     V30 = (94, "V30"),
     V31 = (95, "V31"),
+
+    Z0 = (96, "Z0"),
+    Z1 = (97, "Z1"),
+    Z2 = (98, "Z2"),
+    Z3 = (99, "Z3"),
+    Z4 = (100, "Z4"),
+    Z5 = (101, "Z5"),
+    Z6 = (102, "Z6"),
+    Z7 = (103, "Z7"),
+    Z8 = (104, "Z8"),
+    Z9 = (105, "Z9"),
+    Z10 = (106, "Z10"),
+    Z11 = (107, "Z11"),
+    Z12 = (108, "Z12"),
+    Z13 = (109, "Z13"),
+    Z14 = (110, "Z14"),
+    Z15 = (111, "Z15"),
+    Z16 = (112, "Z16"),
+    Z17 = (113, "Z17"),
+    Z18 = (114, "Z18"),
+    Z19 = (115, "Z19"),
+    Z20 = (116, "Z20"),
+    Z21 = (117, "Z21"),
+    Z22 = (118, "Z22"),
+    Z23 = (119, "Z23"),
+    Z24 = (120, "Z24"),
+    Z25 = (121, "Z25"),
+    Z26 = (122, "Z26"),
+    Z27 = (123, "Z27"),
+    Z28 = (124, "Z28"),
+    Z29 = (125, "Z29"),
+    Z30 = (126, "Z30"),
+    Z31 = (127, "Z31"),
+});
+
+/// LoongArch architecture specific definitions.
+///
+/// See [LoongArch ELF psABI specification](https://loongson.github.io/LoongArch-Documentation/LoongArch-ELF-ABI-EN.html).
+#[derive(Debug, Clone, Copy)]
+pub struct LoongArch;
+
+registers!(LoongArch, {
+    R0 = (0, "$r0"),
+    R1 = (1, "$r1"),
+    R2 = (2, "$r2"),
+    R3 = (3, "$r3"),
+    R4 = (4, "$r4"),
+    R5 = (5, "$r5"),
+    R6 = (6, "$r6"),
+    R7 = (7, "$r7"),
+    R8 = (8, "$r8"),
+    R9 = (9, "$r9"),
+    R10 = (10, "$r10"),
+    R11 = (11, "$r11"),
+    R12 = (12, "$r12"),
+    R13 = (13, "$r13"),
+    R14 = (14, "$r14"),
+    R15 = (15, "$r15"),
+    R16 = (16, "$r16"),
+    R17 = (17, "$r17"),
+    R18 = (18, "$r18"),
+    R19 = (19, "$r19"),
+    R20 = (20, "$r20"),
+    R21 = (21, "$r21"),
+    R22 = (22, "$r22"),
+    R23 = (23, "$r23"),
+    R24 = (24, "$r24"),
+    R25 = (25, "$r25"),
+    R26 = (26, "$r26"),
+    R27 = (27, "$r27"),
+    R28 = (28, "$r28"),
+    R29 = (29, "$r29"),
+    R30 = (30, "$r30"),
+    R31 = (31, "$r31"),
+
+    F0 = (32, "$f0"),
+    F1 = (33, "$f1"),
+    F2 = (34, "$f2"),
+    F3 = (35, "$f3"),
+    F4 = (36, "$f4"),
+    F5 = (37, "$f5"),
+    F6 = (38, "$f6"),
+    F7 = (39, "$f7"),
+    F8 = (40, "$f8"),
+    F9 = (41, "$f9"),
+    F10 = (42, "$f10"),
+    F11 = (43, "$f11"),
+    F12 = (44, "$f12"),
+    F13 = (45, "$f13"),
+    F14 = (46, "$f14"),
+    F15 = (47, "$f15"),
+    F16 = (48, "$f16"),
+    F17 = (49, "$f17"),
+    F18 = (50, "$f18"),
+    F19 = (51, "$f19"),
+    F20 = (52, "$f20"),
+    F21 = (53, "$f21"),
+    F22 = (54, "$f22"),
+    F23 = (55, "$f23"),
+    F24 = (56, "$f24"),
+    F25 = (57, "$f25"),
+    F26 = (58, "$f26"),
+    F27 = (59, "$f27"),
+    F28 = (60, "$f28"),
+    F29 = (61, "$f29"),
+    F30 = (62, "$f30"),
+    F31 = (63, "$f31"),
+    FCC0 = (64, "$fcc0"),
+    FCC1 = (65, "$fcc1"),
+    FCC2 = (66, "$fcc2"),
+    FCC3 = (67, "$fcc3"),
+    FCC4 = (68, "$fcc4"),
+    FCC5 = (69, "$fcc5"),
+    FCC6 = (70, "$fcc6"),
+    FCC7 = (71, "$fcc7"),
+},
+aliases {
+    ZERO = (0, "$zero"),
+    RA = (1, "$ra"),
+    TP = (2, "$tp"),
+    SP = (3, "$sp"),
+    A0 = (4, "$a0"),
+    A1 = (5, "$a1"),
+    A2 = (6, "$a2"),
+    A3 = (7, "$a3"),
+    A4 = (8, "$a4"),
+    A5 = (9, "$a5"),
+    A6 = (10, "$a6"),
+    A7 = (11, "$a7"),
+    T0 = (12, "$t0"),
+    T1 = (13, "$t1"),
+    T2 = (14, "$t2"),
+    T3 = (15, "$t3"),
+    T4 = (16, "$t4"),
+    T5 = (17, "$t5"),
+    T6 = (18, "$t6"),
+    T7 = (19, "$t7"),
+    T8 = (20, "$t8"),
+    FP = (22, "$fp"),
+    S0 = (23, "$s0"),
+    S1 = (24, "$s1"),
+    S2 = (25, "$s2"),
+    S3 = (26, "$s3"),
+    S4 = (27, "$s4"),
+    S5 = (28, "$s5"),
+    S6 = (29, "$s6"),
+    S7 = (30, "$s7"),
+    S8 = (31, "$s8"),
+
+    FA0 = (32, "$fa0"),
+    FA1 = (33, "$fa1"),
+    FA2 = (34, "$fa2"),
+    FA3 = (35, "$fa3"),
+    FA4 = (36, "$fa4"),
+    FA5 = (37, "$fa5"),
+    FA6 = (38, "$fa6"),
+    FA7 = (39, "$fa7"),
+    FT0 = (40, "$ft0"),
+    FT1 = (41, "$ft1"),
+    FT2 = (42, "$ft2"),
+    FT3 = (43, "$ft3"),
+    FT4 = (44, "$ft4"),
+    FT5 = (45, "$ft5"),
+    FT6 = (46, "$ft6"),
+    FT7 = (47, "$ft7"),
+    FT8 = (48, "$ft8"),
+    FT9 = (49, "$ft9"),
+    FT10 = (50, "$ft10"),
+    FT11 = (51, "$ft11"),
+    FT12 = (52, "$ft12"),
+    FT13 = (53, "$ft13"),
+    FT14 = (54, "$ft14"),
+    FT15 = (55, "$ft15"),
+    FS0 = (56, "$fs0"),
+    FS1 = (57, "$fs1"),
+    FS2 = (58, "$fs2"),
+    FS3 = (59, "$fs3"),
+    FS4 = (60, "$fs4"),
+    FS5 = (61, "$fs5"),
+    FS6 = (62, "$fs6"),
+    FS7 = (63, "$fs7"),
+});
+
+/// MIPS architecture specific definitions.
+///
+/// See [MIPS Details](https://en.wikibooks.org/wiki/MIPS_Assembly/MIPS_Details).
+#[derive(Debug, Clone, Copy)]
+pub struct MIPS;
+
+registers!(MIPS, {
+    R0 = (0, "$0"),
+    R1 = (1, "$1"),
+    R2 = (2, "$2"),
+    R3 = (3, "$3"),
+    R4 = (4, "$4"),
+    R5 = (5, "$5"),
+    R6 = (6, "$6"),
+    R7 = (7, "$7"),
+    R8 = (8, "$8"),
+    R9 = (9, "$9"),
+    R10 = (10, "$10"),
+    R11 = (11, "$11"),
+    R12 = (12, "$12"),
+    R13 = (13, "$13"),
+    R14 = (14, "$14"),
+    R15 = (15, "$15"),
+    R16 = (16, "$16"),
+    R17 = (17, "$17"),
+    R18 = (18, "$18"),
+    R19 = (19, "$19"),
+    R20 = (20, "$20"),
+    R21 = (21, "$21"),
+    R22 = (22, "$22"),
+    R23 = (23, "$23"),
+    R24 = (24, "$24"),
+    R25 = (25, "$25"),
+    R26 = (26, "$26"),
+    R27 = (27, "$27"),
+    R28 = (28, "$28"),
+    R29 = (29, "$29"),
+    R30 = (30, "$30"),
+    R31 = (31, "$31"),
+
+    F0 = (32, "$f0"),
+    F1 = (33, "$f1"),
+    F2 = (34, "$f2"),
+    F3 = (35, "$f3"),
+    F4 = (36, "$f4"),
+    F5 = (37, "$f5"),
+    F6 = (38, "$f6"),
+    F7 = (39, "$f7"),
+    F8 = (40, "$f8"),
+    F9 = (41, "$f9"),
+    F10 = (42, "$f10"),
+    F11 = (43, "$f11"),
+    F12 = (44, "$f12"),
+    F13 = (45, "$f13"),
+    F14 = (46, "$f14"),
+    F15 = (47, "$f15"),
+    F16 = (48, "$f16"),
+    F17 = (49, "$f17"),
+    F18 = (50, "$f18"),
+    F19 = (51, "$f19"),
+    F20 = (52, "$f20"),
+    F21 = (53, "$f21"),
+    F22 = (54, "$f22"),
+    F23 = (55, "$f23"),
+    F24 = (56, "$f24"),
+    F25 = (57, "$f25"),
+    F26 = (58, "$f26"),
+    F27 = (59, "$f27"),
+    F28 = (60, "$f28"),
+    F29 = (61, "$f29"),
+    F30 = (62, "$f30"),
+    F31 = (63, "$f31"),
+
+    HI = (64, "$hi"),
+    LO = (65, "$lo"),
+},
+aliases {
+    ZERO = (0, "$zero"),
+    AT = (1, "$at"),
+    V0 = (2, "$v0"),
+    V1 = (3, "$v1"),
+    A0 = (4, "$a0"),
+    A1 = (5, "$a1"),
+    A2 = (6, "$a2"),
+    A3 = (7, "$a3"),
+    T0 = (8, "$t0"),
+    T1 = (9, "$t1"),
+    T2 = (10, "$t2"),
+    T3 = (11, "$t3"),
+    T4 = (12, "$t4"),
+    T5 = (13, "$t5"),
+    T6 = (14, "$t6"),
+    T7 = (15, "$t7"),
+    S0 = (16, "$s0"),
+    S1 = (17, "$s1"),
+    S2 = (18, "$s2"),
+    S3 = (19, "$s3"),
+    S4 = (20, "$s4"),
+    S5 = (21, "$s5"),
+    S6 = (22, "$s6"),
+    S7 = (23, "$s7"),
+    T8 = (24, "$t8"),
+    T9 = (25, "$t9"),
+    K0 = (26, "$k0"),
+    K1 = (27, "$k1"),
+    GP = (28, "$gp"),
+    SP = (29, "$sp"),
+    FP = (30, "$fp"),
+    RA = (31, "$ra"),
+
+    S8 = (30, "$s8")
 });
 
 /// RISC-V architecture specific definitions.
@@ -601,3 +932,160 @@ registers!(X86_64, {
     K6 = (124, "k6"),
     K7 = (125, "k7"),
 });
+
+/// PowerPC 64bit
+///
+/// See [64-bit ELF ABI Specification for OpenPOWER Architecture](https://openpowerfoundation.org/specifications/64bitelfabi/).
+#[derive(Debug, Clone, Copy)]
+pub struct PowerPc64;
+
+registers!(PowerPc64, {
+    R0 = (0, "r0"),
+    R1 = (1, "r1"),
+    R2 = (2, "r2"),
+    R3 = (3, "r3"),
+    R4 = (4, "r4"),
+    R5 = (5, "r5"),
+    R6 = (6, "r6"),
+    R7 = (7, "r7"),
+    R8 = (8, "r8"),
+    R9 = (9, "r9"),
+    R10 = (10, "r10"),
+    R11 = (11, "r11"),
+    R12 = (12, "r12"),
+    R13 = (13, "r13"),
+    R14 = (14, "r14"),
+    R15 = (15, "r15"),
+    R16 = (16, "r16"),
+    R17 = (17, "r17"),
+    R18 = (18, "r18"),
+    R19 = (19, "r19"),
+    R20 = (20, "r20"),
+    R21 = (21, "r21"),
+    R22 = (22, "r22"),
+    R23 = (23, "r23"),
+    R24 = (24, "r24"),
+    R25 = (25, "r25"),
+    R26 = (26, "r26"),
+    R27 = (27, "r27"),
+    R28 = (28, "r28"),
+    R29 = (29, "r29"),
+    R30 = (30, "r30"),
+    R31 = (31, "r31"),
+
+    F0 = (32, "f0"),
+    F1 = (33, "f1"),
+    F2 = (34, "f2"),
+    F3 = (35, "f3"),
+    F4 = (36, "f4"),
+    F5 = (37, "f5"),
+    F6 = (38, "f6"),
+    F7 = (39, "f7"),
+    F8 = (40, "f8"),
+    F9 = (41, "f9"),
+    F10 = (42, "f10"),
+    F11 = (43, "f11"),
+    F12 = (44, "f12"),
+    F13 = (45, "f13"),
+    F14 = (46, "f14"),
+    F15 = (47, "f15"),
+    F16 = (48, "f16"),
+    F17 = (49, "f17"),
+    F18 = (50, "f18"),
+    F19 = (51, "f19"),
+    F20 = (52, "f20"),
+    F21 = (53, "f21"),
+    F22 = (54, "f22"),
+    F23 = (55, "f23"),
+    F24 = (56, "f24"),
+    F25 = (57, "f25"),
+    F26 = (58, "f26"),
+    F27 = (59, "f27"),
+    F28 = (60, "f28"),
+    F29 = (61, "f29"),
+    F30 = (62, "f30"),
+    F31 = (63, "f31"),
+
+    LR = (65, "lr"),
+    CTR = (66, "ctr"),
+
+    CR0 = (68, "cr0"),
+    CR1 = (69, "cr1"),
+    CR2 = (70, "cr2"),
+    CR3 = (71, "cr3"),
+    CR4 = (72, "cr4"),
+    CR5 = (73, "cr5"),
+    CR6 = (74, "cr6"),
+    CR7 = (75, "cr7"),
+    XER = (76, "xer"),
+
+    VR0 = (77, "vr0"),
+    VR1 = (78, "vr1"),
+    VR2 = (79, "vr2"),
+    VR3 = (80, "vr3"),
+    VR4 = (81, "vr4"),
+    VR5 = (82, "vr5"),
+    VR6 = (83, "vr6"),
+    VR7 = (84, "vr7"),
+    VR8 = (85, "vr8"),
+    VR9 = (86, "vr9"),
+    VR10 = (87, "vr10"),
+    VR11 = (88, "vr11"),
+    VR12 = (89, "vr12"),
+    VR13 = (90, "vr13"),
+    VR14 = (91, "vr14"),
+    VR15 = (92, "vr15"),
+    VR16 = (93, "vr16"),
+    VR17 = (94, "vr17"),
+    VR18 = (95, "vr18"),
+    VR19 = (96, "vr19"),
+    VR20 = (97, "vr20"),
+    VR21 = (98, "vr21"),
+    VR22 = (99, "vr22"),
+    VR23 = (100, "vr23"),
+    VR24 = (101, "vr24"),
+    VR25 = (102, "vr25"),
+    VR26 = (103, "vr26"),
+    VR27 = (104, "vr27"),
+    VR28 = (105, "vr28"),
+    VR29 = (106, "vr29"),
+    VR30 = (107, "vr30"),
+    VR31 = (108, "vr31"),
+
+    VSCR = (110, "vscr"),
+    TFHAR = (114, "tfhar"),
+    TFIAR = (115, "tfiar"),
+    TEXASR = (116, "texasr"),
+});
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_aarch64_registers() {
+        use super::*;
+        use std::collections::HashSet;
+
+        let mut names = HashSet::new();
+        for n in (0..=39).chain(46..=127) {
+            let name = AArch64::register_name(Register(n))
+                .unwrap_or_else(|| panic!("Register {} should have a name.", n));
+            assert!(names.insert(name));
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_power64_registers() {
+        use super::*;
+        use std::collections::HashSet;
+
+        let mut names = HashSet::new();
+        for n in (0..=63).chain(68..=75).chain(77..=108) {
+            let name = PowerPc64::register_name(Register(n))
+                .unwrap_or_else(|| panic!("Register {} should have a name.", n));
+            assert!(names.insert(name));
+        }
+    }
+}

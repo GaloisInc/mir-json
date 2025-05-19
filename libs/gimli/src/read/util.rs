@@ -9,7 +9,8 @@ use core::ptr;
 use core::slice;
 
 mod sealed {
-    // SAFETY: Implementer must not modify the content in storage.
+    /// # Safety
+    /// Implementer must not modify the content in storage.
     pub unsafe trait Sealed {
         type Storage;
 
@@ -40,37 +41,51 @@ pub trait ArrayLike: Sealed {
     fn as_mut_slice(storage: &mut Self::Storage) -> &mut [MaybeUninit<Self::Item>];
 }
 
-// Use macro since const generics can't be used due to MSRV.
-macro_rules! impl_array {
-    () => {};
-    ($n:literal $($rest:tt)*) => {
-        // SAFETY: does not modify the content in storage.
-        unsafe impl<T> Sealed for [T; $n] {
-            type Storage = [MaybeUninit<T>; $n];
+// SAFETY: does not modify the content in storage.
+unsafe impl<T, const N: usize> Sealed for [T; N] {
+    type Storage = [MaybeUninit<T>; N];
 
-            fn new_storage() -> Self::Storage {
-                // SAFETY: An uninitialized `[MaybeUninit<_>; _]` is valid.
-                unsafe { MaybeUninit::uninit().assume_init() }
-            }
-        }
-
-        impl<T> ArrayLike for [T; $n] {
-            type Item = T;
-
-            fn as_slice(storage: &Self::Storage) -> &[MaybeUninit<T>] {
-                storage
-            }
-
-            fn as_mut_slice(storage: &mut Self::Storage) -> &mut [MaybeUninit<T>] {
-                storage
-            }
-        }
-
-        impl_array!($($rest)*);
+    fn new_storage() -> Self::Storage {
+        // SAFETY: An uninitialized `[MaybeUninit<_>; _]` is valid.
+        unsafe { MaybeUninit::uninit().assume_init() }
     }
 }
 
-impl_array!(0 1 2 3 4 8 16 32 64 128 192);
+impl<T, const N: usize> ArrayLike for [T; N] {
+    type Item = T;
+
+    fn as_slice(storage: &Self::Storage) -> &[MaybeUninit<T>] {
+        storage
+    }
+
+    fn as_mut_slice(storage: &mut Self::Storage) -> &mut [MaybeUninit<T>] {
+        storage
+    }
+}
+
+// SAFETY: does not modify the content in storage.
+#[cfg(feature = "read")]
+unsafe impl<T, const N: usize> Sealed for Box<[T; N]> {
+    type Storage = Box<[MaybeUninit<T>; N]>;
+
+    fn new_storage() -> Self::Storage {
+        // SAFETY: An uninitialized `[MaybeUninit<_>; _]` is valid.
+        Box::new(unsafe { MaybeUninit::uninit().assume_init() })
+    }
+}
+
+#[cfg(feature = "read")]
+impl<T, const N: usize> ArrayLike for Box<[T; N]> {
+    type Item = T;
+
+    fn as_slice(storage: &Self::Storage) -> &[MaybeUninit<T>] {
+        &storage[..]
+    }
+
+    fn as_mut_slice(storage: &mut Self::Storage) -> &mut [MaybeUninit<T>] {
+        &mut storage[..]
+    }
+}
 
 #[cfg(feature = "read")]
 unsafe impl<T> Sealed for Vec<T> {
@@ -161,7 +176,7 @@ impl<A: ArrayLike> ArrayVec<A> {
         } else {
             self.len -= 1;
             // SAFETY: this element is valid and we "forget" it by setting the length.
-            Some(unsafe { A::as_slice(&mut self.storage)[self.len].as_ptr().read() })
+            Some(unsafe { A::as_slice(&self.storage)[self.len].as_ptr().read() })
         }
     }
 

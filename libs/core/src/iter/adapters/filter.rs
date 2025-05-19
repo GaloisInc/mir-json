@@ -1,5 +1,11 @@
+use core::array;
+use core::mem::MaybeUninit;
+use core::ops::ControlFlow;
+
 use crate::fmt;
-use crate::iter::{adapters::SourceIter, FusedIterator, InPlaceIterable};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{FusedIterator, InPlaceIterable, TrustedFused};
+use crate::num::NonZero;
 use crate::ops::Try;
 
 /// An iterator that filters the elements of `iter` with `predicate`.
@@ -20,6 +26,42 @@ pub struct Filter<I, P> {
 impl<I, P> Filter<I, P> {
     pub(in crate::iter) fn new(iter: I, predicate: P) -> Filter<I, P> {
         Filter { iter, predicate }
+    }
+}
+
+impl<I, P> Filter<I, P>
+where
+    I: Iterator,
+    P: FnMut(&I::Item) -> bool,
+{
+    #[inline]
+    fn next_chunk_dropless<const N: usize>(
+        &mut self,
+    ) -> Result<[I::Item; N], array::IntoIter<I::Item, N>> {
+        let mut array: [MaybeUninit<I::Item>; N] = [const { MaybeUninit::uninit() }; N];
+        let mut initialized = 0;
+
+        let result = self.iter.try_for_each(|element| {
+            let idx = initialized;
+            // branchless index update combined with unconditionally copying the value even when
+            // it is filtered reduces branching and dependencies in the loop.
+            initialized = idx + (self.predicate)(&element) as usize;
+            // SAFETY: Loop conditions ensure the index is in bounds.
+            unsafe { array.get_unchecked_mut(idx) }.write(element);
+
+            if initialized < N { ControlFlow::Continue(()) } else { ControlFlow::Break(()) }
+        });
+
+        match result {
+            ControlFlow::Break(()) => {
+                // SAFETY: The loop above is only explicitly broken when the array has been fully initialized
+                Ok(unsafe { MaybeUninit::array_assume_init(array) })
+            }
+            ControlFlow::Continue(()) => {
+                // SAFETY: The range is in bounds since the loop breaks when reaching N elements.
+                Err(unsafe { array::IntoIter::new_unchecked(array, 0..initialized) })
+            }
+        }
     }
 }
 
@@ -54,6 +96,22 @@ where
     #[inline]
     fn next(&mut self) -> Option<I::Item> {
         self.iter.find(&mut self.predicate)
+    }
+
+    #[inline]
+    fn next_chunk<const N: usize>(
+        &mut self,
+    ) -> Result<[Self::Item; N], array::IntoIter<Self::Item, N>> {
+        // avoid codegen for the dead branch
+        let fun = const {
+            if crate::mem::needs_drop::<I::Item>() {
+                array::iter_next_chunk::<I::Item, N>
+            } else {
+                Self::next_chunk_dropless::<N>
+            }
+        };
+
+        fun(self)
     }
 
     #[inline]
@@ -134,6 +192,9 @@ where
 #[stable(feature = "fused", since = "1.26.0")]
 impl<I: FusedIterator, P> FusedIterator for Filter<I, P> where P: FnMut(&I::Item) -> bool {}
 
+#[unstable(issue = "none", feature = "trusted_fused")]
+unsafe impl<I: TrustedFused, F> TrustedFused for Filter<I, F> {}
+
 #[unstable(issue = "none", feature = "inplace_iteration")]
 unsafe impl<P, I> SourceIter for Filter<I, P>
 where
@@ -149,4 +210,7 @@ where
 }
 
 #[unstable(issue = "none", feature = "inplace_iteration")]
-unsafe impl<I: InPlaceIterable, P> InPlaceIterable for Filter<I, P> where P: FnMut(&I::Item) -> bool {}
+unsafe impl<I: InPlaceIterable, P> InPlaceIterable for Filter<I, P> {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = I::MERGE_BY;
+}

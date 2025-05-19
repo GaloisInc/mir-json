@@ -55,6 +55,26 @@ macro_rules! impl_float_biteq {
 
 impl_float_biteq! { f32, f64 }
 
+impl<T> BitEq for *const T {
+    fn biteq(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<T> BitEq for *mut T {
+    fn biteq(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl<T: BitEq, const N: usize> BitEq for [T; N] {
     fn biteq(&self, other: &Self) -> bool {
         self.iter()
@@ -93,6 +113,27 @@ impl<T: BitEq> core::fmt::Debug for BitEqWrapper<'_, T> {
     }
 }
 
+#[doc(hidden)]
+pub struct BitEqEitherWrapper<'a, T>(pub &'a T, pub &'a T);
+
+impl<T: BitEq> PartialEq<BitEqEitherWrapper<'_, T>> for BitEqWrapper<'_, T> {
+    fn eq(&self, other: &BitEqEitherWrapper<'_, T>) -> bool {
+        self.0.biteq(other.0) || self.0.biteq(other.1)
+    }
+}
+
+impl<T: BitEq> core::fmt::Debug for BitEqEitherWrapper<'_, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        if self.0.biteq(self.1) {
+            self.0.fmt(f)
+        } else {
+            self.0.fmt(f)?;
+            write!(f, " or ")?;
+            self.1.fmt(f)
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! prop_assert_biteq {
     { $a:expr, $b:expr $(,)? } => {
@@ -102,5 +143,14 @@ macro_rules! prop_assert_biteq {
             let b = $b;
             proptest::prop_assert_eq!(BitEqWrapper(&a), BitEqWrapper(&b));
         }
-    }
+    };
+    { $a:expr, $b:expr, $c:expr $(,)? } => {
+        {
+            use $crate::biteq::{BitEqWrapper, BitEqEitherWrapper};
+            let a = $a;
+            let b = $b;
+            let c = $c;
+            proptest::prop_assert_eq!(BitEqWrapper(&a), BitEqEitherWrapper(&b, &c));
+        }
+    };
 }

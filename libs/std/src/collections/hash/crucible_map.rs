@@ -16,8 +16,12 @@ pub struct HashMap<K, V, S> {
 }
 
 impl<K, V, S> HashMap<K, V, S> {
-    pub fn with_hasher(hash_builder: S) -> HashMap<K, V, S> {
-        Self::with_capacity_and_hasher(0, hash_builder)
+    pub const fn with_hasher(hash_builder: S) -> HashMap<K, V, S> {
+        HashMap {
+            items: Vec::new(),
+            hasher: hash_builder,
+            _marker: PhantomData,
+        }
     }
 
     pub fn with_capacity_and_hasher(cap: usize, hash_builder: S) -> HashMap<K, V, S> {
@@ -140,6 +144,40 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
             .map(|&mut (_, ref mut v)| v)
     }
 
+    pub fn get_many_mut<Q: ?Sized, const N: usize>(
+        &mut self,
+        ks: [&Q; N],
+    ) -> [Option<&'_ mut V>; N]
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        let mut refs: Vec<(&K, Option<&mut V>)> =
+            self.items.iter_mut()
+                .map(|&mut (ref k, ref mut v)| (k, Some(v))).collect();
+        let mut results = [const { None }; N];
+        for i in 0..N {
+            results[i] = refs.iter_mut()
+                .find(|&&mut (ref k, _)| (*k).borrow() == ks[i])
+                .map(|&mut (_, ref mut opt_v)| {
+                    opt_v.take()
+                        .expect("get_many_mut should not have duplicates")
+                });
+        }
+        results
+    }
+
+    pub unsafe fn get_many_unchecked_mut<Q: ?Sized, const N: usize>(
+        &mut self,
+        ks: [&Q; N],
+    ) -> [Option<&'_ mut V>; N]
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.get_many_mut(ks)
+    }
+
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         match self.rustc_entry(k) {
             RustcEntry::Occupied(mut e) => { Some(e.insert(v)) },
@@ -198,6 +236,12 @@ impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
     }
 }
 
+impl<'a, K, V> Default for Iter<'a, K, V> {
+    fn default() -> Self {
+        Iter { it: Default::default() }
+    }
+}
+
 
 pub struct IterMut<'a, K: 'a, V: 'a> {
     it: slice::IterMut<'a, (K, V)>,
@@ -227,6 +271,12 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
 impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
     fn len(&self) -> usize {
         self.it.len()
+    }
+}
+
+impl<'a, K, V> Default for IterMut<'a, K, V> {
+    fn default() -> Self {
+        IterMut { it: Default::default() }
     }
 }
 
@@ -270,6 +320,12 @@ impl<K, V> Iterator for IntoIter<K, V> {
 impl<K, V> ExactSizeIterator for IntoIter<K, V> {
     fn len(&self) -> usize {
         self.it.len()
+    }
+}
+
+impl<K, V> Default for IntoIter<K, V> {
+    fn default() -> Self {
+        IntoIter { it: Default::default() }
     }
 }
 

@@ -13,6 +13,11 @@
 
 use crate::ffi::c_void;
 
+mod packed;
+
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
+pub use packed::*;
+
 #[allow(improper_ctypes)]
 extern "C" {
     #[link_name = "llvm.nvvm.barrier0"]
@@ -45,84 +50,98 @@ extern "C" {
 
 /// Synchronizes all threads in the block.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _syncthreads() -> () {
     syncthreads()
 }
 
 /// x-th thread-block dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_dim_x() -> i32 {
     block_dim_x()
 }
 
 /// y-th thread-block dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_dim_y() -> i32 {
     block_dim_y()
 }
 
 /// z-th thread-block dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_dim_z() -> i32 {
     block_dim_z()
 }
 
 /// x-th thread-block index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_idx_x() -> i32 {
     block_idx_x()
 }
 
 /// y-th thread-block index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_idx_y() -> i32 {
     block_idx_y()
 }
 
 /// z-th thread-block index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _block_idx_z() -> i32 {
     block_idx_z()
 }
 
 /// x-th block-grid dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _grid_dim_x() -> i32 {
     grid_dim_x()
 }
 
 /// y-th block-grid dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _grid_dim_y() -> i32 {
     grid_dim_y()
 }
 
 /// z-th block-grid dimension.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _grid_dim_z() -> i32 {
     grid_dim_z()
 }
 
 /// x-th thread index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _thread_idx_x() -> i32 {
     thread_idx_x()
 }
 
 /// y-th thread index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _thread_idx_y() -> i32 {
     thread_idx_y()
 }
 
 /// z-th thread index.
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn _thread_idx_z() -> i32 {
     thread_idx_z()
 }
 
 /// Generates the trap instruction `TRAP`
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn trap() -> ! {
     crate::intrinsics::abort()
 }
@@ -149,6 +168,7 @@ extern "C" {
     /// Sources:
     /// [Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#formatted-output),
     /// [PTX Interoperability](https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html#system-calls).
+    #[unstable(feature = "stdarch_nvptx", issue = "111199")]
     pub fn vprintf(format: *const u8, valist: *const c_void) -> i32;
 
     /// Allocate memory dynamically from a fixed-size heap in global memory.
@@ -168,6 +188,7 @@ extern "C" {
     /// [Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#dynamic-global-memory-allocation-and-operations),
     /// [PTX Interoperability](https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html#system-calls).
     // FIXME(denzp): assign `malloc` and `nothrow` attributes.
+    #[unstable(feature = "stdarch_nvptx", issue = "111199")]
     pub fn malloc(size: usize) -> *mut c_void;
 
     /// Free previously dynamically allocated memory.
@@ -184,6 +205,7 @@ extern "C" {
     /// [Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#dynamic-global-memory-allocation-and-operations),
     /// [PTX Interoperability](https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html#system-calls).
     // FIXME(denzp): assign `nothrow` attribute.
+    #[unstable(feature = "stdarch_nvptx", issue = "111199")]
     pub fn free(ptr: *mut c_void);
 
     // Internal declaration of the syscall. Exported variant has
@@ -208,6 +230,7 @@ extern "C" {
 /// Source:
 /// [PTX Interoperability](https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html#system-calls).
 #[inline]
+#[unstable(feature = "stdarch_nvptx", issue = "111199")]
 pub unsafe fn __assert_fail(message: *const u8, file: *const u8, line: u32, function: *const u8) {
     __assertfail(message, file, line, function, 1)
 }

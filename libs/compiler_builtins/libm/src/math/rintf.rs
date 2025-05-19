@@ -2,26 +2,28 @@
 pub fn rintf(x: f32) -> f32 {
     let one_over_e = 1.0 / f32::EPSILON;
     let as_u32: u32 = x.to_bits();
-    let exponent: u32 = as_u32 >> 23 & 0xff;
+    let exponent: u32 = (as_u32 >> 23) & 0xff;
     let is_positive = (as_u32 >> 31) == 0;
     if exponent >= 0x7f + 23 {
         x
     } else {
         let ans = if is_positive {
-            x + one_over_e - one_over_e
+            #[cfg(all(target_arch = "x86", not(target_feature = "sse2")))]
+            let x = force_eval!(x);
+            let xplusoneovere = x + one_over_e;
+            #[cfg(all(target_arch = "x86", not(target_feature = "sse2")))]
+            let xplusoneovere = force_eval!(xplusoneovere);
+            xplusoneovere - one_over_e
         } else {
-            x - one_over_e + one_over_e
+            #[cfg(all(target_arch = "x86", not(target_feature = "sse2")))]
+            let x = force_eval!(x);
+            let xminusoneovere = x - one_over_e;
+            #[cfg(all(target_arch = "x86", not(target_feature = "sse2")))]
+            let xminusoneovere = force_eval!(xminusoneovere);
+            xminusoneovere + one_over_e
         };
 
-        if ans == 0.0 {
-            if is_positive {
-                0.0
-            } else {
-                -0.0
-            }
-        } else {
-            ans
-        }
+        if ans == 0.0 { if is_positive { 0.0 } else { -0.0 } } else { ans }
     }
 }
 

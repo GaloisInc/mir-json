@@ -34,7 +34,7 @@ use crate::iter::{FusedIterator, TrustedLen};
 /// use std::fs;
 /// use std::path::PathBuf;
 ///
-/// let dirs = fs::read_dir(".foo").unwrap();
+/// let dirs = fs::read_dir(".foo")?;
 ///
 /// // we need to convert from an iterator of DirEntry-s to an iterator of
 /// // PathBufs, so we use map
@@ -50,6 +50,7 @@ use crate::iter::{FusedIterator, TrustedLen};
 /// for f in files {
 ///     println!("{f:?}");
 /// }
+/// # std::io::Result::Ok(())
 /// ```
 #[stable(feature = "iter_once", since = "1.2.0")]
 pub fn once<T>(value: T) -> Once<T> {
@@ -61,6 +62,7 @@ pub fn once<T>(value: T) -> Once<T> {
 /// This `struct` is created by the [`once()`] function. See its documentation for more.
 #[derive(Clone, Debug)]
 #[stable(feature = "iter_once", since = "1.2.0")]
+#[rustc_diagnostic_item = "IterOnce"]
 pub struct Once<T> {
     inner: crate::option::IntoIter<T>,
 }

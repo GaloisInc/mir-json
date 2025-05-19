@@ -5,11 +5,11 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 use crate::fs::{self, Metadata, OpenOptions};
-use crate::io;
 use crate::path::Path;
 use crate::sealed::Sealed;
-use crate::sys;
-use crate::sys_common::{AsInner, AsInnerMut};
+use crate::sys_common::{AsInner, AsInnerMut, IntoInner};
+use crate::time::SystemTime;
+use crate::{io, sys};
 
 /// Windows-specific extensions to [`fs::File`].
 #[stable(feature = "file_offset", since = "1.15.0")]
@@ -58,7 +58,7 @@ pub trait FileExt {
     /// function, it is set to the end of the write.
     ///
     /// When writing beyond the end of the file, the file is appropriately
-    /// extended and the intermediate bytes are left uninitialized.
+    /// extended and the intermediate bytes are set to zero.
     ///
     /// Note that similar to `File::write`, it is not an error to return a
     /// short write. When returning from such a short write, the file pointer
@@ -298,7 +298,7 @@ impl OpenOptionsExt for OpenOptions {
 /// of the [`BY_HANDLE_FILE_INFORMATION`] structure.
 ///
 /// [`BY_HANDLE_FILE_INFORMATION`]:
-///     https://docs.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information
+///     https://docs.microsoft.com/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information
 #[stable(feature = "metadata_ext", since = "1.1.0")]
 pub trait MetadataExt {
     /// Returns the value of the `dwFileAttributes` field of this metadata.
@@ -322,7 +322,7 @@ pub trait MetadataExt {
     /// ```
     ///
     /// [File Attribute Constants]:
-    ///     https://docs.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants
+    ///     https://docs.microsoft.com/windows/win32/fileio/file-attribute-constants
     #[stable(feature = "metadata_ext", since = "1.1.0")]
     fn file_attributes(&self) -> u32;
 
@@ -351,7 +351,7 @@ pub trait MetadataExt {
     /// }
     /// ```
     ///
-    /// [`FILETIME`]: https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+    /// [`FILETIME`]: https://docs.microsoft.com/windows/win32/api/minwinbase/ns-minwinbase-filetime
     #[stable(feature = "metadata_ext", since = "1.1.0")]
     fn creation_time(&self) -> u64;
 
@@ -386,7 +386,7 @@ pub trait MetadataExt {
     /// }
     /// ```
     ///
-    /// [`FILETIME`]: https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+    /// [`FILETIME`]: https://docs.microsoft.com/windows/win32/api/minwinbase/ns-minwinbase-filetime
     #[stable(feature = "metadata_ext", since = "1.1.0")]
     fn last_access_time(&self) -> u64;
 
@@ -419,11 +419,11 @@ pub trait MetadataExt {
     /// }
     /// ```
     ///
-    /// [`FILETIME`]: https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+    /// [`FILETIME`]: https://docs.microsoft.com/windows/win32/api/minwinbase/ns-minwinbase-filetime
     #[stable(feature = "metadata_ext", since = "1.1.0")]
     fn last_write_time(&self) -> u64;
 
-    /// Returns the value of the `nFileSize{High,Low}` fields of this
+    /// Returns the value of the `nFileSize` fields of this
     /// metadata.
     ///
     /// The returned value does not have meaning for directories.
@@ -462,7 +462,7 @@ pub trait MetadataExt {
     #[unstable(feature = "windows_by_handle", issue = "63010")]
     fn number_of_links(&self) -> Option<u32>;
 
-    /// Returns the value of the `nFileIndex{Low,High}` fields of this
+    /// Returns the value of the `nFileIndex` fields of this
     /// metadata.
     ///
     /// This will return `None` if the `Metadata` instance was created from a
@@ -470,6 +470,17 @@ pub trait MetadataExt {
     /// `fs::metadata` or `File::metadata`, then this will return `Some`.
     #[unstable(feature = "windows_by_handle", issue = "63010")]
     fn file_index(&self) -> Option<u64>;
+
+    /// Returns the value of the `ChangeTime` fields of this metadata.
+    ///
+    /// `ChangeTime` is the last time file metadata was changed, such as
+    /// renames, attributes, etc.
+    ///
+    /// This will return `None` if `Metadata` instance was created from a call to
+    /// `DirEntry::metadata` or if the `target_vendor` is outside the current platform
+    /// support for this api.
+    #[unstable(feature = "windows_change_time", issue = "121478")]
+    fn change_time(&self) -> Option<u64>;
 }
 
 #[stable(feature = "metadata_ext", since = "1.1.0")]
@@ -498,6 +509,9 @@ impl MetadataExt for Metadata {
     fn file_index(&self) -> Option<u64> {
         self.as_inner().file_index()
     }
+    fn change_time(&self) -> Option<u64> {
+        self.as_inner().changed_u64()
+    }
 }
 
 /// Windows-specific extensions to [`fs::FileType`].
@@ -523,6 +537,22 @@ impl FileTypeExt for fs::FileType {
     }
     fn is_symlink_file(&self) -> bool {
         self.as_inner().is_symlink_file()
+    }
+}
+
+/// Windows-specific extensions to [`fs::FileTimes`].
+#[stable(feature = "file_set_times", since = "1.75.0")]
+pub trait FileTimesExt: Sealed {
+    /// Set the creation time of a file.
+    #[stable(feature = "file_set_times", since = "1.75.0")]
+    fn set_created(self, t: SystemTime) -> Self;
+}
+
+#[stable(feature = "file_set_times", since = "1.75.0")]
+impl FileTimesExt for fs::FileTimes {
+    fn set_created(mut self, t: SystemTime) -> Self {
+        self.as_inner_mut().set_created(t.into_inner());
+        self
     }
 }
 
@@ -602,4 +632,16 @@ pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io:
 #[stable(feature = "symlink", since = "1.1.0")]
 pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
     sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
+}
+
+/// Creates a junction point.
+///
+/// The `link` path will be a directory junction pointing to the original path.
+/// If `link` is a relative path then it will be made absolute prior to creating the junction point.
+/// The `original` path must be a directory or a link to a directory, otherwise the junction point will be broken.
+///
+/// If either path is not a local file path then this will fail.
+#[unstable(feature = "junction_point", issue = "121709")]
+pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+    sys::fs::junction_point(original.as_ref(), link.as_ref())
 }

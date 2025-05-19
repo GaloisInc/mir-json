@@ -8,16 +8,12 @@
 
 #![deny(unsafe_code)]
 
-use crate::{Delimiter, Level, LineColumn, Spacing};
-use std::fmt;
 use std::hash::Hash;
-use std::marker;
-use std::mem;
-use std::ops::Bound;
-use std::panic;
-use std::sync::atomic::AtomicUsize;
+use std::ops::{Bound, Range};
 use std::sync::Once;
-use std::thread;
+use std::{fmt, marker, mem, panic, thread};
+
+use crate::{Delimiter, Level, Spacing};
 
 /// Higher-order macro describing the server RPC API, allowing automatic
 /// generation of type-safe Rust APIs, both client-side and server-side.
@@ -54,6 +50,7 @@ macro_rules! with_api {
         $m! {
             FreeFunctions {
                 fn drop($self: $S::FreeFunctions);
+                fn injected_env_var(var: &str) -> Option<String>;
                 fn track_env_var(var: &str, value: Option<&str>);
                 fn track_path(path: &str);
                 fn literal_from_str(s: &str) -> Result<Literal<$S::Span, $S::Symbol>, ()>;
@@ -93,10 +90,11 @@ macro_rules! with_api {
                 fn source_file($self: $S::Span) -> $S::SourceFile;
                 fn parent($self: $S::Span) -> Option<$S::Span>;
                 fn source($self: $S::Span) -> $S::Span;
-                fn start($self: $S::Span) -> LineColumn;
-                fn end($self: $S::Span) -> LineColumn;
-                fn before($self: $S::Span) -> $S::Span;
-                fn after($self: $S::Span) -> $S::Span;
+                fn byte_range($self: $S::Span) -> Range<usize>;
+                fn start($self: $S::Span) -> $S::Span;
+                fn end($self: $S::Span) -> $S::Span;
+                fn line($self: $S::Span) -> usize;
+                fn column($self: $S::Span) -> usize;
                 fn join($self: $S::Span, other: $S::Span) -> Option<$S::Span>;
                 fn subspan($self: $S::Span, start: Bound<usize>, end: Bound<usize>) -> Option<$S::Span>;
                 fn resolved_at($self: $S::Span, at: $S::Span) -> $S::Span;
@@ -107,6 +105,23 @@ macro_rules! with_api {
             Symbol {
                 fn normalize_and_validate_ident(string: &str) -> Result<$S::Symbol, ()>;
             },
+        }
+    };
+}
+
+// Similar to `with_api`, but only lists the types requiring handles, and they
+// are divided into the two storage categories.
+macro_rules! with_api_handle_types {
+    ($m:ident) => {
+        $m! {
+            'owned:
+            FreeFunctions,
+            TokenStream,
+            SourceFile,
+
+            'interned:
+            Span,
+            // Symbol is handled manually
         }
     };
 }
@@ -135,7 +150,7 @@ macro_rules! reverse_decode {
 mod arena;
 #[allow(unsafe_code)]
 mod buffer;
-#[forbid(unsafe_code)]
+#[deny(unsafe_code)]
 pub mod client;
 #[allow(unsafe_code)]
 mod closure;
@@ -146,8 +161,6 @@ mod handle;
 #[macro_use]
 #[forbid(unsafe_code)]
 mod rpc;
-#[allow(unsafe_code)]
-mod scoped_cell;
 #[allow(unsafe_code)]
 mod selfless_reify;
 #[forbid(unsafe_code)]
@@ -297,7 +310,6 @@ mark_noop! {
     Delimiter,
     LitKind,
     Level,
-    LineColumn,
     Spacing,
 }
 
@@ -317,7 +329,6 @@ rpc_encode_decode!(
         Help,
     }
 );
-rpc_encode_decode!(struct LineColumn { line, column });
 rpc_encode_decode!(
     enum Spacing {
         Alone,
@@ -335,7 +346,13 @@ pub enum LitKind {
     StrRaw(u8),
     ByteStr,
     ByteStrRaw(u8),
-    Err,
+    CStr,
+    CStrRaw(u8),
+    // This should have an `ErrorGuaranteed`, except that type isn't available
+    // in this crate. (Imagine it is there.) Hence the `WithGuar` suffix. Must
+    // only be constructed in `LitKind::from_internal`, where an
+    // `ErrorGuaranteed` is available.
+    ErrWithGuar,
 }
 
 rpc_encode_decode!(
@@ -348,7 +365,9 @@ rpc_encode_decode!(
         StrRaw(n),
         ByteStr,
         ByteStrRaw(n),
-        Err,
+        CStr,
+        CStrRaw(n),
+        ErrWithGuar,
     }
 );
 
@@ -518,4 +537,8 @@ pub struct ExpnGlobals<Span> {
 
 compound_traits!(
     struct ExpnGlobals<Span> { def_site, call_site, mixed_site }
+);
+
+compound_traits!(
+    struct Range<T> { start, end }
 );

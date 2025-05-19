@@ -4,29 +4,25 @@
 //!
 //! # Safety
 //!
-//! Many functions in this module take raw pointers as arguments and read from
-//! or write to them. For this to be safe, these pointers must be *valid*.
-//! Whether a pointer is valid depends on the operation it is used for
-//! (read or write), and the extent of the memory that is accessed (i.e.,
-//! how many bytes are read/written). Most functions use `*mut T` and `*const T`
-//! to access only a single value, in which case the documentation omits the size
-//! and implicitly assumes it to be `size_of::<T>()` bytes.
+//! Many functions in this module take raw pointers as arguments and read from or write to them. For
+//! this to be safe, these pointers must be *valid* for the given access. Whether a pointer is valid
+//! depends on the operation it is used for (read or write), and the extent of the memory that is
+//! accessed (i.e., how many bytes are read/written) -- it makes no sense to ask "is this pointer
+//! valid"; one has to ask "is this pointer valid for a given access". Most functions use `*mut T`
+//! and `*const T` to access only a single value, in which case the documentation omits the size and
+//! implicitly assumes it to be `size_of::<T>()` bytes.
 //!
 //! The precise rules for validity are not determined yet. The guarantees that are
 //! provided at this point are very minimal:
 //!
-//! * A [null] pointer is *never* valid, not even for accesses of [size zero][zst].
-//! * For a pointer to be valid, it is necessary, but not always sufficient, that the pointer
-//!   be *dereferenceable*: the memory range of the given size starting at the pointer must all be
-//!   within the bounds of a single allocated object. Note that in Rust,
-//!   every (stack-allocated) variable is considered a separate allocated object.
-//! * Even for operations of [size zero][zst], the pointer must not be pointing to deallocated
-//!   memory, i.e., deallocation makes pointers invalid even for zero-sized operations. However,
-//!   casting any non-zero integer *literal* to a pointer is valid for zero-sized accesses, even if
-//!   some memory happens to exist at that address and gets deallocated. This corresponds to writing
-//!   your own allocator: allocating zero-sized objects is not very hard. The canonical way to
-//!   obtain a pointer that is valid for zero-sized accesses is [`NonNull::dangling`].
-//FIXME: mention `ptr::invalid` above, once it is stable.
+//! * For memory accesses of [size zero][zst], *every* pointer is valid, including the [null]
+//!   pointer. The following points are only concerned with non-zero-sized accesses.
+//! * A [null] pointer is *never* valid.
+//! * For a pointer to be valid, it is necessary, but not always sufficient, that the pointer be
+//!   *dereferenceable*. The [provenance] of the pointer is used to determine which [allocated
+//!   object] it is derived from; a pointer is dereferenceable if the memory range of the given size
+//!   starting at the pointer is entirely contained within the bounds of that allocated object. Note
+//!   that in Rust, every (stack-allocated) variable is considered a separate allocated object.
 //! * All accesses performed by functions in this module are *non-atomic* in the sense
 //!   of [atomic operations] used to synchronize between threads. This means it is
 //!   undefined behavior to perform two concurrent accesses to the same location from different
@@ -44,6 +40,10 @@
 //! information, see the [book] as well as the section in the reference devoted
 //! to [undefined behavior][ub].
 //!
+//! We say that a pointer is "dangling" if it is not valid for any non-zero-sized accesses. This
+//! means out-of-bounds pointers, pointers to freed memory, null pointers, and pointers created with
+//! [`NonNull::dangling`] are all dangling.
+//!
 //! ## Alignment
 //!
 //! Valid raw pointers as defined above are not necessarily properly aligned (where
@@ -57,130 +57,204 @@
 //! has size 0, i.e., even if memory is not actually touched. Consider using
 //! [`NonNull::dangling`] in such cases.
 //!
+//! ## Pointer to reference conversion
+//!
+//! When converting a pointer to a reference (e.g. via `&*ptr` or `&mut *ptr`),
+//! there are several rules that must be followed:
+//!
+//! * The pointer must be properly aligned.
+//!
+//! * It must be non-null.
+//!
+//! * It must be "dereferenceable" in the sense defined above.
+//!
+//! * The pointer must point to a [valid value] of type `T`.
+//!
+//! * You must enforce Rust's aliasing rules. The exact aliasing rules are not decided yet, so we
+//!   only give a rough overview here. The rules also depend on whether a mutable or a shared
+//!   reference is being created.
+//!   * When creating a mutable reference, then while this reference exists, the memory it points to
+//!     must not get accessed (read or written) through any other pointer or reference not derived
+//!     from this reference.
+//!   * When creating a shared reference, then while this reference exists, the memory it points to
+//!     must not get mutated (except inside `UnsafeCell`).
+//!
+//! If a pointer follows all of these rules, it is said to be
+//! *convertible to a (mutable or shared) reference*.
+// ^ we use this term instead of saying that the produced reference must
+// be valid, as the validity of a reference is easily confused for the
+// validity of the thing it refers to, and while the two concepts are
+// closely related, they are not identical.
+//!
+//! These rules apply even if the result is unused!
+//! (The part about being initialized is not yet fully decided, but until
+//! it is, the only safe approach is to ensure that they are indeed initialized.)
+//!
+//! An example of the implications of the above rules is that an expression such
+//! as `unsafe { &*(0 as *const u8) }` is Immediate Undefined Behavior.
+//!
+//! [valid value]: ../../reference/behavior-considered-undefined.html#invalid-values
+//!
 //! ## Allocated object
 //!
-//! For several operations, such as [`offset`] or field projections (`expr.field`), the notion of an
-//! "allocated object" becomes relevant. An allocated object is a contiguous region of memory.
-//! Common examples of allocated objects include stack-allocated variables (each variable is a
-//! separate allocated object), heap allocations (each allocation created by the global allocator is
-//! a separate allocated object), and `static` variables.
+//! An *allocated object* is a subset of program memory which is addressable
+//! from Rust, and within which pointer arithmetic is possible. Examples of
+//! allocated objects include heap allocations, stack-allocated variables,
+//! statics, and consts. The safety preconditions of some Rust operations -
+//! such as `offset` and field projections (`expr.field`) - are defined in
+//! terms of the allocated objects on which they operate.
 //!
-//! # Strict Provenance
+//! An allocated object has a base address, a size, and a set of memory
+//! addresses. It is possible for an allocated object to have zero size, but
+//! such an allocated object will still have a base address. The base address
+//! of an allocated object is not necessarily unique. While it is currently the
+//! case that an allocated object always has a set of memory addresses which is
+//! fully contiguous (i.e., has no "holes"), there is no guarantee that this
+//! will not change in the future.
 //!
-//! **The following text is non-normative, insufficiently formal, and is an extremely strict
-//! interpretation of provenance. It's ok if your code doesn't strictly conform to it.**
+//! For any allocated object with `base` address, `size`, and a set of
+//! `addresses`, the following are guaranteed:
+//! - For all addresses `a` in `addresses`, `a` is in the range `base .. (base +
+//!   size)` (note that this requires `a < base + size`, not `a <= base + size`)
+//! - `base` is not equal to [`null()`] (i.e., the address with the numerical
+//!   value 0)
+//! - `base + size <= usize::MAX`
+//! - `size <= isize::MAX`
 //!
-//! [Strict Provenance][] is an experimental set of APIs that help tools that try
-//! to validate the memory-safety of your program's execution. Notably this includes [Miri][]
-//! and [CHERI][], which can detect when you access out of bounds memory or otherwise violate
-//! Rust's memory model.
+//! As a consequence of these guarantees, given any address `a` within the set
+//! of addresses of an allocated object:
+//! - It is guaranteed that `a - base` does not overflow `isize`
+//! - It is guaranteed that `a - base` is non-negative
+//! - It is guaranteed that, given `o = a - base` (i.e., the offset of `a` within
+//!   the allocated object), `base + o` will not wrap around the address space (in
+//!   other words, will not overflow `usize`)
 //!
-//! Provenance must exist in some form for any programming
-//! language compiled for modern computer architectures, but specifying a model for provenance
-//! in a way that is useful to both compilers and programmers is an ongoing challenge.
-//! The [Strict Provenance][] experiment seeks to explore the question: *what if we just said you
-//! couldn't do all the nasty operations that make provenance so messy?*
+//! [`null()`]: null
 //!
-//! What APIs would have to be removed? What APIs would have to be added? How much would code
-//! have to change, and is it worse or better now? Would any patterns become truly inexpressible?
-//! Could we carve out special exceptions for those patterns? Should we?
-//!
-//! A secondary goal of this project is to see if we can disambiguate the many functions of
-//! pointer<->integer casts enough for the definition of `usize` to be loosened so that it
-//! isn't *pointer*-sized but address-space/offset/allocation-sized (we'll probably continue
-//! to conflate these notions). This would potentially make it possible to more efficiently
-//! target platforms where pointers are larger than offsets, such as CHERI and maybe some
-//! segmented architectures.
-//!
-//! ## Provenance
-//!
-//! **This section is *non-normative* and is part of the [Strict Provenance][] experiment.**
+//! # Provenance
 //!
 //! Pointers are not *simply* an "integer" or "address". For instance, it's uncontroversial
-//! to say that a Use After Free is clearly Undefined Behaviour, even if you "get lucky"
+//! to say that a Use After Free is clearly Undefined Behavior, even if you "get lucky"
 //! and the freed memory gets reallocated before your read/write (in fact this is the
 //! worst-case scenario, UAFs would be much less concerning if this didn't happen!).
-//! To rationalize this claim, pointers need to somehow be *more* than just their addresses:
-//! they must have provenance.
+//! As another example, consider that [`wrapping_offset`] is documented to "remember"
+//! the allocated object that the original pointer points to, even if it is offset far
+//! outside the memory range occupied by that allocated object.
+//! To rationalize claims like this, pointers need to somehow be *more* than just their addresses:
+//! they must have **provenance**.
 //!
-//! When an allocation is created, that allocation has a unique Original Pointer. For alloc
-//! APIs this is literally the pointer the call returns, and for local variables and statics,
-//! this is the name of the variable/static. This is mildly overloading the term "pointer"
-//! for the sake of brevity/exposition.
+//! A pointer value in Rust semantically contains the following information:
 //!
-//! The Original Pointer for an allocation is guaranteed to have unique access to the entire
-//! allocation and *only* that allocation. In this sense, an allocation can be thought of
-//! as a "sandbox" that cannot be broken into or out of. *Provenance* is the permission
-//! to access an allocation's sandbox and has both a *spatial* and *temporal* component:
-//!
-//! * Spatial: A range of bytes that the pointer is allowed to access.
-//! * Temporal: The lifetime (of the allocation) that access to these bytes is tied to.
-//!
-//! Spatial provenance makes sure you don't go beyond your sandbox, while temporal provenance
-//! makes sure that you can't "get lucky" after your permission to access some memory
-//! has been revoked (either through deallocations or borrows expiring).
-//!
-//! Provenance is implicitly shared with all pointers transitively derived from
-//! The Original Pointer through operations like [`offset`], borrowing, and pointer casts.
-//! Some operations may *shrink* the derived provenance, limiting how much memory it can
-//! access or how long it's valid for (i.e. borrowing a subfield and subslicing).
-//!
-//! Shrinking provenance cannot be undone: even if you "know" there is a larger allocation, you
-//! can't derive a pointer with a larger provenance. Similarly, you cannot "recombine"
-//! two contiguous provenances back into one (i.e. with a `fn merge(&[T], &[T]) -> &[T]`).
-//!
-//! A reference to a value always has provenance over exactly the memory that field occupies.
-//! A reference to a slice always has provenance over exactly the range that slice describes.
-//!
-//! If an allocation is deallocated, all pointers with provenance to that allocation become
-//! invalidated, and effectively lose their provenance.
-//!
-//! The strict provenance experiment is mostly only interested in exploring stricter *spatial*
-//! provenance. In this sense it can be thought of as a subset of the more ambitious and
-//! formal [Stacked Borrows][] research project, which is what tools like [Miri][] are based on.
-//! In particular, Stacked Borrows is necessary to properly describe what borrows are allowed
-//! to do and when they become invalidated. This necessarily involves much more complex
-//! *temporal* reasoning than simply identifying allocations. Adjusting APIs and code
-//! for the strict provenance experiment will also greatly help Stacked Borrows.
-//!
-//!
-//! ## Pointer Vs Addresses
-//!
-//! **This section is *non-normative* and is part of the [Strict Provenance][] experiment.**
-//!
-//! One of the largest historical issues with trying to define provenance is that programmers
-//! freely convert between pointers and integers. Once you allow for this, it generally becomes
-//! impossible to accurately track and preserve provenance information, and you need to appeal
-//! to very complex and unreliable heuristics. But of course, converting between pointers and
-//! integers is very useful, so what can we do?
-//!
-//! Also did you know WASM is actually a "Harvard Architecture"? As in function pointers are
-//! handled completely differently from data pointers? And we kind of just shipped Rust on WASM
-//! without really addressing the fact that we let you freely convert between function pointers
-//! and data pointers, because it mostly Just Works? Let's just put that on the "pointer casts
-//! are dubious" pile.
-//!
-//! Strict Provenance attempts to square these circles by decoupling Rust's traditional conflation
-//! of pointers and `usize` (and `isize`), and defining a pointer to semantically contain the
-//! following information:
-//!
-//! * The **address-space** it is part of (e.g. "data" vs "code" in WASM).
 //! * The **address** it points to, which can be represented by a `usize`.
-//! * The **provenance** it has, defining the memory it has permission to access.
+//! * The **provenance** it has, defining the memory it has permission to access. Provenance can be
+//!   absent, in which case the pointer does not have permission to access any memory.
 //!
-//! Under Strict Provenance, a usize *cannot* accurately represent a pointer, and converting from
-//! a pointer to a usize is generally an operation which *only* extracts the address. It is
-//! therefore *impossible* to construct a valid pointer from a usize because there is no way
-//! to restore the address-space and provenance. In other words, pointer-integer-pointer
-//! roundtrips are not possible (in the sense that the resulting pointer is not dereferenceable).
+//! The exact structure of provenance is not yet specified, but the permission defined by a
+//! pointer's provenance have a *spatial* component, a *temporal* component, and a *mutability*
+//! component:
 //!
-//! The key insight to making this model *at all* viable is the [`with_addr`][] method:
+//! * Spatial: The set of memory addresses that the pointer is allowed to access.
+//! * Temporal: The timespan during which the pointer is allowed to access those memory addresses.
+//! * Mutability: Whether the pointer may only access the memory for reads, or also access it for
+//!   writes. Note that this can interact with the other components, e.g. a pointer might permit
+//!   mutation only for a subset of addresses, or only for a subset of its maximal timespan.
+//!
+//! When an [allocated object] is created, it has a unique Original Pointer. For alloc
+//! APIs this is literally the pointer the call returns, and for local variables and statics,
+//! this is the name of the variable/static. (This is mildly overloading the term "pointer"
+//! for the sake of brevity/exposition.)
+//!
+//! The Original Pointer for an allocated object has provenance that constrains the *spatial*
+//! permissions of this pointer to the memory range of the allocation, and the *temporal*
+//! permissions to the lifetime of the allocation. Provenance is implicitly inherited by all
+//! pointers transitively derived from the Original Pointer through operations like [`offset`],
+//! borrowing, and pointer casts. Some operations may *shrink* the permissions of the derived
+//! provenance, limiting how much memory it can access or how long it's valid for (i.e. borrowing a
+//! subfield and subslicing can shrink the spatial component of provenance, and all borrowing can
+//! shrink the temporal component of provenance). However, no operation can ever *grow* the
+//! permissions of the derived provenance: even if you "know" there is a larger allocation, you
+//! can't derive a pointer with a larger provenance. Similarly, you cannot "recombine" two
+//! contiguous provenances back into one (i.e. with a `fn merge(&[T], &[T]) -> &[T]`).
+//!
+//! A reference to a place always has provenance over at least the memory that place occupies.
+//! A reference to a slice always has provenance over at least the range that slice describes.
+//! Whether and when exactly the provenance of a reference gets "shrunk" to *exactly* fit
+//! the memory it points to is not yet determined.
+//!
+//! A *shared* reference only ever has provenance that permits reading from memory,
+//! and never permits writes, except inside [`UnsafeCell`].
+//!
+//! Provenance can affect whether a program has undefined behavior:
+//!
+//! * It is undefined behavior to access memory through a pointer that does not have provenance over
+//!   that memory. Note that a pointer "at the end" of its provenance is not actually outside its
+//!   provenance, it just has 0 bytes it can load/store. Zero-sized accesses do not require any
+//!   provenance since they access an empty range of memory.
+//!
+//! * It is undefined behavior to [`offset`] a pointer across a memory range that is not contained
+//!   in the allocated object it is derived from, or to [`offset_from`] two pointers not derived
+//!   from the same allocated object. Provenance is used to say what exactly "derived from" even
+//!   means: the lineage of a pointer is traced back to the Original Pointer it descends from, and
+//!   that identifies the relevant allocated object. In particular, it's always UB to offset a
+//!   pointer derived from something that is now deallocated, except if the offset is 0.
+//!
+//! But it *is* still sound to:
+//!
+//! * Create a pointer without provenance from just an address (see [`without_provenance`]). Such a
+//!   pointer cannot be used for memory accesses (except for zero-sized accesses). This can still be
+//!   useful for sentinel values like `null` *or* to represent a tagged pointer that will never be
+//!   dereferenceable. In general, it is always sound for an integer to pretend to be a pointer "for
+//!   fun" as long as you don't use operations on it which require it to be valid (non-zero-sized
+//!   offset, read, write, etc).
+//!
+//! * Forge an allocation of size zero at any sufficiently aligned non-null address.
+//!   i.e. the usual "ZSTs are fake, do what you want" rules apply.
+//!
+//! * [`wrapping_offset`] a pointer outside its provenance. This includes pointers
+//!   which have "no" provenance. In particular, this makes it sound to do pointer tagging tricks.
+//!
+//! * Compare arbitrary pointers by address. Pointer comparison ignores provenance and addresses
+//!   *are* just integers, so there is always a coherent answer, even if the pointers are dangling
+//!   or from different provenances. Note that if you get "lucky" and notice that a pointer at the
+//!   end of one allocated object is the "same" address as the start of another allocated object,
+//!   anything you do with that fact is *probably* going to be gibberish. The scope of that
+//!   gibberish is kept under control by the fact that the two pointers *still* aren't allowed to
+//!   access the other's allocation (bytes), because they still have different provenance.
+//!
+//! Note that the full definition of provenance in Rust is not decided yet, as this interacts
+//! with the as-yet undecided [aliasing] rules.
+//!
+//! ## Pointers Vs Integers
+//!
+//! From this discussion, it becomes very clear that a `usize` *cannot* accurately represent a pointer,
+//! and converting from a pointer to a `usize` is generally an operation which *only* extracts the
+//! address. Converting this address back into pointer requires somehow answering the question:
+//! which provenance should the resulting pointer have?
+//!
+//! Rust provides two ways of dealing with this situation: *Strict Provenance* and *Exposed Provenance*.
+//!
+//! Note that a pointer *can* represent a `usize` (via [`without_provenance`]), so the right type to
+//! use in situations where a value is "sometimes a pointer and sometimes a bare `usize`" is a
+//! pointer type.
+//!
+//! ## Strict Provenance
+//!
+//! "Strict Provenance" refers to a set of APIs designed to make working with provenance more
+//! explicit. They are intended as substitutes for casting a pointer to an integer and back.
+//!
+//! Entirely avoiding integer-to-pointer casts successfully side-steps the inherent ambiguity of
+//! that operation. This benefits compiler optimizations, and it is pretty much a requirement for
+//! using tools like [Miri] and architectures like [CHERI] that aim to detect and diagnose pointer
+//! misuse.
+//!
+//! The key insight to making programming without integer-to-pointer casts *at all* viable is the
+//! [`with_addr`] method:
 //!
 //! ```text
 //!     /// Creates a new pointer with the given address.
 //!     ///
 //!     /// This performs the same operation as an `addr as ptr` cast, but copies
-//!     /// the *address-space* and *provenance* of `self` to the new pointer.
+//!     /// the *provenance* of `self` to the new pointer.
 //!     /// This allows us to dynamically preserve and propagate this important
 //!     /// information in a way that is otherwise impossible with a unary cast.
 //!     ///
@@ -191,35 +265,31 @@
 //!
 //! So you're still able to drop down to the address representation and do whatever
 //! clever bit tricks you want *as long as* you're able to keep around a pointer
-//! into the allocation you care about that can "reconstitute" the other parts of the pointer.
+//! into the allocation you care about that can "reconstitute" the provenance.
 //! Usually this is very easy, because you only are taking a pointer, messing with the address,
 //! and then immediately converting back to a pointer. To make this use case more ergonomic,
-//! we provide the [`map_addr`][] method.
+//! we provide the [`map_addr`] method.
 //!
 //! To help make it clear that code is "following" Strict Provenance semantics, we also provide an
-//! [`addr`][] method which promises that the returned address is not part of a
-//! pointer-usize-pointer roundtrip. In the future we may provide a lint for pointer<->integer
+//! [`addr`] method which promises that the returned address is not part of a
+//! pointer-integer-pointer roundtrip. In the future we may provide a lint for pointer<->integer
 //! casts to help you audit if your code conforms to strict provenance.
 //!
-//!
-//! ## Using Strict Provenance
+//! ### Using Strict Provenance
 //!
 //! Most code needs no changes to conform to strict provenance, as the only really concerning
-//! operation that *wasn't* obviously already Undefined Behaviour is casts from usize to a
-//! pointer. For code which *does* cast a usize to a pointer, the scope of the change depends
-//! on exactly what you're doing.
+//! operation is casts from usize to a pointer. For code which *does* cast a `usize` to a pointer,
+//! the scope of the change depends on exactly what you're doing.
 //!
-//! In general you just need to make sure that if you want to convert a usize address to a
+//! In general, you just need to make sure that if you want to convert a `usize` address to a
 //! pointer and then use that pointer to read/write memory, you need to keep around a pointer
 //! that has sufficient provenance to perform that read/write itself. In this way all of your
 //! casts from an address to a pointer are essentially just applying offsets/indexing.
 //!
 //! This is generally trivial to do for simple cases like tagged pointers *as long as you
-//! represent the tagged pointer as an actual pointer and not a usize*. For instance:
+//! represent the tagged pointer as an actual pointer and not a `usize`*. For instance:
 //!
 //! ```
-//! #![feature(strict_provenance)]
-//!
 //! unsafe {
 //!     // A flag we want to pack into our pointer
 //!     static HAS_DATA: usize = 0x1;
@@ -244,138 +314,91 @@
 //! }
 //! ```
 //!
-//! (Yes, if you've been using AtomicUsize for pointers in concurrent datastructures, you should
-//! be using AtomicPtr instead. If that messes up the way you atomically manipulate pointers,
+//! (Yes, if you've been using [`AtomicUsize`] for pointers in concurrent datastructures, you should
+//! be using [`AtomicPtr`] instead. If that messes up the way you atomically manipulate pointers,
 //! we would like to know why, and what needs to be done to fix it.)
 //!
-//! Something more complicated and just generally *evil* like an XOR-List requires more significant
-//! changes like allocating all nodes in a pre-allocated Vec or Arena and using a pointer
-//! to the whole allocation to reconstitute the XORed addresses.
-//!
 //! Situations where a valid pointer *must* be created from just an address, such as baremetal code
-//! accessing a memory-mapped interface at a fixed address, are an open question on how to support.
-//! These situations *will* still be allowed, but we might require some kind of "I know what I'm
-//! doing" annotation to explain the situation to the compiler. It's also possible they need no
-//! special attention at all, because they're generally accessing memory outside the scope of
-//! "the abstract machine", or already using "I know what I'm doing" annotations like "volatile".
+//! accessing a memory-mapped interface at a fixed address, cannot currently be handled with strict
+//! provenance APIs and should use [exposed provenance](#exposed-provenance).
 //!
-//! Under [Strict Provenance] it is Undefined Behaviour to:
+//! ## Exposed Provenance
 //!
-//! * Access memory through a pointer that does not have provenance over that memory.
+//! As discussed above, integer-to-pointer casts are not possible with Strict Provenance APIs.
+//! This is by design: the goal of Strict Provenance is to provide a clear specification that we are
+//! confident can be formalized unambiguously and can be subject to precise formal reasoning.
+//! Integer-to-pointer casts do not (currently) have such a clear specification.
 //!
-//! * [`offset`] a pointer to or from an address it doesn't have provenance over.
-//!   This means it's always UB to offset a pointer derived from something deallocated,
-//!   even if the offset is 0. Note that a pointer "one past the end" of its provenance
-//!   is not actually outside its provenance, it just has 0 bytes it can load/store.
+//! However, there exist situations where integer-to-pointer casts cannot be avoided, or
+//! where avoiding them would require major refactoring. Legacy platform APIs also regularly assume
+//! that `usize` can capture all the information that makes up a pointer.
+//! Bare-metal platforms can also require the synthesis of a pointer "out of thin air" without
+//! anywhere to obtain proper provenance from.
 //!
-//! But it *is* still sound to:
+//! Rust's model for dealing with integer-to-pointer casts is called *Exposed Provenance*. However,
+//! the semantics of Exposed Provenance are on much less solid footing than Strict Provenance, and
+//! at this point it is not yet clear whether a satisfying unambiguous semantics can be defined for
+//! Exposed Provenance. (If that sounds bad, be reassured that other popular languages that provide
+//! integer-to-pointer casts are not faring any better.) Furthermore, Exposed Provenance will not
+//! work (well) with tools like [Miri] and [CHERI].
 //!
-//! * Create an invalid pointer from just an address (see [`ptr::invalid`][]). This can
-//!   be used for sentinel values like `null` *or* to represent a tagged pointer that will
-//!   never be dereferenceable. In general, it is always sound for an integer to pretend
-//!   to be a pointer "for fun" as long as you don't use operations on it which require
-//!   it to be valid (offset, read, write, etc).
+//! Exposed Provenance is provided by the [`expose_provenance`] and [`with_exposed_provenance`] methods,
+//! which are equivalent to `as` casts between pointers and integers.
+//! - [`expose_provenance`] is a lot like [`addr`], but additionally adds the provenance of the
+//!   pointer to a global list of 'exposed' provenances. (This list is purely conceptual, it exists
+//!   for the purpose of specifying Rust but is not materialized in actual executions, except in
+//!   tools like [Miri].)
+//!   Memory which is outside the control of the Rust abstract machine (MMIO registers, for example)
+//!   is always considered to be exposed, so long as this memory is disjoint from memory that will
+//!   be used by the abstract machine such as the stack, heap, and statics.
+//! - [`with_exposed_provenance`] can be used to construct a pointer with one of these previously
+//!   'exposed' provenances. [`with_exposed_provenance`] takes only `addr: usize` as arguments, so
+//!   unlike in [`with_addr`] there is no indication of what the correct provenance for the returned
+//!   pointer is -- and that is exactly what makes integer-to-pointer casts so tricky to rigorously
+//!   specify! The compiler will do its best to pick the right provenance for you, but currently we
+//!   cannot provide any guarantees about which provenance the resulting pointer will have. Only one
+//!   thing is clear: if there is *no* previously 'exposed' provenance that justifies the way the
+//!   returned pointer will be used, the program has undefined behavior.
 //!
-//! * Forge an allocation of size zero at any sufficiently aligned non-null address.
-//!   i.e. the usual "ZSTs are fake, do what you want" rules apply *but* this only applies
-//!   for actual forgery (integers cast to pointers). If you borrow some struct's field
-//!   that *happens* to be zero-sized, the resulting pointer will have provenance tied to
-//!   that allocation and it will still get invalidated if the allocation gets deallocated.
-//!   In the future we may introduce an API to make such a forged allocation explicit.
-//!
-//! * [`wrapping_offset`][] a pointer outside its provenance. This includes invalid pointers
-//!   which have "no" provenance. Unfortunately there may be practical limits on this for a
-//!   particular platform, and it's an open question as to how to specify this (if at all).
-//!   Notably, [CHERI][] relies on a compression scheme that can't handle a
-//!   pointer getting offset "too far" out of bounds. If this happens, the address
-//!   returned by `addr` will be the value you expect, but the provenance will get invalidated
-//!   and using it to read/write will fault. The details of this are architecture-specific
-//!   and based on alignment, but the buffer on either side of the pointer's range is pretty
-//!   generous (think kilobytes, not bytes).
-//!
-//! * Compare arbitrary pointers by address. Addresses *are* just integers and so there is
-//!   always a coherent answer, even if the pointers are invalid or from different
-//!   address-spaces/provenances. Of course, comparing addresses from different address-spaces
-//!   is generally going to be *meaningless*, but so is comparing Kilograms to Meters, and Rust
-//!   doesn't prevent that either. Similarly, if you get "lucky" and notice that a pointer
-//!   one-past-the-end is the "same" address as the start of an unrelated allocation, anything
-//!   you do with that fact is *probably* going to be gibberish. The scope of that gibberish
-//!   is kept under control by the fact that the two pointers *still* aren't allowed to access
-//!   the other's allocation (bytes), because they still have different provenance.
-//!
-//! * Perform pointer tagging tricks. This falls out of [`wrapping_offset`] but is worth
-//!   mentioning in more detail because of the limitations of [CHERI][]. Low-bit tagging
-//!   is very robust, and often doesn't even go out of bounds because types ensure
-//!   size >= align (and over-aligning actually gives CHERI more flexibility). Anything
-//!   more complex than this rapidly enters "extremely platform-specific" territory as
-//!   certain things may or may not be allowed based on specific supported operations.
-//!   For instance, ARM explicitly supports high-bit tagging, and so CHERI on ARM inherits
-//!   that and should support it.
-//!
-//! ## Pointer-usize-pointer roundtrips and 'exposed' provenance
-//!
-//! **This section is *non-normative* and is part of the [Strict Provenance] experiment.**
-//!
-//! As discussed above, pointer-usize-pointer roundtrips are not possible under [Strict Provenance].
-//! However, there exists legacy Rust code that is full of such roundtrips, and legacy platform APIs
-//! regularly assume that `usize` can capture all the information that makes up a pointer. There
-//! also might be code that cannot be ported to Strict Provenance (which is something we would [like
-//! to hear about][Strict Provenance]).
-//!
-//! For situations like this, there is a fallback plan, a way to 'opt out' of Strict Provenance.
-//! However, note that this makes your code a lot harder to specify, and the code will not work
-//! (well) with tools like [Miri] and [CHERI].
-//!
-//! This fallback plan is provided by the [`expose_addr`] and [`from_exposed_addr`] methods (which
-//! are equivalent to `as` casts between pointers and integers). [`expose_addr`] is a lot like
-//! [`addr`], but additionally adds the provenance of the pointer to a global list of 'exposed'
-//! provenances. (This list is purely conceptual, it exists for the purpose of specifying Rust but
-//! is not materialized in actual executions, except in tools like [Miri].) [`from_exposed_addr`]
-//! can be used to construct a pointer with one of these previously 'exposed' provenances.
-//! [`from_exposed_addr`] takes only `addr: usize` as arguments, so unlike in [`with_addr`] there is
-//! no indication of what the correct provenance for the returned pointer is -- and that is exactly
-//! what makes pointer-usize-pointer roundtrips so tricky to rigorously specify! There is no
-//! algorithm that decides which provenance will be used. You can think of this as "guessing" the
-//! right provenance, and the guess will be "maximally in your favor", in the sense that if there is
-//! any way to avoid undefined behavior, then that is the guess that will be taken. However, if
-//! there is *no* previously 'exposed' provenance that justifies the way the returned pointer will
-//! be used, the program has undefined behavior.
-//!
-//! Using [`expose_addr`] or [`from_exposed_addr`] (or the equivalent `as` casts) means that code is
-//! *not* following Strict Provenance rules. The goal of the Strict Provenance experiment is to
-//! determine whether it is possible to use Rust without [`expose_addr`] and [`from_exposed_addr`].
-//! If this is successful, it would be a major win for avoiding specification complexity and to
-//! facilitate adoption of tools like [CHERI] and [Miri] that can be a big help in increasing the
-//! confidence in (unsafe) Rust code.
+//! If at all possible, we encourage code to be ported to [Strict Provenance] APIs, thus avoiding
+//! the need for Exposed Provenance. Maximizing the amount of such code is a major win for avoiding
+//! specification complexity and to facilitate adoption of tools like [CHERI] and [Miri] that can be
+//! a big help in increasing the confidence in (unsafe) Rust code. However, we acknowledge that this
+//! is not always possible, and offer Exposed Provenance as a way to explicit "opt out" of the
+//! well-defined semantics of Strict Provenance, and "opt in" to the unclear semantics of
+//! integer-to-pointer casts.
 //!
 //! [aliasing]: ../../nomicon/aliasing.html
+//! [allocated object]: #allocated-object
+//! [provenance]: #provenance
 //! [book]: ../../book/ch19-01-unsafe-rust.html#dereferencing-a-raw-pointer
 //! [ub]: ../../reference/behavior-considered-undefined.html
 //! [zst]: ../../nomicon/exotic-sizes.html#zero-sized-types-zsts
 //! [atomic operations]: crate::sync::atomic
 //! [`offset`]: pointer::offset
+//! [`offset_from`]: pointer::offset_from
 //! [`wrapping_offset`]: pointer::wrapping_offset
 //! [`with_addr`]: pointer::with_addr
 //! [`map_addr`]: pointer::map_addr
 //! [`addr`]: pointer::addr
-//! [`ptr::invalid`]: core::ptr::invalid
-//! [`expose_addr`]: pointer::expose_addr
-//! [`from_exposed_addr`]: from_exposed_addr
+//! [`AtomicUsize`]: crate::sync::atomic::AtomicUsize
+//! [`AtomicPtr`]: crate::sync::atomic::AtomicPtr
+//! [`expose_provenance`]: pointer::expose_provenance
+//! [`with_exposed_provenance`]: with_exposed_provenance
 //! [Miri]: https://github.com/rust-lang/miri
 //! [CHERI]: https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/
-//! [Strict Provenance]: https://github.com/rust-lang/rust/issues/95228
-//! [Stacked Borrows]: https://plv.mpi-sws.org/rustbelt/stacked-borrows/
+//! [Strict Provenance]: #strict-provenance
+//! [`UnsafeCell`]: core::cell::UnsafeCell
 
 #![stable(feature = "rust1", since = "1.0.0")]
+// There are many unsafe functions taking pointers that don't dereference them.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use crate::cmp::Ordering;
-use crate::fmt;
-use crate::hash;
-use crate::intrinsics::{
-    self, assert_unsafe_precondition, is_aligned_and_not_null, is_nonoverlapping,
-};
-
-use crate::mem::{self, MaybeUninit};
+use crate::intrinsics::const_eval_select;
+use crate::marker::FnPtr;
+use crate::mem::{self, MaybeUninit, SizedTypeProperties};
+use crate::{fmt, hash, intrinsics, ub_checks};
 
 mod alignment;
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
@@ -383,19 +406,17 @@ pub use alignment::Alignment;
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[doc(inline)]
-pub use crate::intrinsics::copy_nonoverlapping;
-
+pub use crate::intrinsics::copy;
 #[stable(feature = "rust1", since = "1.0.0")]
 #[doc(inline)]
-pub use crate::intrinsics::copy;
-
+pub use crate::intrinsics::copy_nonoverlapping;
 #[stable(feature = "rust1", since = "1.0.0")]
 #[doc(inline)]
 pub use crate::intrinsics::write_bytes;
 
 mod metadata;
 #[unstable(feature = "ptr_metadata", issue = "81513")]
-pub use metadata::{from_raw_parts, from_raw_parts_mut, metadata, DynMetadata, Pointee, Thin};
+pub use metadata::{DynMetadata, Pointee, Thin, from_raw_parts, from_raw_parts_mut, metadata};
 
 mod non_null;
 #[stable(feature = "nonnull", since = "1.25.0")]
@@ -410,8 +431,13 @@ mod mut_ptr;
 
 /// Executes the destructor (if any) of the pointed-to value.
 ///
-/// This is semantically equivalent to calling [`ptr::read`] and discarding
+/// This is almost the same as calling [`ptr::read`] and discarding
 /// the result, but has the following advantages:
+// FIXME: say something more useful than "almost the same"?
+// There are open questions here: `read` requires the value to be fully valid, e.g. if `T` is a
+// `bool` it must be 0 or 1, if it is a reference then it must be dereferenceable. `drop_in_place`
+// only requires that `*to_drop` be "valid for dropping" and we have not defined what that means. In
+// Miri it currently (May 2024) requires nothing at all for types without drop glue.
 ///
 /// * It is *required* to use `drop_in_place` to drop unsized types like
 ///   trait objects, because they can't be read out onto the stack and
@@ -440,18 +466,24 @@ mod mut_ptr;
 ///
 /// * `to_drop` must be [valid] for both reads and writes.
 ///
-/// * `to_drop` must be properly aligned.
+/// * `to_drop` must be properly aligned, even if `T` has size 0.
 ///
-/// * The value `to_drop` points to must be valid for dropping, which may mean it must uphold
-///   additional invariants - this is type-dependent.
+/// * `to_drop` must be nonnull, even if `T` has size 0.
+///
+/// * The value `to_drop` points to must be valid for dropping, which may mean
+///   it must uphold additional invariants. These invariants depend on the type
+///   of the value being dropped. For instance, when dropping a Box, the box's
+///   pointer to the heap must be valid.
+///
+/// * While `drop_in_place` is executing, the only way to access parts of
+///   `to_drop` is through the `&mut self` references supplied to the
+///   `Drop::drop` methods that `drop_in_place` invokes.
 ///
 /// Additionally, if `T` is not [`Copy`], using the pointed-to value after
 /// calling `drop_in_place` can cause undefined behavior. Note that `*to_drop =
 /// foo` counts as a use because it will cause the value to be dropped
 /// again. [`write()`] can be used to overwrite data without causing it to be
 /// dropped.
-///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -487,6 +519,7 @@ mod mut_ptr;
 #[stable(feature = "drop_in_place", since = "1.8.0")]
 #[lang = "drop_in_place"]
 #[allow(unconditional_recursion)]
+#[rustc_diagnostic_item = "ptr_drop_in_place"]
 pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
     // Code here does not matter - this is replaced by the
     // real drop glue by the compiler.
@@ -497,6 +530,10 @@ pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
 
 /// Creates a null raw pointer.
 ///
+/// This function is equivalent to zero-initializing the pointer:
+/// `MaybeUninit::<*const T>::zeroed().assume_init()`.
+/// The resulting pointer has the address 0.
+///
 /// # Examples
 ///
 /// ```
@@ -504,22 +541,26 @@ pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
 ///
 /// let p: *const i32 = ptr::null();
 /// assert!(p.is_null());
+/// assert_eq!(p as usize, 0); // this pointer has the address 0
 /// ```
 #[inline(always)]
 #[must_use]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_promotable]
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
-#[rustc_allow_const_fn_unstable(ptr_metadata)]
 #[rustc_diagnostic_item = "ptr_null"]
 pub const fn null<T: ?Sized + Thin>() -> *const T {
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *const T {
-        from_raw_parts(invalid(0), ())
+        from_raw_parts(without_provenance::<()>(0), ())
     }
     crucible_null_hook()
 }
 
 /// Creates a null mutable raw pointer.
+///
+/// This function is equivalent to zero-initializing the pointer:
+/// `MaybeUninit::<*mut T>::zeroed().assume_init()`.
+/// The resulting pointer has the address 0.
 ///
 /// # Examples
 ///
@@ -528,179 +569,286 @@ pub const fn null<T: ?Sized + Thin>() -> *const T {
 ///
 /// let p: *mut i32 = ptr::null_mut();
 /// assert!(p.is_null());
+/// assert_eq!(p as usize, 0); // this pointer has the address 0
 /// ```
 #[inline(always)]
 #[must_use]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_promotable]
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
-#[rustc_allow_const_fn_unstable(ptr_metadata)]
 #[rustc_diagnostic_item = "ptr_null_mut"]
 pub const fn null_mut<T: ?Sized + Thin>() -> *mut T {
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *mut T {
-        from_raw_parts_mut(invalid_mut(0), ())
+        from_raw_parts_mut(without_provenance_mut::<()>(0), ())
     }
     crucible_null_hook()
 }
 
-/// Creates an invalid pointer with the given address.
+/// Creates a pointer with the given address and no [provenance][crate::ptr#provenance].
+///
+/// This is equivalent to `ptr::null().with_addr(addr)`.
+///
+/// Without provenance, this pointer is not associated with any actual allocation. Such a
+/// no-provenance pointer may be used for zero-sized memory accesses (if suitably aligned), but
+/// non-zero-sized memory accesses with a no-provenance pointer are UB. No-provenance pointers are
+/// little more than a `usize` address in disguise.
 ///
 /// This is different from `addr as *const T`, which creates a pointer that picks up a previously
-/// exposed provenance. See [`from_exposed_addr`] for more details on that operation.
+/// exposed provenance. See [`with_exposed_provenance`] for more details on that operation.
 ///
-/// The module's top-level documentation discusses the precise meaning of an "invalid"
-/// pointer but essentially this expresses that the pointer is not associated
-/// with any actual allocation and is little more than a usize address in disguise.
-///
-/// This pointer will have no provenance associated with it and is therefore
-/// UB to read/write/offset. This mostly exists to facilitate things
-/// like `ptr::null` and `NonNull::dangling` which make invalid pointers.
-///
-/// (Standard "Zero-Sized-Types get to cheat and lie" caveats apply, although it
-/// may be desirable to give them their own API just to make that 100% clear.)
-///
-/// This API and its claimed semantics are part of the Strict Provenance experiment,
-/// see the [module documentation][crate::ptr] for details.
+/// This is a [Strict Provenance][crate::ptr#strict-provenance] API.
 #[inline(always)]
 #[must_use]
-#[rustc_const_stable(feature = "stable_things_using_strict_provenance", since = "1.61.0")]
-#[unstable(feature = "strict_provenance", issue = "95228")]
-#[allow(fuzzy_provenance_casts)]
-pub const fn invalid<T>(addr: usize) -> *const T {
-    addr as *const T
+#[stable(feature = "strict_provenance", since = "1.84.0")]
+#[rustc_const_stable(feature = "strict_provenance", since = "1.84.0")]
+pub const fn without_provenance<T>(addr: usize) -> *const T {
+    without_provenance_mut(addr)
 }
 
-/// Creates an invalid mutable pointer with the given address.
+/// Creates a new pointer that is dangling, but non-null and well-aligned.
+///
+/// This is useful for initializing types which lazily allocate, like
+/// `Vec::new` does.
+///
+/// Note that the pointer value may potentially represent a valid pointer to
+/// a `T`, which means this must not be used as a "not yet initialized"
+/// sentinel value. Types that lazily allocate must track initialization by
+/// some other means.
+#[inline(always)]
+#[must_use]
+#[stable(feature = "strict_provenance", since = "1.84.0")]
+#[rustc_const_stable(feature = "strict_provenance", since = "1.84.0")]
+pub const fn dangling<T>() -> *const T {
+    dangling_mut()
+}
+
+/// Creates a pointer with the given address and no [provenance][crate::ptr#provenance].
+///
+/// This is equivalent to `ptr::null_mut().with_addr(addr)`.
+///
+/// Without provenance, this pointer is not associated with any actual allocation. Such a
+/// no-provenance pointer may be used for zero-sized memory accesses (if suitably aligned), but
+/// non-zero-sized memory accesses with a no-provenance pointer are UB. No-provenance pointers are
+/// little more than a `usize` address in disguise.
 ///
 /// This is different from `addr as *mut T`, which creates a pointer that picks up a previously
-/// exposed provenance. See [`from_exposed_addr_mut`] for more details on that operation.
+/// exposed provenance. See [`with_exposed_provenance_mut`] for more details on that operation.
 ///
-/// The module's top-level documentation discusses the precise meaning of an "invalid"
-/// pointer but essentially this expresses that the pointer is not associated
-/// with any actual allocation and is little more than a usize address in disguise.
-///
-/// This pointer will have no provenance associated with it and is therefore
-/// UB to read/write/offset. This mostly exists to facilitate things
-/// like `ptr::null` and `NonNull::dangling` which make invalid pointers.
-///
-/// (Standard "Zero-Sized-Types get to cheat and lie" caveats apply, although it
-/// may be desirable to give them their own API just to make that 100% clear.)
-///
-/// This API and its claimed semantics are part of the Strict Provenance experiment,
-/// see the [module documentation][crate::ptr] for details.
+/// This is a [Strict Provenance][crate::ptr#strict-provenance] API.
 #[inline(always)]
 #[must_use]
-#[rustc_const_stable(feature = "stable_things_using_strict_provenance", since = "1.61.0")]
-#[unstable(feature = "strict_provenance", issue = "95228")]
-#[allow(fuzzy_provenance_casts)]
-pub const fn invalid_mut<T>(addr: usize) -> *mut T {
-    addr as *mut T
+#[stable(feature = "strict_provenance", since = "1.84.0")]
+#[rustc_const_stable(feature = "strict_provenance", since = "1.84.0")]
+pub const fn without_provenance_mut<T>(addr: usize) -> *mut T {
+    // An int-to-pointer transmute currently has exactly the intended semantics: it creates a
+    // pointer without provenance. Note that this is *not* a stable guarantee about transmute
+    // semantics, it relies on sysroot crates having special status.
+    // SAFETY: every valid integer is also a valid pointer (as long as you don't dereference that
+    // pointer).
+    unsafe { mem::transmute(addr) }
 }
 
-/// Convert an address back to a pointer, picking up a previously 'exposed' provenance.
+/// Creates a new pointer that is dangling, but non-null and well-aligned.
 ///
-/// This is equivalent to `addr as *const T`. The provenance of the returned pointer is that of *any*
-/// pointer that was previously exposed by passing it to [`expose_addr`][pointer::expose_addr],
-/// or a `ptr as usize` cast. In addition, memory which is outside the control of the Rust abstract
-/// machine (MMIO registers, for example) is always considered to be exposed, so long as this memory
-/// is disjoint from memory that will be used by the abstract machine such as the stack, heap,
-/// and statics.
+/// This is useful for initializing types which lazily allocate, like
+/// `Vec::new` does.
 ///
-/// If there is no 'exposed' provenance that justifies the way this pointer will be used,
-/// the program has undefined behavior. In particular, the aliasing rules still apply: pointers
-/// and references that have been invalidated due to aliasing accesses cannot be used any more,
-/// even if they have been exposed!
+/// Note that the pointer value may potentially represent a valid pointer to
+/// a `T`, which means this must not be used as a "not yet initialized"
+/// sentinel value. Types that lazily allocate must track initialization by
+/// some other means.
+#[inline(always)]
+#[must_use]
+#[stable(feature = "strict_provenance", since = "1.84.0")]
+#[rustc_const_stable(feature = "strict_provenance", since = "1.84.0")]
+pub const fn dangling_mut<T>() -> *mut T {
+    NonNull::dangling().as_ptr()
+}
+
+/// Converts an address back to a pointer, picking up some previously 'exposed'
+/// [provenance][crate::ptr#provenance].
 ///
-/// Note that there is no algorithm that decides which provenance will be used. You can think of this
-/// as "guessing" the right provenance, and the guess will be "maximally in your favor", in the sense
-/// that if there is any way to avoid undefined behavior (while upholding all aliasing requirements),
-/// then that is the guess that will be taken.
+/// This is fully equivalent to `addr as *const T`. The provenance of the returned pointer is that
+/// of *some* pointer that was previously exposed by passing it to
+/// [`expose_provenance`][pointer::expose_provenance], or a `ptr as usize` cast. In addition, memory
+/// which is outside the control of the Rust abstract machine (MMIO registers, for example) is
+/// always considered to be accessible with an exposed provenance, so long as this memory is disjoint
+/// from memory that will be used by the abstract machine such as the stack, heap, and statics.
 ///
-/// On platforms with multiple address spaces, it is your responsibility to ensure that the
-/// address makes sense in the address space that this pointer will be used with.
+/// The exact provenance that gets picked is not specified. The compiler will do its best to pick
+/// the "right" provenance for you (whatever that may be), but currently we cannot provide any
+/// guarantees about which provenance the resulting pointer will have -- and therefore there
+/// is no definite specification for which memory the resulting pointer may access.
 ///
-/// Using this method means that code is *not* following strict provenance rules. "Guessing" a
-/// suitable provenance complicates specification and reasoning and may not be supported by
-/// tools that help you to stay conformant with the Rust memory model, so it is recommended to
-/// use [`with_addr`][pointer::with_addr] wherever possible.
+/// If there is *no* previously 'exposed' provenance that justifies the way the returned pointer
+/// will be used, the program has undefined behavior. In particular, the aliasing rules still apply:
+/// pointers and references that have been invalidated due to aliasing accesses cannot be used
+/// anymore, even if they have been exposed!
+///
+/// Due to its inherent ambiguity, this operation may not be supported by tools that help you to
+/// stay conformant with the Rust memory model. It is recommended to use [Strict
+/// Provenance][self#strict-provenance] APIs such as [`with_addr`][pointer::with_addr] wherever
+/// possible.
 ///
 /// On most platforms this will produce a value with the same bytes as the address. Platforms
 /// which need to store additional information in a pointer may not support this operation,
 /// since it is generally not possible to actually *compute* which provenance the returned
 /// pointer has to pick up.
 ///
-/// This API and its claimed semantics are part of the Strict Provenance experiment, see the
-/// [module documentation][crate::ptr] for details.
+/// This is an [Exposed Provenance][crate::ptr#exposed-provenance] API.
 #[must_use]
 #[inline(always)]
-#[unstable(feature = "strict_provenance", issue = "95228")]
+#[stable(feature = "exposed_provenance", since = "1.84.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
-#[allow(fuzzy_provenance_casts)] // this *is* the strict provenance API one should use instead
-pub fn from_exposed_addr<T>(addr: usize) -> *const T
-where
-    T: Sized,
-{
-    // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+#[allow(fuzzy_provenance_casts)] // this *is* the explicit provenance API one should use instead
+pub fn with_exposed_provenance<T>(addr: usize) -> *const T {
     addr as *const T
 }
 
-/// Convert an address back to a mutable pointer, picking up a previously 'exposed' provenance.
+/// Converts an address back to a mutable pointer, picking up some previously 'exposed'
+/// [provenance][crate::ptr#provenance].
 ///
-/// This is equivalent to `addr as *mut T`. The provenance of the returned pointer is that of *any*
-/// pointer that was previously passed to [`expose_addr`][pointer::expose_addr] or a `ptr as usize`
-/// cast. If there is no previously 'exposed' provenance that justifies the way this pointer will be
-/// used, the program has undefined behavior. Note that there is no algorithm that decides which
-/// provenance will be used. You can think of this as "guessing" the right provenance, and the guess
-/// will be "maximally in your favor", in the sense that if there is any way to avoid undefined
-/// behavior, then that is the guess that will be taken.
+/// This is fully equivalent to `addr as *mut T`. The provenance of the returned pointer is that
+/// of *some* pointer that was previously exposed by passing it to
+/// [`expose_provenance`][pointer::expose_provenance], or a `ptr as usize` cast. In addition, memory
+/// which is outside the control of the Rust abstract machine (MMIO registers, for example) is
+/// always considered to be accessible with an exposed provenance, so long as this memory is disjoint
+/// from memory that will be used by the abstract machine such as the stack, heap, and statics.
 ///
-/// On platforms with multiple address spaces, it is your responsibility to ensure that the
-/// address makes sense in the address space that this pointer will be used with.
+/// The exact provenance that gets picked is not specified. The compiler will do its best to pick
+/// the "right" provenance for you (whatever that may be), but currently we cannot provide any
+/// guarantees about which provenance the resulting pointer will have -- and therefore there
+/// is no definite specification for which memory the resulting pointer may access.
 ///
-/// Using this method means that code is *not* following strict provenance rules. "Guessing" a
-/// suitable provenance complicates specification and reasoning and may not be supported by
-/// tools that help you to stay conformant with the Rust memory model, so it is recommended to
-/// use [`with_addr`][pointer::with_addr] wherever possible.
+/// If there is *no* previously 'exposed' provenance that justifies the way the returned pointer
+/// will be used, the program has undefined behavior. In particular, the aliasing rules still apply:
+/// pointers and references that have been invalidated due to aliasing accesses cannot be used
+/// anymore, even if they have been exposed!
+///
+/// Due to its inherent ambiguity, this operation may not be supported by tools that help you to
+/// stay conformant with the Rust memory model. It is recommended to use [Strict
+/// Provenance][self#strict-provenance] APIs such as [`with_addr`][pointer::with_addr] wherever
+/// possible.
 ///
 /// On most platforms this will produce a value with the same bytes as the address. Platforms
 /// which need to store additional information in a pointer may not support this operation,
 /// since it is generally not possible to actually *compute* which provenance the returned
 /// pointer has to pick up.
 ///
-/// This API and its claimed semantics are part of the Strict Provenance experiment, see the
-/// [module documentation][crate::ptr] for details.
+/// This is an [Exposed Provenance][crate::ptr#exposed-provenance] API.
 #[must_use]
 #[inline(always)]
-#[unstable(feature = "strict_provenance", issue = "95228")]
+#[stable(feature = "exposed_provenance", since = "1.84.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
-#[allow(fuzzy_provenance_casts)] // this *is* the strict provenance API one should use instead
-pub fn from_exposed_addr_mut<T>(addr: usize) -> *mut T
-where
-    T: Sized,
-{
-    // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+#[allow(fuzzy_provenance_casts)] // this *is* the explicit provenance API one should use instead
+pub fn with_exposed_provenance_mut<T>(addr: usize) -> *mut T {
     addr as *mut T
 }
 
-/// Convert a reference to a raw pointer.
+/// Converts a reference to a raw pointer.
 ///
-/// This is equivalent to `r as *const T`, but is a bit safer since it will never silently change
-/// type or mutability, in particular if the code is refactored.
+/// For `r: &T`, `from_ref(r)` is equivalent to `r as *const T` (except for the caveat noted below),
+/// but is a bit safer since it will never silently change type or mutability, in particular if the
+/// code is refactored.
+///
+/// The caller must ensure that the pointee outlives the pointer this function returns, or else it
+/// will end up dangling.
+///
+/// The caller must also ensure that the memory the pointer (non-transitively) points to is never
+/// written to (except inside an `UnsafeCell`) using this pointer or any pointer derived from it. If
+/// you need to mutate the pointee, use [`from_mut`]. Specifically, to turn a mutable reference `m:
+/// &mut T` into `*const T`, prefer `from_mut(m).cast_const()` to obtain a pointer that can later be
+/// used for mutation.
+///
+/// ## Interaction with lifetime extension
+///
+/// Note that this has subtle interactions with the rules for lifetime extension of temporaries in
+/// tail expressions. This code is valid, albeit in a non-obvious way:
+/// ```rust
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// // The temporary holding the return value of `foo` has its lifetime extended,
+/// // because the surrounding expression involves no function call.
+/// let p = &foo() as *const T;
+/// unsafe { p.read() };
+/// ```
+/// Naively replacing the cast with `from_ref` is not valid:
+/// ```rust,no_run
+/// # use std::ptr;
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// // The temporary holding the return value of `foo` does *not* have its lifetime extended,
+/// // because the surrounding expression involves a function call.
+/// let p = ptr::from_ref(&foo());
+/// unsafe { p.read() }; // UB! Reading from a dangling pointer ⚠️
+/// ```
+/// The recommended way to write this code is to avoid relying on lifetime extension
+/// when raw pointers are involved:
+/// ```rust
+/// # use std::ptr;
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// let x = foo();
+/// let p = ptr::from_ref(&x);
+/// unsafe { p.read() };
+/// ```
 #[inline(always)]
 #[must_use]
-#[unstable(feature = "ptr_from_ref", issue = "106116")]
-pub fn from_ref<T: ?Sized>(r: &T) -> *const T {
+#[stable(feature = "ptr_from_ref", since = "1.76.0")]
+#[rustc_const_stable(feature = "ptr_from_ref", since = "1.76.0")]
+#[rustc_never_returns_null_ptr]
+#[rustc_diagnostic_item = "ptr_from_ref"]
+pub const fn from_ref<T: ?Sized>(r: &T) -> *const T {
     r
 }
 
-/// Convert a mutable reference to a raw pointer.
+/// Converts a mutable reference to a raw pointer.
 ///
-/// This is equivalent to `r as *mut T`, but is a bit safer since it will never silently change
-/// type or mutability, in particular if the code is refactored.
+/// For `r: &mut T`, `from_mut(r)` is equivalent to `r as *mut T` (except for the caveat noted
+/// below), but is a bit safer since it will never silently change type or mutability, in particular
+/// if the code is refactored.
+///
+/// The caller must ensure that the pointee outlives the pointer this function returns, or else it
+/// will end up dangling.
+///
+/// ## Interaction with lifetime extension
+///
+/// Note that this has subtle interactions with the rules for lifetime extension of temporaries in
+/// tail expressions. This code is valid, albeit in a non-obvious way:
+/// ```rust
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// // The temporary holding the return value of `foo` has its lifetime extended,
+/// // because the surrounding expression involves no function call.
+/// let p = &mut foo() as *mut T;
+/// unsafe { p.write(T::default()) };
+/// ```
+/// Naively replacing the cast with `from_mut` is not valid:
+/// ```rust,no_run
+/// # use std::ptr;
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// // The temporary holding the return value of `foo` does *not* have its lifetime extended,
+/// // because the surrounding expression involves a function call.
+/// let p = ptr::from_mut(&mut foo());
+/// unsafe { p.write(T::default()) }; // UB! Writing to a dangling pointer ⚠️
+/// ```
+/// The recommended way to write this code is to avoid relying on lifetime extension
+/// when raw pointers are involved:
+/// ```rust
+/// # use std::ptr;
+/// # type T = i32;
+/// # fn foo() -> T { 42 }
+/// let mut x = foo();
+/// let p = ptr::from_mut(&mut x);
+/// unsafe { p.write(T::default()) };
+/// ```
 #[inline(always)]
 #[must_use]
-#[unstable(feature = "ptr_from_ref", issue = "106116")]
-pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
+#[stable(feature = "ptr_from_ref", since = "1.76.0")]
+#[rustc_const_stable(feature = "ptr_from_ref", since = "1.76.0")]
+#[rustc_never_returns_null_ptr]
+pub const fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
     r
 }
 
@@ -724,18 +872,34 @@ pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
 /// let slice = ptr::slice_from_raw_parts(raw_pointer, 3);
 /// assert_eq!(unsafe { &*slice }[2], 7);
 /// ```
+///
+/// You must ensure that the pointer is valid and not null before dereferencing
+/// the raw slice. A slice reference must never have a null pointer, even if it's empty.
+///
+/// ```rust,should_panic
+/// use std::ptr;
+/// let danger: *const [u8] = ptr::slice_from_raw_parts(ptr::null(), 0);
+/// unsafe {
+///     danger.as_ref().expect("references must not be null");
+/// }
+/// ```
 #[inline]
 #[stable(feature = "slice_from_raw_parts", since = "1.42.0")]
 #[rustc_const_stable(feature = "const_slice_from_raw_parts", since = "1.64.0")]
-#[rustc_allow_const_fn_unstable(ptr_metadata)]
+#[rustc_diagnostic_item = "ptr_slice_from_raw_parts"]
 pub const fn slice_from_raw_parts<T>(data: *const T, len: usize) -> *const [T] {
-    from_raw_parts(data.cast(), len)
+    const fn crucible_slice_from_raw_parts_hook<T>(data: *const T, len: usize) -> *const [T] {
+        from_raw_parts(data, len)
+    }
+    crucible_slice_from_raw_parts_hook(data, len)
 }
 
+/// Forms a raw mutable slice from a pointer and a length.
+///
+/// The `len` argument is the number of **elements**, not the number of bytes.
+///
 /// Performs the same functionality as [`slice_from_raw_parts`], except that a
 /// raw mutable slice is returned, as opposed to a raw immutable slice.
-///
-/// See the documentation of [`slice_from_raw_parts`] for more details.
 ///
 /// This function is safe, but actually using the return value is unsafe.
 /// See the documentation of [`slice::from_raw_parts_mut`] for slice safety requirements.
@@ -757,11 +921,26 @@ pub const fn slice_from_raw_parts<T>(data: *const T, len: usize) -> *const [T] {
 ///
 /// assert_eq!(unsafe { &*slice }[2], 99);
 /// ```
+///
+/// You must ensure that the pointer is valid and not null before dereferencing
+/// the raw slice. A slice reference must never have a null pointer, even if it's empty.
+///
+/// ```rust,should_panic
+/// use std::ptr;
+/// let danger: *mut [u8] = ptr::slice_from_raw_parts_mut(ptr::null_mut(), 0);
+/// unsafe {
+///     danger.as_mut().expect("references must not be null");
+/// }
+/// ```
 #[inline]
 #[stable(feature = "slice_from_raw_parts", since = "1.42.0")]
-#[rustc_const_unstable(feature = "const_slice_from_raw_parts_mut", issue = "67456")]
+#[rustc_const_stable(feature = "const_slice_from_raw_parts_mut", since = "1.83.0")]
+#[rustc_diagnostic_item = "ptr_slice_from_raw_parts_mut"]
 pub const fn slice_from_raw_parts_mut<T>(data: *mut T, len: usize) -> *mut [T] {
-    from_raw_parts_mut(data.cast(), len)
+    const fn crucible_slice_from_raw_parts_hook<T>(data: *mut T, len: usize) -> *mut [T] {
+        from_raw_parts_mut(data, len)
+    }
+    crucible_slice_from_raw_parts_hook(data, len)
 }
 
 /// Swaps the values at two mutable locations of the same type, without
@@ -784,11 +963,13 @@ pub const fn slice_from_raw_parts_mut<T>(data: *mut T, len: usize) -> *mut [T] {
 ///
 /// Behavior is undefined if any of the following conditions are violated:
 ///
-/// * Both `x` and `y` must be [valid] for both reads and writes.
+/// * Both `x` and `y` must be [valid] for both reads and writes. They must remain valid even when the
+///   other pointer is written. (This means if the memory ranges overlap, the two pointers must not
+///   be subject to aliasing restrictions relative to each other.)
 ///
 /// * Both `x` and `y` must be properly aligned.
 ///
-/// Note that even if `T` has size `0`, the pointers must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointers must be properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -835,7 +1016,8 @@ pub const fn slice_from_raw_parts_mut<T>(data: *mut T, len: usize) -> *mut [T] {
 /// ```
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
-#[rustc_const_unstable(feature = "const_swap", issue = "83163")]
+#[rustc_const_stable(feature = "const_swap", since = "1.85.0")]
+#[rustc_diagnostic_item = "ptr_swap"]
 pub const unsafe fn swap<T>(x: *mut T, y: *mut T) {
     // Give ourselves some scratch space to work with.
     // We do not have to worry about drops: `MaybeUninit` does nothing when dropped.
@@ -873,7 +1055,7 @@ pub const unsafe fn swap<T>(x: *mut T, y: *mut T) {
 ///   beginning at `y` with the same size.
 ///
 /// Note that even if the effectively copied size (`count * size_of::<T>()`) is `0`,
-/// the pointers must be non-null and properly aligned.
+/// the pointers must be properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -896,72 +1078,102 @@ pub const unsafe fn swap<T>(x: *mut T, y: *mut T) {
 /// ```
 #[inline]
 #[stable(feature = "swap_nonoverlapping", since = "1.27.0")]
-#[rustc_const_unstable(feature = "const_swap", issue = "83163")]
+#[rustc_const_unstable(feature = "const_swap_nonoverlapping", issue = "133668")]
+#[rustc_diagnostic_item = "ptr_swap_nonoverlapping"]
 pub const unsafe fn swap_nonoverlapping<T>(x: *mut T, y: *mut T, count: usize) {
-    #[allow(unused)]
-    macro_rules! attempt_swap_as_chunks {
-        ($ChunkTy:ty) => {
-            if mem::align_of::<T>() >= mem::align_of::<$ChunkTy>()
-                && mem::size_of::<T>() % mem::size_of::<$ChunkTy>() == 0
-            {
-                let x: *mut $ChunkTy = x.cast();
-                let y: *mut $ChunkTy = y.cast();
-                let count = count * (mem::size_of::<T>() / mem::size_of::<$ChunkTy>());
-                // SAFETY: these are the same bytes that the caller promised were
-                // ok, just typed as `MaybeUninit<ChunkTy>`s instead of as `T`s.
-                // The `if` condition above ensures that we're not violating
-                // alignment requirements, and that the division is exact so
-                // that we don't lose any bytes off the end.
-                return unsafe { swap_nonoverlapping_simple_untyped(x, y, count) };
+    ub_checks::assert_unsafe_precondition!(
+        check_library_ub,
+        "ptr::swap_nonoverlapping requires that both pointer arguments are aligned and non-null \
+        and the specified memory ranges do not overlap",
+        (
+            x: *mut () = x as *mut (),
+            y: *mut () = y as *mut (),
+            size: usize = size_of::<T>(),
+            align: usize = align_of::<T>(),
+            count: usize = count,
+        ) => {
+            let zero_size = size == 0 || count == 0;
+            ub_checks::maybe_is_aligned_and_not_null(x, align, zero_size)
+                && ub_checks::maybe_is_aligned_and_not_null(y, align, zero_size)
+                && ub_checks::maybe_is_nonoverlapping(x, y, size, count)
+        }
+    );
+
+    const_eval_select!(
+        @capture[T] { x: *mut T, y: *mut T, count: usize }:
+        if const {
+            // At compile-time we want to always copy this in chunks of `T`, to ensure that if there
+            // are pointers inside `T` we will copy them in one go rather than trying to copy a part
+            // of a pointer (which would not work).
+            // SAFETY: Same preconditions as this function
+            unsafe { swap_nonoverlapping_simple_untyped(x, y, count) }
+        } else {
+            macro_rules! attempt_swap_as_chunks {
+                ($ChunkTy:ty) => {
+                    if mem::align_of::<T>() >= mem::align_of::<$ChunkTy>()
+                        && mem::size_of::<T>() % mem::size_of::<$ChunkTy>() == 0
+                    {
+                        let x: *mut $ChunkTy = x.cast();
+                        let y: *mut $ChunkTy = y.cast();
+                        let count = count * (mem::size_of::<T>() / mem::size_of::<$ChunkTy>());
+                        // SAFETY: these are the same bytes that the caller promised were
+                        // ok, just typed as `MaybeUninit<ChunkTy>`s instead of as `T`s.
+                        // The `if` condition above ensures that we're not violating
+                        // alignment requirements, and that the division is exact so
+                        // that we don't lose any bytes off the end.
+                        return unsafe { swap_nonoverlapping_simple_untyped(x, y, count) };
+                    }
+                };
             }
-        };
-    }
 
-    // SAFETY: the caller must guarantee that `x` and `y` are
-    // valid for writes and properly aligned.
-    unsafe {
-        assert_unsafe_precondition!(
-            "ptr::swap_nonoverlapping requires that both pointer arguments are aligned and non-null \
-            and the specified memory ranges do not overlap",
-            [T](x: *mut T, y: *mut T, count: usize) =>
-            is_aligned_and_not_null(x)
-                && is_aligned_and_not_null(y)
-                && is_nonoverlapping(x, y, count)
-        );
-    }
+            // Split up the slice into small power-of-two-sized chunks that LLVM is able
+            // to vectorize (unless it's a special type with more-than-pointer alignment,
+            // because we don't want to pessimize things like slices of SIMD vectors.)
+            if mem::align_of::<T>() <= mem::size_of::<usize>()
+            && (!mem::size_of::<T>().is_power_of_two()
+                || mem::size_of::<T>() > mem::size_of::<usize>() * 2)
+            {
+                attempt_swap_as_chunks!(usize);
+                attempt_swap_as_chunks!(u8);
+            }
 
-    // Split up the slice into small power-of-two-sized chunks that LLVM is able
-    // to vectorize (unless it's a special type with more-than-pointer alignment,
-    // because we don't want to pessimize things like slices of SIMD vectors.)
-    if mem::align_of::<T>() <= mem::size_of::<usize>()
-        && (!mem::size_of::<T>().is_power_of_two()
-            || mem::size_of::<T>() > mem::size_of::<usize>() * 2)
-    {
-        attempt_swap_as_chunks!(usize);
-        attempt_swap_as_chunks!(u8);
-    }
-
-    // SAFETY: Same preconditions as this function
-    unsafe { swap_nonoverlapping_simple_untyped(x, y, count) }
+            // SAFETY: Same preconditions as this function
+            unsafe { swap_nonoverlapping_simple_untyped(x, y, count) }
+        }
+    )
 }
 
-/// Same behaviour and safety conditions as [`swap_nonoverlapping`]
+/// Same behavior and safety conditions as [`swap_nonoverlapping`]
 ///
 /// LLVM can vectorize this (at least it can for the power-of-two-sized types
 /// `swap_nonoverlapping` tries to use) so no need to manually SIMD it.
 #[inline]
-#[rustc_const_unstable(feature = "const_swap", issue = "83163")]
 const unsafe fn swap_nonoverlapping_simple_untyped<T>(x: *mut T, y: *mut T, count: usize) {
     let x = x.cast::<MaybeUninit<T>>();
     let y = y.cast::<MaybeUninit<T>>();
     let mut i = 0;
     while i < count {
         // SAFETY: By precondition, `i` is in-bounds because it's below `n`
-        let x = unsafe { &mut *x.add(i) };
+        let x = unsafe { x.add(i) };
         // SAFETY: By precondition, `i` is in-bounds because it's below `n`
         // and it's distinct from `x` since the ranges are non-overlapping
-        let y = unsafe { &mut *y.add(i) };
-        mem::swap_simple::<MaybeUninit<T>>(x, y);
+        let y = unsafe { y.add(i) };
+
+        // If we end up here, it's because we're using a simple type -- like
+        // a small power-of-two-sized thing -- or a special type with particularly
+        // large alignment, particularly SIMD types.
+        // Thus, we're fine just reading-and-writing it, as either it's small
+        // and that works well anyway or it's special and the type's author
+        // presumably wanted things to be done in the larger chunk.
+
+        // SAFETY: we're only ever given pointers that are valid to read/write,
+        // including being aligned, and nothing here panics so it's drop-safe.
+        unsafe {
+            let a: MaybeUninit<T> = read(x);
+            let b: MaybeUninit<T> = read(y);
+            write(x, b);
+            write(y, a);
+        }
 
         i += 1;
     }
@@ -985,7 +1197,7 @@ const unsafe fn swap_nonoverlapping_simple_untyped<T>(x: *mut T, y: *mut T, coun
 ///
 /// * `dst` must point to a properly initialized value of type `T`.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointer must be properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -1007,20 +1219,25 @@ const unsafe fn swap_nonoverlapping_simple_untyped<T>(x: *mut T, y: *mut T, coun
 /// ```
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
-#[rustc_const_unstable(feature = "const_replace", issue = "83164")]
-pub const unsafe fn replace<T>(dst: *mut T, mut src: T) -> T {
+#[rustc_const_stable(feature = "const_replace", since = "1.83.0")]
+#[rustc_diagnostic_item = "ptr_replace"]
+pub const unsafe fn replace<T>(dst: *mut T, src: T) -> T {
     // SAFETY: the caller must guarantee that `dst` is valid to be
     // cast to a mutable reference (valid for writes, aligned, initialized),
     // and cannot overlap `src` since `dst` must point to a distinct
     // allocated object.
     unsafe {
-        assert_unsafe_precondition!(
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
             "ptr::replace requires that the pointer argument is aligned and non-null",
-            [T](dst: *mut T) => is_aligned_and_not_null(dst)
+            (
+                addr: *const () = dst as *const (),
+                align: usize = align_of::<T>(),
+                is_zst: bool = T::IS_ZST,
+            ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
         );
-        mem::swap(&mut *dst, &mut src); // cannot overlap
+        mem::replace(&mut *dst, src)
     }
-    src
 }
 
 /// Reads the value from `src` without moving it. This leaves the
@@ -1037,7 +1254,7 @@ pub const unsafe fn replace<T>(dst: *mut T, mut src: T) -> T {
 ///
 /// * `src` must point to a properly initialized value of type `T`.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointer must be properly aligned.
 ///
 /// # Examples
 ///
@@ -1130,30 +1347,49 @@ pub const unsafe fn replace<T>(dst: *mut T, mut src: T) -> T {
 /// [valid]: self#safety
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
-#[rustc_const_unstable(feature = "const_ptr_read", issue = "80377")]
+#[rustc_const_stable(feature = "const_ptr_read", since = "1.71.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
+#[rustc_diagnostic_item = "ptr_read"]
 pub const unsafe fn read<T>(src: *const T) -> T {
-    // We are calling the intrinsics directly to avoid function calls in the generated code
-    // as `intrinsics::copy_nonoverlapping` is a wrapper function.
-    extern "rust-intrinsic" {
-        #[rustc_const_stable(feature = "const_intrinsic_copy", since = "1.63.0")]
-        fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
-    }
+    // It would be semantically correct to implement this via `copy_nonoverlapping`
+    // and `MaybeUninit`, as was done before PR #109035. Calling `assume_init`
+    // provides enough information to know that this is a typed operation.
 
-    let mut tmp = MaybeUninit::<T>::uninit();
-    // SAFETY: the caller must guarantee that `src` is valid for reads.
-    // `src` cannot overlap `tmp` because `tmp` was just allocated on
-    // the stack as a separate allocated object.
+    // However, as of March 2023 the compiler was not capable of taking advantage
+    // of that information. Thus, the implementation here switched to an intrinsic,
+    // which lowers to `_0 = *src` in MIR, to address a few issues:
     //
-    // Also, since we just wrote a valid value into `tmp`, it is guaranteed
-    // to be properly initialized.
+    // - Using `MaybeUninit::assume_init` after a `copy_nonoverlapping` was not
+    //   turning the untyped copy into a typed load. As such, the generated
+    //   `load` in LLVM didn't get various metadata, such as `!range` (#73258),
+    //   `!nonnull`, and `!noundef`, resulting in poorer optimization.
+    // - Going through the extra local resulted in multiple extra copies, even
+    //   in optimized MIR.  (Ignoring StorageLive/Dead, the intrinsic is one
+    //   MIR statement, while the previous implementation was eight.)  LLVM
+    //   could sometimes optimize them away, but because `read` is at the core
+    //   of so many things, not having them in the first place improves what we
+    //   hand off to the backend.  For example, `mem::replace::<Big>` previously
+    //   emitted 4 `alloca` and 6 `memcpy`s, but is now 1 `alloc` and 3 `memcpy`s.
+    // - In general, this approach keeps us from getting any more bugs (like
+    //   #106369) that boil down to "`read(p)` is worse than `*p`", as this
+    //   makes them look identical to the backend (or other MIR consumers).
+    //
+    // Future enhancements to MIR optimizations might well allow this to return
+    // to the previous implementation, rather than using an intrinsic.
+
+    // SAFETY: the caller must guarantee that `src` is valid for reads.
     unsafe {
-        assert_unsafe_precondition!(
+        #[cfg(debug_assertions)] // Too expensive to always enable (for now?)
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
             "ptr::read requires that the pointer argument is aligned and non-null",
-            [T](src: *const T) => is_aligned_and_not_null(src)
+            (
+                addr: *const () = src as *const (),
+                align: usize = align_of::<T>(),
+                is_zst: bool = T::IS_ZST,
+            ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
         );
-        copy_nonoverlapping(src, tmp.as_mut_ptr(), 1);
-        tmp.assume_init()
+        crate::intrinsics::read_via_copy(src)
     }
 }
 
@@ -1174,8 +1410,6 @@ pub const unsafe fn read<T>(src: *const T) -> T {
 /// whether `T` is [`Copy`]. If `T` is not [`Copy`], using both the returned
 /// value and the value at `*src` can [violate memory safety][read-ownership].
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null.
-///
 /// [read-ownership]: read#ownership-of-the-returned-value
 /// [valid]: self#safety
 ///
@@ -1189,9 +1423,8 @@ pub const unsafe fn read<T>(src: *const T) -> T {
 /// As a result, using `&packed.unaligned as *const FieldType` causes immediate
 /// *undefined behavior* in your program.
 ///
-/// Instead you must use the [`ptr::addr_of!`](addr_of) macro to
-/// create the pointer. You may use that returned pointer together with this
-/// function.
+/// Instead you must use the `&raw const` syntax to create the pointer.
+/// You may use that constructed pointer together with this function.
 ///
 /// An example of what not to do and how this relates to `read_unaligned` is:
 ///
@@ -1209,7 +1442,7 @@ pub const unsafe fn read<T>(src: *const T) -> T {
 ///
 /// // Take the address of a 32-bit integer which is not aligned.
 /// // In contrast to `&packed.unaligned as *const _`, this has no undefined behavior.
-/// let unaligned = std::ptr::addr_of!(packed.unaligned);
+/// let unaligned = &raw const packed.unaligned;
 ///
 /// let v = unsafe { std::ptr::read_unaligned(unaligned) };
 /// assert_eq!(v, 0x01020304);
@@ -1219,7 +1452,7 @@ pub const unsafe fn read<T>(src: *const T) -> T {
 ///
 /// # Examples
 ///
-/// Read a usize value from a byte buffer:
+/// Read a `usize` value from a byte buffer:
 ///
 /// ```
 /// use std::mem;
@@ -1234,8 +1467,9 @@ pub const unsafe fn read<T>(src: *const T) -> T {
 /// ```
 #[inline]
 #[stable(feature = "ptr_unaligned", since = "1.17.0")]
-#[rustc_const_unstable(feature = "const_ptr_read", issue = "80377")]
+#[rustc_const_stable(feature = "const_ptr_read", since = "1.71.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
+#[rustc_diagnostic_item = "ptr_read_unaligned"]
 pub const unsafe fn read_unaligned<T>(src: *const T) -> T {
     let mut tmp = MaybeUninit::<T>::uninit();
     // SAFETY: the caller must guarantee that `src` is valid for reads.
@@ -1272,7 +1506,7 @@ pub const unsafe fn read_unaligned<T>(src: *const T) -> T {
 /// * `dst` must be properly aligned. Use [`write_unaligned`] if this is not the
 ///   case.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointer must be properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -1331,26 +1565,33 @@ pub const unsafe fn read_unaligned<T>(src: *const T) -> T {
 /// ```
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
-#[rustc_const_unstable(feature = "const_ptr_write", issue = "86302")]
+#[rustc_const_stable(feature = "const_ptr_write", since = "1.83.0")]
+#[rustc_diagnostic_item = "ptr_write"]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 pub const unsafe fn write<T>(dst: *mut T, src: T) {
-    // We are calling the intrinsics directly to avoid function calls in the generated code
-    // as `intrinsics::copy_nonoverlapping` is a wrapper function.
-    extern "rust-intrinsic" {
-        #[rustc_const_stable(feature = "const_intrinsic_copy", since = "1.63.0")]
-        fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
-    }
+    // Semantically, it would be fine for this to be implemented as a
+    // `copy_nonoverlapping` and appropriate drop suppression of `src`.
+
+    // However, implementing via that currently produces more MIR than is ideal.
+    // Using an intrinsic keeps it down to just the simple `*dst = move src` in
+    // MIR (11 statements shorter, at the time of writing), and also allows
+    // `src` to stay an SSA value in codegen_ssa, rather than a memory one.
 
     // SAFETY: the caller must guarantee that `dst` is valid for writes.
     // `dst` cannot overlap `src` because the caller has mutable access
     // to `dst` while `src` is owned by this function.
     unsafe {
-        assert_unsafe_precondition!(
+        #[cfg(debug_assertions)] // Too expensive to always enable (for now?)
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
             "ptr::write requires that the pointer argument is aligned and non-null",
-            [T](dst: *mut T) => is_aligned_and_not_null(dst)
+            (
+                addr: *mut () = dst as *mut (),
+                align: usize = align_of::<T>(),
+                is_zst: bool = T::IS_ZST,
+            ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
         );
-        copy_nonoverlapping(&src as *const T, dst, 1);
-        intrinsics::forget(src);
+        intrinsics::write_via_move(dst, src)
     }
 }
 
@@ -1375,8 +1616,6 @@ pub const unsafe fn write<T>(dst: *mut T, src: T) {
 ///
 /// * `dst` must be [valid] for writes.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null.
-///
 /// [valid]: self#safety
 ///
 /// ## On `packed` structs
@@ -1389,9 +1628,8 @@ pub const unsafe fn write<T>(dst: *mut T, src: T) {
 /// As a result, using `&packed.unaligned as *const FieldType` causes immediate
 /// *undefined behavior* in your program.
 ///
-/// Instead you must use the [`ptr::addr_of_mut!`](addr_of_mut)
-/// macro to create the pointer. You may use that returned pointer together with
-/// this function.
+/// Instead, you must use the `&raw mut` syntax to create the pointer.
+/// You may use that constructed pointer together with this function.
 ///
 /// An example of how to do it and how this relates to `write_unaligned` is:
 ///
@@ -1406,7 +1644,7 @@ pub const unsafe fn write<T>(dst: *mut T, src: T) {
 ///
 /// // Take the address of a 32-bit integer which is not aligned.
 /// // In contrast to `&packed.unaligned as *mut _`, this has no undefined behavior.
-/// let unaligned = std::ptr::addr_of_mut!(packed.unaligned);
+/// let unaligned = &raw mut packed.unaligned;
 ///
 /// unsafe { std::ptr::write_unaligned(unaligned, 42) };
 ///
@@ -1418,7 +1656,7 @@ pub const unsafe fn write<T>(dst: *mut T, src: T) {
 ///
 /// # Examples
 ///
-/// Write a usize value to a byte buffer:
+/// Write a `usize` value to a byte buffer:
 ///
 /// ```
 /// use std::mem;
@@ -1433,14 +1671,15 @@ pub const unsafe fn write<T>(dst: *mut T, src: T) {
 /// ```
 #[inline]
 #[stable(feature = "ptr_unaligned", since = "1.17.0")]
-#[rustc_const_unstable(feature = "const_ptr_write", issue = "86302")]
+#[rustc_const_stable(feature = "const_ptr_write", since = "1.83.0")]
+#[rustc_diagnostic_item = "ptr_write_unaligned"]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 pub const unsafe fn write_unaligned<T>(dst: *mut T, src: T) {
     // SAFETY: the caller must guarantee that `dst` is valid for writes.
     // `dst` cannot overlap `src` because the caller has mutable access
     // to `dst` while `src` is owned by this function.
     unsafe {
-        copy_nonoverlapping(&src as *const T as *const u8, dst as *mut u8, mem::size_of::<T>());
+        copy_nonoverlapping((&raw const src) as *const u8, dst as *mut u8, mem::size_of::<T>());
         // We are calling the intrinsic directly to avoid function calls in the generated code.
         intrinsics::forget(src);
     }
@@ -1483,7 +1722,7 @@ pub const unsafe fn write_unaligned<T>(dst: *mut T, src: T) {
 /// However, storing non-[`Copy`] types in volatile memory is almost certainly
 /// incorrect.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointer must be properly aligned.
 ///
 /// [valid]: self#safety
 /// [read-ownership]: read#ownership-of-the-returned-value
@@ -1509,12 +1748,18 @@ pub const unsafe fn write_unaligned<T>(dst: *mut T, src: T) {
 #[inline]
 #[stable(feature = "volatile", since = "1.9.0")]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
+#[rustc_diagnostic_item = "ptr_read_volatile"]
 pub unsafe fn read_volatile<T>(src: *const T) -> T {
     // SAFETY: the caller must uphold the safety contract for `volatile_load`.
     unsafe {
-        assert_unsafe_precondition!(
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
             "ptr::read_volatile requires that the pointer argument is aligned and non-null",
-            [T](src: *const T) => is_aligned_and_not_null(src)
+            (
+                addr: *const () = src as *const (),
+                align: usize = align_of::<T>(),
+                is_zst: bool = T::IS_ZST,
+            ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
         );
         intrinsics::volatile_load(src)
     }
@@ -1556,7 +1801,7 @@ pub unsafe fn read_volatile<T>(src: *const T) -> T {
 ///
 /// * `dst` must be properly aligned.
 ///
-/// Note that even if `T` has size `0`, the pointer must be non-null and properly aligned.
+/// Note that even if `T` has size `0`, the pointer must be properly aligned.
 ///
 /// [valid]: self#safety
 ///
@@ -1582,13 +1827,19 @@ pub unsafe fn read_volatile<T>(src: *const T) -> T {
 /// ```
 #[inline]
 #[stable(feature = "volatile", since = "1.9.0")]
+#[rustc_diagnostic_item = "ptr_write_volatile"]
 #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 pub unsafe fn write_volatile<T>(dst: *mut T, src: T) {
     // SAFETY: the caller must uphold the safety contract for `volatile_store`.
     unsafe {
-        assert_unsafe_precondition!(
+        ub_checks::assert_unsafe_precondition!(
+            check_language_ub,
             "ptr::write_volatile requires that the pointer argument is aligned and non-null",
-            [T](dst: *mut T) => is_aligned_and_not_null(dst)
+            (
+                addr: *mut () = dst as *mut (),
+                align: usize = align_of::<T>(),
+                is_zst: bool = T::IS_ZST,
+            ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
         );
         intrinsics::volatile_store(dst, src);
     }
@@ -1612,13 +1863,13 @@ pub unsafe fn write_volatile<T>(dst: *mut T, src: T) {
 /// than trying to adapt this to accommodate that change.
 ///
 /// Any questions go to @nagisa.
-#[lang = "align_offset"]
-pub(crate) const unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usize {
+#[allow(ptr_to_integer_transmute_in_consts)]
+pub(crate) unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usize {
     // FIXME(#75598): Direct use of these intrinsics improves codegen significantly at opt-level <=
     // 1, where the method versions of these operations are not inlined.
     use intrinsics::{
-        cttz_nonzero, exact_div, mul_with_overflow, unchecked_rem, unchecked_shl, unchecked_shr,
-        unchecked_sub, wrapping_add, wrapping_mul, wrapping_sub,
+        assume, cttz_nonzero, exact_div, mul_with_overflow, unchecked_rem, unchecked_shl,
+        unchecked_shr, unchecked_sub, wrapping_add, wrapping_mul, wrapping_sub,
     };
 
     /// Calculate multiplicative modular inverse of `x` modulo `m`.
@@ -1674,11 +1925,7 @@ pub(crate) const unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usiz
 
     let stride = mem::size_of::<T>();
 
-    // SAFETY: This is just an inlined `p.addr()` (which is not
-    // a `const fn` so we cannot call it).
-    // During const eval, we hook this function to ensure that the pointer never
-    // has provenance, making this sound.
-    let addr: usize = unsafe { mem::transmute(p) };
+    let addr: usize = p.addr();
 
     // SAFETY: `a` is a power-of-two, therefore non-zero.
     let a_minus_one = unsafe { unchecked_sub(a, 1) };
@@ -1709,12 +1956,18 @@ pub(crate) const unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usiz
         // in a branch-free way and then bitwise-OR it with whatever result the `-p mod a`
         // computation produces.
 
+        let aligned_address = wrapping_add(addr, a_minus_one) & wrapping_sub(0, a);
+        let byte_offset = wrapping_sub(aligned_address, addr);
+        // FIXME: Remove the assume after <https://github.com/llvm/llvm-project/issues/62502>
+        // SAFETY: Masking by `-a` can only affect the low bits, and thus cannot have reduced
+        // the value by more than `a-1`, so even though the intermediate values might have
+        // wrapped, the byte_offset is always in `[0, a)`.
+        unsafe { assume(byte_offset < a) };
+
         // SAFETY: `stride == 0` case has been handled by the special case above.
         let addr_mod_stride = unsafe { unchecked_rem(addr, stride) };
 
         return if addr_mod_stride == 0 {
-            let aligned_address = wrapping_add(addr, a_minus_one) & wrapping_sub(0, a);
-            let byte_offset = wrapping_sub(aligned_address, addr);
             // SAFETY: `stride` is non-zero. This is guaranteed to divide exactly as well, because
             // addr has been verified to be aligned to the original type’s alignment requirements.
             unsafe { exact_div(byte_offset, stride) }
@@ -1730,8 +1983,13 @@ pub(crate) const unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usiz
     // miracles, given the situations this case has to deal with.
 
     // SAFETY: a is power-of-two hence non-zero. stride == 0 case is handled above.
-    let gcdpow = unsafe { cttz_nonzero(stride).min(cttz_nonzero(a)) };
-    // SAFETY: gcdpow has an upper-bound that’s at most the number of bits in a usize.
+    // FIXME(const-hack) replace with min
+    let gcdpow = unsafe {
+        let x = cttz_nonzero(stride);
+        let y = cttz_nonzero(a);
+        if x < y { x } else { y }
+    };
+    // SAFETY: gcdpow has an upper-bound that’s at most the number of bits in a `usize`.
     let gcd = unsafe { unchecked_shl(1usize, gcdpow) };
     // SAFETY: gcd is always greater or equal to 1.
     if addr & unsafe { unchecked_sub(gcd, 1) } == 0 {
@@ -1822,8 +2080,88 @@ pub(crate) const unsafe fn align_offset<T: Sized>(p: *const T, a: usize) -> usiz
 /// ```
 #[stable(feature = "ptr_eq", since = "1.17.0")]
 #[inline(always)]
+#[must_use = "pointer comparison produces a value"]
+#[rustc_diagnostic_item = "ptr_eq"]
+#[allow(ambiguous_wide_pointer_comparisons)] // it's actually clear here
 pub fn eq<T: ?Sized>(a: *const T, b: *const T) -> bool {
     a == b
+}
+
+/// Compares the *addresses* of the two pointers for equality,
+/// ignoring any metadata in fat pointers.
+///
+/// If the arguments are thin pointers of the same type,
+/// then this is the same as [`eq`].
+///
+/// # Examples
+///
+/// ```
+/// use std::ptr;
+///
+/// let whole: &[i32; 3] = &[1, 2, 3];
+/// let first: &i32 = &whole[0];
+///
+/// assert!(ptr::addr_eq(whole, first));
+/// assert!(!ptr::eq::<dyn std::fmt::Debug>(whole, first));
+/// ```
+#[stable(feature = "ptr_addr_eq", since = "1.76.0")]
+#[inline(always)]
+#[must_use = "pointer comparison produces a value"]
+pub fn addr_eq<T: ?Sized, U: ?Sized>(p: *const T, q: *const U) -> bool {
+    (p as *const ()) == (q as *const ())
+}
+
+/// Compares the *addresses* of the two function pointers for equality.
+///
+/// This is the same as `f == g`, but using this function makes clear that the potentially
+/// surprising semantics of function pointer comparison are involved.
+///
+/// There are **very few guarantees** about how functions are compiled and they have no intrinsic
+/// “identity”; in particular, this comparison:
+///
+/// * May return `true` unexpectedly, in cases where functions are equivalent.
+///
+///   For example, the following program is likely (but not guaranteed) to print `(true, true)`
+///   when compiled with optimization:
+///
+///   ```
+///   let f: fn(i32) -> i32 = |x| x;
+///   let g: fn(i32) -> i32 = |x| x + 0;  // different closure, different body
+///   let h: fn(u32) -> u32 = |x| x + 0;  // different signature too
+///   dbg!(std::ptr::fn_addr_eq(f, g), std::ptr::fn_addr_eq(f, h)); // not guaranteed to be equal
+///   ```
+///
+/// * May return `false` in any case.
+///
+///   This is particularly likely with generic functions but may happen with any function.
+///   (From an implementation perspective, this is possible because functions may sometimes be
+///   processed more than once by the compiler, resulting in duplicate machine code.)
+///
+/// Despite these false positives and false negatives, this comparison can still be useful.
+/// Specifically, if
+///
+/// * `T` is the same type as `U`, `T` is a [subtype] of `U`, or `U` is a [subtype] of `T`, and
+/// * `ptr::fn_addr_eq(f, g)` returns true,
+///
+/// then calling `f` and calling `g` will be equivalent.
+///
+///
+/// # Examples
+///
+/// ```
+/// use std::ptr;
+///
+/// fn a() { println!("a"); }
+/// fn b() { println!("b"); }
+/// assert!(!ptr::fn_addr_eq(a as fn(), b as fn()));
+/// ```
+///
+/// [subtype]: https://doc.rust-lang.org/reference/subtyping.html
+#[stable(feature = "ptr_fn_addr_eq", since = "1.85.0")]
+#[inline(always)]
+#[must_use = "function pointer comparison produces a value"]
+pub fn fn_addr_eq<T: FnPtr, U: FnPtr>(f: T, g: U) -> bool {
+    f.addr() == g.addr()
 }
 
 /// Hash a raw pointer.
@@ -1835,8 +2173,7 @@ pub fn eq<T: ?Sized>(a: *const T, b: *const T) -> bool {
 /// # Examples
 ///
 /// ```
-/// use std::collections::hash_map::DefaultHasher;
-/// use std::hash::{Hash, Hasher};
+/// use std::hash::{DefaultHasher, Hash, Hasher};
 /// use std::ptr;
 ///
 /// let five = 5;
@@ -1858,151 +2195,64 @@ pub fn hash<T: ?Sized, S: hash::Hasher>(hashee: *const T, into: &mut S) {
     hashee.hash(into);
 }
 
-// If this is a unary fn pointer, it adds a doc comment.
-// Otherwise, it hides the docs entirely.
-macro_rules! maybe_fnptr_doc {
-    (@ #[$meta:meta] $item:item) => {
-        #[doc(hidden)]
-        #[$meta]
-        $item
-    };
-    ($a:ident @ #[$meta:meta] $item:item) => {
-        #[doc(fake_variadic)]
-        #[doc = "This trait is implemented for function pointers with up to twelve arguments."]
-        #[$meta]
-        $item
-    };
-    ($a:ident $($rest_a:ident)+ @ #[$meta:meta] $item:item) => {
-        #[doc(hidden)]
-        #[$meta]
-        $item
-    };
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> PartialEq for F {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.addr() == other.addr()
+    }
 }
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> Eq for F {}
 
-// FIXME(strict_provenance_magic): function pointers have buggy codegen that
-// necessitates casting to a usize to get the backend to do the right thing.
-// for now I will break AVR to silence *a billion* lints. We should probably
-// have a proper "opaque function pointer type" to handle this kind of thing.
-
-// Impls for function pointers
-macro_rules! fnptr_impls_safety_abi {
-    ($FnTy: ty, $($Arg: ident),*) => {
-        fnptr_impls_safety_abi! { #[stable(feature = "fnptr_impls", since = "1.4.0")] $FnTy, $($Arg),* }
-    };
-    (@c_unwind $FnTy: ty, $($Arg: ident),*) => {
-        fnptr_impls_safety_abi! { #[unstable(feature = "c_unwind", issue = "74990")] $FnTy, $($Arg),* }
-    };
-    (#[$meta:meta] $FnTy: ty, $($Arg: ident),*) => {
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> PartialEq for $FnTy {
-                #[inline]
-                fn eq(&self, other: &Self) -> bool {
-                    *self as usize == *other as usize
-                }
-            }
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> Eq for $FnTy {}
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> PartialOrd for $FnTy {
-                #[inline]
-                fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                    (*self as usize).partial_cmp(&(*other as usize))
-                }
-            }
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> Ord for $FnTy {
-                #[inline]
-                fn cmp(&self, other: &Self) -> Ordering {
-                    (*self as usize).cmp(&(*other as usize))
-                }
-            }
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> hash::Hash for $FnTy {
-                fn hash<HH: hash::Hasher>(&self, state: &mut HH) {
-                    state.write_usize(*self as usize)
-                }
-            }
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> fmt::Pointer for $FnTy {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    fmt::pointer_fmt_inner(*self as usize, f)
-                }
-            }
-        }
-
-        maybe_fnptr_doc! {
-            $($Arg)* @
-            #[$meta]
-            impl<Ret, $($Arg),*> fmt::Debug for $FnTy {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    fmt::pointer_fmt_inner(*self as usize, f)
-                }
-            }
-        }
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> PartialOrd for F {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.addr().partial_cmp(&other.addr())
+    }
+}
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> Ord for F {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.addr().cmp(&other.addr())
     }
 }
 
-macro_rules! fnptr_impls_args {
-    ($($Arg: ident),+) => {
-        fnptr_impls_safety_abi! { extern "Rust" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { extern "C" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { extern "C" fn($($Arg),+ , ...) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { @c_unwind extern "C-unwind" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { @c_unwind extern "C-unwind" fn($($Arg),+ , ...) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { unsafe extern "Rust" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { unsafe extern "C" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { unsafe extern "C" fn($($Arg),+ , ...) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { @c_unwind unsafe extern "C-unwind" fn($($Arg),+) -> Ret, $($Arg),+ }
-        fnptr_impls_safety_abi! { @c_unwind unsafe extern "C-unwind" fn($($Arg),+ , ...) -> Ret, $($Arg),+ }
-    };
-    () => {
-        // No variadic functions with 0 parameters
-        fnptr_impls_safety_abi! { extern "Rust" fn() -> Ret, }
-        fnptr_impls_safety_abi! { extern "C" fn() -> Ret, }
-        fnptr_impls_safety_abi! { @c_unwind extern "C-unwind" fn() -> Ret, }
-        fnptr_impls_safety_abi! { unsafe extern "Rust" fn() -> Ret, }
-        fnptr_impls_safety_abi! { unsafe extern "C" fn() -> Ret, }
-        fnptr_impls_safety_abi! { @c_unwind unsafe extern "C-unwind" fn() -> Ret, }
-    };
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> hash::Hash for F {
+    fn hash<HH: hash::Hasher>(&self, state: &mut HH) {
+        state.write_usize(self.addr() as _)
+    }
 }
 
-fnptr_impls_args! {}
-fnptr_impls_args! { T }
-fnptr_impls_args! { A, B }
-fnptr_impls_args! { A, B, C }
-fnptr_impls_args! { A, B, C, D }
-fnptr_impls_args! { A, B, C, D, E }
-fnptr_impls_args! { A, B, C, D, E, F }
-fnptr_impls_args! { A, B, C, D, E, F, G }
-fnptr_impls_args! { A, B, C, D, E, F, G, H }
-fnptr_impls_args! { A, B, C, D, E, F, G, H, I }
-fnptr_impls_args! { A, B, C, D, E, F, G, H, I, J }
-fnptr_impls_args! { A, B, C, D, E, F, G, H, I, J, K }
-fnptr_impls_args! { A, B, C, D, E, F, G, H, I, J, K, L }
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> fmt::Pointer for F {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::pointer_fmt_inner(self.addr() as _, f)
+    }
+}
 
-/// Create a `const` raw pointer to a place, without creating an intermediate reference.
+#[stable(feature = "fnptr_impls", since = "1.4.0")]
+impl<F: FnPtr> fmt::Debug for F {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::pointer_fmt_inner(self.addr() as _, f)
+    }
+}
+
+/// Creates a `const` raw pointer to a place, without creating an intermediate reference.
+///
+/// `addr_of!(expr)` is equivalent to `&raw const expr`. The macro is *soft-deprecated*;
+/// use `&raw const` instead.
+///
+/// It is still an open question under which conditions writing through an `addr_of!`-created
+/// pointer is permitted. If the place `expr` evaluates to is based on a raw pointer, then the
+/// result of `addr_of!` inherits all permissions from that raw pointer. However, if the place is
+/// based on a reference, local variable, or `static`, then until all details are decided, the same
+/// rules as for shared references apply: it is UB to write through a pointer created with this
+/// operation, except for bytes located inside an `UnsafeCell`. Use `&raw mut` (or [`addr_of_mut`])
+/// to create a raw pointer that definitely permits mutation.
 ///
 /// Creating a reference with `&`/`&mut` is only allowed if the pointer is properly aligned
 /// and points to initialized data. For cases where those requirements do not hold,
@@ -2011,11 +2261,27 @@ fnptr_impls_args! { A, B, C, D, E, F, G, H, I, J, K, L }
 /// as all other references. This macro can create a raw pointer *without* creating
 /// a reference first.
 ///
-/// Note, however, that the `expr` in `addr_of!(expr)` is still subject to all
-/// the usual rules. In particular, `addr_of!(*ptr::null())` is Undefined
-/// Behavior because it dereferences a null pointer.
+/// See [`addr_of_mut`] for how to create a pointer to uninitialized data.
+/// Doing that with `addr_of` would not make much sense since one could only
+/// read the data, and that would be Undefined Behavior.
+///
+/// # Safety
+///
+/// The `expr` in `addr_of!(expr)` is evaluated as a place expression, but never loads from the
+/// place or requires the place to be dereferenceable. This means that `addr_of!((*ptr).field)`
+/// still requires the projection to `field` to be in-bounds, using the same rules as [`offset`].
+/// However, `addr_of!(*ptr)` is defined behavior even if `ptr` is null, dangling, or misaligned.
+///
+/// Note that `Deref`/`Index` coercions (and their mutable counterparts) are applied inside
+/// `addr_of!` like everywhere else, in which case a reference is created to call `Deref::deref` or
+/// `Index::index`, respectively. The statements above only apply when no such coercions are
+/// applied.
+///
+/// [`offset`]: pointer::offset
 ///
 /// # Example
+///
+/// **Correct usage: Creating a pointer to unaligned data**
 ///
 /// ```
 /// use std::ptr;
@@ -2032,17 +2298,37 @@ fnptr_impls_args! { A, B, C, D, E, F, G, H, I, J, K, L }
 /// assert_eq!(unsafe { raw_f2.read_unaligned() }, 2);
 /// ```
 ///
-/// See [`addr_of_mut`] for how to create a pointer to unininitialized data.
-/// Doing that with `addr_of` would not make much sense since one could only
-/// read the data, and that would be Undefined Behavior.
+/// **Incorrect usage: Out-of-bounds fields projection**
+///
+/// ```rust,no_run
+/// use std::ptr;
+///
+/// #[repr(C)]
+/// struct MyStruct {
+///     field1: i32,
+///     field2: i32,
+/// }
+///
+/// let ptr: *const MyStruct = ptr::null();
+/// let fieldptr = unsafe { ptr::addr_of!((*ptr).field2) }; // Undefined Behavior ⚠️
+/// ```
+///
+/// The field projection `.field2` would offset the pointer by 4 bytes,
+/// but the pointer is not in-bounds of an allocation for 4 bytes,
+/// so this offset is Undefined Behavior.
+/// See the [`offset`] docs for a full list of requirements for inbounds pointer arithmetic; the
+/// same requirements apply to field projections, even inside `addr_of!`. (In particular, it makes
+/// no difference whether the pointer is null or dangling.)
 #[stable(feature = "raw_ref_macros", since = "1.51.0")]
 #[rustc_macro_transparency = "semitransparent"]
-#[allow_internal_unstable(raw_ref_op)]
 pub macro addr_of($place:expr) {
     &raw const $place
 }
 
-/// Create a `mut` raw pointer to a place, without creating an intermediate reference.
+/// Creates a `mut` raw pointer to a place, without creating an intermediate reference.
+///
+/// `addr_of_mut!(expr)` is equivalent to `&raw mut expr`. The macro is *soft-deprecated*;
+/// use `&raw mut` instead.
 ///
 /// Creating a reference with `&`/`&mut` is only allowed if the pointer is properly aligned
 /// and points to initialized data. For cases where those requirements do not hold,
@@ -2051,13 +2337,23 @@ pub macro addr_of($place:expr) {
 /// as all other references. This macro can create a raw pointer *without* creating
 /// a reference first.
 ///
-/// Note, however, that the `expr` in `addr_of_mut!(expr)` is still subject to all
-/// the usual rules. In particular, `addr_of_mut!(*ptr::null_mut())` is Undefined
-/// Behavior because it dereferences a null pointer.
+/// # Safety
+///
+/// The `expr` in `addr_of_mut!(expr)` is evaluated as a place expression, but never loads from the
+/// place or requires the place to be dereferenceable. This means that `addr_of_mut!((*ptr).field)`
+/// still requires the projection to `field` to be in-bounds, using the same rules as [`offset`].
+/// However, `addr_of_mut!(*ptr)` is defined behavior even if `ptr` is null, dangling, or misaligned.
+///
+/// Note that `Deref`/`Index` coercions (and their mutable counterparts) are applied inside
+/// `addr_of_mut!` like everywhere else, in which case a reference is created to call `Deref::deref`
+/// or `Index::index`, respectively. The statements above only apply when no such coercions are
+/// applied.
+///
+/// [`offset`]: pointer::offset
 ///
 /// # Examples
 ///
-/// **Creating a pointer to unaligned data:**
+/// **Correct usage: Creating a pointer to unaligned data**
 ///
 /// ```
 /// use std::ptr;
@@ -2075,7 +2371,7 @@ pub macro addr_of($place:expr) {
 /// assert_eq!({packed.f2}, 42); // `{...}` forces copying the field instead of creating a reference.
 /// ```
 ///
-/// **Creating a pointer to uninitialized data:**
+/// **Correct usage: Creating a pointer to uninitialized data**
 ///
 /// ```rust
 /// use std::{ptr, mem::MaybeUninit};
@@ -2091,9 +2387,30 @@ pub macro addr_of($place:expr) {
 /// unsafe { f1_ptr.write(true); }
 /// let init = unsafe { uninit.assume_init() };
 /// ```
+///
+/// **Incorrect usage: Out-of-bounds fields projection**
+///
+/// ```rust,no_run
+/// use std::ptr;
+///
+/// #[repr(C)]
+/// struct MyStruct {
+///     field1: i32,
+///     field2: i32,
+/// }
+///
+/// let ptr: *mut MyStruct = ptr::null_mut();
+/// let fieldptr = unsafe { ptr::addr_of_mut!((*ptr).field2) }; // Undefined Behavior ⚠️
+/// ```
+///
+/// The field projection `.field2` would offset the pointer by 4 bytes,
+/// but the pointer is not in-bounds of an allocation for 4 bytes,
+/// so this offset is Undefined Behavior.
+/// See the [`offset`] docs for a full list of requirements for inbounds pointer arithmetic; the
+/// same requirements apply to field projections, even inside `addr_of_mut!`. (In particular, it
+/// makes no difference whether the pointer is null or dangling.)
 #[stable(feature = "raw_ref_macros", since = "1.51.0")]
 #[rustc_macro_transparency = "semitransparent"]
-#[allow_internal_unstable(raw_ref_op)]
 pub macro addr_of_mut($place:expr) {
     &raw mut $place
 }

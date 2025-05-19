@@ -1,12 +1,9 @@
+use std::ops::Bound::{Excluded, Included};
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
 use super::*;
 use crate::testing::crash_test::{CrashTestDummy, Panic};
 use crate::testing::rng::DeterministicRng;
-use crate::vec::Vec;
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
-use std::iter::FromIterator;
-use std::ops::Bound::{Excluded, Included};
-use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[test]
 fn test_clone_eq() {
@@ -367,18 +364,19 @@ fn test_retain() {
 }
 
 #[test]
-fn test_drain_filter() {
+fn test_extract_if() {
     let mut x = BTreeSet::from([1]);
     let mut y = BTreeSet::from([1]);
 
-    x.drain_filter(|_| true);
-    y.drain_filter(|_| false);
+    x.extract_if(|_| true).for_each(drop);
+    y.extract_if(|_| false).for_each(drop);
     assert_eq!(x.len(), 0);
     assert_eq!(y.len(), 1);
 }
 
 #[test]
-fn test_drain_filter_drop_panic_leak() {
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
+fn test_extract_if_drop_panic_leak() {
     let a = CrashTestDummy::new(0);
     let b = CrashTestDummy::new(1);
     let c = CrashTestDummy::new(2);
@@ -387,7 +385,7 @@ fn test_drain_filter_drop_panic_leak() {
     set.insert(b.spawn(Panic::InDrop));
     set.insert(c.spawn(Panic::Never));
 
-    catch_unwind(move || drop(set.drain_filter(|dummy| dummy.query(true)))).ok();
+    catch_unwind(move || set.extract_if(|dummy| dummy.query(true)).for_each(drop)).ok();
 
     assert_eq!(a.queried(), 1);
     assert_eq!(b.queried(), 1);
@@ -398,7 +396,8 @@ fn test_drain_filter_drop_panic_leak() {
 }
 
 #[test]
-fn test_drain_filter_pred_panic_leak() {
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
+fn test_extract_if_pred_panic_leak() {
     let a = CrashTestDummy::new(0);
     let b = CrashTestDummy::new(1);
     let c = CrashTestDummy::new(2);
@@ -407,7 +406,8 @@ fn test_drain_filter_pred_panic_leak() {
     set.insert(b.spawn(Panic::InQuery));
     set.insert(c.spawn(Panic::InQuery));
 
-    catch_unwind(AssertUnwindSafe(|| drop(set.drain_filter(|dummy| dummy.query(true))))).ok();
+    catch_unwind(AssertUnwindSafe(|| set.extract_if(|dummy| dummy.query(true)).for_each(drop)))
+        .ok();
 
     assert_eq!(a.queried(), 1);
     assert_eq!(b.queried(), 1);
@@ -525,7 +525,7 @@ fn test_extend_ref() {
 #[test]
 fn test_recovery() {
     #[derive(Debug)]
-    struct Foo(&'static str, i32);
+    struct Foo(&'static str, #[allow(dead_code)] i32);
 
     impl PartialEq for Foo {
         fn eq(&self, other: &Self) -> bool {
@@ -604,8 +604,8 @@ fn assert_sync() {
         v.range(..)
     }
 
-    fn drain_filter<T: Sync + Ord>(v: &mut BTreeSet<T>) -> impl Sync + '_ {
-        v.drain_filter(|_| false)
+    fn extract_if<T: Sync + Ord>(v: &mut BTreeSet<T>) -> impl Sync + '_ {
+        v.extract_if(|_| false)
     }
 
     fn difference<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
@@ -643,8 +643,8 @@ fn assert_send() {
         v.range(..)
     }
 
-    fn drain_filter<T: Send + Ord>(v: &mut BTreeSet<T>) -> impl Send + '_ {
-        v.drain_filter(|_| false)
+    fn extract_if<T: Send + Ord>(v: &mut BTreeSet<T>) -> impl Send + '_ {
+        v.extract_if(|_| false)
     }
 
     fn difference<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
@@ -706,9 +706,9 @@ fn test_ord_absence() {
     }
 
     fn set_debug<K: Debug>(set: BTreeSet<K>) {
-        format!("{set:?}");
-        format!("{:?}", set.iter());
-        format!("{:?}", set.into_iter());
+        let _ = format!("{set:?}");
+        let _ = format!("{:?}", set.iter());
+        let _ = format!("{:?}", set.into_iter());
     }
 
     fn set_clone<K: Clone>(mut set: BTreeSet<K>) {

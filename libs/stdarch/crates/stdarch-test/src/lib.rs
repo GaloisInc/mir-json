@@ -64,14 +64,14 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
     // Make sure that the shim is not removed
     black_box(shim_addr);
 
-    //eprintln!("shim name: {}", fnname);
+    //eprintln!("shim name: {fnname}");
     let function = &DISASSEMBLY
         .get(&Function::new(fnname))
-        .unwrap_or_else(|| panic!("function \"{}\" not found in the disassembly", fnname));
+        .unwrap_or_else(|| panic!("function \"{fnname}\" not found in the disassembly"));
     //eprintln!("  function: {:?}", function);
 
     let mut instrs = &function.instrs[..];
-    while instrs.last().map_or(false, |s| s == "nop") {
+    while instrs.last().map_or(false, |s| s == "nop" || s == "int3") {
         instrs = &instrs[..instrs.len() - 1];
     }
 
@@ -84,6 +84,11 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
     // 2. It is a mark, indicating that the instruction will be
     // compiled into other instructions - mainly because of llvm
     // optimization.
+    let expected = if expected == "unknown" {
+        "<unknown>" // Workaround for rust-lang/stdarch#1674, todo: remove when the issue is fixed
+    } else {
+        expected
+    };
     let found = expected == "nop" || instrs.iter().any(|s| s.starts_with(expected));
 
     // Look for subroutine call instructions in the disassembly to detect whether
@@ -99,7 +104,7 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
             // failed inlining something.
             s[0].starts_with("call ") && s[1].starts_with("pop") // FIXME: original logic but does not match comment
         })
-    } else if cfg!(target_arch = "aarch64") {
+    } else if cfg!(any(target_arch = "aarch64", target_arch = "arm64ec")) {
         instrs.iter().any(|s| s.starts_with("bl "))
     } else {
         // FIXME: Add detection for other archs
@@ -115,7 +120,7 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
                 "cpuid" => 30,
 
                 // Apparently, on Windows, LLVM generates a bunch of
-                // saves/restores of xmm registers around these intstructions,
+                // saves/restores of xmm registers around these instructions,
                 // which exceeds the limit of 20 below. As it seems dictated by
                 // Windows's ABI (I believe?), we probably can't do much
                 // about it.
@@ -129,22 +134,20 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
                 "usad8" | "vfma" | "vfms" => 27,
                 "qadd8" | "qsub8" | "sadd8" | "sel" | "shadd8" | "shsub8" | "usub8" | "ssub8" => 29,
                 // core_arch/src/arm_shared/simd32
-                // vst1q_s64_x4_vst1 : #instructions = 22 >= 22 (limit)
-                "vld3" => 23,
+                // vst1q_s64_x4_vst1 : #instructions = 27 >= 22 (limit)
+                "vld3" => 28,
                 // core_arch/src/arm_shared/simd32
-                // vld4q_lane_u32_vld4 : #instructions = 31 >= 22 (limit)
-                "vld4" => 32,
+                // vld4q_lane_u32_vld4 : #instructions = 36 >= 22 (limit)
+                "vld4" => 37,
                 // core_arch/src/arm_shared/simd32
                 // vst1q_s64_x4_vst1 : #instructions = 40 >= 22 (limit)
                 "vst1" => 41,
                 // core_arch/src/arm_shared/simd32
-                // vst4q_u32_vst4 : #instructions = 26 >= 22 (limit)
-                "vst4" => 27,
-
-                // Temporary, currently the fptosi.sat and fptoui.sat LLVM
-                // intrinsics emit unnecessary code on arm. This can be
-                // removed once it has been addressed in LLVM.
-                "fcvtzu" | "fcvtzs" | "vcvt" => 64,
+                // vst3q_u32_vst3 : #instructions = 25 >= 22 (limit)
+                "vst3" => 26,
+                // core_arch/src/arm_shared/simd32
+                // vst4q_u32_vst4 : #instructions = 33 >= 22 (limit)
+                "vst4" => 34,
 
                 // core_arch/src/arm_shared/simd32
                 // vst1q_p64_x4_nop : #instructions = 33 >= 22 (limit)
@@ -165,16 +168,13 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
 
     // Help debug by printing out the found disassembly, and then panic as we
     // didn't find the instruction.
-    println!("disassembly for {}: ", fnname,);
+    println!("disassembly for {fnname}: ",);
     for (i, instr) in instrs.iter().enumerate() {
-        println!("\t{:2}: {}", i, instr);
+        println!("\t{i:2}: {instr}");
     }
 
     if !found {
-        panic!(
-            "failed to find instruction `{}` in the disassembly",
-            expected
-        );
+        panic!("failed to find instruction `{expected}` in the disassembly");
     } else if !probably_only_one_instruction {
         panic!(
             "instruction found, but the disassembly contains too many \
@@ -190,11 +190,15 @@ pub fn assert(shim_addr: usize, fnname: &str, expected: &str) {
     }
 }
 
-pub fn assert_skip_test_ok(name: &str) {
-    if env::var("STDARCH_TEST_EVERYTHING").is_err() {
-        return;
+pub fn assert_skip_test_ok(name: &str, missing_features: &[&str]) {
+    println!("Skipping test `{name}` due to missing target features:");
+    for feature in missing_features {
+        println!("  - {feature}");
     }
-    panic!("skipped test `{}` when it shouldn't be skipped", name);
+    match env::var("STDARCH_TEST_EVERYTHING") {
+        Ok(_) => panic!("skipped test `{name}` when it shouldn't be skipped"),
+        Err(_) => println!("Set STDARCH_TEST_EVERYTHING to make this an error."),
+    }
 }
 
 // See comment in `assert-instr-macro` crate for why this exists

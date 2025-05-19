@@ -1,10 +1,9 @@
-use super::{current, park, Builder, JoinInner, Result, Thread};
-use crate::fmt;
-use crate::io;
+use super::{Builder, JoinInner, Result, Thread, current_or_unnamed};
 use crate::marker::PhantomData;
-use crate::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
-use crate::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use crate::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use crate::sync::Arc;
+use crate::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use crate::{fmt, io};
 
 /// A scope to spawn scoped threads in.
 ///
@@ -47,10 +46,16 @@ impl ScopeData {
         // chance it overflows to 0, which would result in unsoundness.
         if self.num_running_threads.fetch_add(1, Ordering::Relaxed) > usize::MAX / 2 {
             // This can only reasonably happen by mem::forget()'ing a lot of ScopedJoinHandles.
-            self.decrement_num_running_threads(false);
-            panic!("too many running threads in thread scope");
+            self.overflow();
         }
     }
+
+    #[cold]
+    fn overflow(&self) {
+        self.decrement_num_running_threads(false);
+        panic!("too many running threads in thread scope");
+    }
+
     pub(super) fn decrement_num_running_threads(&self, panic: bool) {
         if panic {
             self.a_thread_panicked.store(true, Ordering::Relaxed);
@@ -61,7 +66,7 @@ impl ScopeData {
     }
 }
 
-/// Create a scope for spawning scoped threads.
+/// Creates a scope for spawning scoped threads.
 ///
 /// The function passed to `scope` will be provided a [`Scope`] object,
 /// through which scoped threads can be [spawned][`Scope::spawn`].
@@ -135,7 +140,7 @@ where
     let scope = Scope {
         data: Arc::new(ScopeData {
             num_running_threads: AtomicUsize::new(0),
-            main_thread: current(),
+            main_thread: current_or_unnamed(),
             a_thread_panicked: AtomicBool::new(false),
         }),
         env: PhantomData,
@@ -147,7 +152,8 @@ where
 
     // Wait until all the threads are finished.
     while scope.data.num_running_threads.load(Ordering::Acquire) != 0 {
-        park();
+        // SAFETY: this is the main thread, the handle belongs to us.
+        unsafe { scope.data.main_thread.park() };
     }
 
     // Throw any panic from `f`, or the return value of `f` if no thread panicked.
@@ -171,7 +177,7 @@ impl<'scope, 'env> Scope<'scope, 'env> {
     /// thread. If the spawned thread panics, [`join`] will return an [`Err`] containing
     /// the panic payload.
     ///
-    /// If the join handle is dropped, the spawned thread will implicitly joined at the
+    /// If the join handle is dropped, the spawned thread will be implicitly joined at the
     /// end of the scope. In that case, if the spawned thread panics, [`scope`] will
     /// panic after all threads are joined.
     ///
@@ -311,7 +317,7 @@ impl<'scope, T> ScopedJoinHandle<'scope, T> {
     /// Checks if the associated thread has finished running its main function.
     ///
     /// `is_finished` supports implementing a non-blocking join operation, by checking
-    /// `is_finished`, and calling `join` if it returns `false`. This function does not block. To
+    /// `is_finished`, and calling `join` if it returns `true`. This function does not block. To
     /// block while waiting on the thread to finish, use [`join`][Self::join].
     ///
     /// This might return `true` for a brief moment after the thread's main

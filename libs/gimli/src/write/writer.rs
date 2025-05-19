@@ -93,9 +93,7 @@ pub trait Writer {
             constants::DW_EH_PE_sdata2 => self.write_sdata(val as i64, 2),
             constants::DW_EH_PE_sdata4 => self.write_sdata(val as i64, 4),
             constants::DW_EH_PE_sdata8 => self.write_sdata(val as i64, 8),
-            _ => {
-                return Err(Error::UnsupportedPointerEncoding(format));
-            }
+            _ => Err(Error::UnsupportedPointerEncoding(format)),
         }
     }
 
@@ -331,10 +329,8 @@ mod tests {
     use super::*;
     use crate::write;
     use crate::{BigEndian, LittleEndian};
-    use std::{i64, u64};
 
     #[test]
-    #[allow(clippy::cyclomatic_complexity)]
     fn test_writer() {
         let mut w = write::EndianVec::new(LittleEndian);
         w.write_address(Address::Constant(0x1122_3344), 4).unwrap();

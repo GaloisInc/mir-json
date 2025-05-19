@@ -10,61 +10,38 @@ use stdarch_test::assert_instr;
 
 use crate::mem;
 
-#[macro_use]
-mod macros;
-
 types! {
-    // / MIPS-specific 128-bit wide vector of 16 packed `i8`.
-   pub struct v16i8(
-       i8, i8, i8, i8, i8, i8, i8, i8,
-       i8, i8, i8, i8, i8, i8, i8, i8,
-   );
+    #![unstable(feature = "stdarch_mips", issue = "111198")]
 
-    // / MIPS-specific 128-bit wide vector of 8 packed `i16`.
-   pub struct v8i16(
-       i16, i16, i16, i16, i16, i16, i16, i16,
-   );
+    /// MIPS-specific 128-bit wide vector of 16 packed `i8`.
+    pub struct v16i8(16 x i8);
 
-    // / MIPS-specific 128-bit wide vector of 4 packed `i32`.
-   pub struct v4i32(
-       i32, i32, i32, i32,
-   );
+    /// MIPS-specific 128-bit wide vector of 8 packed `i16`.
+    pub struct v8i16(8 x i16);
 
-    // / MIPS-specific 128-bit wide vector of 2 packed `i64`.
-   pub struct v2i64(
-       i64, i64,
-   );
+    /// MIPS-specific 128-bit wide vector of 4 packed `i32`.
+    pub struct v4i32(4 x i32);
 
-    // / MIPS-specific 128-bit wide vector of 16 packed `u8`.
-   pub struct v16u8(
-       u8, u8, u8, u8, u8, u8, u8, u8,
-       u8, u8, u8, u8, u8, u8, u8, u8,
-   );
+    /// MIPS-specific 128-bit wide vector of 2 packed `i64`.
+    pub struct v2i64(2 x i64);
 
-    // / MIPS-specific 128-bit wide vector of 8 packed `u16`.
-   pub struct v8u16(
-       u16, u16, u16, u16, u16, u16, u16, u16,
-   );
+    /// MIPS-specific 128-bit wide vector of 16 packed `u8`.
+    pub struct v16u8(16 x u8);
 
-    // / MIPS-specific 128-bit wide vector of 4 packed `u32`.
-   pub struct v4u32(
-       u32, u32, u32, u32,
-   );
+    /// MIPS-specific 128-bit wide vector of 8 packed `u16`.
+    pub struct v8u16(8 x u16);
 
-    // / MIPS-specific 128-bit wide vector of 2 packed `u64`.
-   pub struct v2u64(
-       u64, u64,
-   );
+    /// MIPS-specific 128-bit wide vector of 4 packed `u32`.
+    pub struct v4u32(4 x u32);
 
-   // / MIPS-specific 128-bit wide vector of 4 packed `f32`.
-   pub struct v4f32(
-       f32, f32, f32, f32,
-   );
+    /// MIPS-specific 128-bit wide vector of 2 packed `u64`.
+    pub struct v2u64(2 x u64);
 
-    // / MIPS-specific 128-bit wide vector of 2 packed `f64`.
-   pub struct v2f64(
-       f64, f64,
-   );
+    // / MIPS-specific 128-bit wide vector of 4 packed `f32`.
+    pub struct v4f32(4 x f32);
+
+    /// MIPS-specific 128-bit wide vector of 2 packed `f64`.
+    pub struct v2f64(2 x f64);
 }
 
 #[allow(improper_ctypes)]
@@ -1143,6 +1120,7 @@ extern "C" {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(add_a.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_add_a_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_add_a_b(a, mem::transmute(b))
 }
@@ -1156,6 +1134,7 @@ pub unsafe fn __msa_add_a_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(add_a.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_add_a_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_add_a_h(a, mem::transmute(b))
 }
@@ -1169,6 +1148,7 @@ pub unsafe fn __msa_add_a_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(add_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_add_a_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_add_a_w(a, mem::transmute(b))
 }
@@ -1182,6 +1162,7 @@ pub unsafe fn __msa_add_a_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(add_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_add_a_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_add_a_d(a, mem::transmute(b))
 }
@@ -1195,6 +1176,7 @@ pub unsafe fn __msa_add_a_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_a.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_a_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_adds_a_b(a, mem::transmute(b))
 }
@@ -1208,6 +1190,7 @@ pub unsafe fn __msa_adds_a_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_a.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_a_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_adds_a_h(a, mem::transmute(b))
 }
@@ -1221,6 +1204,7 @@ pub unsafe fn __msa_adds_a_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_a_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_adds_a_w(a, mem::transmute(b))
 }
@@ -1234,6 +1218,7 @@ pub unsafe fn __msa_adds_a_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_a_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_adds_a_d(a, mem::transmute(b))
 }
@@ -1248,6 +1233,7 @@ pub unsafe fn __msa_adds_a_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_adds_s_b(a, mem::transmute(b))
 }
@@ -1262,6 +1248,7 @@ pub unsafe fn __msa_adds_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_adds_s_h(a, mem::transmute(b))
 }
@@ -1276,6 +1263,7 @@ pub unsafe fn __msa_adds_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_adds_s_w(a, mem::transmute(b))
 }
@@ -1290,6 +1278,7 @@ pub unsafe fn __msa_adds_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_adds_s_d(a, mem::transmute(b))
 }
@@ -1304,6 +1293,7 @@ pub unsafe fn __msa_adds_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_adds_u_b(a, mem::transmute(b))
 }
@@ -1318,6 +1308,7 @@ pub unsafe fn __msa_adds_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_adds_u_h(a, mem::transmute(b))
 }
@@ -1332,6 +1323,7 @@ pub unsafe fn __msa_adds_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_adds_u_w(a, mem::transmute(b))
 }
@@ -1346,6 +1338,7 @@ pub unsafe fn __msa_adds_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(adds_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_adds_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_adds_u_d(a, mem::transmute(b))
 }
@@ -1359,6 +1352,7 @@ pub unsafe fn __msa_adds_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addv.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addv_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_addv_b(a, mem::transmute(b))
 }
@@ -1372,6 +1366,7 @@ pub unsafe fn __msa_addv_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addv.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addv_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_addv_h(a, mem::transmute(b))
 }
@@ -1385,6 +1380,7 @@ pub unsafe fn __msa_addv_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addv_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_addv_w(a, mem::transmute(b))
 }
@@ -1398,6 +1394,7 @@ pub unsafe fn __msa_addv_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addv_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_addv_d(a, mem::transmute(b))
 }
@@ -1412,8 +1409,9 @@ pub unsafe fn __msa_addv_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addvi.b, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addvi_b<const IMM5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_addvi_b(a, IMM5)
 }
 
@@ -1427,8 +1425,9 @@ pub unsafe fn __msa_addvi_b<const IMM5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addvi.h, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addvi_h<const IMM5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_addvi_h(a, IMM5)
 }
 
@@ -1442,8 +1441,9 @@ pub unsafe fn __msa_addvi_h<const IMM5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addvi.w, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addvi_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_addvi_w(a, IMM5)
 }
 
@@ -1457,8 +1457,9 @@ pub unsafe fn __msa_addvi_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(addvi.d, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_addvi_d<const IMM5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_addvi_d(a, IMM5)
 }
 
@@ -1472,6 +1473,7 @@ pub unsafe fn __msa_addvi_d<const IMM5: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(and.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_and_v(a: v16u8, b: v16u8) -> v16u8 {
     msa_and_v(a, mem::transmute(b))
 }
@@ -1486,8 +1488,9 @@ pub unsafe fn __msa_and_v(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(andi.b, imm8 = 0b10010111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_andi_b<const IMM8: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_andi_b(a, IMM8)
 }
 
@@ -1500,6 +1503,7 @@ pub unsafe fn __msa_andi_b<const IMM8: i32>(a: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_asub_s_b(a, mem::transmute(b))
 }
@@ -1513,6 +1517,7 @@ pub unsafe fn __msa_asub_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_asub_s_h(a, mem::transmute(b))
 }
@@ -1526,6 +1531,7 @@ pub unsafe fn __msa_asub_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_asub_s_w(a, mem::transmute(b))
 }
@@ -1539,6 +1545,7 @@ pub unsafe fn __msa_asub_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_asub_s_d(a, mem::transmute(b))
 }
@@ -1552,6 +1559,7 @@ pub unsafe fn __msa_asub_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_asub_u_b(a, mem::transmute(b))
 }
@@ -1565,6 +1573,7 @@ pub unsafe fn __msa_asub_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_asub_u_h(a, mem::transmute(b))
 }
@@ -1578,6 +1587,7 @@ pub unsafe fn __msa_asub_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_asub_u_w(a, mem::transmute(b))
 }
@@ -1591,6 +1601,7 @@ pub unsafe fn __msa_asub_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(asub_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_asub_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_asub_u_d(a, mem::transmute(b))
 }
@@ -1606,6 +1617,7 @@ pub unsafe fn __msa_asub_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ave_s_b(a, mem::transmute(b))
 }
@@ -1621,6 +1633,7 @@ pub unsafe fn __msa_ave_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ave_s_h(a, mem::transmute(b))
 }
@@ -1636,6 +1649,7 @@ pub unsafe fn __msa_ave_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ave_s_w(a, mem::transmute(b))
 }
@@ -1651,6 +1665,7 @@ pub unsafe fn __msa_ave_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ave_s_d(a, mem::transmute(b))
 }
@@ -1666,6 +1681,7 @@ pub unsafe fn __msa_ave_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_ave_u_b(a, mem::transmute(b))
 }
@@ -1681,6 +1697,7 @@ pub unsafe fn __msa_ave_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_ave_u_h(a, mem::transmute(b))
 }
@@ -1696,6 +1713,7 @@ pub unsafe fn __msa_ave_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_ave_u_w(a, mem::transmute(b))
 }
@@ -1711,6 +1729,7 @@ pub unsafe fn __msa_ave_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ave_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ave_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_ave_u_d(a, mem::transmute(b))
 }
@@ -1727,6 +1746,7 @@ pub unsafe fn __msa_ave_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_aver_s_b(a, mem::transmute(b))
 }
@@ -1743,6 +1763,7 @@ pub unsafe fn __msa_aver_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_aver_s_h(a, mem::transmute(b))
 }
@@ -1759,6 +1780,7 @@ pub unsafe fn __msa_aver_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_aver_s_w(a, mem::transmute(b))
 }
@@ -1775,6 +1797,7 @@ pub unsafe fn __msa_aver_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_aver_s_d(a, mem::transmute(b))
 }
@@ -1791,6 +1814,7 @@ pub unsafe fn __msa_aver_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_aver_u_b(a, mem::transmute(b))
 }
@@ -1807,6 +1831,7 @@ pub unsafe fn __msa_aver_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_aver_u_h(a, mem::transmute(b))
 }
@@ -1823,6 +1848,7 @@ pub unsafe fn __msa_aver_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_aver_u_w(a, mem::transmute(b))
 }
@@ -1839,6 +1865,7 @@ pub unsafe fn __msa_aver_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(aver_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_aver_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_aver_u_d(a, mem::transmute(b))
 }
@@ -1853,6 +1880,7 @@ pub unsafe fn __msa_aver_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclr.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclr_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_bclr_b(a, mem::transmute(b))
 }
@@ -1867,6 +1895,7 @@ pub unsafe fn __msa_bclr_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclr.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclr_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_bclr_h(a, mem::transmute(b))
 }
@@ -1881,6 +1910,7 @@ pub unsafe fn __msa_bclr_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclr.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclr_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_bclr_w(a, mem::transmute(b))
 }
@@ -1895,6 +1925,7 @@ pub unsafe fn __msa_bclr_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclr_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_bclr_d(a, mem::transmute(b))
 }
@@ -1909,8 +1940,9 @@ pub unsafe fn __msa_bclr_d(a: v2u64, b: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclri.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclri_b<const IMM3: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_bclri_b(a, IMM3)
 }
 
@@ -1924,8 +1956,9 @@ pub unsafe fn __msa_bclri_b<const IMM3: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclri.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclri_h<const IMM4: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_bclri_h(a, IMM4)
 }
 
@@ -1939,8 +1972,9 @@ pub unsafe fn __msa_bclri_h<const IMM4: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclri.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclri_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_bclri_w(a, IMM5)
 }
 
@@ -1954,8 +1988,9 @@ pub unsafe fn __msa_bclri_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bclri.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bclri_d<const IMM6: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_bclri_d(a, IMM6)
 }
 
@@ -1969,6 +2004,7 @@ pub unsafe fn __msa_bclri_d<const IMM6: i32>(a: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsl.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsl_b(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
     msa_binsl_b(a, mem::transmute(b), c)
 }
@@ -1983,6 +2019,7 @@ pub unsafe fn __msa_binsl_b(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsl.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsl_h(a: v8u16, b: v8u16, c: v8u16) -> v8u16 {
     msa_binsl_h(a, mem::transmute(b), c)
 }
@@ -1997,6 +2034,7 @@ pub unsafe fn __msa_binsl_h(a: v8u16, b: v8u16, c: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsl.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsl_w(a: v4u32, b: v4u32, c: v4u32) -> v4u32 {
     msa_binsl_w(a, mem::transmute(b), c)
 }
@@ -2011,6 +2049,7 @@ pub unsafe fn __msa_binsl_w(a: v4u32, b: v4u32, c: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsl.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsl_d(a: v2u64, b: v2u64, c: v2u64) -> v2u64 {
     msa_binsl_d(a, mem::transmute(b), c)
 }
@@ -2025,8 +2064,9 @@ pub unsafe fn __msa_binsl_d(a: v2u64, b: v2u64, c: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsli.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsli_b<const IMM3: i32>(a: v16u8, b: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_binsli_b(a, mem::transmute(b), IMM3)
 }
 
@@ -2040,8 +2080,9 @@ pub unsafe fn __msa_binsli_b<const IMM3: i32>(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsli.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsli_h<const IMM4: i32>(a: v8u16, b: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_binsli_h(a, mem::transmute(b), IMM4)
 }
 
@@ -2055,8 +2096,9 @@ pub unsafe fn __msa_binsli_h<const IMM4: i32>(a: v8u16, b: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsli.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsli_w<const IMM5: i32>(a: v4u32, b: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_binsli_w(a, mem::transmute(b), IMM5)
 }
 
@@ -2070,8 +2112,9 @@ pub unsafe fn __msa_binsli_w<const IMM5: i32>(a: v4u32, b: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsli.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsli_d<const IMM6: i32>(a: v2u64, b: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_binsli_d(a, mem::transmute(b), IMM6)
 }
 
@@ -2085,6 +2128,7 @@ pub unsafe fn __msa_binsli_d<const IMM6: i32>(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsr.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsr_b(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
     msa_binsr_b(a, mem::transmute(b), c)
 }
@@ -2099,6 +2143,7 @@ pub unsafe fn __msa_binsr_b(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsr.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsr_h(a: v8u16, b: v8u16, c: v8u16) -> v8u16 {
     msa_binsr_h(a, mem::transmute(b), c)
 }
@@ -2113,6 +2158,7 @@ pub unsafe fn __msa_binsr_h(a: v8u16, b: v8u16, c: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsr.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsr_w(a: v4u32, b: v4u32, c: v4u32) -> v4u32 {
     msa_binsr_w(a, mem::transmute(b), c)
 }
@@ -2127,6 +2173,7 @@ pub unsafe fn __msa_binsr_w(a: v4u32, b: v4u32, c: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsr_d(a: v2u64, b: v2u64, c: v2u64) -> v2u64 {
     msa_binsr_d(a, mem::transmute(b), c)
 }
@@ -2141,8 +2188,9 @@ pub unsafe fn __msa_binsr_d(a: v2u64, b: v2u64, c: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsri.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsri_b<const IMM3: i32>(a: v16u8, b: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_binsri_b(a, mem::transmute(b), IMM3)
 }
 
@@ -2156,8 +2204,9 @@ pub unsafe fn __msa_binsri_b<const IMM3: i32>(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsri.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsri_h<const IMM4: i32>(a: v8u16, b: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_binsri_h(a, mem::transmute(b), IMM4)
 }
 
@@ -2171,8 +2220,9 @@ pub unsafe fn __msa_binsri_h<const IMM4: i32>(a: v8u16, b: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsri.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsri_w<const IMM5: i32>(a: v4u32, b: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_binsri_w(a, mem::transmute(b), IMM5)
 }
 
@@ -2186,8 +2236,9 @@ pub unsafe fn __msa_binsri_w<const IMM5: i32>(a: v4u32, b: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(binsri.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_binsri_d<const IMM6: i32>(a: v2u64, b: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_binsri_d(a, mem::transmute(b), IMM6)
 }
 
@@ -2201,6 +2252,7 @@ pub unsafe fn __msa_binsri_d<const IMM6: i32>(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bmnz.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bmnz_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
     msa_bmnz_v(a, mem::transmute(b), c)
 }
@@ -2208,15 +2260,16 @@ pub unsafe fn __msa_bmnz_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
 /// Immediate Bit Move If Not Zero
 ///
 /// Copy to destination vector `a` (sixteen unsigned 8-bit integer numbers) all bits from source vector
-/// `b` (sixteen unsigned 8-bit integer numbers) for which the corresponding bits from from immediate `imm8`
+/// `b` (sixteen unsigned 8-bit integer numbers) for which the corresponding bits from immediate `imm8`
 /// are 1 and leaves unchanged all destination bits for which the corresponding target bits are 0.
 ///
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bmnzi.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bmnzi_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_bmnzi_b(a, mem::transmute(b), IMM8)
 }
 
@@ -2230,6 +2283,7 @@ pub unsafe fn __msa_bmnzi_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bmz.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bmz_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
     msa_bmz_v(a, mem::transmute(b), c)
 }
@@ -2237,15 +2291,16 @@ pub unsafe fn __msa_bmz_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
 /// Immediate Bit Move If Zero
 ///
 /// Copy to destination vector `a` (sixteen unsigned 8-bit integer numbers) all bits from source vector
-/// `b` (sixteen unsigned 8-bit integer numbers) for which the corresponding bits from from immediate `imm8`
+/// `b` (sixteen unsigned 8-bit integer numbers) for which the corresponding bits from immediate `imm8`
 /// are 0 and leaves unchanged all destination bits for which the corresponding immediate bits are 1.
 ///
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bmzi.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bmzi_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_bmzi_b(a, mem::transmute(b), IMM8)
 }
 
@@ -2259,6 +2314,7 @@ pub unsafe fn __msa_bmzi_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bneg.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bneg_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_bneg_b(a, mem::transmute(b))
 }
@@ -2273,6 +2329,7 @@ pub unsafe fn __msa_bneg_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bneg.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bneg_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_bneg_h(a, mem::transmute(b))
 }
@@ -2287,6 +2344,7 @@ pub unsafe fn __msa_bneg_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bneg.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bneg_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_bneg_w(a, mem::transmute(b))
 }
@@ -2301,6 +2359,7 @@ pub unsafe fn __msa_bneg_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bneg.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bneg_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_bneg_d(a, mem::transmute(b))
 }
@@ -2315,8 +2374,9 @@ pub unsafe fn __msa_bneg_d(a: v2u64, b: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnegi.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnegi_b<const IMM3: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_bnegi_b(a, IMM3)
 }
 
@@ -2330,8 +2390,9 @@ pub unsafe fn __msa_bnegi_b<const IMM3: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnegi.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnegi_h<const IMM4: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_bnegi_h(a, IMM4)
 }
 
@@ -2345,8 +2406,9 @@ pub unsafe fn __msa_bnegi_h<const IMM4: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnegi.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnegi_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_bnegi_w(a, IMM5)
 }
 
@@ -2360,8 +2422,9 @@ pub unsafe fn __msa_bnegi_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnegi.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnegi_d<const IMM6: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_bnegi_d(a, IMM6)
 }
 
@@ -2372,6 +2435,7 @@ pub unsafe fn __msa_bnegi_d<const IMM6: i32>(a: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnz.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnz_b(a: v16u8) -> i32 {
     msa_bnz_b(a)
 }
@@ -2383,6 +2447,7 @@ pub unsafe fn __msa_bnz_b(a: v16u8) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnz.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnz_h(a: v8u16) -> i32 {
     msa_bnz_h(a)
 }
@@ -2394,6 +2459,7 @@ pub unsafe fn __msa_bnz_h(a: v8u16) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnz.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnz_w(a: v4u32) -> i32 {
     msa_bnz_w(a)
 }
@@ -2405,6 +2471,7 @@ pub unsafe fn __msa_bnz_w(a: v4u32) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnz.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnz_d(a: v2u64) -> i32 {
     msa_bnz_d(a)
 }
@@ -2417,6 +2484,7 @@ pub unsafe fn __msa_bnz_d(a: v2u64) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bnz.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bnz_v(a: v16u8) -> i32 {
     msa_bnz_v(a)
 }
@@ -2431,6 +2499,7 @@ pub unsafe fn __msa_bnz_v(a: v16u8) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bsel.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bsel_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
     msa_bsel_v(a, mem::transmute(b), c)
 }
@@ -2445,8 +2514,9 @@ pub unsafe fn __msa_bsel_v(a: v16u8, b: v16u8, c: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bseli.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bseli_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_bseli_b(a, mem::transmute(b), IMM8)
 }
 
@@ -2460,6 +2530,7 @@ pub unsafe fn __msa_bseli_b<const IMM8: i32>(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bset.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bset_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_bset_b(a, mem::transmute(b))
 }
@@ -2474,6 +2545,7 @@ pub unsafe fn __msa_bset_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bset.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bset_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_bset_h(a, mem::transmute(b))
 }
@@ -2488,6 +2560,7 @@ pub unsafe fn __msa_bset_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bset.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bset_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_bset_w(a, mem::transmute(b))
 }
@@ -2502,6 +2575,7 @@ pub unsafe fn __msa_bset_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bset.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bset_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_bset_d(a, mem::transmute(b))
 }
@@ -2516,8 +2590,9 @@ pub unsafe fn __msa_bset_d(a: v2u64, b: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bseti.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bseti_b<const IMM3: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_bseti_b(a, IMM3)
 }
 
@@ -2531,8 +2606,9 @@ pub unsafe fn __msa_bseti_b<const IMM3: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bseti.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bseti_h<const IMM4: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_bseti_h(a, IMM4)
 }
 
@@ -2546,8 +2622,9 @@ pub unsafe fn __msa_bseti_h<const IMM4: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bseti.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bseti_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_bseti_w(a, IMM5)
 }
 
@@ -2561,8 +2638,9 @@ pub unsafe fn __msa_bseti_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bseti.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bseti_d<const IMM6: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_bseti_d(a, IMM6)
 }
 
@@ -2573,6 +2651,7 @@ pub unsafe fn __msa_bseti_d<const IMM6: i32>(a: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bz.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bz_b(a: v16u8) -> i32 {
     msa_bz_b(a)
 }
@@ -2584,6 +2663,7 @@ pub unsafe fn __msa_bz_b(a: v16u8) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bz.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bz_h(a: v8u16) -> i32 {
     msa_bz_h(a)
 }
@@ -2595,6 +2675,7 @@ pub unsafe fn __msa_bz_h(a: v8u16) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bz.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bz_w(a: v4u32) -> i32 {
     msa_bz_w(a)
 }
@@ -2606,6 +2687,7 @@ pub unsafe fn __msa_bz_w(a: v4u32) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bz.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bz_d(a: v2u64) -> i32 {
     msa_bz_d(a)
 }
@@ -2618,6 +2700,7 @@ pub unsafe fn __msa_bz_d(a: v2u64) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(bz.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_bz_v(a: v16u8) -> i32 {
     msa_bz_v(a)
 }
@@ -2631,6 +2714,7 @@ pub unsafe fn __msa_bz_v(a: v16u8) -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceq.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceq_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ceq_b(a, mem::transmute(b))
 }
@@ -2644,6 +2728,7 @@ pub unsafe fn __msa_ceq_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceq.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceq_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ceq_h(a, mem::transmute(b))
 }
@@ -2657,6 +2742,7 @@ pub unsafe fn __msa_ceq_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceq_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ceq_w(a, mem::transmute(b))
 }
@@ -2670,6 +2756,7 @@ pub unsafe fn __msa_ceq_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceq.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceq_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ceq_d(a, mem::transmute(b))
 }
@@ -2684,8 +2771,9 @@ pub unsafe fn __msa_ceq_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceqi.b, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceqi_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_ceqi_b(a, IMM_S5)
 }
 
@@ -2699,8 +2787,9 @@ pub unsafe fn __msa_ceqi_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceqi.h, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceqi_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_ceqi_h(a, IMM_S5)
 }
 
@@ -2714,8 +2803,9 @@ pub unsafe fn __msa_ceqi_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceqi.w, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceqi_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_ceqi_w(a, IMM_S5)
 }
 
@@ -2729,8 +2819,9 @@ pub unsafe fn __msa_ceqi_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ceqi.d, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ceqi_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_ceqi_d(a, IMM_S5)
 }
 
@@ -2743,8 +2834,9 @@ pub unsafe fn __msa_ceqi_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cfcmsa, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cfcmsa<const IMM5: i32>() -> i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_cfcmsa(IMM5)
 }
 
@@ -2758,6 +2850,7 @@ pub unsafe fn __msa_cfcmsa<const IMM5: i32>() -> i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_cle_s_b(a, mem::transmute(b))
 }
@@ -2772,6 +2865,7 @@ pub unsafe fn __msa_cle_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_cle_s_h(a, mem::transmute(b))
 }
@@ -2786,6 +2880,7 @@ pub unsafe fn __msa_cle_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_cle_s_w(a, mem::transmute(b))
 }
@@ -2800,6 +2895,7 @@ pub unsafe fn __msa_cle_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_cle_s_d(a, mem::transmute(b))
 }
@@ -2814,6 +2910,7 @@ pub unsafe fn __msa_cle_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_u_b(a: v16u8, b: v16u8) -> v16i8 {
     msa_cle_u_b(a, mem::transmute(b))
 }
@@ -2828,6 +2925,7 @@ pub unsafe fn __msa_cle_u_b(a: v16u8, b: v16u8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_u_h(a: v8u16, b: v8u16) -> v8i16 {
     msa_cle_u_h(a, mem::transmute(b))
 }
@@ -2842,6 +2940,7 @@ pub unsafe fn __msa_cle_u_h(a: v8u16, b: v8u16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_u_w(a: v4u32, b: v4u32) -> v4i32 {
     msa_cle_u_w(a, mem::transmute(b))
 }
@@ -2856,6 +2955,7 @@ pub unsafe fn __msa_cle_u_w(a: v4u32, b: v4u32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(cle_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_cle_u_d(a: v2u64, b: v2u64) -> v2i64 {
     msa_cle_u_d(a, mem::transmute(b))
 }
@@ -2871,8 +2971,9 @@ pub unsafe fn __msa_cle_u_d(a: v2u64, b: v2u64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_s.b, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clei_s_b(a, IMM_S5)
 }
 
@@ -2887,8 +2988,9 @@ pub unsafe fn __msa_clei_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_s.h, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clei_s_h(a, IMM_S5)
 }
 
@@ -2903,8 +3005,9 @@ pub unsafe fn __msa_clei_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_s.w, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clei_s_w(a, IMM_S5)
 }
 
@@ -2919,8 +3022,9 @@ pub unsafe fn __msa_clei_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_s.d, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clei_s_d(a, IMM_S5)
 }
 
@@ -2935,8 +3039,9 @@ pub unsafe fn __msa_clei_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_u.b, imm5 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_u_b<const IMM5: i32>(a: v16u8) -> v16i8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clei_u_b(a, IMM5)
 }
 
@@ -2951,8 +3056,9 @@ pub unsafe fn __msa_clei_u_b<const IMM5: i32>(a: v16u8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_u.h, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_u_h<const IMM5: i32>(a: v8u16) -> v8i16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clei_u_h(a, IMM5)
 }
 
@@ -2967,8 +3073,9 @@ pub unsafe fn __msa_clei_u_h<const IMM5: i32>(a: v8u16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_u.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_u_w<const IMM5: i32>(a: v4u32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clei_u_w(a, IMM5)
 }
 
@@ -2983,8 +3090,9 @@ pub unsafe fn __msa_clei_u_w<const IMM5: i32>(a: v4u32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clei_u.d, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clei_u_d<const IMM5: i32>(a: v2u64) -> v2i64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clei_u_d(a, IMM5)
 }
 
@@ -2998,6 +3106,7 @@ pub unsafe fn __msa_clei_u_d<const IMM5: i32>(a: v2u64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_clt_s_b(a, mem::transmute(b))
 }
@@ -3012,6 +3121,7 @@ pub unsafe fn __msa_clt_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_clt_s_h(a, mem::transmute(b))
 }
@@ -3026,6 +3136,7 @@ pub unsafe fn __msa_clt_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_clt_s_w(a, mem::transmute(b))
 }
@@ -3040,6 +3151,7 @@ pub unsafe fn __msa_clt_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_clt_s_d(a, mem::transmute(b))
 }
@@ -3054,6 +3166,7 @@ pub unsafe fn __msa_clt_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_u_b(a: v16u8, b: v16u8) -> v16i8 {
     msa_clt_u_b(a, mem::transmute(b))
 }
@@ -3068,6 +3181,7 @@ pub unsafe fn __msa_clt_u_b(a: v16u8, b: v16u8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_u_h(a: v8u16, b: v8u16) -> v8i16 {
     msa_clt_u_h(a, mem::transmute(b))
 }
@@ -3082,6 +3196,7 @@ pub unsafe fn __msa_clt_u_h(a: v8u16, b: v8u16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_u_w(a: v4u32, b: v4u32) -> v4i32 {
     msa_clt_u_w(a, mem::transmute(b))
 }
@@ -3096,6 +3211,7 @@ pub unsafe fn __msa_clt_u_w(a: v4u32, b: v4u32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clt_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clt_u_d(a: v2u64, b: v2u64) -> v2i64 {
     msa_clt_u_d(a, mem::transmute(b))
 }
@@ -3111,8 +3227,9 @@ pub unsafe fn __msa_clt_u_d(a: v2u64, b: v2u64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_s.b, imm_s5 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clti_s_b(a, IMM_S5)
 }
 
@@ -3127,8 +3244,9 @@ pub unsafe fn __msa_clti_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_s.h, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clti_s_h(a, IMM_S5)
 }
 
@@ -3143,8 +3261,9 @@ pub unsafe fn __msa_clti_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_s.w, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clti_s_w(a, IMM_S5)
 }
 
@@ -3159,8 +3278,9 @@ pub unsafe fn __msa_clti_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_s.d, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_clti_s_d(a, IMM_S5)
 }
 
@@ -3175,8 +3295,9 @@ pub unsafe fn __msa_clti_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_u.b, imm5 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_u_b<const IMM5: i32>(a: v16u8) -> v16i8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clti_u_b(a, IMM5)
 }
 
@@ -3191,8 +3312,9 @@ pub unsafe fn __msa_clti_u_b<const IMM5: i32>(a: v16u8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_u.h, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_u_h<const IMM5: i32>(a: v8u16) -> v8i16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clti_u_h(a, IMM5)
 }
 
@@ -3207,8 +3329,9 @@ pub unsafe fn __msa_clti_u_h<const IMM5: i32>(a: v8u16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_u.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_u_w<const IMM5: i32>(a: v4u32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clti_u_w(a, IMM5)
 }
 
@@ -3223,8 +3346,9 @@ pub unsafe fn __msa_clti_u_w<const IMM5: i32>(a: v4u32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(clti_u.d, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_clti_u_d<const IMM5: i32>(a: v2u64) -> v2i64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_clti_u_d(a, IMM5)
 }
 
@@ -3237,8 +3361,9 @@ pub unsafe fn __msa_clti_u_d<const IMM5: i32>(a: v2u64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_s.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_s_b<const IMM4: i32>(a: v16i8) -> i32 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_copy_s_b(a, IMM4)
 }
 
@@ -3251,8 +3376,9 @@ pub unsafe fn __msa_copy_s_b<const IMM4: i32>(a: v16i8) -> i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_s.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_s_h<const IMM3: i32>(a: v8i16) -> i32 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_copy_s_h(a, IMM3)
 }
 
@@ -3265,8 +3391,9 @@ pub unsafe fn __msa_copy_s_h<const IMM3: i32>(a: v8i16) -> i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_s.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_s_w<const IMM2: i32>(a: v4i32) -> i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_copy_s_w(a, IMM2)
 }
 
@@ -3279,8 +3406,9 @@ pub unsafe fn __msa_copy_s_w<const IMM2: i32>(a: v4i32) -> i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_s.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_s_d<const IMM1: i32>(a: v2i64) -> i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_copy_s_d(a, IMM1)
 }
 
@@ -3293,8 +3421,9 @@ pub unsafe fn __msa_copy_s_d<const IMM1: i32>(a: v2i64) -> i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_u.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_u_b<const IMM4: i32>(a: v16i8) -> u32 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_copy_u_b(a, IMM4)
 }
 
@@ -3307,8 +3436,9 @@ pub unsafe fn __msa_copy_u_b<const IMM4: i32>(a: v16i8) -> u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_u.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_u_h<const IMM3: i32>(a: v8i16) -> u32 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_copy_u_h(a, IMM3)
 }
 
@@ -3321,8 +3451,9 @@ pub unsafe fn __msa_copy_u_h<const IMM3: i32>(a: v8i16) -> u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_u.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_u_w<const IMM2: i32>(a: v4i32) -> u32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_copy_u_w(a, IMM2)
 }
 
@@ -3335,8 +3466,9 @@ pub unsafe fn __msa_copy_u_w<const IMM2: i32>(a: v4i32) -> u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(copy_u.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_copy_u_d<const IMM1: i32>(a: v2i64) -> u64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_copy_u_d(a, IMM1)
 }
 
@@ -3351,8 +3483,9 @@ pub unsafe fn __msa_copy_u_d<const IMM1: i32>(a: v2i64) -> u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ctcmsa, imm1 = 0b1))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ctcmsa<const IMM5: i32>(a: i32) -> () {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_ctcmsa(IMM5, a)
 }
 
@@ -3365,6 +3498,7 @@ pub unsafe fn __msa_ctcmsa<const IMM5: i32>(a: i32) -> () {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_div_s_b(a, mem::transmute(b))
 }
@@ -3378,6 +3512,7 @@ pub unsafe fn __msa_div_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_div_s_h(a, mem::transmute(b))
 }
@@ -3391,6 +3526,7 @@ pub unsafe fn __msa_div_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_div_s_w(a, mem::transmute(b))
 }
@@ -3404,6 +3540,7 @@ pub unsafe fn __msa_div_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_div_s_d(a, mem::transmute(b))
 }
@@ -3417,6 +3554,7 @@ pub unsafe fn __msa_div_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_div_u_b(a, mem::transmute(b))
 }
@@ -3430,6 +3568,7 @@ pub unsafe fn __msa_div_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_div_u_h(a, mem::transmute(b))
 }
@@ -3443,6 +3582,7 @@ pub unsafe fn __msa_div_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_div_u_w(a, mem::transmute(b))
 }
@@ -3456,6 +3596,7 @@ pub unsafe fn __msa_div_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(div_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_div_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_div_u_d(a, mem::transmute(b))
 }
@@ -3471,6 +3612,7 @@ pub unsafe fn __msa_div_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_s_h(a: v16i8, b: v16i8) -> v8i16 {
     msa_dotp_s_h(a, mem::transmute(b))
 }
@@ -3486,6 +3628,7 @@ pub unsafe fn __msa_dotp_s_h(a: v16i8, b: v16i8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_s_w(a: v8i16, b: v8i16) -> v4i32 {
     msa_dotp_s_w(a, mem::transmute(b))
 }
@@ -3501,6 +3644,7 @@ pub unsafe fn __msa_dotp_s_w(a: v8i16, b: v8i16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_s_d(a: v4i32, b: v4i32) -> v2i64 {
     msa_dotp_s_d(a, mem::transmute(b))
 }
@@ -3516,6 +3660,7 @@ pub unsafe fn __msa_dotp_s_d(a: v4i32, b: v4i32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_u_h(a: v16u8, b: v16u8) -> v8u16 {
     msa_dotp_u_h(a, mem::transmute(b))
 }
@@ -3531,6 +3676,7 @@ pub unsafe fn __msa_dotp_u_h(a: v16u8, b: v16u8) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_u_w(a: v8u16, b: v8u16) -> v4u32 {
     msa_dotp_u_w(a, mem::transmute(b))
 }
@@ -3546,6 +3692,7 @@ pub unsafe fn __msa_dotp_u_w(a: v8u16, b: v8u16) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dotp_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dotp_u_d(a: v4u32, b: v4u32) -> v2u64 {
     msa_dotp_u_d(a, mem::transmute(b))
 }
@@ -3560,6 +3707,7 @@ pub unsafe fn __msa_dotp_u_d(a: v4u32, b: v4u32) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_s_h(a: v8i16, b: v16i8, c: v16i8) -> v8i16 {
     msa_dpadd_s_h(a, mem::transmute(b), c)
 }
@@ -3574,6 +3722,7 @@ pub unsafe fn __msa_dpadd_s_h(a: v8i16, b: v16i8, c: v16i8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_s_w(a: v4i32, b: v8i16, c: v8i16) -> v4i32 {
     msa_dpadd_s_w(a, mem::transmute(b), c)
 }
@@ -3588,6 +3737,7 @@ pub unsafe fn __msa_dpadd_s_w(a: v4i32, b: v8i16, c: v8i16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_s_d(a: v2i64, b: v4i32, c: v4i32) -> v2i64 {
     msa_dpadd_s_d(a, mem::transmute(b), c)
 }
@@ -3602,6 +3752,7 @@ pub unsafe fn __msa_dpadd_s_d(a: v2i64, b: v4i32, c: v4i32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_u_h(a: v8u16, b: v16u8, c: v16u8) -> v8u16 {
     msa_dpadd_u_h(a, mem::transmute(b), c)
 }
@@ -3616,6 +3767,7 @@ pub unsafe fn __msa_dpadd_u_h(a: v8u16, b: v16u8, c: v16u8) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_u_w(a: v4u32, b: v8u16, c: v8u16) -> v4u32 {
     msa_dpadd_u_w(a, mem::transmute(b), c)
 }
@@ -3630,6 +3782,7 @@ pub unsafe fn __msa_dpadd_u_w(a: v4u32, b: v8u16, c: v8u16) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpadd_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpadd_u_d(a: v2u64, b: v4u32, c: v4u32) -> v2u64 {
     msa_dpadd_u_d(a, mem::transmute(b), c)
 }
@@ -3645,6 +3798,7 @@ pub unsafe fn __msa_dpadd_u_d(a: v2u64, b: v4u32, c: v4u32) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_s_h(a: v8i16, b: v16i8, c: v16i8) -> v8i16 {
     msa_dpsub_s_h(a, mem::transmute(b), c)
 }
@@ -3660,6 +3814,7 @@ pub unsafe fn __msa_dpsub_s_h(a: v8i16, b: v16i8, c: v16i8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_s_w(a: v4i32, b: v8i16, c: v8i16) -> v4i32 {
     msa_dpsub_s_w(a, mem::transmute(b), c)
 }
@@ -3675,6 +3830,7 @@ pub unsafe fn __msa_dpsub_s_w(a: v4i32, b: v8i16, c: v8i16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_s_d(a: v2i64, b: v4i32, c: v4i32) -> v2i64 {
     msa_dpsub_s_d(a, mem::transmute(b), c)
 }
@@ -3690,6 +3846,7 @@ pub unsafe fn __msa_dpsub_s_d(a: v2i64, b: v4i32, c: v4i32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_u_h(a: v8i16, b: v16u8, c: v16u8) -> v8i16 {
     msa_dpsub_u_h(a, mem::transmute(b), c)
 }
@@ -3705,6 +3862,7 @@ pub unsafe fn __msa_dpsub_u_h(a: v8i16, b: v16u8, c: v16u8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_u_w(a: v4i32, b: v8u16, c: v8u16) -> v4i32 {
     msa_dpsub_u_w(a, mem::transmute(b), c)
 }
@@ -3720,6 +3878,7 @@ pub unsafe fn __msa_dpsub_u_w(a: v4i32, b: v8u16, c: v8u16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(dpsub_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_dpsub_u_d(a: v2i64, b: v4u32, c: v4u32) -> v2i64 {
     msa_dpsub_u_d(a, mem::transmute(b), c)
 }
@@ -3733,6 +3892,7 @@ pub unsafe fn __msa_dpsub_u_d(a: v2i64, b: v4u32, c: v4u32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fadd.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fadd_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fadd_w(a, mem::transmute(b))
 }
@@ -3746,6 +3906,7 @@ pub unsafe fn __msa_fadd_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fadd.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fadd_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fadd_d(a, mem::transmute(b))
 }
@@ -3759,6 +3920,7 @@ pub unsafe fn __msa_fadd_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcaf.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcaf_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcaf_w(a, mem::transmute(b))
 }
@@ -3772,6 +3934,7 @@ pub unsafe fn __msa_fcaf_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcaf.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcaf_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcaf_d(a, mem::transmute(b))
 }
@@ -3786,6 +3949,7 @@ pub unsafe fn __msa_fcaf_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fceq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fceq_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fceq_w(a, mem::transmute(b))
 }
@@ -3800,6 +3964,7 @@ pub unsafe fn __msa_fceq_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fceq.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fceq_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fceq_d(a, mem::transmute(b))
 }
@@ -3816,6 +3981,7 @@ pub unsafe fn __msa_fceq_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fclass.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fclass_w(a: v4f32) -> v4i32 {
     msa_fclass_w(a)
 }
@@ -3832,6 +3998,7 @@ pub unsafe fn __msa_fclass_w(a: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fclass.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fclass_d(a: v2f64) -> v2i64 {
     msa_fclass_d(a)
 }
@@ -3846,6 +4013,7 @@ pub unsafe fn __msa_fclass_d(a: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcle.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcle_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcle_w(a, mem::transmute(b))
 }
@@ -3860,6 +4028,7 @@ pub unsafe fn __msa_fcle_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcle.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcle_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcle_d(a, mem::transmute(b))
 }
@@ -3874,6 +4043,7 @@ pub unsafe fn __msa_fcle_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fclt.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fclt_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fclt_w(a, mem::transmute(b))
 }
@@ -3888,6 +4058,7 @@ pub unsafe fn __msa_fclt_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fclt.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fclt_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fclt_d(a, mem::transmute(b))
 }
@@ -3902,6 +4073,7 @@ pub unsafe fn __msa_fclt_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcne.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcne_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcne_w(a, mem::transmute(b))
 }
@@ -3916,6 +4088,7 @@ pub unsafe fn __msa_fcne_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcne.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcne_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcne_d(a, mem::transmute(b))
 }
@@ -3930,6 +4103,7 @@ pub unsafe fn __msa_fcne_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcor.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcor_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcor_w(a, mem::transmute(b))
 }
@@ -3944,6 +4118,7 @@ pub unsafe fn __msa_fcor_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcor.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcor_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcor_d(a, mem::transmute(b))
 }
@@ -3958,6 +4133,7 @@ pub unsafe fn __msa_fcor_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcueq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcueq_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcueq_w(a, mem::transmute(b))
 }
@@ -3972,6 +4148,7 @@ pub unsafe fn __msa_fcueq_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcueq.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcueq_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcueq_d(a, mem::transmute(b))
 }
@@ -3986,6 +4163,7 @@ pub unsafe fn __msa_fcueq_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcule.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcule_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcule_w(a, mem::transmute(b))
 }
@@ -4000,6 +4178,7 @@ pub unsafe fn __msa_fcule_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcule.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcule_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcule_d(a, mem::transmute(b))
 }
@@ -4014,6 +4193,7 @@ pub unsafe fn __msa_fcule_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcult.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcult_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcult_w(a, mem::transmute(b))
 }
@@ -4028,6 +4208,7 @@ pub unsafe fn __msa_fcult_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcult.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcult_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcult_d(a, mem::transmute(b))
 }
@@ -4042,6 +4223,7 @@ pub unsafe fn __msa_fcult_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcun.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcun_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcun_w(a, mem::transmute(b))
 }
@@ -4056,6 +4238,7 @@ pub unsafe fn __msa_fcun_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcun.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcun_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcun_d(a, mem::transmute(b))
 }
@@ -4070,6 +4253,7 @@ pub unsafe fn __msa_fcun_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcune.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcune_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fcune_w(a, mem::transmute(b))
 }
@@ -4084,6 +4268,7 @@ pub unsafe fn __msa_fcune_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fcune.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fcune_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fcune_d(a, mem::transmute(b))
 }
@@ -4097,6 +4282,7 @@ pub unsafe fn __msa_fcune_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fdiv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fdiv_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fdiv_w(a, mem::transmute(b))
 }
@@ -4110,6 +4296,7 @@ pub unsafe fn __msa_fdiv_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fdiv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fdiv_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fdiv_d(a, mem::transmute(b))
 }
@@ -4125,7 +4312,7 @@ pub unsafe fn __msa_fdiv_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexdo.h))]
-pub unsafe fn __msa_fexdo_h(a: v4f32, b: v4f32) -> f16x8 {
+    #[unstable(feature = "stdarch_mips", issue = "111198")] pub unsafe fn __msa_fexdo_h(a: v4f32, b: v4f32) -> f16x8 {
     msa_fexdo_h(a, mem::transmute(b))
 }*/
 
@@ -4139,6 +4326,7 @@ pub unsafe fn __msa_fexdo_h(a: v4f32, b: v4f32) -> f16x8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexdo.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fexdo_w(a: v2f64, b: v2f64) -> v4f32 {
     msa_fexdo_w(a, mem::transmute(b))
 }
@@ -4153,6 +4341,7 @@ pub unsafe fn __msa_fexdo_w(a: v2f64, b: v2f64) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexp2.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fexp2_w(a: v4f32, b: v4i32) -> v4f32 {
     msa_fexp2_w(a, mem::transmute(b))
 }
@@ -4167,6 +4356,7 @@ pub unsafe fn __msa_fexp2_w(a: v4f32, b: v4i32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexp2.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fexp2_d(a: v2f64, b: v2i64) -> v2f64 {
     msa_fexp2_d(a, mem::transmute(b))
 }
@@ -4182,7 +4372,7 @@ pub unsafe fn __msa_fexp2_d(a: v2f64, b: v2i64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexupl.w))]
-pub unsafe fn __msa_fexupl_w(a: f16x8) -> v4f32 {
+    #[unstable(feature = "stdarch_mips", issue = "111198")] pub unsafe fn __msa_fexupl_w(a: f16x8) -> v4f32 {
     msa_fexupl_w(a)
 }*/
 
@@ -4196,6 +4386,7 @@ pub unsafe fn __msa_fexupl_w(a: f16x8) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexupl.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fexupl_d(a: v4f32) -> v2f64 {
     msa_fexupl_d(a)
 }
@@ -4211,7 +4402,7 @@ pub unsafe fn __msa_fexupl_d(a: v4f32) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexupr.w))]
-pub unsafe fn __msa_fexupr_w(a: f16x8) -> v4f32 {
+    #[unstable(feature = "stdarch_mips", issue = "111198")] pub unsafe fn __msa_fexupr_w(a: f16x8) -> v4f32 {
     msa_fexupr_w(a)
 } */
 
@@ -4225,6 +4416,7 @@ pub unsafe fn __msa_fexupr_w(a: f16x8) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fexupr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fexupr_d(a: v4f32) -> v2f64 {
     msa_fexupr_d(a)
 }
@@ -4238,6 +4430,7 @@ pub unsafe fn __msa_fexupr_d(a: v4f32) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffint_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffint_s_w(a: v4i32) -> v4f32 {
     msa_ffint_s_w(a)
 }
@@ -4251,6 +4444,7 @@ pub unsafe fn __msa_ffint_s_w(a: v4i32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffint_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffint_s_d(a: v2i64) -> v2f64 {
     msa_ffint_s_d(a)
 }
@@ -4264,6 +4458,7 @@ pub unsafe fn __msa_ffint_s_d(a: v2i64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffint_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffint_u_w(a: v4u32) -> v4f32 {
     msa_ffint_u_w(a)
 }
@@ -4277,6 +4472,7 @@ pub unsafe fn __msa_ffint_u_w(a: v4u32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffint_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffint_u_d(a: v2u64) -> v2f64 {
     msa_ffint_u_d(a)
 }
@@ -4291,6 +4487,7 @@ pub unsafe fn __msa_ffint_u_d(a: v2u64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffql.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffql_w(a: v8i16) -> v4f32 {
     msa_ffql_w(a)
 }
@@ -4305,6 +4502,7 @@ pub unsafe fn __msa_ffql_w(a: v8i16) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffql.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffql_d(a: v4i32) -> v2f64 {
     msa_ffql_d(a)
 }
@@ -4319,6 +4517,7 @@ pub unsafe fn __msa_ffql_d(a: v4i32) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffqr.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffqr_w(a: v8i16) -> v4f32 {
     msa_ffqr_w(a)
 }
@@ -4333,6 +4532,7 @@ pub unsafe fn __msa_ffqr_w(a: v8i16) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ffqr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ffqr_d(a: v4i32) -> v2f64 {
     msa_ffqr_d(a)
 }
@@ -4346,6 +4546,7 @@ pub unsafe fn __msa_ffqr_d(a: v4i32) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fill.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fill_b(a: i32) -> v16i8 {
     msa_fill_b(a)
 }
@@ -4359,6 +4560,7 @@ pub unsafe fn __msa_fill_b(a: i32) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fill.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fill_h(a: i32) -> v8i16 {
     msa_fill_h(a)
 }
@@ -4372,6 +4574,7 @@ pub unsafe fn __msa_fill_h(a: i32) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fill.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fill_w(a: i32) -> v4i32 {
     msa_fill_w(a)
 }
@@ -4385,6 +4588,7 @@ pub unsafe fn __msa_fill_w(a: i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fill.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fill_d(a: i64) -> v2i64 {
     msa_fill_d(a)
 }
@@ -4398,6 +4602,7 @@ pub unsafe fn __msa_fill_d(a: i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(flog2.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_flog2_w(a: v4f32) -> v4f32 {
     msa_flog2_w(a)
 }
@@ -4411,6 +4616,7 @@ pub unsafe fn __msa_flog2_w(a: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(flog2.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_flog2_d(a: v2f64) -> v2f64 {
     msa_flog2_d(a)
 }
@@ -4424,6 +4630,7 @@ pub unsafe fn __msa_flog2_d(a: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmadd.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmadd_w(a: v4f32, b: v4f32, c: v4f32) -> v4f32 {
     msa_fmadd_w(a, mem::transmute(b), c)
 }
@@ -4437,6 +4644,7 @@ pub unsafe fn __msa_fmadd_w(a: v4f32, b: v4f32, c: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmadd.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmadd_d(a: v2f64, b: v2f64, c: v2f64) -> v2f64 {
     msa_fmadd_d(a, mem::transmute(b), c)
 }
@@ -4450,6 +4658,7 @@ pub unsafe fn __msa_fmadd_d(a: v2f64, b: v2f64, c: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmax.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmax_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fmax_w(a, mem::transmute(b))
 }
@@ -4463,6 +4672,7 @@ pub unsafe fn __msa_fmax_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmax.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmax_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fmax_d(a, mem::transmute(b))
 }
@@ -4477,6 +4687,7 @@ pub unsafe fn __msa_fmax_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmax_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmax_a_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fmax_a_w(a, mem::transmute(b))
 }
@@ -4491,6 +4702,7 @@ pub unsafe fn __msa_fmax_a_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmax_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmax_a_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fmax_a_d(a, mem::transmute(b))
 }
@@ -4504,6 +4716,7 @@ pub unsafe fn __msa_fmax_a_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmin.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmin_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fmin_w(a, mem::transmute(b))
 }
@@ -4517,6 +4730,7 @@ pub unsafe fn __msa_fmin_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmin.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmin_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fmin_d(a, mem::transmute(b))
 }
@@ -4531,6 +4745,7 @@ pub unsafe fn __msa_fmin_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmin_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmin_a_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fmin_a_w(a, mem::transmute(b))
 }
@@ -4545,6 +4760,7 @@ pub unsafe fn __msa_fmin_a_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmin_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmin_a_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fmin_a_d(a, mem::transmute(b))
 }
@@ -4558,6 +4774,7 @@ pub unsafe fn __msa_fmin_a_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmsub.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmsub_w(a: v4f32, b: v4f32, c: v4f32) -> v4f32 {
     msa_fmsub_w(a, mem::transmute(b), c)
 }
@@ -4571,6 +4788,7 @@ pub unsafe fn __msa_fmsub_w(a: v4f32, b: v4f32, c: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmsub.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmsub_d(a: v2f64, b: v2f64, c: v2f64) -> v2f64 {
     msa_fmsub_d(a, mem::transmute(b), c)
 }
@@ -4583,6 +4801,7 @@ pub unsafe fn __msa_fmsub_d(a: v2f64, b: v2f64, c: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmul.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmul_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fmul_w(a, mem::transmute(b))
 }
@@ -4595,6 +4814,7 @@ pub unsafe fn __msa_fmul_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fmul.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fmul_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fmul_d(a, mem::transmute(b))
 }
@@ -4608,6 +4828,7 @@ pub unsafe fn __msa_fmul_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frint.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frint_w(a: v4f32) -> v4f32 {
     msa_frint_w(a)
 }
@@ -4621,6 +4842,7 @@ pub unsafe fn __msa_frint_w(a: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frint.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frint_d(a: v2f64) -> v2f64 {
     msa_frint_d(a)
 }
@@ -4633,6 +4855,7 @@ pub unsafe fn __msa_frint_d(a: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frcp.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frcp_w(a: v4f32) -> v4f32 {
     msa_frcp_w(a)
 }
@@ -4645,6 +4868,7 @@ pub unsafe fn __msa_frcp_w(a: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frcp.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frcp_d(a: v2f64) -> v2f64 {
     msa_frcp_d(a)
 }
@@ -4657,6 +4881,7 @@ pub unsafe fn __msa_frcp_d(a: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frsqrt.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frsqrt_w(a: v4f32) -> v4f32 {
     msa_frsqrt_w(a)
 }
@@ -4669,6 +4894,7 @@ pub unsafe fn __msa_frsqrt_w(a: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(frsqrt.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_frsqrt_d(a: v2f64) -> v2f64 {
     msa_frsqrt_d(a)
 }
@@ -4683,6 +4909,7 @@ pub unsafe fn __msa_frsqrt_d(a: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsaf.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsaf_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsaf_w(a, mem::transmute(b))
 }
@@ -4697,6 +4924,7 @@ pub unsafe fn __msa_fsaf_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsaf.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsaf_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsaf_d(a, mem::transmute(b))
 }
@@ -4710,6 +4938,7 @@ pub unsafe fn __msa_fsaf_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fseq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fseq_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fseq_w(a, mem::transmute(b))
 }
@@ -4723,6 +4952,7 @@ pub unsafe fn __msa_fseq_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fseq.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fseq_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fseq_d(a, mem::transmute(b))
 }
@@ -4736,6 +4966,7 @@ pub unsafe fn __msa_fseq_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsle.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsle_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsle_w(a, mem::transmute(b))
 }
@@ -4749,6 +4980,7 @@ pub unsafe fn __msa_fsle_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsle.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsle_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsle_d(a, mem::transmute(b))
 }
@@ -4762,6 +4994,7 @@ pub unsafe fn __msa_fsle_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fslt.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fslt_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fslt_w(a, mem::transmute(b))
 }
@@ -4775,6 +5008,7 @@ pub unsafe fn __msa_fslt_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fslt.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fslt_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fslt_d(a, mem::transmute(b))
 }
@@ -4788,6 +5022,7 @@ pub unsafe fn __msa_fslt_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsne.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsne_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsne_w(a, mem::transmute(b))
 }
@@ -4801,6 +5036,7 @@ pub unsafe fn __msa_fsne_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsne.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsne_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsne_d(a, mem::transmute(b))
 }
@@ -4815,6 +5051,7 @@ pub unsafe fn __msa_fsne_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsor.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsor_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsor_w(a, mem::transmute(b))
 }
@@ -4829,6 +5066,7 @@ pub unsafe fn __msa_fsor_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsor.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsor_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsor_d(a, mem::transmute(b))
 }
@@ -4842,6 +5080,7 @@ pub unsafe fn __msa_fsor_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsqrt.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsqrt_w(a: v4f32) -> v4f32 {
     msa_fsqrt_w(a)
 }
@@ -4855,6 +5094,7 @@ pub unsafe fn __msa_fsqrt_w(a: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsqrt.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsqrt_d(a: v2f64) -> v2f64 {
     msa_fsqrt_d(a)
 }
@@ -4869,6 +5109,7 @@ pub unsafe fn __msa_fsqrt_d(a: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsub.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsub_w(a: v4f32, b: v4f32) -> v4f32 {
     msa_fsub_w(a, mem::transmute(b))
 }
@@ -4883,6 +5124,7 @@ pub unsafe fn __msa_fsub_w(a: v4f32, b: v4f32) -> v4f32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsub.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsub_d(a: v2f64, b: v2f64) -> v2f64 {
     msa_fsub_d(a, mem::transmute(b))
 }
@@ -4897,6 +5139,7 @@ pub unsafe fn __msa_fsub_d(a: v2f64, b: v2f64) -> v2f64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsueq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsueq_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsueq_w(a, mem::transmute(b))
 }
@@ -4911,6 +5154,7 @@ pub unsafe fn __msa_fsueq_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsueq.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsueq_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsueq_d(a, mem::transmute(b))
 }
@@ -4925,6 +5169,7 @@ pub unsafe fn __msa_fsueq_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsule.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsule_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsule_w(a, mem::transmute(b))
 }
@@ -4939,6 +5184,7 @@ pub unsafe fn __msa_fsule_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsule.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsule_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsule_d(a, mem::transmute(b))
 }
@@ -4953,6 +5199,7 @@ pub unsafe fn __msa_fsule_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsult.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsult_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsult_w(a, mem::transmute(b))
 }
@@ -4967,6 +5214,7 @@ pub unsafe fn __msa_fsult_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsult.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsult_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsult_d(a, mem::transmute(b))
 }
@@ -4981,6 +5229,7 @@ pub unsafe fn __msa_fsult_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsun.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsun_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsun_w(a, mem::transmute(b))
 }
@@ -4995,6 +5244,7 @@ pub unsafe fn __msa_fsun_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsun.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsun_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsun_d(a, mem::transmute(b))
 }
@@ -5009,6 +5259,7 @@ pub unsafe fn __msa_fsun_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsune.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsune_w(a: v4f32, b: v4f32) -> v4i32 {
     msa_fsune_w(a, mem::transmute(b))
 }
@@ -5023,6 +5274,7 @@ pub unsafe fn __msa_fsune_w(a: v4f32, b: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(fsune.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_fsune_d(a: v2f64, b: v2f64) -> v2i64 {
     msa_fsune_d(a, mem::transmute(b))
 }
@@ -5037,6 +5289,7 @@ pub unsafe fn __msa_fsune_d(a: v2f64, b: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftint_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftint_s_w(a: v4f32) -> v4i32 {
     msa_ftint_s_w(a)
 }
@@ -5051,6 +5304,7 @@ pub unsafe fn __msa_ftint_s_w(a: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftint_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftint_s_d(a: v2f64) -> v2i64 {
     msa_ftint_s_d(a)
 }
@@ -5065,6 +5319,7 @@ pub unsafe fn __msa_ftint_s_d(a: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftint_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftint_u_w(a: v4f32) -> v4u32 {
     msa_ftint_u_w(a)
 }
@@ -5079,6 +5334,7 @@ pub unsafe fn __msa_ftint_u_w(a: v4f32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftint_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftint_u_d(a: v2f64) -> v2u64 {
     msa_ftint_u_d(a)
 }
@@ -5094,6 +5350,7 @@ pub unsafe fn __msa_ftint_u_d(a: v2f64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftq.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftq_h(a: v4f32, b: v4f32) -> v8i16 {
     msa_ftq_h(a, mem::transmute(b))
 }
@@ -5109,6 +5366,7 @@ pub unsafe fn __msa_ftq_h(a: v4f32, b: v4f32) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftq.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftq_w(a: v2f64, b: v2f64) -> v4i32 {
     msa_ftq_w(a, mem::transmute(b))
 }
@@ -5122,6 +5380,7 @@ pub unsafe fn __msa_ftq_w(a: v2f64, b: v2f64) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftrunc_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftrunc_s_w(a: v4f32) -> v4i32 {
     msa_ftrunc_s_w(a)
 }
@@ -5135,6 +5394,7 @@ pub unsafe fn __msa_ftrunc_s_w(a: v4f32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftrunc_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftrunc_s_d(a: v2f64) -> v2i64 {
     msa_ftrunc_s_d(a)
 }
@@ -5148,6 +5408,7 @@ pub unsafe fn __msa_ftrunc_s_d(a: v2f64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftrunc_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftrunc_u_w(a: v4f32) -> v4u32 {
     msa_ftrunc_u_w(a)
 }
@@ -5161,6 +5422,7 @@ pub unsafe fn __msa_ftrunc_u_w(a: v4f32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ftrunc_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ftrunc_u_d(a: v2f64) -> v2u64 {
     msa_ftrunc_u_d(a)
 }
@@ -5175,6 +5437,7 @@ pub unsafe fn __msa_ftrunc_u_d(a: v2f64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_s_h(a: v16i8, b: v16i8) -> v8i16 {
     msa_hadd_s_h(a, mem::transmute(b))
 }
@@ -5189,6 +5452,7 @@ pub unsafe fn __msa_hadd_s_h(a: v16i8, b: v16i8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_s_w(a: v8i16, b: v8i16) -> v4i32 {
     msa_hadd_s_w(a, mem::transmute(b))
 }
@@ -5203,6 +5467,7 @@ pub unsafe fn __msa_hadd_s_w(a: v8i16, b: v8i16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_s_d(a: v4i32, b: v4i32) -> v2i64 {
     msa_hadd_s_d(a, mem::transmute(b))
 }
@@ -5217,6 +5482,7 @@ pub unsafe fn __msa_hadd_s_d(a: v4i32, b: v4i32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_u_h(a: v16u8, b: v16u8) -> v8u16 {
     msa_hadd_u_h(a, mem::transmute(b))
 }
@@ -5231,6 +5497,7 @@ pub unsafe fn __msa_hadd_u_h(a: v16u8, b: v16u8) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_u_w(a: v8u16, b: v8u16) -> v4u32 {
     msa_hadd_u_w(a, mem::transmute(b))
 }
@@ -5245,6 +5512,7 @@ pub unsafe fn __msa_hadd_u_w(a: v8u16, b: v8u16) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hadd_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hadd_u_d(a: v4u32, b: v4u32) -> v2u64 {
     msa_hadd_u_d(a, mem::transmute(b))
 }
@@ -5259,6 +5527,7 @@ pub unsafe fn __msa_hadd_u_d(a: v4u32, b: v4u32) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_s_h(a: v16i8, b: v16i8) -> v8i16 {
     msa_hsub_s_h(a, mem::transmute(b))
 }
@@ -5273,6 +5542,7 @@ pub unsafe fn __msa_hsub_s_h(a: v16i8, b: v16i8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_s_w(a: v8i16, b: v8i16) -> v4i32 {
     msa_hsub_s_w(a, mem::transmute(b))
 }
@@ -5287,6 +5557,7 @@ pub unsafe fn __msa_hsub_s_w(a: v8i16, b: v8i16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_s_d(a: v4i32, b: v4i32) -> v2i64 {
     msa_hsub_s_d(a, mem::transmute(b))
 }
@@ -5301,6 +5572,7 @@ pub unsafe fn __msa_hsub_s_d(a: v4i32, b: v4i32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_u_h(a: v16u8, b: v16u8) -> v8i16 {
     msa_hsub_u_h(a, mem::transmute(b))
 }
@@ -5315,6 +5587,7 @@ pub unsafe fn __msa_hsub_u_h(a: v16u8, b: v16u8) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_u_w(a: v8u16, b: v8u16) -> v4i32 {
     msa_hsub_u_w(a, mem::transmute(b))
 }
@@ -5329,6 +5602,7 @@ pub unsafe fn __msa_hsub_u_w(a: v8u16, b: v8u16) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(hsub_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_hsub_u_d(a: v4u32, b: v4u32) -> v2i64 {
     msa_hsub_u_d(a, mem::transmute(b))
 }
@@ -5343,6 +5617,7 @@ pub unsafe fn __msa_hsub_u_d(a: v4u32, b: v4u32) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvev.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvev_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ilvev_b(a, mem::transmute(b))
 }
@@ -5357,6 +5632,7 @@ pub unsafe fn __msa_ilvev_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvev.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvev_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ilvev_h(a, mem::transmute(b))
 }
@@ -5371,6 +5647,7 @@ pub unsafe fn __msa_ilvev_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvev.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvev_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ilvev_w(a, mem::transmute(b))
 }
@@ -5385,6 +5662,7 @@ pub unsafe fn __msa_ilvev_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvev.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvev_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ilvev_d(a, mem::transmute(b))
 }
@@ -5399,6 +5677,7 @@ pub unsafe fn __msa_ilvev_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvl.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvl_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ilvl_b(a, mem::transmute(b))
 }
@@ -5413,6 +5692,7 @@ pub unsafe fn __msa_ilvl_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvl.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvl_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ilvl_h(a, mem::transmute(b))
 }
@@ -5427,6 +5707,7 @@ pub unsafe fn __msa_ilvl_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvl.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvl_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ilvl_w(a, mem::transmute(b))
 }
@@ -5441,6 +5722,7 @@ pub unsafe fn __msa_ilvl_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvl.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvl_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ilvl_d(a, mem::transmute(b))
 }
@@ -5455,6 +5737,7 @@ pub unsafe fn __msa_ilvl_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvod.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvod_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ilvod_b(a, mem::transmute(b))
 }
@@ -5469,6 +5752,7 @@ pub unsafe fn __msa_ilvod_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvod.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvod_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ilvod_h(a, mem::transmute(b))
 }
@@ -5483,6 +5767,7 @@ pub unsafe fn __msa_ilvod_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvod.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvod_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ilvod_w(a, mem::transmute(b))
 }
@@ -5497,6 +5782,7 @@ pub unsafe fn __msa_ilvod_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvod.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvod_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ilvod_d(a, mem::transmute(b))
 }
@@ -5511,6 +5797,7 @@ pub unsafe fn __msa_ilvod_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvr.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvr_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_ilvr_b(a, mem::transmute(b))
 }
@@ -5525,6 +5812,7 @@ pub unsafe fn __msa_ilvr_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvr.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvr_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_ilvr_h(a, mem::transmute(b))
 }
@@ -5539,6 +5827,7 @@ pub unsafe fn __msa_ilvr_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvr.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvr_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_ilvr_w(a, mem::transmute(b))
 }
@@ -5553,6 +5842,7 @@ pub unsafe fn __msa_ilvr_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ilvr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ilvr_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_ilvr_d(a, mem::transmute(b))
 }
@@ -5567,8 +5857,9 @@ pub unsafe fn __msa_ilvr_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insert.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insert_b<const IMM4: i32>(a: v16i8, c: i32) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_insert_b(a, IMM4, c)
 }
 
@@ -5582,8 +5873,9 @@ pub unsafe fn __msa_insert_b<const IMM4: i32>(a: v16i8, c: i32) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insert.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insert_h<const IMM3: i32>(a: v8i16, c: i32) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_insert_h(a, IMM3, c)
 }
 
@@ -5597,8 +5889,9 @@ pub unsafe fn __msa_insert_h<const IMM3: i32>(a: v8i16, c: i32) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insert.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insert_w<const IMM2: i32>(a: v4i32, c: i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_insert_w(a, IMM2, c)
 }
 
@@ -5612,8 +5905,9 @@ pub unsafe fn __msa_insert_w<const IMM2: i32>(a: v4i32, c: i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insert.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insert_d<const IMM1: i32>(a: v2i64, c: i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_insert_d(a, IMM1, c)
 }
 
@@ -5627,8 +5921,9 @@ pub unsafe fn __msa_insert_d<const IMM1: i32>(a: v2i64, c: i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insve.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insve_b<const IMM4: i32>(a: v16i8, c: v16i8) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_insve_b(a, IMM4, c)
 }
 
@@ -5642,8 +5937,9 @@ pub unsafe fn __msa_insve_b<const IMM4: i32>(a: v16i8, c: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insve.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insve_h<const IMM3: i32>(a: v8i16, c: v8i16) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_insve_h(a, IMM3, c)
 }
 
@@ -5657,8 +5953,9 @@ pub unsafe fn __msa_insve_h<const IMM3: i32>(a: v8i16, c: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insve.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insve_w<const IMM2: i32>(a: v4i32, c: v4i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_insve_w(a, IMM2, c)
 }
 
@@ -5672,8 +5969,9 @@ pub unsafe fn __msa_insve_w<const IMM2: i32>(a: v4i32, c: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(insve.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_insve_d<const IMM1: i32>(a: v2i64, c: v2i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_insve_d(a, IMM1, c)
 }
 
@@ -5687,8 +5985,9 @@ pub unsafe fn __msa_insve_d<const IMM1: i32>(a: v2i64, c: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ld.b, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ld_b<const IMM_S10: i32>(mem_addr: *mut u8) -> v16i8 {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_ld_b(mem_addr, IMM_S10)
 }
 
@@ -5702,9 +6001,10 @@ pub unsafe fn __msa_ld_b<const IMM_S10: i32>(mem_addr: *mut u8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ld.h, imm_s11 = 0b11111111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ld_h<const IMM_S11: i32>(mem_addr: *mut u8) -> v8i16 {
-    static_assert_imm_s11!(IMM_S11);
-    static_assert!(IMM_S11: i32 where IMM_S11 % 2 == 0);
+    static_assert_simm_bits!(IMM_S11, 11);
+    static_assert!(IMM_S11 % 2 == 0);
     msa_ld_h(mem_addr, IMM_S11)
 }
 
@@ -5718,9 +6018,10 @@ pub unsafe fn __msa_ld_h<const IMM_S11: i32>(mem_addr: *mut u8) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ld.w, imm_s12 = 0b111111111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ld_w<const IMM_S12: i32>(mem_addr: *mut u8) -> v4i32 {
-    static_assert_imm_s12!(IMM_S12);
-    static_assert!(IMM_S12: i32 where IMM_S12 % 4 == 0);
+    static_assert_simm_bits!(IMM_S12, 12);
+    static_assert!(IMM_S12 % 4 == 0);
     msa_ld_w(mem_addr, IMM_S12)
 }
 
@@ -5734,9 +6035,10 @@ pub unsafe fn __msa_ld_w<const IMM_S12: i32>(mem_addr: *mut u8) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ld.d, imm_s13 = 0b1111111111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ld_d<const IMM_S13: i32>(mem_addr: *mut u8) -> v2i64 {
-    static_assert_imm_s13!(IMM_S13);
-    static_assert!(IMM_S13: i32 where IMM_S13 % 8 == 0);
+    static_assert_simm_bits!(IMM_S13, 13);
+    static_assert!(IMM_S13 % 8 == 0);
     msa_ld_d(mem_addr, IMM_S13)
 }
 
@@ -5750,8 +6052,9 @@ pub unsafe fn __msa_ld_d<const IMM_S13: i32>(mem_addr: *mut u8) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ldi.b, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ldi_b<const IMM_S10: i32>() -> v16i8 {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_ldi_b(IMM_S10)
 }
 
@@ -5765,8 +6068,9 @@ pub unsafe fn __msa_ldi_b<const IMM_S10: i32>() -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ldi.h, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ldi_h<const IMM_S10: i32>() -> v8i16 {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_ldi_h(IMM_S10)
 }
 
@@ -5780,8 +6084,9 @@ pub unsafe fn __msa_ldi_h<const IMM_S10: i32>() -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ldi.w, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ldi_w<const IMM_S10: i32>() -> v4i32 {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_ldi_w(IMM_S10)
 }
 
@@ -5795,8 +6100,9 @@ pub unsafe fn __msa_ldi_w<const IMM_S10: i32>() -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ldi.d, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(0)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ldi_d<const IMM_S10: i32>() -> v2i64 {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_ldi_d(IMM_S10)
 }
 
@@ -5811,6 +6117,7 @@ pub unsafe fn __msa_ldi_d<const IMM_S10: i32>() -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(madd_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_madd_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_madd_q_h(a, mem::transmute(b), c)
 }
@@ -5826,6 +6133,7 @@ pub unsafe fn __msa_madd_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(madd_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_madd_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_madd_q_w(a, mem::transmute(b), c)
 }
@@ -5841,6 +6149,7 @@ pub unsafe fn __msa_madd_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddr_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddr_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_maddr_q_h(a, mem::transmute(b), c)
 }
@@ -5856,6 +6165,7 @@ pub unsafe fn __msa_maddr_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddr_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddr_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_maddr_q_w(a, mem::transmute(b), c)
 }
@@ -5870,6 +6180,7 @@ pub unsafe fn __msa_maddr_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddv.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddv_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
     msa_maddv_b(a, mem::transmute(b), c)
 }
@@ -5884,6 +6195,7 @@ pub unsafe fn __msa_maddv_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddv.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddv_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_maddv_h(a, mem::transmute(b), c)
 }
@@ -5898,6 +6210,7 @@ pub unsafe fn __msa_maddv_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddv_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_maddv_w(a, mem::transmute(b), c)
 }
@@ -5912,6 +6225,7 @@ pub unsafe fn __msa_maddv_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maddv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maddv_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
     msa_maddv_d(a, mem::transmute(b), c)
 }
@@ -5926,6 +6240,7 @@ pub unsafe fn __msa_maddv_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_a.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_a_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_max_a_b(a, mem::transmute(b))
 }
@@ -5940,6 +6255,7 @@ pub unsafe fn __msa_max_a_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_a.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_a_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_max_a_h(a, mem::transmute(b))
 }
@@ -5954,6 +6270,7 @@ pub unsafe fn __msa_max_a_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_a_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_max_a_w(a, mem::transmute(b))
 }
@@ -5968,6 +6285,7 @@ pub unsafe fn __msa_max_a_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_a_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_max_a_d(a, mem::transmute(b))
 }
@@ -5981,6 +6299,7 @@ pub unsafe fn __msa_max_a_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_max_s_b(a, mem::transmute(b))
 }
@@ -5994,6 +6313,7 @@ pub unsafe fn __msa_max_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_max_s_h(a, mem::transmute(b))
 }
@@ -6007,6 +6327,7 @@ pub unsafe fn __msa_max_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_max_s_w(a, mem::transmute(b))
 }
@@ -6020,6 +6341,7 @@ pub unsafe fn __msa_max_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_max_s_d(a, mem::transmute(b))
 }
@@ -6033,6 +6355,7 @@ pub unsafe fn __msa_max_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_max_u_b(a, mem::transmute(b))
 }
@@ -6046,6 +6369,7 @@ pub unsafe fn __msa_max_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_max_u_h(a, mem::transmute(b))
 }
@@ -6059,6 +6383,7 @@ pub unsafe fn __msa_max_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_max_u_w(a, mem::transmute(b))
 }
@@ -6072,6 +6397,7 @@ pub unsafe fn __msa_max_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(max_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_max_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_max_u_d(a, mem::transmute(b))
 }
@@ -6086,8 +6412,9 @@ pub unsafe fn __msa_max_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_s.b, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_maxi_s_b(a, IMM_S5)
 }
 
@@ -6101,8 +6428,9 @@ pub unsafe fn __msa_maxi_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_s.h, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_maxi_s_h(a, IMM_S5)
 }
 
@@ -6116,8 +6444,9 @@ pub unsafe fn __msa_maxi_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_s.w, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_maxi_s_w(a, IMM_S5)
 }
 
@@ -6131,8 +6460,9 @@ pub unsafe fn __msa_maxi_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_s.d, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_maxi_s_d(a, IMM_S5)
 }
 
@@ -6146,8 +6476,9 @@ pub unsafe fn __msa_maxi_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_u.b, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_u_b<const IMM5: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_maxi_u_b(a, IMM5)
 }
 
@@ -6161,8 +6492,9 @@ pub unsafe fn __msa_maxi_u_b<const IMM5: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_u.h, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_u_h<const IMM5: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_maxi_u_h(a, IMM5)
 }
 
@@ -6176,8 +6508,9 @@ pub unsafe fn __msa_maxi_u_h<const IMM5: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_u.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_maxi_u_w(a, IMM5)
 }
 
@@ -6191,8 +6524,9 @@ pub unsafe fn __msa_maxi_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(maxi_u.d, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_maxi_u_d<const IMM5: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_maxi_u_d(a, IMM5)
 }
 
@@ -6206,6 +6540,7 @@ pub unsafe fn __msa_maxi_u_d<const IMM5: i32>(a: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_a.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_a_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_min_a_b(a, mem::transmute(b))
 }
@@ -6220,6 +6555,7 @@ pub unsafe fn __msa_min_a_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_a.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_a_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_min_a_h(a, mem::transmute(b))
 }
@@ -6234,6 +6570,7 @@ pub unsafe fn __msa_min_a_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_a.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_a_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_min_a_w(a, mem::transmute(b))
 }
@@ -6248,6 +6585,7 @@ pub unsafe fn __msa_min_a_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_a.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_a_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_min_a_d(a, mem::transmute(b))
 }
@@ -6261,6 +6599,7 @@ pub unsafe fn __msa_min_a_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_min_s_b(a, mem::transmute(b))
 }
@@ -6274,6 +6613,7 @@ pub unsafe fn __msa_min_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_min_s_h(a, mem::transmute(b))
 }
@@ -6287,6 +6627,7 @@ pub unsafe fn __msa_min_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_min_s_w(a, mem::transmute(b))
 }
@@ -6300,6 +6641,7 @@ pub unsafe fn __msa_min_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_min_s_d(a, mem::transmute(b))
 }
@@ -6314,8 +6656,9 @@ pub unsafe fn __msa_min_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_s.b, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_mini_s_b(a, IMM_S5)
 }
 
@@ -6329,8 +6672,9 @@ pub unsafe fn __msa_mini_s_b<const IMM_S5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_s.h, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_mini_s_h(a, IMM_S5)
 }
 
@@ -6344,8 +6688,9 @@ pub unsafe fn __msa_mini_s_h<const IMM_S5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_s.w, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_mini_s_w(a, IMM_S5)
 }
 
@@ -6359,8 +6704,9 @@ pub unsafe fn __msa_mini_s_w<const IMM_S5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_s.d, imm_s5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm_s5!(IMM_S5);
+    static_assert_simm_bits!(IMM_S5, 5);
     msa_mini_s_d(a, IMM_S5)
 }
 
@@ -6373,6 +6719,7 @@ pub unsafe fn __msa_mini_s_d<const IMM_S5: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_min_u_b(a, mem::transmute(b))
 }
@@ -6386,6 +6733,7 @@ pub unsafe fn __msa_min_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_min_u_h(a, mem::transmute(b))
 }
@@ -6399,6 +6747,7 @@ pub unsafe fn __msa_min_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_min_u_w(a, mem::transmute(b))
 }
@@ -6412,6 +6761,7 @@ pub unsafe fn __msa_min_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(min_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_min_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_min_u_d(a, mem::transmute(b))
 }
@@ -6426,8 +6776,9 @@ pub unsafe fn __msa_min_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_u.b, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_u_b<const IMM5: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_mini_u_b(a, IMM5)
 }
 
@@ -6441,8 +6792,9 @@ pub unsafe fn __msa_mini_u_b<const IMM5: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_u.h, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_u_h<const IMM5: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_mini_u_h(a, IMM5)
 }
 
@@ -6456,8 +6808,9 @@ pub unsafe fn __msa_mini_u_h<const IMM5: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_u.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_mini_u_w(a, IMM5)
 }
 
@@ -6471,8 +6824,9 @@ pub unsafe fn __msa_mini_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mini_u.d, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mini_u_d<const IMM5: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_mini_u_d(a, IMM5)
 }
 
@@ -6487,6 +6841,7 @@ pub unsafe fn __msa_mini_u_d<const IMM5: i32>(a: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_mod_s_b(a, mem::transmute(b))
 }
@@ -6502,6 +6857,7 @@ pub unsafe fn __msa_mod_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_mod_s_h(a, mem::transmute(b))
 }
@@ -6517,6 +6873,7 @@ pub unsafe fn __msa_mod_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_mod_s_w(a, mem::transmute(b))
 }
@@ -6532,6 +6889,7 @@ pub unsafe fn __msa_mod_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_mod_s_d(a, mem::transmute(b))
 }
@@ -6547,6 +6905,7 @@ pub unsafe fn __msa_mod_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_mod_u_b(a, mem::transmute(b))
 }
@@ -6562,6 +6921,7 @@ pub unsafe fn __msa_mod_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_mod_u_h(a, mem::transmute(b))
 }
@@ -6577,6 +6937,7 @@ pub unsafe fn __msa_mod_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_mod_u_w(a, mem::transmute(b))
 }
@@ -6592,6 +6953,7 @@ pub unsafe fn __msa_mod_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mod_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mod_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_mod_u_d(a, mem::transmute(b))
 }
@@ -6604,6 +6966,7 @@ pub unsafe fn __msa_mod_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(move.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_move_v(a: v16i8) -> v16i8 {
     msa_move_v(a)
 }
@@ -6620,6 +6983,7 @@ pub unsafe fn __msa_move_v(a: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msub_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msub_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_msub_q_h(a, mem::transmute(b), c)
 }
@@ -6636,6 +7000,7 @@ pub unsafe fn __msa_msub_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msub_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msub_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_msub_q_w(a, mem::transmute(b), c)
 }
@@ -6652,6 +7017,7 @@ pub unsafe fn __msa_msub_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubr_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubr_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_msubr_q_h(a, mem::transmute(b), c)
 }
@@ -6668,6 +7034,7 @@ pub unsafe fn __msa_msubr_q_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubr_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubr_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_msubr_q_w(a, mem::transmute(b), c)
 }
@@ -6682,6 +7049,7 @@ pub unsafe fn __msa_msubr_q_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubv.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubv_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
     msa_msubv_b(a, mem::transmute(b), c)
 }
@@ -6696,6 +7064,7 @@ pub unsafe fn __msa_msubv_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubv.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubv_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_msubv_h(a, mem::transmute(b), c)
 }
@@ -6710,6 +7079,7 @@ pub unsafe fn __msa_msubv_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubv_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_msubv_w(a, mem::transmute(b), c)
 }
@@ -6724,6 +7094,7 @@ pub unsafe fn __msa_msubv_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(msubv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_msubv_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
     msa_msubv_d(a, mem::transmute(b), c)
 }
@@ -6737,6 +7108,7 @@ pub unsafe fn __msa_msubv_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mul_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mul_q_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_mul_q_h(a, mem::transmute(b))
 }
@@ -6750,6 +7122,7 @@ pub unsafe fn __msa_mul_q_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mul_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mul_q_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_mul_q_w(a, mem::transmute(b))
 }
@@ -6763,6 +7136,7 @@ pub unsafe fn __msa_mul_q_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulr_q.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulr_q_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_mulr_q_h(a, mem::transmute(b))
 }
@@ -6776,6 +7150,7 @@ pub unsafe fn __msa_mulr_q_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulr_q.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulr_q_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_mulr_q_w(a, mem::transmute(b))
 }
@@ -6790,6 +7165,7 @@ pub unsafe fn __msa_mulr_q_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulv.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulv_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_mulv_b(a, mem::transmute(b))
 }
@@ -6804,6 +7180,7 @@ pub unsafe fn __msa_mulv_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulv.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulv_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_mulv_h(a, mem::transmute(b))
 }
@@ -6818,6 +7195,7 @@ pub unsafe fn __msa_mulv_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulv_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_mulv_w(a, mem::transmute(b))
 }
@@ -6832,6 +7210,7 @@ pub unsafe fn __msa_mulv_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(mulv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_mulv_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_mulv_d(a, mem::transmute(b))
 }
@@ -6844,6 +7223,7 @@ pub unsafe fn __msa_mulv_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nloc.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nloc_b(a: v16i8) -> v16i8 {
     msa_nloc_b(a)
 }
@@ -6856,6 +7236,7 @@ pub unsafe fn __msa_nloc_b(a: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nloc.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nloc_h(a: v8i16) -> v8i16 {
     msa_nloc_h(a)
 }
@@ -6868,6 +7249,7 @@ pub unsafe fn __msa_nloc_h(a: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nloc.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nloc_w(a: v4i32) -> v4i32 {
     msa_nloc_w(a)
 }
@@ -6880,6 +7262,7 @@ pub unsafe fn __msa_nloc_w(a: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nloc.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nloc_d(a: v2i64) -> v2i64 {
     msa_nloc_d(a)
 }
@@ -6892,6 +7275,7 @@ pub unsafe fn __msa_nloc_d(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nlzc.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nlzc_b(a: v16i8) -> v16i8 {
     msa_nlzc_b(a)
 }
@@ -6904,6 +7288,7 @@ pub unsafe fn __msa_nlzc_b(a: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nlzc.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nlzc_h(a: v8i16) -> v8i16 {
     msa_nlzc_h(a)
 }
@@ -6916,6 +7301,7 @@ pub unsafe fn __msa_nlzc_h(a: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nlzc.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nlzc_w(a: v4i32) -> v4i32 {
     msa_nlzc_w(a)
 }
@@ -6928,6 +7314,7 @@ pub unsafe fn __msa_nlzc_w(a: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nlzc.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nlzc_d(a: v2i64) -> v2i64 {
     msa_nlzc_d(a)
 }
@@ -6942,6 +7329,7 @@ pub unsafe fn __msa_nlzc_d(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nor.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nor_v(a: v16u8, b: v16u8) -> v16u8 {
     msa_nor_v(a, mem::transmute(b))
 }
@@ -6957,8 +7345,9 @@ pub unsafe fn __msa_nor_v(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(nori.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_nori_b<const IMM8: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_nori_b(a, IMM8)
 }
 
@@ -6972,6 +7361,7 @@ pub unsafe fn __msa_nori_b<const IMM8: i32>(a: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(or.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_or_v(a: v16u8, b: v16u8) -> v16u8 {
     msa_or_v(a, mem::transmute(b))
 }
@@ -6987,8 +7377,9 @@ pub unsafe fn __msa_or_v(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(ori.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_ori_b<const IMM8: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_ori_b(a, IMM8)
 }
 
@@ -7001,6 +7392,7 @@ pub unsafe fn __msa_ori_b<const IMM8: i32>(a: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckev.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckev_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_pckev_b(a, mem::transmute(b))
 }
@@ -7014,6 +7406,7 @@ pub unsafe fn __msa_pckev_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckev.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckev_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_pckev_h(a, mem::transmute(b))
 }
@@ -7027,6 +7420,7 @@ pub unsafe fn __msa_pckev_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckev.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckev_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_pckev_w(a, mem::transmute(b))
 }
@@ -7040,6 +7434,7 @@ pub unsafe fn __msa_pckev_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckev.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckev_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_pckev_d(a, mem::transmute(b))
 }
@@ -7053,6 +7448,7 @@ pub unsafe fn __msa_pckev_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckod.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckod_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_pckod_b(a, mem::transmute(b))
 }
@@ -7066,6 +7462,7 @@ pub unsafe fn __msa_pckod_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckod.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckod_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_pckod_h(a, mem::transmute(b))
 }
@@ -7079,6 +7476,7 @@ pub unsafe fn __msa_pckod_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckod.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckod_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_pckod_w(a, mem::transmute(b))
 }
@@ -7092,6 +7490,7 @@ pub unsafe fn __msa_pckod_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pckod.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pckod_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_pckod_d(a, mem::transmute(b))
 }
@@ -7104,6 +7503,7 @@ pub unsafe fn __msa_pckod_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pcnt.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pcnt_b(a: v16i8) -> v16i8 {
     msa_pcnt_b(a)
 }
@@ -7116,6 +7516,7 @@ pub unsafe fn __msa_pcnt_b(a: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pcnt.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pcnt_h(a: v8i16) -> v8i16 {
     msa_pcnt_h(a)
 }
@@ -7128,6 +7529,7 @@ pub unsafe fn __msa_pcnt_h(a: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pcnt.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pcnt_w(a: v4i32) -> v4i32 {
     msa_pcnt_w(a)
 }
@@ -7140,6 +7542,7 @@ pub unsafe fn __msa_pcnt_w(a: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(pcnt.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_pcnt_d(a: v2i64) -> v2i64 {
     msa_pcnt_d(a)
 }
@@ -7154,8 +7557,9 @@ pub unsafe fn __msa_pcnt_d(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_s.b, imm4 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_s_b<const IMM3: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_sat_s_b(a, IMM3)
 }
 
@@ -7169,8 +7573,9 @@ pub unsafe fn __msa_sat_s_b<const IMM3: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_s.h, imm3 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_s_h<const IMM4: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_sat_s_h(a, IMM4)
 }
 
@@ -7184,8 +7589,9 @@ pub unsafe fn __msa_sat_s_h<const IMM4: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_s.w, imm2 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_s_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_sat_s_w(a, IMM5)
 }
 
@@ -7199,8 +7605,9 @@ pub unsafe fn __msa_sat_s_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_s.d, imm1 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_s_d<const IMM6: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_sat_s_d(a, IMM6)
 }
 
@@ -7214,8 +7621,9 @@ pub unsafe fn __msa_sat_s_d<const IMM6: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_u.b, imm4 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_u_b<const IMM3: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_sat_u_b(a, IMM3)
 }
 
@@ -7229,8 +7637,9 @@ pub unsafe fn __msa_sat_u_b<const IMM3: i32>(a: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_u.h, imm3 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_u_h<const IMM4: i32>(a: v8u16) -> v8u16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_sat_u_h(a, IMM4)
 }
 
@@ -7244,8 +7653,9 @@ pub unsafe fn __msa_sat_u_h<const IMM4: i32>(a: v8u16) -> v8u16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_u.w, imm2 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_sat_u_w(a, IMM5)
 }
 
@@ -7259,8 +7669,9 @@ pub unsafe fn __msa_sat_u_w<const IMM5: i32>(a: v4u32) -> v4u32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sat_u.d, imm1 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sat_u_d<const IMM6: i32>(a: v2u64) -> v2u64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_sat_u_d(a, IMM6)
 }
 
@@ -7275,8 +7686,9 @@ pub unsafe fn __msa_sat_u_d<const IMM6: i32>(a: v2u64) -> v2u64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(shf.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_shf_b<const IMM8: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_shf_b(a, IMM8)
 }
 
@@ -7291,8 +7703,9 @@ pub unsafe fn __msa_shf_b<const IMM8: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(shf.h, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_shf_h<const IMM8: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_shf_h(a, IMM8)
 }
 
@@ -7307,8 +7720,9 @@ pub unsafe fn __msa_shf_h<const IMM8: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(shf.w, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_shf_w<const IMM8: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_shf_w(a, IMM8)
 }
 
@@ -7328,6 +7742,7 @@ pub unsafe fn __msa_shf_w<const IMM8: i32>(a: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sld.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sld_b(a: v16i8, b: v16i8, c: i32) -> v16i8 {
     msa_sld_b(a, mem::transmute(b), c)
 }
@@ -7348,6 +7763,7 @@ pub unsafe fn __msa_sld_b(a: v16i8, b: v16i8, c: i32) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sld.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sld_h(a: v8i16, b: v8i16, c: i32) -> v8i16 {
     msa_sld_h(a, mem::transmute(b), c)
 }
@@ -7368,6 +7784,7 @@ pub unsafe fn __msa_sld_h(a: v8i16, b: v8i16, c: i32) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sld.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sld_w(a: v4i32, b: v4i32, c: i32) -> v4i32 {
     msa_sld_w(a, mem::transmute(b), c)
 }
@@ -7388,6 +7805,7 @@ pub unsafe fn __msa_sld_w(a: v4i32, b: v4i32, c: i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sld.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sld_d(a: v2i64, b: v2i64, c: i32) -> v2i64 {
     msa_sld_d(a, mem::transmute(b), c)
 }
@@ -7407,8 +7825,9 @@ pub unsafe fn __msa_sld_d(a: v2i64, b: v2i64, c: i32) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sldi.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sldi_b<const IMM4: i32>(a: v16i8, b: v16i8) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_sldi_b(a, mem::transmute(b), IMM4)
 }
 
@@ -7427,8 +7846,9 @@ pub unsafe fn __msa_sldi_b<const IMM4: i32>(a: v16i8, b: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sldi.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sldi_h<const IMM3: i32>(a: v8i16, b: v8i16) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_sldi_h(a, mem::transmute(b), IMM3)
 }
 
@@ -7447,8 +7867,9 @@ pub unsafe fn __msa_sldi_h<const IMM3: i32>(a: v8i16, b: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sldi.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sldi_w<const IMM2: i32>(a: v4i32, b: v4i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_sldi_w(a, mem::transmute(b), IMM2)
 }
 
@@ -7467,8 +7888,9 @@ pub unsafe fn __msa_sldi_w<const IMM2: i32>(a: v4i32, b: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sldi.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sldi_d<const IMM1: i32>(a: v2i64, b: v2i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_sldi_d(a, mem::transmute(b), IMM1)
 }
 
@@ -7482,6 +7904,7 @@ pub unsafe fn __msa_sldi_d<const IMM1: i32>(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sll.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sll_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_sll_b(a, mem::transmute(b))
 }
@@ -7496,6 +7919,7 @@ pub unsafe fn __msa_sll_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sll.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sll_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_sll_h(a, mem::transmute(b))
 }
@@ -7510,6 +7934,7 @@ pub unsafe fn __msa_sll_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sll.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sll_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_sll_w(a, mem::transmute(b))
 }
@@ -7524,6 +7949,7 @@ pub unsafe fn __msa_sll_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sll.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sll_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_sll_d(a, mem::transmute(b))
 }
@@ -7538,8 +7964,9 @@ pub unsafe fn __msa_sll_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(slli.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_slli_b<const IMM4: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_slli_b(a, IMM4)
 }
 
@@ -7553,8 +7980,9 @@ pub unsafe fn __msa_slli_b<const IMM4: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(slli.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_slli_h<const IMM3: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_slli_h(a, IMM3)
 }
 
@@ -7568,8 +7996,9 @@ pub unsafe fn __msa_slli_h<const IMM3: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(slli.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_slli_w<const IMM2: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_slli_w(a, IMM2)
 }
 
@@ -7583,8 +8012,9 @@ pub unsafe fn __msa_slli_w<const IMM2: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(slli.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_slli_d<const IMM1: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_slli_d(a, IMM1)
 }
 
@@ -7598,6 +8028,7 @@ pub unsafe fn __msa_slli_d<const IMM1: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splat.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splat_b(a: v16i8, b: i32) -> v16i8 {
     msa_splat_b(a, mem::transmute(b))
 }
@@ -7612,6 +8043,7 @@ pub unsafe fn __msa_splat_b(a: v16i8, b: i32) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splat.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splat_h(a: v8i16, b: i32) -> v8i16 {
     msa_splat_h(a, mem::transmute(b))
 }
@@ -7626,6 +8058,7 @@ pub unsafe fn __msa_splat_h(a: v8i16, b: i32) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splat.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splat_w(a: v4i32, b: i32) -> v4i32 {
     msa_splat_w(a, mem::transmute(b))
 }
@@ -7640,6 +8073,7 @@ pub unsafe fn __msa_splat_w(a: v4i32, b: i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splat.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splat_d(a: v2i64, b: i32) -> v2i64 {
     msa_splat_d(a, mem::transmute(b))
 }
@@ -7653,8 +8087,9 @@ pub unsafe fn __msa_splat_d(a: v2i64, b: i32) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splati.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splati_b<const IMM4: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_splati_b(a, IMM4)
 }
 
@@ -7667,8 +8102,9 @@ pub unsafe fn __msa_splati_b<const IMM4: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splati.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splati_h<const IMM3: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_splati_h(a, IMM3)
 }
 
@@ -7681,8 +8117,9 @@ pub unsafe fn __msa_splati_h<const IMM3: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splati.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splati_w<const IMM2: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_splati_w(a, IMM2)
 }
 
@@ -7695,8 +8132,9 @@ pub unsafe fn __msa_splati_w<const IMM2: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(splati.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_splati_d<const IMM1: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_splati_d(a, IMM1)
 }
 
@@ -7710,6 +8148,7 @@ pub unsafe fn __msa_splati_d<const IMM1: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sra.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sra_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_sra_b(a, mem::transmute(b))
 }
@@ -7724,6 +8163,7 @@ pub unsafe fn __msa_sra_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sra.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sra_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_sra_h(a, mem::transmute(b))
 }
@@ -7738,6 +8178,7 @@ pub unsafe fn __msa_sra_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sra.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sra_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_sra_w(a, mem::transmute(b))
 }
@@ -7752,6 +8193,7 @@ pub unsafe fn __msa_sra_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(sra.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_sra_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_sra_d(a, mem::transmute(b))
 }
@@ -7766,8 +8208,9 @@ pub unsafe fn __msa_sra_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srai.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srai_b<const IMM3: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_srai_b(a, IMM3)
 }
 
@@ -7781,8 +8224,9 @@ pub unsafe fn __msa_srai_b<const IMM3: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srai.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srai_h<const IMM4: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_srai_h(a, IMM4)
 }
 
@@ -7796,8 +8240,9 @@ pub unsafe fn __msa_srai_h<const IMM4: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srai.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srai_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_srai_w(a, IMM5)
 }
 
@@ -7811,8 +8256,9 @@ pub unsafe fn __msa_srai_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srai.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srai_d<const IMM6: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_srai_d(a, IMM6)
 }
 
@@ -7827,6 +8273,7 @@ pub unsafe fn __msa_srai_d<const IMM6: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srar.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srar_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_srar_b(a, mem::transmute(b))
 }
@@ -7842,6 +8289,7 @@ pub unsafe fn __msa_srar_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srar.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srar_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_srar_h(a, mem::transmute(b))
 }
@@ -7857,6 +8305,7 @@ pub unsafe fn __msa_srar_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srar.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srar_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_srar_w(a, mem::transmute(b))
 }
@@ -7872,6 +8321,7 @@ pub unsafe fn __msa_srar_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srar.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srar_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_srar_d(a, mem::transmute(b))
 }
@@ -7887,8 +8337,9 @@ pub unsafe fn __msa_srar_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srari.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srari_b<const IMM3: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_srari_b(a, IMM3)
 }
 
@@ -7903,8 +8354,9 @@ pub unsafe fn __msa_srari_b<const IMM3: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srari.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srari_h<const IMM4: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_srari_h(a, IMM4)
 }
 
@@ -7919,8 +8371,9 @@ pub unsafe fn __msa_srari_h<const IMM4: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srari.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srari_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_srari_w(a, IMM5)
 }
 
@@ -7935,8 +8388,9 @@ pub unsafe fn __msa_srari_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srari.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srari_d<const IMM6: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_srari_d(a, IMM6)
 }
 
@@ -7950,6 +8404,7 @@ pub unsafe fn __msa_srari_d<const IMM6: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srl.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srl_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_srl_b(a, mem::transmute(b))
 }
@@ -7964,6 +8419,7 @@ pub unsafe fn __msa_srl_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srl.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srl_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_srl_h(a, mem::transmute(b))
 }
@@ -7978,6 +8434,7 @@ pub unsafe fn __msa_srl_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srl.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srl_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_srl_w(a, mem::transmute(b))
 }
@@ -7992,6 +8449,7 @@ pub unsafe fn __msa_srl_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srl.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srl_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_srl_d(a, mem::transmute(b))
 }
@@ -8006,8 +8464,9 @@ pub unsafe fn __msa_srl_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srli.b, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srli_b<const IMM4: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_srli_b(a, IMM4)
 }
 
@@ -8021,8 +8480,9 @@ pub unsafe fn __msa_srli_b<const IMM4: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srli.h, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srli_h<const IMM3: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_srli_h(a, IMM3)
 }
 
@@ -8036,8 +8496,9 @@ pub unsafe fn __msa_srli_h<const IMM3: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srli.w, imm2 = 0b11))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srli_w<const IMM2: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm2!(IMM2);
+    static_assert_uimm_bits!(IMM2, 2);
     msa_srli_w(a, IMM2)
 }
 
@@ -8051,8 +8512,9 @@ pub unsafe fn __msa_srli_w<const IMM2: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srli.d, imm1 = 0b1))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srli_d<const IMM1: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm1!(IMM1);
+    static_assert_uimm_bits!(IMM1, 1);
     msa_srli_d(a, IMM1)
 }
 
@@ -8067,6 +8529,7 @@ pub unsafe fn __msa_srli_d<const IMM1: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlr.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlr_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_srlr_b(a, mem::transmute(b))
 }
@@ -8082,6 +8545,7 @@ pub unsafe fn __msa_srlr_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlr.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlr_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_srlr_h(a, mem::transmute(b))
 }
@@ -8097,6 +8561,7 @@ pub unsafe fn __msa_srlr_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlr.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlr_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_srlr_w(a, mem::transmute(b))
 }
@@ -8112,6 +8577,7 @@ pub unsafe fn __msa_srlr_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlr.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlr_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_srlr_d(a, mem::transmute(b))
 }
@@ -8127,8 +8593,9 @@ pub unsafe fn __msa_srlr_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlri.b, imm3 = 0b111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlri_b<const IMM3: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm3!(IMM3);
+    static_assert_uimm_bits!(IMM3, 3);
     msa_srlri_b(a, IMM3)
 }
 
@@ -8143,8 +8610,9 @@ pub unsafe fn __msa_srlri_b<const IMM3: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlri.h, imm4 = 0b1111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlri_h<const IMM4: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm4!(IMM4);
+    static_assert_uimm_bits!(IMM4, 4);
     msa_srlri_h(a, IMM4)
 }
 
@@ -8159,8 +8627,9 @@ pub unsafe fn __msa_srlri_h<const IMM4: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlri.w, imm5 = 0b11111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlri_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_srlri_w(a, IMM5)
 }
 
@@ -8175,8 +8644,9 @@ pub unsafe fn __msa_srlri_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(srlri.d, imm6 = 0b111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_srlri_d<const IMM6: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm6!(IMM6);
+    static_assert_uimm_bits!(IMM6, 6);
     msa_srlri_d(a, IMM6)
 }
 
@@ -8190,8 +8660,9 @@ pub unsafe fn __msa_srlri_d<const IMM6: i32>(a: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(st.b, imm_s10 = 0b1111111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_st_b<const IMM_S10: i32>(a: v16i8, mem_addr: *mut u8) -> () {
-    static_assert_imm_s10!(IMM_S10);
+    static_assert_simm_bits!(IMM_S10, 10);
     msa_st_b(a, mem_addr, IMM_S10)
 }
 
@@ -8205,9 +8676,10 @@ pub unsafe fn __msa_st_b<const IMM_S10: i32>(a: v16i8, mem_addr: *mut u8) -> () 
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(st.h, imm_s11 = 0b11111111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_st_h<const IMM_S11: i32>(a: v8i16, mem_addr: *mut u8) -> () {
-    static_assert_imm_s11!(IMM_S11);
-    static_assert!(IMM_S11: i32 where IMM_S11 % 2 == 0);
+    static_assert_simm_bits!(IMM_S11, 11);
+    static_assert!(IMM_S11 % 2 == 0);
     msa_st_h(a, mem_addr, IMM_S11)
 }
 
@@ -8221,9 +8693,10 @@ pub unsafe fn __msa_st_h<const IMM_S11: i32>(a: v8i16, mem_addr: *mut u8) -> () 
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(st.w, imm_s12 = 0b111111111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_st_w<const IMM_S12: i32>(a: v4i32, mem_addr: *mut u8) -> () {
-    static_assert_imm_s12!(IMM_S12);
-    static_assert!(IMM_S12: i32 where IMM_S12 % 4 == 0);
+    static_assert_simm_bits!(IMM_S12, 12);
+    static_assert!(IMM_S12 % 4 == 0);
     msa_st_w(a, mem_addr, IMM_S12)
 }
 
@@ -8237,9 +8710,10 @@ pub unsafe fn __msa_st_w<const IMM_S12: i32>(a: v4i32, mem_addr: *mut u8) -> () 
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(st.d, imm_s13 = 0b1111111111111))]
 #[rustc_legacy_const_generics(2)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_st_d<const IMM_S13: i32>(a: v2i64, mem_addr: *mut u8) -> () {
-    static_assert_imm_s13!(IMM_S13);
-    static_assert!(IMM_S13: i32 where IMM_S13 % 8 == 0);
+    static_assert_simm_bits!(IMM_S13, 13);
+    static_assert!(IMM_S13 % 8 == 0);
     msa_st_d(a, mem_addr, IMM_S13)
 }
 
@@ -8253,6 +8727,7 @@ pub unsafe fn __msa_st_d<const IMM_S13: i32>(a: v2i64, mem_addr: *mut u8) -> () 
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_s_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_subs_s_b(a, mem::transmute(b))
 }
@@ -8267,6 +8742,7 @@ pub unsafe fn __msa_subs_s_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_s_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_subs_s_h(a, mem::transmute(b))
 }
@@ -8281,6 +8757,7 @@ pub unsafe fn __msa_subs_s_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_s_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_subs_s_w(a, mem::transmute(b))
 }
@@ -8295,6 +8772,7 @@ pub unsafe fn __msa_subs_s_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_s_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_subs_s_d(a, mem::transmute(b))
 }
@@ -8309,6 +8787,7 @@ pub unsafe fn __msa_subs_s_d(a: v2i64, b: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_u_b(a: v16u8, b: v16u8) -> v16u8 {
     msa_subs_u_b(a, mem::transmute(b))
 }
@@ -8323,6 +8802,7 @@ pub unsafe fn __msa_subs_u_b(a: v16u8, b: v16u8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_u_h(a: v8u16, b: v8u16) -> v8u16 {
     msa_subs_u_h(a, mem::transmute(b))
 }
@@ -8337,6 +8817,7 @@ pub unsafe fn __msa_subs_u_h(a: v8u16, b: v8u16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_u_w(a: v4u32, b: v4u32) -> v4u32 {
     msa_subs_u_w(a, mem::transmute(b))
 }
@@ -8351,6 +8832,7 @@ pub unsafe fn __msa_subs_u_w(a: v4u32, b: v4u32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subs_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subs_u_d(a: v2u64, b: v2u64) -> v2u64 {
     msa_subs_u_d(a, mem::transmute(b))
 }
@@ -8365,6 +8847,7 @@ pub unsafe fn __msa_subs_u_d(a: v2u64, b: v2u64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsus_u.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsus_u_b(a: v16u8, b: v16i8) -> v16u8 {
     msa_subsus_u_b(a, mem::transmute(b))
 }
@@ -8379,6 +8862,7 @@ pub unsafe fn __msa_subsus_u_b(a: v16u8, b: v16i8) -> v16u8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsus_u.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsus_u_h(a: v8u16, b: v8i16) -> v8u16 {
     msa_subsus_u_h(a, mem::transmute(b))
 }
@@ -8393,6 +8877,7 @@ pub unsafe fn __msa_subsus_u_h(a: v8u16, b: v8i16) -> v8u16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsus_u.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsus_u_w(a: v4u32, b: v4i32) -> v4u32 {
     msa_subsus_u_w(a, mem::transmute(b))
 }
@@ -8407,6 +8892,7 @@ pub unsafe fn __msa_subsus_u_w(a: v4u32, b: v4i32) -> v4u32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsus_u.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsus_u_d(a: v2u64, b: v2i64) -> v2u64 {
     msa_subsus_u_d(a, mem::transmute(b))
 }
@@ -8421,6 +8907,7 @@ pub unsafe fn __msa_subsus_u_d(a: v2u64, b: v2i64) -> v2u64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsuu_s.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsuu_s_b(a: v16u8, b: v16u8) -> v16i8 {
     msa_subsuu_s_b(a, mem::transmute(b))
 }
@@ -8435,6 +8922,7 @@ pub unsafe fn __msa_subsuu_s_b(a: v16u8, b: v16u8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsuu_s.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsuu_s_h(a: v8u16, b: v8u16) -> v8i16 {
     msa_subsuu_s_h(a, mem::transmute(b))
 }
@@ -8449,6 +8937,7 @@ pub unsafe fn __msa_subsuu_s_h(a: v8u16, b: v8u16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsuu_s.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsuu_s_w(a: v4u32, b: v4u32) -> v4i32 {
     msa_subsuu_s_w(a, mem::transmute(b))
 }
@@ -8463,6 +8952,7 @@ pub unsafe fn __msa_subsuu_s_w(a: v4u32, b: v4u32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subsuu_s.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subsuu_s_d(a: v2u64, b: v2u64) -> v2i64 {
     msa_subsuu_s_d(a, mem::transmute(b))
 }
@@ -8476,6 +8966,7 @@ pub unsafe fn __msa_subsuu_s_d(a: v2u64, b: v2u64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subv.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subv_b(a: v16i8, b: v16i8) -> v16i8 {
     msa_subv_b(a, mem::transmute(b))
 }
@@ -8489,6 +8980,7 @@ pub unsafe fn __msa_subv_b(a: v16i8, b: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subv.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subv_h(a: v8i16, b: v8i16) -> v8i16 {
     msa_subv_h(a, mem::transmute(b))
 }
@@ -8502,6 +8994,7 @@ pub unsafe fn __msa_subv_h(a: v8i16, b: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subv.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subv_w(a: v4i32, b: v4i32) -> v4i32 {
     msa_subv_w(a, mem::transmute(b))
 }
@@ -8515,6 +9008,7 @@ pub unsafe fn __msa_subv_w(a: v4i32, b: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subv.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subv_d(a: v2i64, b: v2i64) -> v2i64 {
     msa_subv_d(a, mem::transmute(b))
 }
@@ -8529,8 +9023,9 @@ pub unsafe fn __msa_subv_d(a: v2i64, b: v2i64) -> v2i64 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subvi.b, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subvi_b<const IMM5: i32>(a: v16i8) -> v16i8 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_subvi_b(a, IMM5)
 }
 
@@ -8544,8 +9039,9 @@ pub unsafe fn __msa_subvi_b<const IMM5: i32>(a: v16i8) -> v16i8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subvi.h, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subvi_h<const IMM5: i32>(a: v8i16) -> v8i16 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_subvi_h(a, IMM5)
 }
 
@@ -8559,8 +9055,9 @@ pub unsafe fn __msa_subvi_h<const IMM5: i32>(a: v8i16) -> v8i16 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subvi.w, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subvi_w<const IMM5: i32>(a: v4i32) -> v4i32 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_subvi_w(a, IMM5)
 }
 
@@ -8574,8 +9071,9 @@ pub unsafe fn __msa_subvi_w<const IMM5: i32>(a: v4i32) -> v4i32 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(subvi.d, imm5 = 0b10111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_subvi_d<const IMM5: i32>(a: v2i64) -> v2i64 {
-    static_assert_imm5!(IMM5);
+    static_assert_uimm_bits!(IMM5, 5);
     msa_subvi_d(a, IMM5)
 }
 
@@ -8592,6 +9090,7 @@ pub unsafe fn __msa_subvi_d<const IMM5: i32>(a: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(vshf.b))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_vshf_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
     msa_vshf_b(a, mem::transmute(b), c)
 }
@@ -8609,6 +9108,7 @@ pub unsafe fn __msa_vshf_b(a: v16i8, b: v16i8, c: v16i8) -> v16i8 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(vshf.h))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_vshf_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
     msa_vshf_h(a, mem::transmute(b), c)
 }
@@ -8626,6 +9126,7 @@ pub unsafe fn __msa_vshf_h(a: v8i16, b: v8i16, c: v8i16) -> v8i16 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(vshf.w))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_vshf_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
     msa_vshf_w(a, mem::transmute(b), c)
 }
@@ -8643,6 +9144,7 @@ pub unsafe fn __msa_vshf_w(a: v4i32, b: v4i32, c: v4i32) -> v4i32 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(vshf.d))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_vshf_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
     msa_vshf_d(a, mem::transmute(b), c)
 }
@@ -8657,6 +9159,7 @@ pub unsafe fn __msa_vshf_d(a: v2i64, b: v2i64, c: v2i64) -> v2i64 {
 #[inline]
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(xor.v))]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_xor_v(a: v16u8, b: v16u8) -> v16u8 {
     msa_xor_v(a, mem::transmute(b))
 }
@@ -8672,8 +9175,9 @@ pub unsafe fn __msa_xor_v(a: v16u8, b: v16u8) -> v16u8 {
 #[target_feature(enable = "msa")]
 #[cfg_attr(test, assert_instr(xori.b, imm8 = 0b11111111))]
 #[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_mips", issue = "111198")]
 pub unsafe fn __msa_xori_b<const IMM8: i32>(a: v16u8) -> v16u8 {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     msa_xori_b(a, IMM8)
 }
 
@@ -8705,8 +9209,8 @@ mod tests {
         #[rustfmt::skip]
         let r = i8x16::new(
             5, 5, 5, 5,
-            5, 5, 5, 5, 
-            5, 5, 5, 5, 
+            5, 5, 5, 5,
+            5, 5, 5, 5,
             5, 5, 5, 5
         );
 
@@ -8779,9 +9283,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            104, 127, 102, 127, 
-            104, 127, 102, 127, 
-            104, 127, 102, 127, 
+            104, 127, 102, 127,
+            104, 127, 102, 127,
+            104, 127, 102, 127,
             104, 127, 102, 127
         );
 
@@ -8795,7 +9299,7 @@ mod tests {
     unsafe fn test_msa_adds_a_h() {
         #[rustfmt::skip]
         let a = i16x8::new(
-            100, i16::MAX, 100, i16::MAX, 
+            100, i16::MAX, 100, i16::MAX,
             100, i16::MAX, 100, i16::MAX
         );
         #[rustfmt::skip]
@@ -8860,9 +9364,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            96, i8::MIN, 98, i8::MAX, 
-            96, i8::MIN, 98, i8::MAX, 
-            96, i8::MIN, 98, i8::MAX, 
+            96, i8::MIN, 98, i8::MAX,
+            96, i8::MIN, 98, i8::MAX,
+            96, i8::MIN, 98, i8::MAX,
             96, i8::MIN, 98, i8::MAX
         );
 
@@ -8876,14 +9380,14 @@ mod tests {
     unsafe fn test_msa_adds_s_h() {
         #[rustfmt::skip]
         let a = i16x8::new(
-            100, i16::MIN, 100, i16::MAX, 
+            100, i16::MIN, 100, i16::MAX,
             100, i16::MIN, 100, i16::MAX
         );
         #[rustfmt::skip]
         let b = i16x8::new(-4, -3, -2, 1, -4, -3, -2, 1);
         #[rustfmt::skip]
         let r = i16x8::new(
-            96, i16::MIN, 98, i16::MAX, 
+            96, i16::MIN, 98, i16::MAX,
             96, i16::MIN, 98, i16::MAX
         );
 
@@ -8941,9 +9445,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            104, u8::MAX, 102, u8::MAX, 
-            104, u8::MAX, 102, u8::MAX, 
-            104, u8::MAX, 102, u8::MAX, 
+            104, u8::MAX, 102, u8::MAX,
+            104, u8::MAX, 102, u8::MAX,
+            104, u8::MAX, 102, u8::MAX,
             104, u8::MAX, 102, u8::MAX
         );
 
@@ -8957,14 +9461,14 @@ mod tests {
     unsafe fn test_msa_adds_u_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            100, u16::MAX, 100, u16::MAX, 
+            100, u16::MAX, 100, u16::MAX,
             100, u16::MAX, 100, u16::MAX
         );
         #[rustfmt::skip]
         let b = u16x8::new(4, 3, 2, 1, 4, 3, 2, 1);
         #[rustfmt::skip]
         let r = u16x8::new(
-            104, u16::MAX, 102, u16::MAX, 
+            104, u16::MAX, 102, u16::MAX,
             104, u16::MAX, 102, u16::MAX
         );
 
@@ -9022,9 +9526,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            96, 125, 98, -29, 
-            96, 125, 98, -29, 
-            96, 125, 98, -29, 
+            96, 125, 98, -29,
+            96, 125, 98, -29,
+            96, 125, 98, -29,
             96, 125, 98, -29
         );
 
@@ -9038,7 +9542,7 @@ mod tests {
     unsafe fn test_msa_addv_h() {
         #[rustfmt::skip]
         let a = i16x8::new(
-            100, i16::MIN, 100, i16::MAX, 
+            100, i16::MIN, 100, i16::MAX,
             100, i16::MIN, 100, i16::MAX
         );
         #[rustfmt::skip]
@@ -9093,9 +9597,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            103, -126, 103, -126, 
-            103, -126, 103, -126, 
-            103, -126, 103, -126, 
+            103, -126, 103, -126,
+            103, -126, 103, -126,
+            103, -126, 103, -126,
             103, -126, 103, -126
         );
 
@@ -9106,12 +9610,12 @@ mod tests {
     unsafe fn test_msa_addvi_h() {
         #[rustfmt::skip]
         let a = i16x8::new(
-            i16::MAX, 3276, -100, -127, 
+            i16::MAX, 3276, -100, -127,
             i16::MAX, 3276, -100, -127
         );
         #[rustfmt::skip]
         let r = i16x8::new(
-            -32766, 3279, -97, -124, 
+            -32766, 3279, -97, -124,
             -32766, 3279, -97, -124
         );
 
@@ -9156,9 +9660,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            4, 3, 0, 100, 
-            4, 3, 0, 100, 
-            4, 3, 0, 100, 
+            4, 3, 0, 100,
+            4, 3, 0, 100,
+            4, 3, 0, 100,
             4, 3, 0, 100
         );
 
@@ -9179,9 +9683,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            4, 5, 4, 5, 
-            4, 5, 4, 5, 
-            4, 5, 4, 5, 
+            4, 5, 4, 5,
+            4, 5, 4, 5,
+            4, 5, 4, 5,
             4, 5, 4, 5
         );
 
@@ -9206,9 +9710,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            5, 5, 5, 5, 
-            5, 5, 5, 5, 
-            5, 5, 5, 5, 
+            5, 5, 5, 5,
+            5, 5, 5, 5,
+            5, 5, 5, 5,
             5, 5, 5, 5
         );
 
@@ -9281,9 +9785,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            5, 5, 5, 5, 
-            5, 5, 5, 5, 
-            5, 5, 5, 5, 
+            5, 5, 5, 5,
+            5, 5, 5, 5,
+            5, 5, 5, 5,
             5, 5, 5, 5
         );
 
@@ -9356,9 +9860,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            2, -5, 2, -7, 
-            2, -5, 2, -7, 
-            2, -5, 2, -7, 
+            2, -5, 2, -7,
+            2, -5, 2, -7,
+            2, -5, 2, -7,
             2, -5, 2, -7
         );
 
@@ -9431,9 +9935,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            3, 4, 5, 6, 
-            3, 4, 5, 6, 
-            3, 4, 5, 6, 
+            3, 4, 5, 6,
+            3, 4, 5, 6,
+            3, 4, 5, 6,
             3, 4, 5, 6
         );
 
@@ -9506,9 +10010,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            -3, 3, -2, -6, 
-            -3, 3, -2, -6, 
-            -3, 3, -2, -6, 
+            -3, 3, -2, -6,
+            -3, 3, -2, -6,
+            -3, 3, -2, -6,
             -3, 3, -2, -6
         );
 
@@ -9581,9 +10085,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            4, 5, 6, 7, 
-            4, 5, 6, 7, 
-            4, 5, 6, 7, 
+            4, 5, 6, 7,
+            4, 5, 6, 7,
+            4, 5, 6, 7,
             4, 5, 6, 7
         );
 
@@ -9656,9 +10160,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            191, 27, 54, 1, 
-            191, 27, 54, 1, 
-            191, 27, 54, 1, 
+            191, 27, 54, 1,
+            191, 27, 54, 1,
+            191, 27, 54, 1,
             191, 27, 54, 1
         );
 
@@ -9724,9 +10228,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            247, 147, 55, 1, 
-            247, 147, 55, 1, 
-            247, 147, 55, 1, 
+            247, 147, 55, 1,
+            247, 147, 55, 1,
+            247, 147, 55, 1,
             247, 147, 55, 1
         );
 
@@ -9788,9 +10292,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            63, 11, 11, 1, 
-            63, 11, 11, 1, 
-            63, 11, 11, 1, 
+            63, 11, 11, 1,
+            63, 11, 11, 1,
+            63, 11, 11, 1,
             63, 11, 11, 1
         );
 
@@ -9808,22 +10312,22 @@ mod tests {
     unsafe fn test_msa_binsl_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            32767, 16384, 8192, 4096, 
+            32767, 16384, 8192, 4096,
             32767, 16384, 8192, 4096
         );
         #[rustfmt::skip]
         let b = u16x8::new(
-            21656, 5273, 7081, 2985, 
+            21656, 5273, 7081, 2985,
             21656, 5273, 7081, 2985
         );
         #[rustfmt::skip]
         let c = u16x8::new(
-            3, 7, 9, 13, 
+            3, 7, 9, 13,
             15, 17, 21, 23
         );
         #[rustfmt::skip]
         let r = u16x8::new(
-            24575, 5120, 7040, 2984, 
+            24575, 5120, 7040, 2984,
             21656, 0, 6144, 2816
         );
 
@@ -9897,9 +10401,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            7, 7, 11, 9, 
-            7, 7, 11, 9, 
-            7, 7, 11, 9, 
+            7, 7, 11, 9,
+            7, 7, 11, 9,
+            7, 7, 11, 9,
             7, 7, 11, 9
         );
 
@@ -9913,17 +10417,17 @@ mod tests {
     unsafe fn test_msa_binsli_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            32767, 16384, 8192, 4096, 
+            32767, 16384, 8192, 4096,
             32767, 16384, 8192, 4096
         );
         #[rustfmt::skip]
         let b = u16x8::new(
-            21656, 5273, 7081, 2985, 
+            21656, 5273, 7081, 2985,
             21656, 5273, 7081, 2985
         );
         #[rustfmt::skip]
         let r = u16x8::new(
-            21659, 5272, 7080, 2984, 
+            21659, 5272, 7080, 2984,
             21659, 5272, 7080, 2984
         );
 
@@ -9988,9 +10492,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            254, 151, 8, 1, 
-            254, 151, 8, 1, 
-            254, 151, 8, 1, 
+            254, 151, 8, 1,
+            254, 151, 8, 1,
+            254, 151, 8, 1,
             254, 151, 8, 1
         );
 
@@ -10008,22 +10512,22 @@ mod tests {
     unsafe fn test_msa_binsr_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            32767, 16384, 8192, 4096, 
+            32767, 16384, 8192, 4096,
             32767, 16384, 8192, 4096
         );
         #[rustfmt::skip]
         let b = u16x8::new(
-            21656, 5273, 7081, 2985, 
+            21656, 5273, 7081, 2985,
             21656, 5273, 7081, 2985
         );
         #[rustfmt::skip]
         let c = u16x8::new(
-            3, 7, 9, 13, 
+            3, 7, 9, 13,
             15, 17, 21, 23
         );
         #[rustfmt::skip]
         let r = u16x8::new(
-            32760, 16537, 9129, 2985, 
+            32760, 16537, 9129, 2985,
             21656, 16385, 8233, 4265
         );
 
@@ -10097,9 +10601,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            198, 135, 8, 9, 
-            198, 135, 8, 9, 
-            198, 135, 8, 9, 
+            198, 135, 8, 9,
+            198, 135, 8, 9,
+            198, 135, 8, 9,
             198, 135, 8, 9
         );
 
@@ -10113,17 +10617,17 @@ mod tests {
     unsafe fn test_msa_binsri_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            32767, 16384, 8192, 4096, 
+            32767, 16384, 8192, 4096,
             32767, 16384, 8192, 4096
         );
         #[rustfmt::skip]
         let b = u16x8::new(
-            21656, 5273, 7081, 2985, 
+            21656, 5273, 7081, 2985,
             21656, 5273, 7081, 2985
         );
         #[rustfmt::skip]
         let r = u16x8::new(
-            21656, 21657, 7081, 2985, 
+            21656, 21657, 7081, 2985,
             21656, 21657, 7081, 2985
         );
 
@@ -10188,9 +10692,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            254, 159, 48, 1, 
-            254, 159, 48, 1, 
-            254, 159, 48, 1, 
+            254, 159, 48, 1,
+            254, 159, 48, 1,
+            254, 159, 48, 1,
             254, 159, 48, 1
         );
 
@@ -10222,9 +10726,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            249, 159, 51, 7, 
-            249, 159, 51, 7, 
-            249, 159, 51, 7, 
+            249, 159, 51, 7,
+            249, 159, 51, 7,
+            249, 159, 51, 7,
             249, 159, 51, 7
         );
 
@@ -10259,9 +10763,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            7, 3, 15, 9, 
-            7, 3, 15, 9, 
-            7, 3, 15, 9, 
+            7, 3, 15, 9,
+            7, 3, 15, 9,
+            7, 3, 15, 9,
             7, 3, 15, 9
         );
 
@@ -10293,9 +10797,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            7, 251, 159, 49, 
-            7, 251, 159, 49, 
-            7, 251, 159, 49, 
+            7, 251, 159, 49,
+            7, 251, 159, 49,
+            7, 251, 159, 49,
             7, 251, 159, 49
         );
 
@@ -10323,9 +10827,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            191, 27, 54, 3, 
-            191, 27, 54, 3, 
-            191, 27, 54, 3, 
+            191, 27, 54, 3,
+            191, 27, 54, 3,
+            191, 27, 54, 3,
             191, 27, 54, 3
         );
 
@@ -10391,9 +10895,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            34, 116, 111, 239, 
-            34, 116, 111, 239, 
-            34, 116, 111, 239, 
+            34, 116, 111, 239,
+            34, 116, 111, 239,
+            34, 116, 111, 239,
             34, 116, 111, 239
         );
 
@@ -10409,7 +10913,7 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u16x8::new(
-            30719, 1228, 2148, 2175, 
+            30719, 1228, 2148, 2175,
             30719, 1228, 2148, 2175
         );
 
@@ -10520,9 +11024,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            7, 3, 15, 9, 
-            7, 3, 15, 9, 
-            7, 3, 15, 9, 
+            7, 3, 15, 9,
+            7, 3, 15, 9,
+            7, 3, 15, 9,
             7, 3, 15, 9
         );
 
@@ -10554,9 +11058,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            121, 29, 57, 9, 
-            121, 29, 57, 9, 
-            121, 29, 57, 9, 
+            121, 29, 57, 9,
+            121, 29, 57, 9,
+            121, 29, 57, 9,
             121, 29, 57, 9
         );
 
@@ -10584,9 +11088,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            255, 155, 55, 3, 
-            255, 155, 55, 3, 
-            255, 155, 55, 3, 
+            255, 155, 55, 3,
+            255, 155, 55, 3,
+            255, 155, 55, 3,
             255, 155, 55, 3
         );
 
@@ -10652,9 +11156,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            255, 159, 55, 5, 
-            255, 159, 55, 5, 
-            255, 159, 55, 5, 
+            255, 159, 55, 5,
+            255, 159, 55, 5,
+            255, 159, 55, 5,
             255, 159, 55, 5
         );
 
@@ -10764,9 +11268,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            -1, 0, -1, -1, 
-            -1, 0, -1, -1, 
-            -1, 0, -1, -1, 
+            -1, 0, -1, -1,
+            -1, 0, -1, -1,
+            -1, 0, -1, -1,
             -1, 0, -1, -1
         );
 
@@ -10903,9 +11407,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            -1, 0, -1, 0, 
-            -1, 0, -1, 0, 
-            -1, 0, -1, 0, 
+            -1, 0, -1, 0,
+            -1, 0, -1, 0,
+            -1, 0, -1, 0,
             -1, 0, -1, 0
         );
 
@@ -10989,12 +11493,12 @@ mod tests {
     unsafe fn test_msa_cle_u_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            u16::MAX, 155, 55, 2, 
+            u16::MAX, 155, 55, 2,
             u16::MAX, 155, 55, 2
         );
         #[rustfmt::skip]
         let b = u16x8::new(
-            u16::MAX, 155, 56, 1, 
+            u16::MAX, 155, 56, 1,
             u16::MAX, 155, 56, 1
         );
         #[rustfmt::skip]
@@ -11098,9 +11602,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            -1, 0, 0, 0, 
-            -1, 0, 0, 0, 
-            -1, 0, 0, 0, 
+            -1, 0, 0, 0,
+            -1, 0, 0, 0,
+            -1, 0, 0, 0,
             -1, 0, 0, 0
         );
 
@@ -11158,9 +11662,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            -1, 0, -1, 0, 
-            -1, 0, -1, 0, 
-            -1, 0, -1, 0, 
+            -1, 0, -1, 0,
+            -1, 0, -1, 0,
+            -1, 0, -1, 0,
             -1, 0, -1, 0
         );
 
@@ -11233,9 +11737,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            0, 0, -1, 0, 
-            0, 0, -1, 0, 
-            0, 0, -1, 0, 
+            0, 0, -1, 0,
+            0, 0, -1, 0,
+            0, 0, -1, 0,
             0, 0, -1, 0
         );
 
@@ -11301,9 +11805,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            0, -1, 0, 0, 
-            0, -1, 0, 0, 
-            0, -1, 0, 0, 
+            0, -1, 0, 0,
+            0, -1, 0, 0,
+            0, -1, 0, 0,
             0, -1, 0, 0
         );
 
@@ -11517,9 +12021,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            6, 3, 2, 2, 
-            6, 3, 2, 2, 
-            6, 3, 2, 2, 
+            6, 3, 2, 2,
+            6, 3, 2, 2,
+            6, 3, 2, 2,
             6, 3, 2, 2
         );
 
@@ -11592,9 +12096,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            6, 3, 2, 2, 
-            6, 3, 2, 2, 
-            6, 3, 2, 2, 
+            6, 3, 2, 2,
+            6, 3, 2, 2,
+            6, 3, 2, 2,
             6, 3, 2, 2
         );
 
@@ -12005,14 +12509,14 @@ mod tests {
             1, 2, 3, 4,
             1, 2, 3, 4,
             1, 2, 3, 4,
-            1, 2, 3, 4        
+            1, 2, 3, 4
         );
         #[rustfmt::skip]
         let c = u8x16::new(
             6, 7, 8, 9,
             6, 7, 8, 9,
             6, 7, 8, 9,
-            6, 7, 8, 9       
+            6, 7, 8, 9
         );
         #[rustfmt::skip]
         let r = i16x8::new(-19, -62, -17, -64, -21, -58, -23, -56);
@@ -12509,7 +13013,7 @@ mod tests {
         let b = f64x2::new(1235689784512.1, 2147483649998.5);
         #[rustfmt::skip]
         let r = f32x4::new(
-            1235689800000.0, 2147483600000.0, 
+            1235689800000.0, 2147483600000.0,
             2000005.5, 2.3
         );
 
@@ -12663,7 +13167,7 @@ mod tests {
         let a = i16x8::new(12, 26, 34, 48, 11, 25, 33, 47);
         #[rustfmt::skip]
         let r = f32x4::new(
-            0.00036621094, 0.00079345703, 
+            0.00036621094, 0.00079345703,
             0.0010375977, 0.0014648438
         );
 
@@ -12676,7 +13180,7 @@ mod tests {
         let a = i32x4::new(1111, 2555, 3333, 475);
         #[rustfmt::skip]
         let r = f64x2::new(
-            0.0000005173496901988983, 
+            0.0000005173496901988983,
             0.0000011897645890712738
         );
 
@@ -13000,7 +13504,7 @@ mod tests {
         let a = f32x4::new(2.6, -2.7, 1.3, -1.7);
         #[rustfmt::skip]
         let r = f32x4::new(
-            0.3846154, -0.37037036, 
+            0.3846154, -0.37037036,
             0.7692308, -0.58823526
         );
 
@@ -13023,7 +13527,7 @@ mod tests {
         let a = f32x4::new(2.6, 2.7, 1.3, 1.7);
         #[rustfmt::skip]
         let r = f32x4::new(
-            0.6201737, 0.6085806, 
+            0.6201737, 0.6085806,
             0.87705797, 0.766965
         );
 
@@ -14250,9 +14754,9 @@ mod tests {
         let p = &mut a[4] as *mut _ as *mut u8;
         #[rustfmt::skip]
         let r = i8x16::new(
-            13, 14, 15, 16, 
-            17, 18, 19, 20, 
-            21, 22, 23, 24, 
+            13, 14, 15, 16,
+            17, 18, 19, 20,
+            21, 22, 23, 24,
             25, 26, 27, 28
         );
 
@@ -14263,7 +14767,7 @@ mod tests {
     unsafe fn test_msa_ld_h() {
         #[rustfmt::skip]
         let mut a : [i16; 16] = [
-            0, 1, 2, 3, 4, 5, 6, 7, 
+            0, 1, 2, 3, 4, 5, 6, 7,
             8, 9, 10, 11, 12, 13, 14, 15
         ];
         let p = &mut a[4] as *mut _ as *mut u8;
@@ -15429,7 +15933,7 @@ mod tests {
         );
         #[rustfmt::skip]
         let b = i16x8::new(
-            1025, 1025, 1025, 1025, 
+            1025, 1025, 1025, 1025,
             1025, 1025, 1025, 1025
         );
         #[rustfmt::skip]
@@ -16548,7 +17052,7 @@ mod tests {
         #[rustfmt::skip]
         let a = i16x8::new(
             1, 2, 3, 4,
-            1, 2, 3, 4  
+            1, 2, 3, 4
         );
         #[rustfmt::skip]
         let r = i16x8::new(4, 8, 12, 16, 4, 8, 12, 16);
@@ -16790,7 +17294,7 @@ mod tests {
     unsafe fn test_msa_srai_h() {
         #[rustfmt::skip]
         let a = i16x8::new(
-            i16::MAX, 125, 55, 1, 
+            i16::MAX, 125, 55, 1,
             i16::MAX, 125, 55, 1
         );
         #[rustfmt::skip]
@@ -16862,7 +17366,7 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i16x8::new(
-            -2048, -2048, -2048, -2048, 
+            -2048, -2048, -2048, -2048,
             75, 13, 3, 1
         );
 
@@ -17045,8 +17549,8 @@ mod tests {
         #[rustfmt::skip]
         let r = i8x16::new(
             6, 12, 25, 31,
-            6, 12, 25, 31, 
-            6, 12, 25, 31, 
+            6, 12, 25, 31,
+            6, 12, 25, 31,
             6, 12, 25, 31
         );
 
@@ -17180,9 +17684,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            6, 13, 25, 32, 
-            6, 13, 25, 32, 
-            6, 13, 25, 32, 
+            6, 13, 25, 32,
+            6, 13, 25, 32,
+            6, 13, 25, 32,
             6, 13, 25, 32
         );
 
@@ -17225,9 +17729,9 @@ mod tests {
     unsafe fn test_msa_st_b() {
         #[rustfmt::skip]
         let a = i8x16::new(
-            13, 14, 15, 16, 
-            17, 18, 19, 20, 
-            21, 22, 23, 24, 
+            13, 14, 15, 16,
+            17, 18, 19, 20,
+            21, 22, 23, 24,
             25, 26, 27, 28
         );
         #[rustfmt::skip]
@@ -17239,9 +17743,9 @@ mod tests {
         ];
         #[rustfmt::skip]
         let r : [i8; 16] = [
-            13, 14, 15, 16, 
-            17, 18, 19, 20, 
-            21, 22, 23, 24, 
+            13, 14, 15, 16,
+            17, 18, 19, 20,
+            21, 22, 23, 24,
             25, 26, 27, 28
         ];
         __msa_st_b(mem::transmute(a), arr.as_mut_ptr() as *mut u8, 0);
@@ -17396,7 +17900,7 @@ mod tests {
     unsafe fn test_msa_subs_u_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            u16::MAX, 2, 3, 4, 
+            u16::MAX, 2, 3, 4,
             u16::MAX, 2, 3, 4
         );
         #[rustfmt::skip]
@@ -17552,7 +18056,7 @@ mod tests {
     unsafe fn test_msa_subsuu_s_h() {
         #[rustfmt::skip]
         let a = u16x8::new(
-            u16::MAX, 2, 3, 
+            u16::MAX, 2, 3,
             4, u16::MAX, 2, 3, 4
         );
         #[rustfmt::skip]
@@ -17755,9 +18259,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = i8x16::new(
-            3, 2, 1, 4, 
-            3, 2, 1, 4, 
-            3, 2, 1, 4, 
+            3, 2, 1, 4,
+            3, 2, 1, 4,
+            3, 2, 1, 4,
             3, 2, 1, 4
         );
 
@@ -17860,9 +18364,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            17, 13, 13, 9, 
-            9, 13, 13, 1, 
-            1, 13, 13, 9, 
+            17, 13, 13, 9,
+            9, 13, 13, 1,
+            1, 13, 13, 9,
             9, 13, 13, 17
         );
 
@@ -17883,9 +18387,9 @@ mod tests {
         );
         #[rustfmt::skip]
         let r = u8x16::new(
-            5, 6, 7, 0, 
-            1, 2, 3, 12, 
-            13, 14, 15, 8, 
+            5, 6, 7, 0,
+            1, 2, 3, 12,
+            13, 14, 15, 8,
             9, 10, 11, 20
         );
 

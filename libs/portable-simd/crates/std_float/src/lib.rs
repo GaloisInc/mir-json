@@ -1,9 +1,15 @@
-#![cfg_attr(feature = "as_crate", no_std)] // We are std!
-#![cfg_attr(feature = "as_crate", feature(platform_intrinsics), feature(portable_simd))]
+#![cfg_attr(
+    feature = "as_crate",
+    feature(core_intrinsics),
+    feature(portable_simd),
+    allow(internal_features)
+)]
 #[cfg(not(feature = "as_crate"))]
 use core::simd;
 #[cfg(feature = "as_crate")]
 use core_simd::simd;
+
+use core::intrinsics::simd as intrinsics;
 
 use simd::{LaneCount, Simd, SupportedLaneCount};
 
@@ -16,28 +22,6 @@ mod experimental {
 use experimental as sealed;
 
 use crate::sealed::Sealed;
-
-// "platform intrinsics" are essentially "codegen intrinsics"
-// each of these may be scalarized and lowered to a libm call
-extern "platform-intrinsic" {
-    // ceil
-    fn simd_ceil<T>(x: T) -> T;
-
-    // floor
-    fn simd_floor<T>(x: T) -> T;
-
-    // round
-    fn simd_round<T>(x: T) -> T;
-
-    // trunc
-    fn simd_trunc<T>(x: T) -> T;
-
-    // fsqrt
-    fn simd_fsqrt<T>(x: T) -> T;
-
-    // fma
-    fn simd_fma<T>(x: T, y: T, z: T) -> T;
-}
 
 /// This trait provides a possibly-temporary implementation of float functions
 /// that may, in the absence of hardware support, canonicalize to calling an
@@ -59,7 +43,7 @@ extern "platform-intrinsic" {
 /// For now this trait is available to permit experimentation with SIMD float
 /// operations that may lack hardware support, such as `mul_add`.
 pub trait StdFloat: Sealed + Sized {
-    /// Fused multiply-add.  Computes `(self * a) + b` with only one rounding error,
+    /// Elementwise fused multiply-add. Computes `(self * a) + b` with only one rounding error,
     /// yielding a more accurate result than an unfused multiply-add.
     ///
     /// Using `mul_add` *may* be more performant than an unfused multiply-add if the target
@@ -69,43 +53,86 @@ pub trait StdFloat: Sealed + Sized {
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original value"]
     fn mul_add(self, a: Self, b: Self) -> Self {
-        unsafe { simd_fma(self, a, b) }
+        unsafe { intrinsics::simd_fma(self, a, b) }
     }
 
-    /// Produces a vector where every lane has the square root value
-    /// of the equivalently-indexed lane in `self`
+    /// Produces a vector where every element has the square root value
+    /// of the equivalently-indexed element in `self`
     #[inline]
     #[must_use = "method returns a new vector and does not mutate the original value"]
     fn sqrt(self) -> Self {
-        unsafe { simd_fsqrt(self) }
+        unsafe { intrinsics::simd_fsqrt(self) }
     }
 
-    /// Returns the smallest integer greater than or equal to each lane.
+    /// Produces a vector where every element has the sine of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn sin(self) -> Self;
+
+    /// Produces a vector where every element has the cosine of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn cos(self) -> Self;
+
+    /// Produces a vector where every element has the exponential (base e) of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn exp(self) -> Self;
+
+    /// Produces a vector where every element has the exponential (base 2) of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn exp2(self) -> Self;
+
+    /// Produces a vector where every element has the natural logarithm of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn ln(self) -> Self;
+
+    /// Produces a vector where every element has the logarithm with respect to an arbitrary
+    /// in the equivalently-indexed elements in `self` and `base`.
+    #[inline]
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn log(self, base: Self) -> Self {
+        unsafe { intrinsics::simd_div(self.ln(), base.ln()) }
+    }
+
+    /// Produces a vector where every element has the base-2 logarithm of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn log2(self) -> Self;
+
+    /// Produces a vector where every element has the base-10 logarithm of the value
+    /// in the equivalently-indexed element in `self`.
+    #[must_use = "method returns a new vector and does not mutate the original value"]
+    fn log10(self) -> Self;
+
+    /// Returns the smallest integer greater than or equal to each element.
     #[must_use = "method returns a new vector and does not mutate the original value"]
     #[inline]
     fn ceil(self) -> Self {
-        unsafe { simd_ceil(self) }
+        unsafe { intrinsics::simd_ceil(self) }
     }
 
-    /// Returns the largest integer value less than or equal to each lane.
+    /// Returns the largest integer value less than or equal to each element.
     #[must_use = "method returns a new vector and does not mutate the original value"]
     #[inline]
     fn floor(self) -> Self {
-        unsafe { simd_floor(self) }
+        unsafe { intrinsics::simd_floor(self) }
     }
 
     /// Rounds to the nearest integer value. Ties round toward zero.
     #[must_use = "method returns a new vector and does not mutate the original value"]
     #[inline]
     fn round(self) -> Self {
-        unsafe { simd_round(self) }
+        unsafe { intrinsics::simd_round(self) }
     }
 
     /// Returns the floating point's integer value, with its fractional part removed.
     #[must_use = "method returns a new vector and does not mutate the original value"]
     #[inline]
     fn trunc(self) -> Self {
-        unsafe { simd_trunc(self) }
+        unsafe { intrinsics::simd_trunc(self) }
     }
 
     /// Returns the floating point's fractional value, with its integer part removed.
@@ -116,46 +143,65 @@ pub trait StdFloat: Sealed + Sized {
 impl<const N: usize> Sealed for Simd<f32, N> where LaneCount<N>: SupportedLaneCount {}
 impl<const N: usize> Sealed for Simd<f64, N> where LaneCount<N>: SupportedLaneCount {}
 
-// We can safely just use all the defaults.
-impl<const N: usize> StdFloat for Simd<f32, N>
-where
-    LaneCount<N>: SupportedLaneCount,
-{
-    /// Returns the floating point's fractional value, with its integer part removed.
-    #[must_use = "method returns a new vector and does not mutate the original value"]
-    #[inline]
-    fn fract(self) -> Self {
-        self - self.trunc()
+macro_rules! impl_float {
+    {
+        $($fn:ident: $intrinsic:ident,)*
+    } => {
+        impl<const N: usize> StdFloat for Simd<f32, N>
+        where
+            LaneCount<N>: SupportedLaneCount,
+        {
+            #[inline]
+            fn fract(self) -> Self {
+                self - self.trunc()
+            }
+
+            $(
+            #[inline]
+            fn $fn(self) -> Self {
+                unsafe { intrinsics::$intrinsic(self) }
+            }
+            )*
+        }
+
+        impl<const N: usize> StdFloat for Simd<f64, N>
+        where
+            LaneCount<N>: SupportedLaneCount,
+        {
+            #[inline]
+            fn fract(self) -> Self {
+                self - self.trunc()
+            }
+
+            $(
+            #[inline]
+            fn $fn(self) -> Self {
+                // https://github.com/llvm/llvm-project/issues/83729
+                #[cfg(target_arch = "aarch64")]
+                {
+                    let mut ln = Self::splat(0f64);
+                    for i in 0..N {
+                        ln[i] = self[i].$fn()
+                    }
+                    ln
+                }
+
+                #[cfg(not(target_arch = "aarch64"))]
+                {
+                    unsafe { intrinsics::$intrinsic(self) }
+                }
+            }
+            )*
+        }
     }
 }
 
-impl<const N: usize> StdFloat for Simd<f64, N>
-where
-    LaneCount<N>: SupportedLaneCount,
-{
-    /// Returns the floating point's fractional value, with its integer part removed.
-    #[must_use = "method returns a new vector and does not mutate the original value"]
-    #[inline]
-    fn fract(self) -> Self {
-        self - self.trunc()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use simd::*;
-
-    #[test]
-    fn everything_works() {
-        let x = f32x4::from_array([0.1, 0.5, 0.6, -1.5]);
-        let x2 = x + x;
-        let _xc = x.ceil();
-        let _xf = x.floor();
-        let _xr = x.round();
-        let _xt = x.trunc();
-        let _xfma = x.mul_add(x, x);
-        let _xsqrt = x.sqrt();
-        let _ = x2.abs() * x2;
-    }
+impl_float! {
+    sin: simd_fsin,
+    cos: simd_fcos,
+    exp: simd_fexp,
+    exp2: simd_fexp2,
+    ln: simd_flog,
+    log2: simd_flog2,
+    log10: simd_flog10,
 }

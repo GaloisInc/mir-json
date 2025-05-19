@@ -1,190 +1,147 @@
 //! Utility macros.
 
-// Helper struct used to trigger const eval errors when the const generic immediate value `IMM` is
-// out of `[MIN-MAX]` range.
-pub(crate) struct ValidateConstImm<const IMM: i32, const MIN: i32, const MAX: i32>;
-impl<const IMM: i32, const MIN: i32, const MAX: i32> ValidateConstImm<IMM, MIN, MAX> {
-    pub(crate) const VALID: () = {
-        assert!(IMM >= MIN && IMM <= MAX, "IMM value not in expected range");
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm1 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 1) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm2 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 2) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm3 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 3) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm4 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 4) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm5 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 5) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm6 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 6) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm8 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 8) - 1 }>::VALID;
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! static_assert_imm16 {
-    ($imm:ident) => {
-        let _ = $crate::core_arch::macros::ValidateConstImm::<$imm, 0, { (1 << 16) - 1 }>::VALID;
-    };
-}
-
 #[allow(unused)]
 macro_rules! static_assert {
-    ($imm:ident : $ty:ty where $e:expr) => {{
-        struct Validate<const $imm: $ty>();
-        impl<const $imm: $ty> Validate<$imm> {
-            const VALID: () = {
-                assert!($e, concat!("Assertion failed: ", stringify!($e)));
-            };
+    ($e:expr) => {
+        const {
+            assert!($e);
         }
-        let _ = Validate::<$imm>::VALID;
-    }};
+    };
+    ($e:expr, $msg:expr) => {
+        const {
+            assert!($e, $msg);
+        }
+    };
+}
+
+#[allow(unused_macros)]
+macro_rules! static_assert_uimm_bits {
+    ($imm:ident, $bits:expr) => {
+        // `0 <= $imm` produces a warning if the immediate has an unsigned type
+        #[allow(unused_comparisons)]
+        {
+            static_assert!(
+                0 <= $imm && $imm < (1 << $bits),
+                concat!(
+                    stringify!($imm),
+                    " doesn't fit in ",
+                    stringify!($bits),
+                    " bits",
+                )
+            )
+        }
+    };
+}
+
+#[allow(unused_macros)]
+macro_rules! static_assert_simm_bits {
+    ($imm:ident, $bits:expr) => {
+        static_assert!(
+            (-1 << ($bits - 1)) - 1 <= $imm && $imm < (1 << ($bits - 1)),
+            concat!(
+                stringify!($imm),
+                " doesn't fit in ",
+                stringify!($bits),
+                " bits",
+            )
+        )
+    };
 }
 
 #[allow(unused)]
 macro_rules! types {
-    ($(
-        $(#[$doc:meta])*
-        pub struct $name:ident($($fields:tt)*);
-    )*) => ($(
+    (
+        #![$stability_first:meta]
+        $(
+            #![$stability_more:meta]
+        )*
+
+        $(
+            $(#[$doc:meta])*
+            $(stability: [$stability_already: meta])*
+            pub struct $name:ident($len:literal x $v:vis $elem_type:ty);
+        )*
+    ) => (types! {
+        $(
+            #![$stability_more]
+        )*
+
+        $(
+            $(#[$doc])*
+            $(stability: [$stability_already])*
+            stability: [$stability_first]
+            pub struct $name($len x $v $elem_type);
+        )*
+    });
+
+    (
+        $(
+            $(#[$doc:meta])*
+            $(stability: [$stability: meta])+
+            pub struct $name:ident($len:literal x $v:vis $elem_type:ty);
+        )*
+    ) => ($(
         $(#[$doc])*
-        #[derive(Copy, Clone, Debug)]
+        $(#[$stability])+
+        #[derive(Copy, Clone)]
         #[allow(non_camel_case_types)]
         #[repr(simd)]
         #[allow(clippy::missing_inline_in_public_items)]
-        pub struct $name($($fields)*);
-    )*)
+        pub struct $name($v [$elem_type; $len]);
+
+        impl $name {
+            /// Using `my_simd([x; N])` seemingly fails tests,
+            /// so use this internal helper for it instead.
+            #[inline(always)]
+            $v fn splat(value: $elem_type) -> $name {
+                #[derive(Copy, Clone)]
+                #[repr(simd)]
+                struct JustOne([$elem_type; 1]);
+                let one = JustOne([value]);
+                // SAFETY: 0 is always in-bounds because we're shuffling
+                // a simd type with exactly one element.
+                unsafe { simd_shuffle!(one, one, [0; $len]) }
+            }
+        }
+
+        $(#[$stability])+
+        impl crate::fmt::Debug for $name {
+            #[inline]
+            fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+                crate::core_arch::simd::debug_simd_finish(f, stringify!($name), self.0)
+            }
+        }
+    )*);
 }
 
 #[allow(unused)]
-macro_rules! simd_shuffle2 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+ $(,)?> $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 2] = $idx;
-        }
+#[repr(simd)]
+pub(crate) struct SimdShuffleIdx<const LEN: usize>(pub(crate) [u32; LEN]);
 
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
-    }};
+#[allow(unused)]
+macro_rules! simd_shuffle {
     ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 2] = $idx;
-        simd_shuffle($x, $y, IDX)
-    }};
-}
-
-#[allow(unused_macros)]
-macro_rules! simd_shuffle4 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+ $(,)?> $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 4] = $idx;
-        }
-
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
-    }};
-    ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 4] = $idx;
-        simd_shuffle($x, $y, IDX)
-    }};
-}
-
-#[allow(unused_macros)]
-macro_rules! simd_shuffle8 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+ $(,)?> $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 8] = $idx;
-        }
-
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
-    }};
-    ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 8] = $idx;
-        simd_shuffle($x, $y, IDX)
+        $crate::intrinsics::simd::simd_shuffle(
+            $x,
+            $y,
+            const { $crate::core_arch::macros::SimdShuffleIdx($idx) },
+        )
     }};
 }
 
 #[allow(unused)]
-macro_rules! simd_shuffle16 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+ $(,)?> $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 16] = $idx;
-        }
-
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
-    }};
-    ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 16] = $idx;
-        simd_shuffle($x, $y, IDX)
+macro_rules! simd_insert {
+    ($x:expr, $idx:expr, $val:expr $(,)?) => {{
+        $crate::intrinsics::simd::simd_insert($x, const { $idx }, $val)
     }};
 }
 
-#[allow(unused_macros)]
-macro_rules! simd_shuffle32 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+> $(,)? $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 32] = $idx;
-        }
-
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
+#[allow(unused)]
+macro_rules! simd_extract {
+    ($x:expr, $idx:expr $(,)?) => {{
+        $crate::intrinsics::simd::simd_extract($x, const { $idx })
     }};
-    ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 32] = $idx;
-        simd_shuffle($x, $y, IDX)
-    }};
-}
-
-#[allow(unused_macros)]
-macro_rules! simd_shuffle64 {
-    ($x:expr, $y:expr, <$(const $imm:ident : $ty:ty),+ $(,)?> $idx:expr $(,)?) => {{
-        struct ConstParam<$(const $imm: $ty),+>;
-        impl<$(const $imm: $ty),+> ConstParam<$($imm),+> {
-            const IDX: [u32; 64] = $idx;
-        }
-
-        simd_shuffle($x, $y, ConstParam::<$($imm),+>::IDX)
-    }};
-    ($x:expr, $y:expr, $idx:expr $(,)?) => {{
-        const IDX: [u32; 64] = $idx;
-        simd_shuffle($x, $y, IDX)
+    ($x:expr, $idx:expr, $ty:ty $(,)?) => {{
+        $crate::intrinsics::simd::simd_extract::<_, $ty>($x, const { $idx })
     }};
 }

@@ -1,5 +1,7 @@
 use crate::fmt;
-use crate::iter::{adapters::SourceIter, FusedIterator, InPlaceIterable};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{FusedIterator, InPlaceIterable, TrustedFused};
+use crate::num::NonZero;
 use crate::ops::{ControlFlow, Try};
 
 /// An iterator that only accepts elements while `predicate` returns `true`.
@@ -105,6 +107,9 @@ where
 {
 }
 
+#[unstable(issue = "none", feature = "trusted_fused")]
+unsafe impl<I: TrustedFused, P> TrustedFused for TakeWhile<I, P> {}
+
 #[unstable(issue = "none", feature = "inplace_iteration")]
 unsafe impl<P, I> SourceIter for TakeWhile<I, P>
 where
@@ -120,7 +125,7 @@ where
 }
 
 #[unstable(issue = "none", feature = "inplace_iteration")]
-unsafe impl<I: InPlaceIterable, F> InPlaceIterable for TakeWhile<I, F> where
-    F: FnMut(&I::Item) -> bool
-{
+unsafe impl<I: InPlaceIterable, F> InPlaceIterable for TakeWhile<I, F> {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = I::MERGE_BY;
 }

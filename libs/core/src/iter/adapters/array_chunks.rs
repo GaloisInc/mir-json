@@ -1,7 +1,9 @@
 use crate::array;
-use crate::const_closure::ConstFnMutClosure;
-use crate::iter::{ByRefSized, FusedIterator, Iterator, TrustedRandomAccessNoCoerce};
-use crate::mem::{self, MaybeUninit};
+use crate::iter::adapters::SourceIter;
+use crate::iter::{
+    ByRefSized, FusedIterator, InPlaceIterable, TrustedFused, TrustedRandomAccessNoCoerce,
+};
+use crate::num::NonZero;
 use crate::ops::{ControlFlow, NeverShortCircuit, Try};
 
 /// An iterator over `N` elements of the iterator at a time.
@@ -32,9 +34,22 @@ where
     /// Returns an iterator over the remaining elements of the original iterator
     /// that are not going to be returned by this iterator. The returned
     /// iterator will yield at most `N-1` elements.
+    ///
+    /// # Example
+    /// ```
+    /// # // Also serves as a regression test for https://github.com/rust-lang/rust/issues/123333
+    /// # #![feature(iter_array_chunks)]
+    /// let x = [1,2,3,4,5].into_iter().array_chunks::<2>();
+    /// let mut rem = x.into_remainder().unwrap();
+    /// assert_eq!(rem.next(), Some(5));
+    /// assert_eq!(rem.next(), None);
+    /// ```
     #[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
     #[inline]
-    pub fn into_remainder(self) -> Option<array::IntoIter<I::Item, N>> {
+    pub fn into_remainder(mut self) -> Option<array::IntoIter<I::Item, N>> {
+        if self.remainder.is_none() {
+            while let Some(_) = self.next() {}
+        }
         self.remainder
     }
 }
@@ -161,6 +176,9 @@ where
 #[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
 impl<I, const N: usize> FusedIterator for ArrayChunks<I, N> where I: FusedIterator {}
 
+#[unstable(issue = "none", feature = "trusted_fused")]
+unsafe impl<I, const N: usize> TrustedFused for ArrayChunks<I, N> where I: TrustedFused + Iterator {}
+
 #[unstable(feature = "iter_array_chunks", reason = "recently added", issue = "100450")]
 impl<I, const N: usize> ExactSizeIterator for ArrayChunks<I, N>
 where
@@ -189,13 +207,12 @@ where
     I: Iterator,
 {
     #[inline]
-    default fn fold<B, F>(mut self, init: B, mut f: F) -> B
+    default fn fold<B, F>(mut self, init: B, f: F) -> B
     where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        let fold = ConstFnMutClosure::new(&mut f, NeverShortCircuit::wrap_mut_2_imp);
-        self.try_fold(init, fold).0
+        self.try_fold(init, NeverShortCircuit::wrap_mut_2(f)).0
     }
 }
 
@@ -214,19 +231,14 @@ where
         let mut i = 0;
         // Use a while loop because (0..len).step_by(N) doesn't optimize well.
         while inner_len - i >= N {
-            let mut chunk = MaybeUninit::uninit_array();
-            let mut guard = array::Guard { array_mut: &mut chunk, initialized: 0 };
-            while guard.initialized < N {
+            let chunk = crate::array::from_fn(|local| {
                 // SAFETY: The method consumes the iterator and the loop condition ensures that
                 // all accesses are in bounds and only happen once.
                 unsafe {
-                    let idx = i + guard.initialized;
-                    guard.push_unchecked(self.iter.__iterator_get_unchecked(idx));
+                    let idx = i + local;
+                    self.iter.__iterator_get_unchecked(idx)
                 }
-            }
-            mem::forget(guard);
-            // SAFETY: The loop above initialized all elements
-            let chunk = unsafe { MaybeUninit::array_assume_init(chunk) };
+            });
             accum = f(accum, chunk);
             i += N;
         }
@@ -236,4 +248,29 @@ where
 
         accum
     }
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I, const N: usize> SourceIter for ArrayChunks<I, N>
+where
+    I: SourceIter + Iterator,
+{
+    type Source = I::Source;
+
+    #[inline]
+    unsafe fn as_inner(&mut self) -> &mut I::Source {
+        // SAFETY: unsafe function forwarding to unsafe function with the same requirements
+        unsafe { SourceIter::as_inner(&mut self.iter) }
+    }
+}
+
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I: InPlaceIterable + Iterator, const N: usize> InPlaceIterable for ArrayChunks<I, N> {
+    const EXPAND_BY: Option<NonZero<usize>> = I::EXPAND_BY;
+    const MERGE_BY: Option<NonZero<usize>> = const {
+        match (I::MERGE_BY, NonZero::new(N)) {
+            (Some(m), Some(n)) => m.checked_mul(n),
+            _ => None,
+        }
+    };
 }

@@ -7,6 +7,7 @@ extern crate serde_cbor;
 #[macro_use] extern crate serde_derive;
 extern crate tar;
 
+extern crate rustc_abi;
 extern crate rustc_ast;
 extern crate rustc_const_eval;
 extern crate rustc_driver;

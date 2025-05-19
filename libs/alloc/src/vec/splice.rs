@@ -1,8 +1,8 @@
-use crate::alloc::{Allocator, Global};
 use core::ptr::{self};
 use core::slice::{self};
 
 use super::{Drain, Vec};
+use crate::alloc::{Allocator, Global};
 
 /// A splicing iterator for `Vec`.
 ///
@@ -14,7 +14,7 @@ use super::{Drain, Vec};
 /// ```
 /// let mut v = vec![0, 1, 2];
 /// let new = [7, 8];
-/// let iter: std::vec::Splice<_> = v.splice(1.., new);
+/// let iter: std::vec::Splice<'_, _> = v.splice(1.., new);
 /// ```
 #[derive(Debug)]
 #[stable(feature = "vec_splice", since = "1.21.0")]
@@ -52,6 +52,7 @@ impl<I: Iterator, A: Allocator> ExactSizeIterator for Splice<'_, I, A> {}
 
 #[stable(feature = "vec_splice", since = "1.21.0")]
 impl<I: Iterator, A: Allocator> Drop for Splice<'_, I, A> {
+    #[track_caller]
     fn drop(&mut self) {
         self.drain.by_ref().for_each(drop);
         // At this point draining is done and the only remaining tasks are splicing
@@ -123,6 +124,7 @@ impl<T, A: Allocator> Drain<'_, T, A> {
     }
 
     /// Makes room for inserting more elements before the tail.
+    #[track_caller]
     unsafe fn move_tail(&mut self, additional: usize) {
         let vec = unsafe { self.vec.as_mut() };
         let len = self.tail_start + self.tail_len;

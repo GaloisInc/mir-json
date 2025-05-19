@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate quote;
 
-use proc_macro2::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
+use proc_macro2::{Ident, Literal, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use std::env;
 
@@ -44,13 +44,9 @@ pub fn simd_test(
         .collect();
 
     let enable_feature = string(enable_feature);
-    let item = TokenStream::from(item);
-    let name = find_name(item.clone());
-
-    let name: TokenStream = name
-        .to_string()
-        .parse()
-        .unwrap_or_else(|_| panic!("failed to parse name: {}", name.to_string()));
+    let mut item = syn::parse_macro_input!(item as syn::ItemFn);
+    let item_attrs = std::mem::take(&mut item.attrs);
+    let name = &item.sig.ident;
 
     let target = env::var("TARGET").expect(
         "TARGET environment variable should be set for rustc (e.g. TARGET=x86_64-apple-darwin cargo test)"
@@ -59,11 +55,11 @@ pub fn simd_test(
     let macro_test = match target
         .split('-')
         .next()
-        .unwrap_or_else(|| panic!("target triple contained no \"-\": {}", target))
+        .unwrap_or_else(|| panic!("target triple contained no \"-\": {target}"))
     {
         "i686" | "x86_64" | "i586" => "is_x86_feature_detected",
         "arm" | "armv7" => "is_arm_feature_detected",
-        "aarch64" => "is_aarch64_feature_detected",
+        "aarch64" | "arm64ec" => "is_aarch64_feature_detected",
         maybe_riscv if maybe_riscv.starts_with("riscv") => "is_riscv_feature_detected",
         "powerpc" | "powerpcle" => "is_powerpc_feature_detected",
         "powerpc64" | "powerpc64le" => "is_powerpc64_feature_detected",
@@ -82,20 +78,21 @@ pub fn simd_test(
             force_test = true;
             "is_mips64_feature_detected"
         }
-        t => panic!("unknown target: {}", t),
+        "loongarch64" => "is_loongarch_feature_detected",
+        t => panic!("unknown target: {t}"),
     };
     let macro_test = Ident::new(macro_test, Span::call_site());
 
-    let mut cfg_target_features = TokenStream::new();
+    let mut detect_missing_features = TokenStream::new();
     for feature in target_features {
         let q = quote_spanned! {
             proc_macro2::Span::call_site() =>
-            #macro_test!(#feature) &&
+            if !#macro_test!(#feature) {
+                missing_features.push(#feature);
+            }
         };
-        q.to_tokens(&mut cfg_target_features);
+        q.to_tokens(&mut detect_missing_features);
     }
-    let q = quote! { true };
-    q.to_tokens(&mut cfg_target_features);
 
     let test_norun = std::env::var("STDSIMD_TEST_NORUN").is_ok();
     let maybe_ignore = if test_norun {
@@ -109,12 +106,15 @@ pub fn simd_test(
         #[allow(non_snake_case)]
         #[test]
         #maybe_ignore
+        #(#item_attrs)*
         fn #name() {
-            if #force_test | (#cfg_target_features) {
+            let mut missing_features = ::std::vec::Vec::new();
+            #detect_missing_features
+            if #force_test || missing_features.is_empty() {
                 let v = unsafe { #name() };
                 return v;
             } else {
-                ::stdarch_test::assert_skip_test_ok(stringify!(#name));
+                ::stdarch_test::assert_skip_test_ok(stringify!(#name), &missing_features);
             }
 
             #[target_feature(enable = #enable_feature)]
@@ -122,30 +122,4 @@ pub fn simd_test(
         }
     };
     ret.into()
-}
-
-fn find_name(item: TokenStream) -> Ident {
-    let mut tokens = item.into_iter();
-    while let Some(tok) = tokens.next() {
-        if let TokenTree::Ident(word) = tok {
-            if word == "fn" {
-                break;
-            }
-        }
-    }
-
-    fn get_ident(tt: TokenTree) -> Option<Ident> {
-        match tt {
-            TokenTree::Ident(i) => Some(i),
-            TokenTree::Group(g) if g.delimiter() == Delimiter::None => {
-                get_ident(g.stream().into_iter().next()?)
-            }
-            _ => None,
-        }
-    }
-
-    tokens
-        .next()
-        .and_then(get_ident)
-        .expect("failed to find function name")
 }

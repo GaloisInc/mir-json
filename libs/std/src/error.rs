@@ -1,22 +1,13 @@
 #![doc = include_str!("../../core/src/error.md")]
 #![stable(feature = "rust1", since = "1.0.0")]
 
-#[cfg(test)]
-mod tests;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use core::error::Error;
+#[unstable(feature = "error_generic_member_access", issue = "99301")]
+pub use core::error::{Request, request_ref, request_value};
 
 use crate::backtrace::Backtrace;
 use crate::fmt::{self, Write};
-
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use core::error::Error;
-
-mod private {
-    // This is a hack to prevent `type_id` from being overridden by `Error`
-    // implementations, since that can enable unsound downcasting.
-    #[unstable(feature = "error_type_id", issue = "60784")]
-    #[derive(Debug)]
-    pub struct Internal;
-}
 
 /// An error reporter that prints an error and its sources.
 ///
@@ -121,7 +112,8 @@ mod private {
 /// This example produces the following output:
 ///
 /// ```console
-/// thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: SuperError is here!: SuperErrorSideKick is here!', src/error.rs:34:40
+/// thread 'main' panicked at src/error.rs:34:40:
+/// called `Result::unwrap()` on an `Err` value: SuperError is here!: SuperErrorSideKick is here!
 /// note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 /// ```
 ///
@@ -239,7 +231,7 @@ impl<E> Report<E>
 where
     Report<E>: From<E>,
 {
-    /// Create a new `Report` from an input error.
+    /// Creates a new `Report` from an input error.
     #[unstable(feature = "error_reporter", issue = "90172")]
     pub fn new(error: E) -> Report<E> {
         Self::from(error)
@@ -370,11 +362,10 @@ impl<E> Report<E> {
     ///
     /// ```rust
     /// #![feature(error_reporter)]
-    /// #![feature(provide_any)]
     /// #![feature(error_generic_member_access)]
     /// # use std::error::Error;
     /// # use std::fmt;
-    /// use std::any::Demand;
+    /// use std::error::Request;
     /// use std::error::Report;
     /// use std::backtrace::Backtrace;
     ///
@@ -404,8 +395,8 @@ impl<E> Report<E> {
     /// }
     ///
     /// impl Error for SuperErrorSideKick {
-    ///     fn provide<'a>(&'a self, demand: &mut Demand<'a>) {
-    ///         demand.provide_ref::<Backtrace>(&self.backtrace);
+    ///     fn provide<'a>(&'a self, request: &mut Request<'a>) {
+    ///         request.provide_ref::<Backtrace>(&self.backtrace);
     ///     }
     /// }
     ///
@@ -435,7 +426,7 @@ impl<E> Report<E> {
     ///    1: rust_out::main::_doctest_main_src_error_rs_1158_0
     ///    2: rust_out::main
     ///    3: core::ops::function::FnOnce::call_once
-    ///    4: std::sys_common::backtrace::__rust_begin_short_backtrace
+    ///    4: std::sys::backtrace::__rust_begin_short_backtrace
     ///    5: std::rt::lang_start::{{closure}}
     ///    6: std::panicking::try
     ///    7: std::rt::lang_start_internal
@@ -458,11 +449,11 @@ where
     fn backtrace(&self) -> Option<&Backtrace> {
         // have to grab the backtrace on the first error directly since that error may not be
         // 'static
-        let backtrace = (&self.error as &dyn Error).request_ref();
+        let backtrace = request_ref(&self.error);
         let backtrace = backtrace.or_else(|| {
             self.error
                 .source()
-                .map(|source| source.sources().find_map(|source| source.request_ref()))
+                .map(|source| source.sources().find_map(|source| request_ref(source)))
                 .flatten()
         });
         backtrace
@@ -506,13 +497,8 @@ where
         }
 
         if self.show_backtrace {
-            let backtrace = self.backtrace();
-
-            if let Some(backtrace) = backtrace {
-                let backtrace = backtrace.to_string();
-
-                f.write_str("\n\nStack backtrace:\n")?;
-                f.write_str(backtrace.trim_end())?;
+            if let Some(backtrace) = self.backtrace() {
+                write!(f, "\n\nStack backtrace:\n{}", backtrace.to_string().trim_end())?;
             }
         }
 

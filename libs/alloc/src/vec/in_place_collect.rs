@@ -6,11 +6,11 @@
 //! The specialization in this module applies to iterators in the shape of
 //! `source.adapter().adapter().adapter().collect::<Vec<U>>()`
 //! where `source` is an owning iterator obtained from [`Vec<T>`], [`Box<[T]>`][box] (by conversion to `Vec`)
-//! or [`BinaryHeap<T>`], the adapters each consume one or more items per step
-//! (represented by [`InPlaceIterable`]), provide transitive access to `source` (via [`SourceIter`])
-//! and thus the underlying allocation. And finally the layouts of `T` and `U` must
-//! have the same size and alignment, this is currently ensured via const eval instead of trait bounds
-//! in the specialized [`SpecFromIter`] implementation.
+//! or [`BinaryHeap<T>`], the adapters guarantee to consume enough items per step to make room
+//! for the results (represented by [`InPlaceIterable`]), provide transitive access to `source`
+//! (via [`SourceIter`]) and thus the underlying allocation.
+//! And finally there are alignment and size constraints to consider, this is currently ensured via
+//! const eval instead of trait bounds in the specialized [`SpecFromIter`] implementation.
 //!
 //! [`BinaryHeap<T>`]: crate::collections::BinaryHeap
 //! [box]: crate::boxed::Box
@@ -35,11 +35,28 @@
 //! the step of reading a value and getting a reference to write to. Instead raw pointers must be
 //! used on the reader and writer side.
 //!
-//! That writes never clobber a yet-to-be-read item is ensured by the [`InPlaceIterable`] requirements.
+//! That writes never clobber a yet-to-be-read items is ensured by the [`InPlaceIterable`] requirements.
 //!
 //! # Layout constraints
 //!
-//! [`Allocator`] requires that `allocate()` and `deallocate()` have matching alignment and size.
+//! When recycling an allocation between different types we must uphold the [`Allocator`] contract
+//! which means that the input and output Layouts have to "fit".
+//!
+//! To complicate things further `InPlaceIterable` supports splitting or merging items into smaller/
+//! larger ones to enable (de)aggregation of arrays.
+//!
+//! Ultimately each step of the iterator must free up enough *bytes* in the source to make room
+//! for the next output item.
+//! If `T` and `U` have the same size no fixup is needed.
+//! If `T`'s size is a multiple of `U`'s we can compensate by multiplying the capacity accordingly.
+//! Otherwise the input capacity (and thus layout) in bytes may not be representable by the output
+//! `Vec<U>`. In that case `alloc.shrink()` is used to update the allocation's layout.
+//!
+//! Alignments of `T` must be the same or larger than `U`. Since alignments are always a power
+//! of two _larger_ implies _is a multiple of_.
+//!
+//! See `in_place_collectible()` for the current conditions.
+//!
 //! Additionally this specialization doesn't make sense for ZSTs as there is no reallocation to
 //! avoid and it would make pointer arithmetic more difficult.
 //!
@@ -55,7 +72,7 @@
 //! This is handled by the [`InPlaceDrop`] guard for sink items (`U`) and by
 //! [`vec::IntoIter::forget_allocation_drop_remaining()`] for remaining source items (`T`).
 //!
-//! If dropping any remaining source item (`T`) panics then [`InPlaceDstBufDrop`] will handle dropping
+//! If dropping any remaining source item (`T`) panics then [`InPlaceDstDataSrcBufDrop`] will handle dropping
 //! the already collected sink items (`U`) and freeing the allocation.
 //!
 //! [`vec::IntoIter::forget_allocation_drop_remaining()`]: super::IntoIter::forget_allocation_drop_remaining()
@@ -137,79 +154,185 @@
 //! }
 //! vec.truncate(write_idx);
 //! ```
+
+use core::alloc::{Allocator, Layout};
 use core::iter::{InPlaceIterable, SourceIter, TrustedRandomAccessNoCoerce};
+use core::marker::PhantomData;
 use core::mem::{self, ManuallyDrop, SizedTypeProperties};
-use core::ptr::{self};
+use core::num::NonZero;
+use core::ptr;
 
-use super::{InPlaceDrop, InPlaceDstBufDrop, SpecFromIter, SpecFromIterNested, Vec};
+use super::{InPlaceDrop, InPlaceDstDataSrcBufDrop, SpecFromIter, SpecFromIterNested, Vec};
+use crate::alloc::{Global, handle_alloc_error};
 
-/// Specialization marker for collecting an iterator pipeline into a Vec while reusing the
-/// source allocation, i.e. executing the pipeline in place.
-#[rustc_unsafe_specialization_marker]
-pub(super) trait InPlaceIterableMarker {}
+const fn in_place_collectible<DEST, SRC>(
+    step_merge: Option<NonZero<usize>>,
+    step_expand: Option<NonZero<usize>>,
+) -> bool {
+    // Require matching alignments because an alignment-changing realloc is inefficient on many
+    // system allocators and better implementations would require the unstable Allocator trait.
+    if const { SRC::IS_ZST || DEST::IS_ZST || mem::align_of::<SRC>() != mem::align_of::<DEST>() } {
+        return false;
+    }
 
-impl<T> InPlaceIterableMarker for T where T: InPlaceIterable {}
+    match (step_merge, step_expand) {
+        (Some(step_merge), Some(step_expand)) => {
+            // At least N merged source items -> at most M expanded destination items
+            // e.g.
+            // - 1 x [u8; 4] -> 4x u8, via flatten
+            // - 4 x u8 -> 1x [u8; 4], via array_chunks
+            mem::size_of::<SRC>() * step_merge.get() >= mem::size_of::<DEST>() * step_expand.get()
+        }
+        // Fall back to other from_iter impls if an overflow occurred in the step merge/expansion
+        // tracking.
+        _ => false,
+    }
+}
+
+const fn needs_realloc<SRC, DEST>(src_cap: usize, dst_cap: usize) -> bool {
+    if const { mem::align_of::<SRC>() != mem::align_of::<DEST>() } {
+        // FIXME(const-hack): use unreachable! once that works in const
+        panic!("in_place_collectible() prevents this");
+    }
+
+    // If src type size is an integer multiple of the destination type size then
+    // the caller will have calculated a `dst_cap` that is an integer multiple of
+    // `src_cap` without remainder.
+    if const {
+        let src_sz = mem::size_of::<SRC>();
+        let dest_sz = mem::size_of::<DEST>();
+        dest_sz != 0 && src_sz % dest_sz == 0
+    } {
+        return false;
+    }
+
+    // type layouts don't guarantee a fit, so do a runtime check to see if
+    // the allocations happen to match
+    src_cap > 0 && src_cap * mem::size_of::<SRC>() != dst_cap * mem::size_of::<DEST>()
+}
+
+/// This provides a shorthand for the source type since local type aliases aren't a thing.
+#[rustc_specialization_trait]
+trait InPlaceCollect: SourceIter<Source: AsVecIntoIter> + InPlaceIterable {
+    type Src;
+}
+
+impl<T> InPlaceCollect for T
+where
+    T: SourceIter<Source: AsVecIntoIter> + InPlaceIterable,
+{
+    type Src = <<T as SourceIter>::Source as AsVecIntoIter>::Item;
+}
 
 impl<T, I> SpecFromIter<T, I> for Vec<T>
 where
-    I: Iterator<Item = T> + SourceIter<Source: AsVecIntoIter> + InPlaceIterableMarker,
+    I: Iterator<Item = T> + InPlaceCollect,
+    <I as SourceIter>::Source: AsVecIntoIter,
 {
-    default fn from_iter(mut iterator: I) -> Self {
-        // See "Layout constraints" section in the module documentation. We rely on const
-        // optimization here since these conditions currently cannot be expressed as trait bounds
-        if T::IS_ZST
-            || mem::size_of::<T>()
-                != mem::size_of::<<<I as SourceIter>::Source as AsVecIntoIter>::Item>()
-            || mem::align_of::<T>()
-                != mem::align_of::<<<I as SourceIter>::Source as AsVecIntoIter>::Item>()
-        {
-            // fallback to more generic implementations
-            return SpecFromIterNested::from_iter(iterator);
-        }
-
-        let (src_buf, src_ptr, dst_buf, dst_end, cap) = unsafe {
-            let inner = iterator.as_inner().as_into_iter();
-            (
-                inner.buf.as_ptr(),
-                inner.ptr,
-                inner.buf.as_ptr() as *mut T,
-                inner.end as *const T,
-                inner.cap,
-            )
+    #[track_caller]
+    default fn from_iter(iterator: I) -> Self {
+        // Select the implementation in const eval to avoid codegen of the dead branch to improve compile times.
+        let fun: fn(I) -> Vec<T> = const {
+            // See "Layout constraints" section in the module documentation. We use const conditions here
+            // since these conditions currently cannot be expressed as trait bounds
+            if in_place_collectible::<T, I::Src>(I::MERGE_BY, I::EXPAND_BY) {
+                from_iter_in_place
+            } else {
+                // fallback
+                SpecFromIterNested::<T, I>::from_iter
+            }
         };
 
-        let len = SpecInPlaceCollect::collect_in_place(&mut iterator, dst_buf, dst_end);
-
-        let src = unsafe { iterator.as_inner().as_into_iter() };
-        // check if SourceIter contract was upheld
-        // caveat: if they weren't we might not even make it to this point
-        debug_assert_eq!(src_buf, src.buf.as_ptr());
-        // check InPlaceIterable contract. This is only possible if the iterator advanced the
-        // source pointer at all. If it uses unchecked access via TrustedRandomAccess
-        // then the source pointer will stay in its initial position and we can't use it as reference
-        if src.ptr != src_ptr {
-            debug_assert!(
-                unsafe { dst_buf.add(len) as *const _ } <= src.ptr,
-                "InPlaceIterable contract violation, write pointer advanced beyond read pointer"
-            );
-        }
-
-        // The ownership of the allocation and the new `T` values is temporarily moved into `dst_guard`.
-        // This is safe because `forget_allocation_drop_remaining` immediately forgets the allocation
-        // before any panic can occur in order to avoid any double free, and then proceeds to drop
-        // any remaining values at the tail of the source.
-        //
-        // Note: This access to the source wouldn't be allowed by the TrustedRandomIteratorNoCoerce
-        // contract (used by SpecInPlaceCollect below). But see the "O(1) collect" section in the
-        // module documenttation why this is ok anyway.
-        let dst_guard = InPlaceDstBufDrop { ptr: dst_buf, len, cap };
-        src.forget_allocation_drop_remaining();
-        mem::forget(dst_guard);
-
-        let vec = unsafe { Vec::from_raw_parts(dst_buf, len, cap) };
-
-        vec
+        fun(iterator)
     }
+}
+
+#[track_caller]
+fn from_iter_in_place<I, T>(mut iterator: I) -> Vec<T>
+where
+    I: Iterator<Item = T> + InPlaceCollect,
+    <I as SourceIter>::Source: AsVecIntoIter,
+{
+    let (src_buf, src_ptr, src_cap, mut dst_buf, dst_end, dst_cap) = unsafe {
+        let inner = iterator.as_inner().as_into_iter();
+        (
+            inner.buf,
+            inner.ptr,
+            inner.cap,
+            inner.buf.cast::<T>(),
+            inner.end as *const T,
+            // SAFETY: the multiplication can not overflow, since `inner.cap * size_of::<I::SRC>()` is the size of the allocation.
+            inner.cap.unchecked_mul(mem::size_of::<I::Src>()) / mem::size_of::<T>(),
+        )
+    };
+
+    // SAFETY: `dst_buf` and `dst_end` are the start and end of the buffer.
+    let len = unsafe {
+        SpecInPlaceCollect::collect_in_place(&mut iterator, dst_buf.as_ptr() as *mut T, dst_end)
+    };
+
+    let src = unsafe { iterator.as_inner().as_into_iter() };
+    // check if SourceIter contract was upheld
+    // caveat: if they weren't we might not even make it to this point
+    debug_assert_eq!(src_buf, src.buf);
+    // check InPlaceIterable contract. This is only possible if the iterator advanced the
+    // source pointer at all. If it uses unchecked access via TrustedRandomAccess
+    // then the source pointer will stay in its initial position and we can't use it as reference
+    if src.ptr != src_ptr {
+        debug_assert!(
+            unsafe { dst_buf.add(len).cast() } <= src.ptr,
+            "InPlaceIterable contract violation, write pointer advanced beyond read pointer"
+        );
+    }
+
+    // The ownership of the source allocation and the new `T` values is temporarily moved into `dst_guard`.
+    // This is safe because
+    // * `forget_allocation_drop_remaining` immediately forgets the allocation
+    // before any panic can occur in order to avoid any double free, and then proceeds to drop
+    // any remaining values at the tail of the source.
+    // * the shrink either panics without invalidating the allocation, aborts or
+    //   succeeds. In the last case we disarm the guard.
+    //
+    // Note: This access to the source wouldn't be allowed by the TrustedRandomIteratorNoCoerce
+    // contract (used by SpecInPlaceCollect below). But see the "O(1) collect" section in the
+    // module documentation why this is ok anyway.
+    let dst_guard =
+        InPlaceDstDataSrcBufDrop { ptr: dst_buf, len, src_cap, src: PhantomData::<I::Src> };
+    src.forget_allocation_drop_remaining();
+
+    // Adjust the allocation if the source had a capacity in bytes that wasn't a multiple
+    // of the destination type size.
+    // Since the discrepancy should generally be small this should only result in some
+    // bookkeeping updates and no memmove.
+    if needs_realloc::<I::Src, T>(src_cap, dst_cap) {
+        let alloc = Global;
+        debug_assert_ne!(src_cap, 0);
+        debug_assert_ne!(dst_cap, 0);
+        unsafe {
+            // The old allocation exists, therefore it must have a valid layout.
+            let src_align = mem::align_of::<I::Src>();
+            let src_size = mem::size_of::<I::Src>().unchecked_mul(src_cap);
+            let old_layout = Layout::from_size_align_unchecked(src_size, src_align);
+
+            // The allocation must be equal or smaller for in-place iteration to be possible
+            // therefore the new layout must be ≤ the old one and therefore valid.
+            let dst_align = mem::align_of::<T>();
+            let dst_size = mem::size_of::<T>().unchecked_mul(dst_cap);
+            let new_layout = Layout::from_size_align_unchecked(dst_size, dst_align);
+
+            let result = alloc.shrink(dst_buf.cast(), old_layout, new_layout);
+            let Ok(reallocated) = result else { handle_alloc_error(new_layout) };
+            dst_buf = reallocated.cast::<T>();
+        }
+    } else {
+        debug_assert_eq!(src_cap * mem::size_of::<I::Src>(), dst_cap * mem::size_of::<T>());
+    }
+
+    mem::forget(dst_guard);
+
+    let vec = unsafe { Vec::from_parts(dst_buf, len, dst_cap) };
+
+    vec
 }
 
 fn write_in_place_with_drop<T>(
@@ -239,7 +362,7 @@ trait SpecInPlaceCollect<T, I>: Iterator<Item = T> {
     /// `Iterator::__iterator_get_unchecked` calls with a `TrustedRandomAccessNoCoerce` bound
     /// on `I` which means the caller of this method must take the safety conditions
     /// of that trait into consideration.
-    fn collect_in_place(&mut self, dst: *mut T, end: *const T) -> usize;
+    unsafe fn collect_in_place(&mut self, dst: *mut T, end: *const T) -> usize;
 }
 
 impl<T, I> SpecInPlaceCollect<T, I> for I
@@ -247,14 +370,14 @@ where
     I: Iterator<Item = T>,
 {
     #[inline]
-    default fn collect_in_place(&mut self, dst_buf: *mut T, end: *const T) -> usize {
+    default unsafe fn collect_in_place(&mut self, dst_buf: *mut T, end: *const T) -> usize {
         // use try-fold since
         // - it vectorizes better for some iterator adapters
         // - unlike most internal iteration methods, it only takes a &mut self
         // - it lets us thread the write pointer through its innards and get it back in the end
         let sink = InPlaceDrop { inner: dst_buf, dst: dst_buf };
         let sink =
-            self.try_fold::<_, _, Result<_, !>>(sink, write_in_place_with_drop(end)).unwrap();
+            self.try_fold::<_, _, Result<_, !>>(sink, write_in_place_with_drop(end)).into_ok();
         // iteration succeeded, don't drop head
         unsafe { ManuallyDrop::new(sink).dst.sub_ptr(dst_buf) }
     }
@@ -265,7 +388,7 @@ where
     I: Iterator<Item = T> + TrustedRandomAccessNoCoerce,
 {
     #[inline]
-    fn collect_in_place(&mut self, dst_buf: *mut T, end: *const T) -> usize {
+    unsafe fn collect_in_place(&mut self, dst_buf: *mut T, end: *const T) -> usize {
         let len = self.size();
         let mut drop_guard = InPlaceDrop { inner: dst_buf, dst: dst_buf };
         for i in 0..len {

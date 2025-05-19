@@ -1,4 +1,16 @@
 use crate::iter::Step;
+use crate::num::NonZero;
+
+/// Same as FusedIterator
+///
+/// # Safety
+///
+/// This is used for specialization. Therefore implementations must not
+/// be lifetime-dependent.
+#[unstable(issue = "none", feature = "trusted_fused")]
+#[doc(hidden)]
+#[rustc_specialization_trait]
+pub unsafe trait TrustedFused {}
 
 /// An iterator that always continues to yield `None` when exhausted.
 ///
@@ -14,6 +26,9 @@ use crate::iter::Step;
 /// [`Fuse`]: crate::iter::Fuse
 #[stable(feature = "fused", since = "1.26.0")]
 #[rustc_unsafe_specialization_marker]
+// FIXME: this should be a #[marker] and have another blanket impl for T: TrustedFused
+// but that ICEs iter::Fuse specializations.
+#[lang = "fused_iterator"]
 pub trait FusedIterator: Iterator {}
 
 #[stable(feature = "fused", since = "1.26.0")]
@@ -30,6 +45,17 @@ impl<I: FusedIterator + ?Sized> FusedIterator for &mut I {}
 ///
 /// The iterator must produce exactly the number of elements it reported
 /// or diverge before reaching the end.
+///
+/// # When *shouldn't* an adapter be `TrustedLen`?
+///
+/// If an adapter makes an iterator *shorter* by a given amount, then it's
+/// usually incorrect for that adapter to implement `TrustedLen`.  The inner
+/// iterator might return more than `usize::MAX` items, but there's no way to
+/// know what `k` elements less than that will be, since the `size_hint` from
+/// the inner iterator has already saturated and lost that information.
+///
+/// This is why [`Skip<I>`](crate::iter::Skip) isn't `TrustedLen`, even when
+/// `I` implements `TrustedLen`.
 ///
 /// # Safety
 ///
@@ -60,7 +86,19 @@ unsafe impl<I: TrustedLen + ?Sized> TrustedLen for &mut I {}
 /// [`try_fold()`]: Iterator::try_fold
 #[unstable(issue = "none", feature = "inplace_iteration")]
 #[doc(hidden)]
-pub unsafe trait InPlaceIterable: Iterator {}
+#[rustc_specialization_trait]
+pub unsafe trait InPlaceIterable {
+    /// The product of one-to-many item expansions that happen throughout the iterator pipeline.
+    /// E.g. [[u8; 4]; 4].iter().flatten().flatten() would have a `EXPAND_BY` of 16.
+    /// This is an upper bound, i.e. the transformations will produce at most this many items per
+    /// input. It's meant for layout calculations.
+    const EXPAND_BY: Option<NonZero<usize>>;
+    /// The product of many-to-one item reductions that happen throughout the iterator pipeline.
+    /// E.g. [u8].iter().array_chunks::<4>().array_chunks::<4>() would have a `MERGE_BY` of 16.
+    /// This is a lower bound, i.e. the transformations will consume at least this many items per
+    /// output.
+    const MERGE_BY: Option<NonZero<usize>>;
+}
 
 /// A type that upholds all invariants of [`Step`].
 ///
@@ -75,4 +113,4 @@ pub unsafe trait InPlaceIterable: Iterator {}
 /// for details. Consumers are free to rely on the invariants in unsafe code.
 #[unstable(feature = "trusted_step", issue = "85731")]
 #[rustc_specialization_trait]
-pub unsafe trait TrustedStep: Step {}
+pub unsafe trait TrustedStep: Step + Copy {}

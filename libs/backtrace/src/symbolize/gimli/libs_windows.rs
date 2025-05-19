@@ -1,6 +1,7 @@
-use super::super::super::windows::*;
+use super::super::super::windows_sys::*;
+use super::mystd::ffi::OsString;
 use super::mystd::os::windows::prelude::*;
-use super::{coff, mmap, Library, LibrarySegment, OsString};
+use super::{coff, mmap, Library, LibrarySegment};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::mem;
@@ -17,26 +18,29 @@ pub(super) fn native_libraries() -> Vec<Library> {
 }
 
 unsafe fn add_loaded_images(ret: &mut Vec<Library>) {
-    let snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0);
-    if snap == INVALID_HANDLE_VALUE {
-        return;
-    }
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0);
+        if snap == INVALID_HANDLE_VALUE {
+            return;
+        }
 
-    let mut me = MaybeUninit::<MODULEENTRY32W>::zeroed().assume_init();
-    me.dwSize = mem::size_of_val(&me) as DWORD;
-    if Module32FirstW(snap, &mut me) == TRUE {
-        loop {
-            if let Some(lib) = load_library(&me) {
-                ret.push(lib);
-            }
+        // huge struct, probably should avoid manually initializing it even if we can
+        let mut me = MaybeUninit::<MODULEENTRY32W>::zeroed().assume_init();
+        me.dwSize = mem::size_of_val(&me) as u32;
+        if Module32FirstW(snap, &mut me) == TRUE {
+            loop {
+                if let Some(lib) = load_library(&me) {
+                    ret.push(lib);
+                }
 
-            if Module32NextW(snap, &mut me) != TRUE {
-                break;
+                if Module32NextW(snap, &mut me) != TRUE {
+                    break;
+                }
             }
         }
-    }
 
-    CloseHandle(snap);
+        CloseHandle(snap);
+    }
 }
 
 unsafe fn load_library(me: &MODULEENTRY32W) -> Option<Library> {

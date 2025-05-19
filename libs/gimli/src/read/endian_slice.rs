@@ -4,7 +4,8 @@
 use alloc::borrow::Cow;
 #[cfg(feature = "read")]
 use alloc::string::String;
-use core::ops::{Deref, Index, Range, RangeFrom, RangeTo};
+use core::fmt;
+use core::ops::{Deref, Range, RangeFrom, RangeTo};
 use core::str;
 
 use crate::endianity::Endianity;
@@ -13,7 +14,7 @@ use crate::read::{Error, Reader, ReaderOffsetId, Result};
 /// A `&[u8]` slice with endianity metadata.
 ///
 /// This implements the `Reader` trait, which is used for all reading of DWARF sections.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EndianSlice<'input, Endian>
 where
     Endian: Endianity,
@@ -57,7 +58,7 @@ where
         (self.range_to(..idx), self.range_from(idx..))
     }
 
-    /// Find the first occurence of a byte in the slice, and return its index.
+    /// Find the first occurrence of a byte in the slice, and return its index.
     #[inline]
     pub fn find(&self, byte: u8) -> Option<usize> {
         self.slice.iter().position(|ch| *ch == byte)
@@ -67,8 +68,8 @@ where
     /// of the given slice.
     #[inline]
     pub fn offset_from(&self, base: EndianSlice<'input, Endian>) -> usize {
-        let base_ptr = base.slice.as_ptr() as *const u8 as usize;
-        let ptr = self.slice.as_ptr() as *const u8 as usize;
+        let base_ptr = base.slice.as_ptr() as usize;
+        let ptr = self.slice.as_ptr() as usize;
         debug_assert!(base_ptr <= ptr);
         debug_assert!(ptr + self.slice.len() <= base_ptr + base.slice.len());
         ptr - base_ptr
@@ -167,26 +168,6 @@ where
     }
 }
 
-impl<'input, Endian> Index<usize> for EndianSlice<'input, Endian>
-where
-    Endian: Endianity,
-{
-    type Output = u8;
-    fn index(&self, idx: usize) -> &Self::Output {
-        &self.slice[idx]
-    }
-}
-
-impl<'input, Endian> Index<RangeFrom<usize>> for EndianSlice<'input, Endian>
-where
-    Endian: Endianity,
-{
-    type Output = [u8];
-    fn index(&self, idx: RangeFrom<usize>) -> &Self::Output {
-        &self.slice[idx]
-    }
-}
-
 impl<'input, Endian> Deref for EndianSlice<'input, Endian>
 where
     Endian: Endianity,
@@ -197,12 +178,41 @@ where
     }
 }
 
-impl<'input, Endian> Into<&'input [u8]> for EndianSlice<'input, Endian>
-where
-    Endian: Endianity,
-{
-    fn into(self) -> &'input [u8] {
-        self.slice
+impl<'input, Endian: Endianity> fmt::Debug for EndianSlice<'input, Endian> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> core::result::Result<(), fmt::Error> {
+        fmt.debug_tuple("EndianSlice")
+            .field(&self.endian)
+            .field(&DebugBytes(self.slice))
+            .finish()
+    }
+}
+
+struct DebugBytes<'input>(&'input [u8]);
+
+impl<'input> core::fmt::Debug for DebugBytes<'input> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> core::result::Result<(), fmt::Error> {
+        let mut list = fmt.debug_list();
+        list.entries(self.0.iter().take(8).copied().map(DebugByte));
+        if self.0.len() > 8 {
+            list.entry(&DebugLen(self.0.len()));
+        }
+        list.finish()
+    }
+}
+
+struct DebugByte(u8);
+
+impl fmt::Debug for DebugByte {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "0x{:02x}", self.0)
+    }
+}
+
+struct DebugLen(usize);
+
+impl fmt::Debug for DebugLen {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "...; {}", self.0)
     }
 }
 
@@ -294,13 +304,13 @@ where
 
     #[cfg(feature = "read")]
     #[inline]
-    fn to_slice(&self) -> Result<Cow<[u8]>> {
+    fn to_slice(&self) -> Result<Cow<'_, [u8]>> {
         Ok(self.slice.into())
     }
 
     #[cfg(feature = "read")]
     #[inline]
-    fn to_string(&self) -> Result<Cow<str>> {
+    fn to_string(&self) -> Result<Cow<'_, str>> {
         match str::from_utf8(self.slice) {
             Ok(s) => Ok(s.into()),
             _ => Err(Error::BadUtf8),
@@ -309,7 +319,7 @@ where
 
     #[cfg(feature = "read")]
     #[inline]
-    fn to_string_lossy(&self) -> Result<Cow<str>> {
+    fn to_string_lossy(&self) -> Result<Cow<'_, str>> {
         Ok(String::from_utf8_lossy(self.slice))
     }
 

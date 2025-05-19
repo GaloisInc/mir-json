@@ -15,8 +15,8 @@
 //!
 //! This is the default unwinding API for all non-Windows platforms currently.
 
-use super::super::Bomb;
 use core::ffi::c_void;
+use core::ptr::addr_of_mut;
 
 pub enum Frame {
     Raw(*mut uw::_Unwind_Context),
@@ -40,7 +40,18 @@ impl Frame {
             Frame::Raw(ctx) => ctx,
             Frame::Cloned { ip, .. } => return ip,
         };
-        unsafe { uw::_Unwind_GetIP(ctx) as *mut c_void }
+        #[allow(unused_mut)]
+        let mut ip = unsafe { uw::_Unwind_GetIP(ctx) as *mut c_void };
+
+        // To reduce TCB size in SGX enclaves, we do not want to implement
+        // symbol resolution functionality. Rather, we can print the offset of
+        // the address here, which could be later mapped to correct function.
+        #[cfg(all(target_env = "sgx", target_vendor = "fortanix"))]
+        {
+            let image_base = super::sgx_image_base::get_image_base();
+            ip = usize::wrapping_sub(ip as usize, image_base as _) as _;
+        }
+        ip
     }
 
     pub fn sp(&self) -> *mut c_void {
@@ -66,7 +77,7 @@ impl Frame {
         //
         // Note the `skip_inner_frames.rs` test is skipped on macOS due to this
         // clause, and if this is fixed that test in theory can be run on macOS!
-        if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
+        if cfg!(target_vendor = "apple") {
             self.ip()
         } else {
             unsafe { uw::_Unwind_FindEnclosingFunction(self.ip()) }
@@ -88,15 +99,29 @@ impl Clone for Frame {
     }
 }
 
+struct Bomb {
+    enabled: bool,
+}
+
+impl Drop for Bomb {
+    fn drop(&mut self) {
+        if self.enabled {
+            panic!("cannot panic during the backtrace function");
+        }
+    }
+}
+
 #[inline(always)]
 pub unsafe fn trace(mut cb: &mut dyn FnMut(&super::Frame) -> bool) {
-    uw::_Unwind_Backtrace(trace_fn, &mut cb as *mut _ as *mut _);
+    unsafe {
+        uw::_Unwind_Backtrace(trace_fn, addr_of_mut!(cb).cast());
+    }
 
     extern "C" fn trace_fn(
         ctx: *mut uw::_Unwind_Context,
         arg: *mut c_void,
     ) -> uw::_Unwind_Reason_Code {
-        let cb = unsafe { &mut *(arg as *mut &mut dyn FnMut(&super::Frame) -> bool) };
+        let cb = unsafe { &mut *arg.cast::<&mut dyn FnMut(&super::Frame) -> bool>() };
         let cx = super::Frame {
             inner: Frame::Raw(ctx),
         };
@@ -145,7 +170,7 @@ mod uw {
     pub type _Unwind_Trace_Fn =
         extern "C" fn(ctx: *mut _Unwind_Context, arg: *mut c_void) -> _Unwind_Reason_Code;
 
-    extern "C" {
+    unsafe extern "C" {
         pub fn _Unwind_Backtrace(
             trace: _Unwind_Trace_Fn,
             trace_argument: *mut c_void,
@@ -158,9 +183,12 @@ mod uw {
             not(all(target_os = "android", target_arch = "arm")),
             not(all(target_os = "freebsd", target_arch = "arm")),
             not(all(target_os = "linux", target_arch = "arm")),
-            not(all(target_os = "horizon", target_arch = "arm"))
+            not(all(target_os = "horizon", target_arch = "arm")),
+            not(all(target_os = "rtems", target_arch = "arm")),
+            not(all(target_os = "vita", target_arch = "arm")),
+            not(all(target_os = "nuttx", target_arch = "arm")),
         ))] {
-            extern "C" {
+            unsafe extern "C" {
                 pub fn _Unwind_GetIP(ctx: *mut _Unwind_Context) -> libc::uintptr_t;
                 pub fn _Unwind_FindEnclosingFunction(pc: *mut c_void) -> *mut c_void;
 
@@ -180,12 +208,14 @@ mod uw {
             // instead of relying on _Unwind_GetCFA.
             #[cfg(all(target_os = "linux", target_arch = "s390x"))]
             pub unsafe fn get_sp(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
-                extern "C" {
+                unsafe extern "C" {
                     pub fn _Unwind_GetGR(ctx: *mut _Unwind_Context, index: libc::c_int) -> libc::uintptr_t;
                 }
-                _Unwind_GetGR(ctx, 15)
+                unsafe { _Unwind_GetGR(ctx, 15) }
             }
         } else {
+            use core::ptr::addr_of_mut;
+
             // On android and arm, the function `_Unwind_GetIP` and a bunch of
             // others are macros, so we define functions containing the
             // expansion of the macros.
@@ -218,7 +248,7 @@ mod uw {
             }
 
             type _Unwind_Word = libc::c_uint;
-            extern "C" {
+            unsafe extern "C" {
                 fn _Unwind_VRS_Get(
                     ctx: *mut _Unwind_Context,
                     klass: _Unwind_VRS_RegClass,
@@ -230,14 +260,16 @@ mod uw {
 
             pub unsafe fn _Unwind_GetIP(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
                 let mut val: _Unwind_Word = 0;
-                let ptr = &mut val as *mut _Unwind_Word;
-                let _ = _Unwind_VRS_Get(
-                    ctx,
-                    _Unwind_VRS_RegClass::_UVRSC_CORE,
-                    15,
-                    _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
-                    ptr as *mut c_void,
-                );
+                let ptr = addr_of_mut!(val);
+                unsafe {
+                    let _ = _Unwind_VRS_Get(
+                        ctx,
+                        _Unwind_VRS_RegClass::_UVRSC_CORE,
+                        15,
+                        _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
+                        ptr.cast::<c_void>(),
+                    );
+                }
                 (val & !1) as libc::uintptr_t
             }
 
@@ -246,14 +278,16 @@ mod uw {
 
             pub unsafe fn get_sp(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
                 let mut val: _Unwind_Word = 0;
-                let ptr = &mut val as *mut _Unwind_Word;
-                let _ = _Unwind_VRS_Get(
-                    ctx,
-                    _Unwind_VRS_RegClass::_UVRSC_CORE,
-                    SP,
-                    _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
-                    ptr as *mut c_void,
-                );
+                let ptr = addr_of_mut!(val);
+                unsafe {
+                    let _ = _Unwind_VRS_Get(
+                        ctx,
+                        _Unwind_VRS_RegClass::_UVRSC_CORE,
+                        SP,
+                        _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
+                        ptr.cast::<c_void>(),
+                    );
+                }
                 val as libc::uintptr_t
             }
 

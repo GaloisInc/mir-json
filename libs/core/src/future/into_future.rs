@@ -40,7 +40,7 @@ use crate::future::Future;
 /// }
 ///
 /// impl Multiply {
-///     /// Construct a new instance of `Multiply`.
+///     /// Constructs a new instance of `Multiply`.
 ///     pub fn new(num: u16, factor: u16) -> Self {
 ///         Self { num, factor }
 ///     }
@@ -89,7 +89,7 @@ use crate::future::Future;
 /// ```rust
 /// use std::future::IntoFuture;
 ///
-/// /// Convert the output of a future to a string.
+/// /// Converts the output of a future to a string.
 /// async fn fut_to_string<Fut>(fut: Fut) -> String
 /// where
 ///     Fut: IntoFuture,
@@ -99,6 +99,12 @@ use crate::future::Future;
 /// }
 /// ```
 #[stable(feature = "into_future", since = "1.64.0")]
+#[rustc_diagnostic_item = "IntoFuture"]
+#[diagnostic::on_unimplemented(
+    label = "`{Self}` is not a future",
+    message = "`{Self}` is not a future",
+    note = "{Self} must be a future or must implement `IntoFuture` to be awaited"
+)]
 pub trait IntoFuture {
     /// The output that the future will produce on completion.
     #[stable(feature = "into_future", since = "1.64.0")]

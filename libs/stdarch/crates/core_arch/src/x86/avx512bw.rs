@@ -1,35 +1,33 @@
 use crate::{
-    arch::asm,
-    core_arch::{simd::*, simd_llvm::*, x86::*},
-    mem::{self, transmute},
+    core_arch::{simd::*, x86::*},
+    intrinsics::simd::*,
     ptr,
 };
+
+use core::hint::unreachable_unchecked;
 
 #[cfg(test)]
 use stdarch_test::assert_instr;
 
-use super::avx512f::{vpl, vps};
-
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_abs_epi16&expand=30)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_abs_epi16&expand=30)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm512_abs_epi16(a: __m512i) -> __m512i {
     let a = a.as_i16x32();
-    // all-0 is a properly initialized i16x32
-    let zero: i16x32 = mem::zeroed();
-    let sub = simd_sub(zero, a);
-    let cmp: i16x32 = simd_gt(a, zero);
-    transmute(simd_select(cmp, a, sub))
+    let cmp: i16x32 = simd_gt(a, i16x32::ZERO);
+    transmute(simd_select(cmp, a, simd_neg(a)))
 }
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_abs_epi16&expand=31)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_abs_epi16&expand=31)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm512_mask_abs_epi16(src: __m512i, k: __mmask32, a: __m512i) -> __m512i {
     let abs = _mm512_abs_epi16(a).as_i16x32();
@@ -38,21 +36,22 @@ pub unsafe fn _mm512_mask_abs_epi16(src: __m512i, k: __mmask32, a: __m512i) -> _
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_abs_epi16&expand=32)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_abs_epi16&expand=32)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm512_maskz_abs_epi16(k: __mmask32, a: __m512i) -> __m512i {
     let abs = _mm512_abs_epi16(a).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i16x32::ZERO))
 }
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_abs_epi16&expand=28)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_abs_epi16&expand=28)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm256_mask_abs_epi16(src: __m256i, k: __mmask16, a: __m256i) -> __m256i {
     let abs = _mm256_abs_epi16(a).as_i16x16();
@@ -61,21 +60,22 @@ pub unsafe fn _mm256_mask_abs_epi16(src: __m256i, k: __mmask16, a: __m256i) -> _
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_abs_epi16&expand=29)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_abs_epi16&expand=29)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm256_maskz_abs_epi16(k: __mmask16, a: __m256i) -> __m256i {
     let abs = _mm256_abs_epi16(a).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i16x16::ZERO))
 }
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_abs_epi16&expand=25)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_abs_epi16&expand=25)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm_mask_abs_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let abs = _mm_abs_epi16(a).as_i16x8();
@@ -84,36 +84,35 @@ pub unsafe fn _mm_mask_abs_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m12
 
 /// Compute the absolute value of packed signed 16-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_abs_epi16&expand=26)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_abs_epi16&expand=26)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsw))]
 pub unsafe fn _mm_maskz_abs_epi16(k: __mmask8, a: __m128i) -> __m128i {
     let abs = _mm_abs_epi16(a).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i16x8::ZERO))
 }
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_abs_epi8&expand=57)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_abs_epi8&expand=57)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm512_abs_epi8(a: __m512i) -> __m512i {
     let a = a.as_i8x64();
-    // all-0 is a properly initialized i8x64
-    let zero: i8x64 = mem::zeroed();
-    let sub = simd_sub(zero, a);
-    let cmp: i8x64 = simd_gt(a, zero);
-    transmute(simd_select(cmp, a, sub))
+    let cmp: i8x64 = simd_gt(a, i8x64::ZERO);
+    transmute(simd_select(cmp, a, simd_neg(a)))
 }
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_abs_epi8&expand=58)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_abs_epi8&expand=58)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm512_mask_abs_epi8(src: __m512i, k: __mmask64, a: __m512i) -> __m512i {
     let abs = _mm512_abs_epi8(a).as_i8x64();
@@ -122,21 +121,22 @@ pub unsafe fn _mm512_mask_abs_epi8(src: __m512i, k: __mmask64, a: __m512i) -> __
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_abs_epi8&expand=59)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_abs_epi8&expand=59)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm512_maskz_abs_epi8(k: __mmask64, a: __m512i) -> __m512i {
     let abs = _mm512_abs_epi8(a).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i8x64::ZERO))
 }
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_abs_epi8&expand=55)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_abs_epi8&expand=55)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm256_mask_abs_epi8(src: __m256i, k: __mmask32, a: __m256i) -> __m256i {
     let abs = _mm256_abs_epi8(a).as_i8x32();
@@ -145,21 +145,22 @@ pub unsafe fn _mm256_mask_abs_epi8(src: __m256i, k: __mmask32, a: __m256i) -> __
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_abs_epi8&expand=56)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_abs_epi8&expand=56)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm256_maskz_abs_epi8(k: __mmask32, a: __m256i) -> __m256i {
     let abs = _mm256_abs_epi8(a).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i8x32::ZERO))
 }
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set)
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_abs_epi8&expand=52)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_abs_epi8&expand=52)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm_mask_abs_epi8(src: __m128i, k: __mmask16, a: __m128i) -> __m128i {
     let abs = _mm_abs_epi8(a).as_i8x16();
@@ -168,21 +169,22 @@ pub unsafe fn _mm_mask_abs_epi8(src: __m128i, k: __mmask16, a: __m128i) -> __m12
 
 /// Compute the absolute value of packed signed 8-bit integers in a, and store the unsigned results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_abs_epi8&expand=53)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_abs_epi8&expand=53)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpabsb))]
 pub unsafe fn _mm_maskz_abs_epi8(k: __mmask16, a: __m128i) -> __m128i {
     let abs = _mm_abs_epi8(a).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, abs, zero))
+    transmute(simd_select_bitmask(k, abs, i8x16::ZERO))
 }
 
 /// Add packed 16-bit integers in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_add_epi16&expand=91)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_add_epi16&expand=91)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm512_add_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_add(a.as_i16x32(), b.as_i16x32()))
@@ -190,9 +192,10 @@ pub unsafe fn _mm512_add_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_add_epi16&expand=92)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_add_epi16&expand=92)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm512_mask_add_epi16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let add = _mm512_add_epi16(a, b).as_i16x32();
@@ -201,21 +204,22 @@ pub unsafe fn _mm512_mask_add_epi16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_add_epi16&expand=93)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_add_epi16&expand=93)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm512_maskz_add_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let add = _mm512_add_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i16x32::ZERO))
 }
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_add_epi&expand=89)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_add_epi16&expand=89)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm256_mask_add_epi16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let add = _mm256_add_epi16(a, b).as_i16x16();
@@ -224,21 +228,22 @@ pub unsafe fn _mm256_mask_add_epi16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_add_epi16&expand=90)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_add_epi16&expand=90)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm256_maskz_add_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let add = _mm256_add_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i16x16::ZERO))
 }
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_add_epi16&expand=86)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_add_epi16&expand=86)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm_mask_add_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let add = _mm_add_epi16(a, b).as_i16x8();
@@ -247,21 +252,22 @@ pub unsafe fn _mm_mask_add_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Add packed 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_add_epi16&expand=87)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_add_epi16&expand=87)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddw))]
 pub unsafe fn _mm_maskz_add_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let add = _mm_add_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i16x8::ZERO))
 }
 
 /// Add packed 8-bit integers in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_add_epi8&expand=118)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_add_epi8&expand=118)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm512_add_epi8(a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_add(a.as_i8x64(), b.as_i8x64()))
@@ -269,9 +275,10 @@ pub unsafe fn _mm512_add_epi8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_add_epi8&expand=119)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_add_epi8&expand=119)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm512_mask_add_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let add = _mm512_add_epi8(a, b).as_i8x64();
@@ -280,21 +287,22 @@ pub unsafe fn _mm512_mask_add_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_add_epi8&expand=120)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_add_epi8&expand=120)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm512_maskz_add_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let add = _mm512_add_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i8x64::ZERO))
 }
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_add_epi8&expand=116)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_add_epi8&expand=116)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm256_mask_add_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let add = _mm256_add_epi8(a, b).as_i8x32();
@@ -303,21 +311,22 @@ pub unsafe fn _mm256_mask_add_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_add_epi8&expand=117)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_add_epi8&expand=117)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm256_maskz_add_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let add = _mm256_add_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i8x32::ZERO))
 }
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_add_epi8&expand=113)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_add_epi8&expand=113)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm_mask_add_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let add = _mm_add_epi8(a, b).as_i8x16();
@@ -326,36 +335,33 @@ pub unsafe fn _mm_mask_add_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Add packed 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_add_epi8&expand=114)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_add_epi8&expand=114)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddb))]
 pub unsafe fn _mm_maskz_add_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let add = _mm_add_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, add, zero))
+    transmute(simd_select_bitmask(k, add, i8x16::ZERO))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_adds_epu16&expand=197)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_adds_epu16&expand=197)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm512_adds_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddusw(
-        a.as_u16x32(),
-        b.as_u16x32(),
-        _mm512_setzero_si512().as_u16x32(),
-        0b11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_add(a.as_u16x32(), b.as_u16x32()))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_adds_epu16&expand=198)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_adds_epu16&expand=198)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm512_mask_adds_epu16(
     src: __m512i,
@@ -363,29 +369,28 @@ pub unsafe fn _mm512_mask_adds_epu16(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    transmute(vpaddusw(a.as_u16x32(), b.as_u16x32(), src.as_u16x32(), k))
+    let add = _mm512_adds_epu16(a, b).as_u16x32();
+    transmute(simd_select_bitmask(k, add, src.as_u16x32()))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_adds_epu16&expand=199)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_adds_epu16&expand=199)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm512_maskz_adds_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddusw(
-        a.as_u16x32(),
-        b.as_u16x32(),
-        _mm512_setzero_si512().as_u16x32(),
-        k,
-    ))
+    let add = _mm512_adds_epu16(a, b).as_u16x32();
+    transmute(simd_select_bitmask(k, add, u16x32::ZERO))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_adds_epu16&expand=195)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_adds_epu16&expand=195)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm256_mask_adds_epu16(
     src: __m256i,
@@ -393,164 +398,146 @@ pub unsafe fn _mm256_mask_adds_epu16(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    transmute(vpaddusw256(
-        a.as_u16x16(),
-        b.as_u16x16(),
-        src.as_u16x16(),
-        k,
-    ))
+    let add = _mm256_adds_epu16(a, b).as_u16x16();
+    transmute(simd_select_bitmask(k, add, src.as_u16x16()))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_adds_epu16&expand=196)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_adds_epu16&expand=196)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm256_maskz_adds_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddusw256(
-        a.as_u16x16(),
-        b.as_u16x16(),
-        _mm256_setzero_si256().as_u16x16(),
-        k,
-    ))
+    let add = _mm256_adds_epu16(a, b).as_u16x16();
+    transmute(simd_select_bitmask(k, add, u16x16::ZERO))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_adds_epu16&expand=192)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_adds_epu16&expand=192)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm_mask_adds_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddusw128(a.as_u16x8(), b.as_u16x8(), src.as_u16x8(), k))
+    let add = _mm_adds_epu16(a, b).as_u16x8();
+    transmute(simd_select_bitmask(k, add, src.as_u16x8()))
 }
 
 /// Add packed unsigned 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_adds_epu16&expand=193)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_adds_epu16&expand=193)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusw))]
 pub unsafe fn _mm_maskz_adds_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddusw128(
-        a.as_u16x8(),
-        b.as_u16x8(),
-        _mm_setzero_si128().as_u16x8(),
-        k,
-    ))
+    let add = _mm_adds_epu16(a, b).as_u16x8();
+    transmute(simd_select_bitmask(k, add, u16x8::ZERO))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_adds_epu8&expand=206)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_adds_epu8&expand=206)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm512_adds_epu8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddusb(
-        a.as_u8x64(),
-        b.as_u8x64(),
-        _mm512_setzero_si512().as_u8x64(),
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_add(a.as_u8x64(), b.as_u8x64()))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_adds_epu8&expand=207)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_adds_epu8&expand=207)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm512_mask_adds_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddusb(a.as_u8x64(), b.as_u8x64(), src.as_u8x64(), k))
+    let add = _mm512_adds_epu8(a, b).as_u8x64();
+    transmute(simd_select_bitmask(k, add, src.as_u8x64()))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_adds_epu8&expand=208)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_adds_epu8&expand=208)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm512_maskz_adds_epu8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddusb(
-        a.as_u8x64(),
-        b.as_u8x64(),
-        _mm512_setzero_si512().as_u8x64(),
-        k,
-    ))
+    let add = _mm512_adds_epu8(a, b).as_u8x64();
+    transmute(simd_select_bitmask(k, add, u8x64::ZERO))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_adds_epu8&expand=204)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_adds_epu8&expand=204)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm256_mask_adds_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddusb256(a.as_u8x32(), b.as_u8x32(), src.as_u8x32(), k))
+    let add = _mm256_adds_epu8(a, b).as_u8x32();
+    transmute(simd_select_bitmask(k, add, src.as_u8x32()))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_adds_epu8&expand=205)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_adds_epu8&expand=205)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm256_maskz_adds_epu8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddusb256(
-        a.as_u8x32(),
-        b.as_u8x32(),
-        _mm256_setzero_si256().as_u8x32(),
-        k,
-    ))
+    let add = _mm256_adds_epu8(a, b).as_u8x32();
+    transmute(simd_select_bitmask(k, add, u8x32::ZERO))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_adds_epu8&expand=201)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_adds_epu8&expand=201)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm_mask_adds_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddusb128(a.as_u8x16(), b.as_u8x16(), src.as_u8x16(), k))
+    let add = _mm_adds_epu8(a, b).as_u8x16();
+    transmute(simd_select_bitmask(k, add, src.as_u8x16()))
 }
 
 /// Add packed unsigned 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_adds_epu8&expand=202)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_adds_epu8&expand=202)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddusb))]
 pub unsafe fn _mm_maskz_adds_epu8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddusb128(
-        a.as_u8x16(),
-        b.as_u8x16(),
-        _mm_setzero_si128().as_u8x16(),
-        k,
-    ))
+    let add = _mm_adds_epu8(a, b).as_u8x16();
+    transmute(simd_select_bitmask(k, add, u8x16::ZERO))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_adds_epi16&expand=179)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_adds_epi16&expand=179)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm512_adds_epi16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddsw(
-        a.as_i16x32(),
-        b.as_i16x32(),
-        _mm512_setzero_si512().as_i16x32(),
-        0b11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_add(a.as_i16x32(), b.as_i16x32()))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_adds_epi16&expand=180)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_adds_epi16&expand=180)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm512_mask_adds_epi16(
     src: __m512i,
@@ -558,29 +545,28 @@ pub unsafe fn _mm512_mask_adds_epi16(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    transmute(vpaddsw(a.as_i16x32(), b.as_i16x32(), src.as_i16x32(), k))
+    let add = _mm512_adds_epi16(a, b).as_i16x32();
+    transmute(simd_select_bitmask(k, add, src.as_i16x32()))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_adds_epi16&expand=181)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_adds_epi16&expand=181)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm512_maskz_adds_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddsw(
-        a.as_i16x32(),
-        b.as_i16x32(),
-        _mm512_setzero_si512().as_i16x32(),
-        k,
-    ))
+    let add = _mm512_adds_epi16(a, b).as_i16x32();
+    transmute(simd_select_bitmask(k, add, i16x32::ZERO))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_adds_epi16&expand=177)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_adds_epi16&expand=177)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm256_mask_adds_epi16(
     src: __m256i,
@@ -588,144 +574,135 @@ pub unsafe fn _mm256_mask_adds_epi16(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    transmute(vpaddsw256(a.as_i16x16(), b.as_i16x16(), src.as_i16x16(), k))
+    let add = _mm256_adds_epi16(a, b).as_i16x16();
+    transmute(simd_select_bitmask(k, add, src.as_i16x16()))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_adds_epi16&expand=178)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_adds_epi16&expand=178)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm256_maskz_adds_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddsw256(
-        a.as_i16x16(),
-        b.as_i16x16(),
-        _mm256_setzero_si256().as_i16x16(),
-        k,
-    ))
+    let add = _mm256_adds_epi16(a, b).as_i16x16();
+    transmute(simd_select_bitmask(k, add, i16x16::ZERO))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_adds_epi16&expand=174)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_adds_epi16&expand=174)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm_mask_adds_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddsw128(a.as_i16x8(), b.as_i16x8(), src.as_i16x8(), k))
+    let add = _mm_adds_epi16(a, b).as_i16x8();
+    transmute(simd_select_bitmask(k, add, src.as_i16x8()))
 }
 
 /// Add packed signed 16-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_adds_epi16&expand=175)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_adds_epi16&expand=175)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsw))]
 pub unsafe fn _mm_maskz_adds_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddsw128(
-        a.as_i16x8(),
-        b.as_i16x8(),
-        _mm_setzero_si128().as_i16x8(),
-        k,
-    ))
+    let add = _mm_adds_epi16(a, b).as_i16x8();
+    transmute(simd_select_bitmask(k, add, i16x8::ZERO))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_adds_epi8&expand=188)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_adds_epi8&expand=188)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm512_adds_epi8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddsb(
-        a.as_i8x64(),
-        b.as_i8x64(),
-        _mm512_setzero_si512().as_i8x64(),
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_add(a.as_i8x64(), b.as_i8x64()))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_adds_epi8&expand=189)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_adds_epi8&expand=189)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm512_mask_adds_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddsb(a.as_i8x64(), b.as_i8x64(), src.as_i8x64(), k))
+    let add = _mm512_adds_epi8(a, b).as_i8x64();
+    transmute(simd_select_bitmask(k, add, src.as_i8x64()))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_adds_epi8&expand=190)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_adds_epi8&expand=190)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm512_maskz_adds_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpaddsb(
-        a.as_i8x64(),
-        b.as_i8x64(),
-        _mm512_setzero_si512().as_i8x64(),
-        k,
-    ))
+    let add = _mm512_adds_epi8(a, b).as_i8x64();
+    transmute(simd_select_bitmask(k, add, i8x64::ZERO))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_adds_epi8&expand=186)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_adds_epi8&expand=186)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm256_mask_adds_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddsb256(a.as_i8x32(), b.as_i8x32(), src.as_i8x32(), k))
+    let add = _mm256_adds_epi8(a, b).as_i8x32();
+    transmute(simd_select_bitmask(k, add, src.as_i8x32()))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_adds_epi8&expand=187)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_adds_epi8&expand=187)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm256_maskz_adds_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpaddsb256(
-        a.as_i8x32(),
-        b.as_i8x32(),
-        _mm256_setzero_si256().as_i8x32(),
-        k,
-    ))
+    let add = _mm256_adds_epi8(a, b).as_i8x32();
+    transmute(simd_select_bitmask(k, add, i8x32::ZERO))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_adds_epi8&expand=183)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_adds_epi8&expand=183)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm_mask_adds_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddsb128(a.as_i8x16(), b.as_i8x16(), src.as_i8x16(), k))
+    let add = _mm_adds_epi8(a, b).as_i8x16();
+    transmute(simd_select_bitmask(k, add, src.as_i8x16()))
 }
 
 /// Add packed signed 8-bit integers in a and b using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_adds_epi8&expand=184)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_adds_epi8&expand=184)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpaddsb))]
 pub unsafe fn _mm_maskz_adds_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpaddsb128(
-        a.as_i8x16(),
-        b.as_i8x16(),
-        _mm_setzero_si128().as_i8x16(),
-        k,
-    ))
+    let add = _mm_adds_epi8(a, b).as_i8x16();
+    transmute(simd_select_bitmask(k, add, i8x16::ZERO))
 }
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sub_epi16&expand=5685)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sub_epi16&expand=5685)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm512_sub_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_sub(a.as_i16x32(), b.as_i16x32()))
@@ -733,9 +710,10 @@ pub unsafe fn _mm512_sub_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_sub_epi16&expand=5683)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_sub_epi16&expand=5683)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm512_mask_sub_epi16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let sub = _mm512_sub_epi16(a, b).as_i16x32();
@@ -744,21 +722,22 @@ pub unsafe fn _mm512_mask_sub_epi16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_sub_epi16&expand=5684)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_sub_epi16&expand=5684)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm512_maskz_sub_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let sub = _mm512_sub_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i16x32::ZERO))
 }
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_sub_epi16&expand=5680)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_sub_epi16&expand=5680)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm256_mask_sub_epi16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let sub = _mm256_sub_epi16(a, b).as_i16x16();
@@ -767,21 +746,22 @@ pub unsafe fn _mm256_mask_sub_epi16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_sub_epi16&expand=5681)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_sub_epi16&expand=5681)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm256_maskz_sub_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let sub = _mm256_sub_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i16x16::ZERO))
 }
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_sub_epi16&expand=5677)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_sub_epi16&expand=5677)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm_mask_sub_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let sub = _mm_sub_epi16(a, b).as_i16x8();
@@ -790,21 +770,22 @@ pub unsafe fn _mm_mask_sub_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Subtract packed 16-bit integers in b from packed 16-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_sub_epi16&expand=5678)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_sub_epi16&expand=5678)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubw))]
 pub unsafe fn _mm_maskz_sub_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let sub = _mm_sub_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i16x8::ZERO))
 }
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sub_epi8&expand=5712)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sub_epi8&expand=5712)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm512_sub_epi8(a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_sub(a.as_i8x64(), b.as_i8x64()))
@@ -812,9 +793,10 @@ pub unsafe fn _mm512_sub_epi8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_sub_epi8&expand=5710)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_sub_epi8&expand=5710)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm512_mask_sub_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let sub = _mm512_sub_epi8(a, b).as_i8x64();
@@ -823,21 +805,22 @@ pub unsafe fn _mm512_mask_sub_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_sub_epi8&expand=5711)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_sub_epi8&expand=5711)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm512_maskz_sub_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let sub = _mm512_sub_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i8x64::ZERO))
 }
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_sub_epi8&expand=5707)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_sub_epi8&expand=5707)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm256_mask_sub_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let sub = _mm256_sub_epi8(a, b).as_i8x32();
@@ -846,21 +829,22 @@ pub unsafe fn _mm256_mask_sub_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_sub_epi8&expand=5708)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_sub_epi8&expand=5708)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm256_maskz_sub_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let sub = _mm256_sub_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i8x32::ZERO))
 }
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_sub_epi8&expand=5704)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_sub_epi8&expand=5704)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm_mask_sub_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let sub = _mm_sub_epi8(a, b).as_i8x16();
@@ -869,36 +853,33 @@ pub unsafe fn _mm_mask_sub_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Subtract packed 8-bit integers in b from packed 8-bit integers in a, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_sub_epi8&expand=5705)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_sub_epi8&expand=5705)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubb))]
 pub unsafe fn _mm_maskz_sub_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let sub = _mm_sub_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, sub, zero))
+    transmute(simd_select_bitmask(k, sub, i8x16::ZERO))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_subs_epu16&expand=5793)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_subs_epu16&expand=5793)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm512_subs_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubusw(
-        a.as_u16x32(),
-        b.as_u16x32(),
-        _mm512_setzero_si512().as_u16x32(),
-        0b11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_sub(a.as_u16x32(), b.as_u16x32()))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_subs_epu16&expand=5791)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_subs_epu16&expand=5791)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm512_mask_subs_epu16(
     src: __m512i,
@@ -906,29 +887,28 @@ pub unsafe fn _mm512_mask_subs_epu16(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    transmute(vpsubusw(a.as_u16x32(), b.as_u16x32(), src.as_u16x32(), k))
+    let sub = _mm512_subs_epu16(a, b).as_u16x32();
+    transmute(simd_select_bitmask(k, sub, src.as_u16x32()))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_subs_epu16&expand=5792)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_subs_epu16&expand=5792)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm512_maskz_subs_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubusw(
-        a.as_u16x32(),
-        b.as_u16x32(),
-        _mm512_setzero_si512().as_u16x32(),
-        k,
-    ))
+    let sub = _mm512_subs_epu16(a, b).as_u16x32();
+    transmute(simd_select_bitmask(k, sub, u16x32::ZERO))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_subs_epu16&expand=5788)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_subs_epu16&expand=5788)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm256_mask_subs_epu16(
     src: __m256i,
@@ -936,164 +916,146 @@ pub unsafe fn _mm256_mask_subs_epu16(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    transmute(vpsubusw256(
-        a.as_u16x16(),
-        b.as_u16x16(),
-        src.as_u16x16(),
-        k,
-    ))
+    let sub = _mm256_subs_epu16(a, b).as_u16x16();
+    transmute(simd_select_bitmask(k, sub, src.as_u16x16()))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_subs_epu16&expand=5789)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_subs_epu16&expand=5789)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm256_maskz_subs_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubusw256(
-        a.as_u16x16(),
-        b.as_u16x16(),
-        _mm256_setzero_si256().as_u16x16(),
-        k,
-    ))
+    let sub = _mm256_subs_epu16(a, b).as_u16x16();
+    transmute(simd_select_bitmask(k, sub, u16x16::ZERO))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_subs_epu16&expand=5785)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_subs_epu16&expand=5785)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm_mask_subs_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubusw128(a.as_u16x8(), b.as_u16x8(), src.as_u16x8(), k))
+    let sub = _mm_subs_epu16(a, b).as_u16x8();
+    transmute(simd_select_bitmask(k, sub, src.as_u16x8()))
 }
 
 /// Subtract packed unsigned 16-bit integers in b from packed unsigned 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_subs_epu16&expand=5786)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_subs_epu16&expand=5786)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusw))]
 pub unsafe fn _mm_maskz_subs_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubusw128(
-        a.as_u16x8(),
-        b.as_u16x8(),
-        _mm_setzero_si128().as_u16x8(),
-        k,
-    ))
+    let sub = _mm_subs_epu16(a, b).as_u16x8();
+    transmute(simd_select_bitmask(k, sub, u16x8::ZERO))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_subs_epu8&expand=5802)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_subs_epu8&expand=5802)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm512_subs_epu8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubusb(
-        a.as_u8x64(),
-        b.as_u8x64(),
-        _mm512_setzero_si512().as_u8x64(),
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_sub(a.as_u8x64(), b.as_u8x64()))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_subs_epu8&expand=5800)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_subs_epu8&expand=5800)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm512_mask_subs_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubusb(a.as_u8x64(), b.as_u8x64(), src.as_u8x64(), k))
+    let sub = _mm512_subs_epu8(a, b).as_u8x64();
+    transmute(simd_select_bitmask(k, sub, src.as_u8x64()))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_subs_epu8&expand=5801)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_subs_epu8&expand=5801)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm512_maskz_subs_epu8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubusb(
-        a.as_u8x64(),
-        b.as_u8x64(),
-        _mm512_setzero_si512().as_u8x64(),
-        k,
-    ))
+    let sub = _mm512_subs_epu8(a, b).as_u8x64();
+    transmute(simd_select_bitmask(k, sub, u8x64::ZERO))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_subs_epu8&expand=5797)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_subs_epu8&expand=5797)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm256_mask_subs_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubusb256(a.as_u8x32(), b.as_u8x32(), src.as_u8x32(), k))
+    let sub = _mm256_subs_epu8(a, b).as_u8x32();
+    transmute(simd_select_bitmask(k, sub, src.as_u8x32()))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_subs_epu8&expand=5798)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_subs_epu8&expand=5798)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm256_maskz_subs_epu8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubusb256(
-        a.as_u8x32(),
-        b.as_u8x32(),
-        _mm256_setzero_si256().as_u8x32(),
-        k,
-    ))
+    let sub = _mm256_subs_epu8(a, b).as_u8x32();
+    transmute(simd_select_bitmask(k, sub, u8x32::ZERO))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_subs_epu8&expand=5794)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_subs_epu8&expand=5794)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm_mask_subs_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubusb128(a.as_u8x16(), b.as_u8x16(), src.as_u8x16(), k))
+    let sub = _mm_subs_epu8(a, b).as_u8x16();
+    transmute(simd_select_bitmask(k, sub, src.as_u8x16()))
 }
 
 /// Subtract packed unsigned 8-bit integers in b from packed unsigned 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_subs_epu8&expand=5795)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_subs_epu8&expand=5795)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubusb))]
 pub unsafe fn _mm_maskz_subs_epu8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubusb128(
-        a.as_u8x16(),
-        b.as_u8x16(),
-        _mm_setzero_si128().as_u8x16(),
-        k,
-    ))
+    let sub = _mm_subs_epu8(a, b).as_u8x16();
+    transmute(simd_select_bitmask(k, sub, u8x16::ZERO))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_subs_epi16&expand=5775)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_subs_epi16&expand=5775)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm512_subs_epi16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubsw(
-        a.as_i16x32(),
-        b.as_i16x32(),
-        _mm512_setzero_si512().as_i16x32(),
-        0b11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_sub(a.as_i16x32(), b.as_i16x32()))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_subs_epi16&expand=5773)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_subs_epi16&expand=5773)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm512_mask_subs_epi16(
     src: __m512i,
@@ -1101,29 +1063,28 @@ pub unsafe fn _mm512_mask_subs_epi16(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    transmute(vpsubsw(a.as_i16x32(), b.as_i16x32(), src.as_i16x32(), k))
+    let sub = _mm512_subs_epi16(a, b).as_i16x32();
+    transmute(simd_select_bitmask(k, sub, src.as_i16x32()))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_subs_epi16&expand=5774)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_subs_epi16&expand=5774)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm512_maskz_subs_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubsw(
-        a.as_i16x32(),
-        b.as_i16x32(),
-        _mm512_setzero_si512().as_i16x32(),
-        k,
-    ))
+    let sub = _mm512_subs_epi16(a, b).as_i16x32();
+    transmute(simd_select_bitmask(k, sub, i16x32::ZERO))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_subs_epi16&expand=5770)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_subs_epi16&expand=5770)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm256_mask_subs_epi16(
     src: __m256i,
@@ -1131,154 +1092,149 @@ pub unsafe fn _mm256_mask_subs_epi16(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    transmute(vpsubsw256(a.as_i16x16(), b.as_i16x16(), src.as_i16x16(), k))
+    let sub = _mm256_subs_epi16(a, b).as_i16x16();
+    transmute(simd_select_bitmask(k, sub, src.as_i16x16()))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_subs_epi16&expand=5771)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_subs_epi16&expand=5771)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm256_maskz_subs_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubsw256(
-        a.as_i16x16(),
-        b.as_i16x16(),
-        _mm256_setzero_si256().as_i16x16(),
-        k,
-    ))
+    let sub = _mm256_subs_epi16(a, b).as_i16x16();
+    transmute(simd_select_bitmask(k, sub, i16x16::ZERO))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_subs_epi16&expand=5767)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_subs_epi16&expand=5767)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm_mask_subs_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubsw128(a.as_i16x8(), b.as_i16x8(), src.as_i16x8(), k))
+    let sub = _mm_subs_epi16(a, b).as_i16x8();
+    transmute(simd_select_bitmask(k, sub, src.as_i16x8()))
 }
 
 /// Subtract packed signed 16-bit integers in b from packed 16-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_subs_epi16&expand=5768)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_subs_epi16&expand=5768)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsw))]
 pub unsafe fn _mm_maskz_subs_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubsw128(
-        a.as_i16x8(),
-        b.as_i16x8(),
-        _mm_setzero_si128().as_i16x8(),
-        k,
-    ))
+    let sub = _mm_subs_epi16(a, b).as_i16x8();
+    transmute(simd_select_bitmask(k, sub, i16x8::ZERO))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_subs_epi8&expand=5784)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_subs_epi8&expand=5784)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm512_subs_epi8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubsb(
-        a.as_i8x64(),
-        b.as_i8x64(),
-        _mm512_setzero_si512().as_i8x64(),
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    ))
+    transmute(simd_saturating_sub(a.as_i8x64(), b.as_i8x64()))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_subs_epi8&expand=5782)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_subs_epi8&expand=5782)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm512_mask_subs_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubsb(a.as_i8x64(), b.as_i8x64(), src.as_i8x64(), k))
+    let sub = _mm512_subs_epi8(a, b).as_i8x64();
+    transmute(simd_select_bitmask(k, sub, src.as_i8x64()))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_subs_epi8&expand=5783)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_subs_epi8&expand=5783)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm512_maskz_subs_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpsubsb(
-        a.as_i8x64(),
-        b.as_i8x64(),
-        _mm512_setzero_si512().as_i8x64(),
-        k,
-    ))
+    let sub = _mm512_subs_epi8(a, b).as_i8x64();
+    transmute(simd_select_bitmask(k, sub, i8x64::ZERO))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_subs_epi8&expand=5779)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_subs_epi8&expand=5779)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm256_mask_subs_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubsb256(a.as_i8x32(), b.as_i8x32(), src.as_i8x32(), k))
+    let sub = _mm256_subs_epi8(a, b).as_i8x32();
+    transmute(simd_select_bitmask(k, sub, src.as_i8x32()))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_subs_epi8&expand=5780)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_subs_epi8&expand=5780)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm256_maskz_subs_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpsubsb256(
-        a.as_i8x32(),
-        b.as_i8x32(),
-        _mm256_setzero_si256().as_i8x32(),
-        k,
-    ))
+    let sub = _mm256_subs_epi8(a, b).as_i8x32();
+    transmute(simd_select_bitmask(k, sub, i8x32::ZERO))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_subs_epi8&expand=5776)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_subs_epi8&expand=5776)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm_mask_subs_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubsb128(a.as_i8x16(), b.as_i8x16(), src.as_i8x16(), k))
+    let sub = _mm_subs_epi8(a, b).as_i8x16();
+    transmute(simd_select_bitmask(k, sub, src.as_i8x16()))
 }
 
 /// Subtract packed signed 8-bit integers in b from packed 8-bit integers in a using saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_subs_epi8&expand=5777)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_subs_epi8&expand=5777)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsubsb))]
 pub unsafe fn _mm_maskz_subs_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpsubsb128(
-        a.as_i8x16(),
-        b.as_i8x16(),
-        _mm_setzero_si128().as_i8x16(),
-        k,
-    ))
+    let sub = _mm_subs_epi8(a, b).as_i8x16();
+    transmute(simd_select_bitmask(k, sub, i8x16::ZERO))
 }
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mulhi_epu16&expand=3973)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mulhi_epu16&expand=3973)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm512_mulhi_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmulhuw(a.as_u16x32(), b.as_u16x32()))
+    let a = simd_cast::<_, u32x32>(a.as_u16x32());
+    let b = simd_cast::<_, u32x32>(b.as_u16x32());
+    let r = simd_shr(simd_mul(a, b), u32x32::splat(16));
+    transmute(simd_cast::<u32x32, u16x32>(r))
 }
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mulhi_epu16&expand=3971)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mulhi_epu16&expand=3971)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm512_mask_mulhi_epu16(
     src: __m512i,
@@ -1292,21 +1248,22 @@ pub unsafe fn _mm512_mask_mulhi_epu16(
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mulhi_epu16&expand=3972)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mulhi_epu16&expand=3972)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm512_maskz_mulhi_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let mul = _mm512_mulhi_epu16(a, b).as_u16x32();
-    let zero = _mm512_setzero_si512().as_u16x32();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, u16x32::ZERO))
 }
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mulhi_epu16&expand=3968)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mulhi_epu16&expand=3968)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm256_mask_mulhi_epu16(
     src: __m256i,
@@ -1320,21 +1277,22 @@ pub unsafe fn _mm256_mask_mulhi_epu16(
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mulhi_epu16&expand=3969)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mulhi_epu16&expand=3969)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm256_maskz_mulhi_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let mul = _mm256_mulhi_epu16(a, b).as_u16x16();
-    let zero = _mm256_setzero_si256().as_u16x16();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, u16x16::ZERO))
 }
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mulhi_epu16&expand=3965)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mulhi_epu16&expand=3965)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm_mask_mulhi_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhi_epu16(a, b).as_u16x8();
@@ -1343,31 +1301,36 @@ pub unsafe fn _mm_mask_mulhi_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m
 
 /// Multiply the packed unsigned 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mulhi_epu16&expand=3966)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mulhi_epu16&expand=3966)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhuw))]
 pub unsafe fn _mm_maskz_mulhi_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhi_epu16(a, b).as_u16x8();
-    let zero = _mm_setzero_si128().as_u16x8();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, u16x8::ZERO))
 }
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mulhi_epi16&expand=3962)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mulhi_epi16&expand=3962)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm512_mulhi_epi16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmulhw(a.as_i16x32(), b.as_i16x32()))
+    let a = simd_cast::<_, i32x32>(a.as_i16x32());
+    let b = simd_cast::<_, i32x32>(b.as_i16x32());
+    let r = simd_shr(simd_mul(a, b), i32x32::splat(16));
+    transmute(simd_cast::<i32x32, i16x32>(r))
 }
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mulhi_epi16&expand=3960)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mulhi_epi16&expand=3960)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm512_mask_mulhi_epi16(
     src: __m512i,
@@ -1381,21 +1344,22 @@ pub unsafe fn _mm512_mask_mulhi_epi16(
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mulhi_epi16&expand=3961)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mulhi_epi16&expand=3961)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm512_maskz_mulhi_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let mul = _mm512_mulhi_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x32::ZERO))
 }
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mulhi_epi16&expand=3957)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mulhi_epi16&expand=3957)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm256_mask_mulhi_epi16(
     src: __m256i,
@@ -1409,21 +1373,22 @@ pub unsafe fn _mm256_mask_mulhi_epi16(
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mulhi_epi16&expand=3958)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mulhi_epi16&expand=3958)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm256_maskz_mulhi_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let mul = _mm256_mulhi_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x16::ZERO))
 }
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mulhi_epi16&expand=3954)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mulhi_epi16&expand=3954)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm_mask_mulhi_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhi_epi16(a, b).as_i16x8();
@@ -1432,21 +1397,22 @@ pub unsafe fn _mm_mask_mulhi_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m
 
 /// Multiply the packed signed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the high 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mulhi_epi16&expand=3955)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mulhi_epi16&expand=3955)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhw))]
 pub unsafe fn _mm_maskz_mulhi_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhi_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x8::ZERO))
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mulhrs_epi16&expand=3986)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mulhrs_epi16&expand=3986)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm512_mulhrs_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpmulhrsw(a.as_i16x32(), b.as_i16x32()))
@@ -1454,9 +1420,10 @@ pub unsafe fn _mm512_mulhrs_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mulhrs_epi16&expand=3984)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mulhrs_epi16&expand=3984)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm512_mask_mulhrs_epi16(
     src: __m512i,
@@ -1470,21 +1437,22 @@ pub unsafe fn _mm512_mask_mulhrs_epi16(
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mulhrs_epi16&expand=3985)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mulhrs_epi16&expand=3985)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm512_maskz_mulhrs_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let mul = _mm512_mulhrs_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x32::ZERO))
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mulhrs_epi16&expand=3981)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mulhrs_epi16&expand=3981)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm256_mask_mulhrs_epi16(
     src: __m256i,
@@ -1498,21 +1466,22 @@ pub unsafe fn _mm256_mask_mulhrs_epi16(
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mulhrs_epi16&expand=3982)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mulhrs_epi16&expand=3982)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm256_maskz_mulhrs_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let mul = _mm256_mulhrs_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x16::ZERO))
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mulhrs_epi16&expand=3978)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mulhrs_epi16&expand=3978)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm_mask_mulhrs_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhrs_epi16(a, b).as_i16x8();
@@ -1521,21 +1490,22 @@ pub unsafe fn _mm_mask_mulhrs_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Truncate each intermediate integer to the 18 most significant bits, round by adding 1, and store bits \[16:1\] to dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mulhrs_epi16&expand=3979)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mulhrs_epi16&expand=3979)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmulhrsw))]
 pub unsafe fn _mm_maskz_mulhrs_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mulhrs_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x8::ZERO))
 }
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mullo_epi16&expand=3996)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mullo_epi16&expand=3996)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm512_mullo_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_mul(a.as_i16x32(), b.as_i16x32()))
@@ -1543,9 +1513,10 @@ pub unsafe fn _mm512_mullo_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mullo_epi16&expand=3994)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mullo_epi16&expand=3994)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm512_mask_mullo_epi16(
     src: __m512i,
@@ -1559,21 +1530,22 @@ pub unsafe fn _mm512_mask_mullo_epi16(
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mullo_epi16&expand=3995)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mullo_epi16&expand=3995)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm512_maskz_mullo_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let mul = _mm512_mullo_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x32::ZERO))
 }
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mullo_epi16&expand=3991)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mullo_epi16&expand=3991)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm256_mask_mullo_epi16(
     src: __m256i,
@@ -1587,21 +1559,22 @@ pub unsafe fn _mm256_mask_mullo_epi16(
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mullo_epi16&expand=3992)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mullo_epi16&expand=3992)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm256_maskz_mullo_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let mul = _mm256_mullo_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x16::ZERO))
 }
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mullo_epi16&expand=3988)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mullo_epi16&expand=3988)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm_mask_mullo_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mullo_epi16(a, b).as_i16x8();
@@ -1610,31 +1583,35 @@ pub unsafe fn _mm_mask_mullo_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m
 
 /// Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mullo_epi16&expand=3989)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mullo_epi16&expand=3989)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmullw))]
 pub unsafe fn _mm_maskz_mullo_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let mul = _mm_mullo_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, mul, zero))
+    transmute(simd_select_bitmask(k, mul, i16x8::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_max_epu16&expand=3609)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_max_epu16&expand=3609)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm512_max_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmaxuw(a.as_u16x32(), b.as_u16x32()))
+    let a = a.as_u16x32();
+    let b = b.as_u16x32();
+    transmute(simd_select::<i16x32, _>(simd_gt(a, b), a, b))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_max_epu16&expand=3607)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_max_epu16&expand=3607)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm512_mask_max_epu16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epu16(a, b).as_u16x32();
@@ -1643,21 +1620,22 @@ pub unsafe fn _mm512_mask_max_epu16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_max_epu16&expand=3608)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_max_epu16&expand=3608)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm512_maskz_max_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epu16(a, b).as_u16x32();
-    let zero = _mm512_setzero_si512().as_u16x32();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u16x32::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_max_epu16&expand=3604)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_max_epu16&expand=3604)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm256_mask_max_epu16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epu16(a, b).as_u16x16();
@@ -1666,21 +1644,22 @@ pub unsafe fn _mm256_mask_max_epu16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_max_epu16&expand=3605)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_max_epu16&expand=3605)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm256_maskz_max_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epu16(a, b).as_u16x16();
-    let zero = _mm256_setzero_si256().as_u16x16();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u16x16::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_max_epu16&expand=3601)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_max_epu16&expand=3601)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm_mask_max_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epu16(a, b).as_u16x8();
@@ -1689,31 +1668,35 @@ pub unsafe fn _mm_mask_max_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_max_epu16&expand=3602)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_max_epu16&expand=3602)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxuw))]
 pub unsafe fn _mm_maskz_max_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epu16(a, b).as_u16x8();
-    let zero = _mm_setzero_si128().as_u16x8();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u16x8::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_max_epu8&expand=3636)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_max_epu8&expand=3636)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm512_max_epu8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmaxub(a.as_u8x64(), b.as_u8x64()))
+    let a = a.as_u8x64();
+    let b = b.as_u8x64();
+    transmute(simd_select::<i8x64, _>(simd_gt(a, b), a, b))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_max_epu8&expand=3634)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_max_epu8&expand=3634)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm512_mask_max_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epu8(a, b).as_u8x64();
@@ -1722,21 +1705,22 @@ pub unsafe fn _mm512_mask_max_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_max_epu8&expand=3635)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_max_epu8&expand=3635)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm512_maskz_max_epu8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epu8(a, b).as_u8x64();
-    let zero = _mm512_setzero_si512().as_u8x64();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u8x64::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_max_epu8&expand=3631)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_max_epu8&expand=3631)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm256_mask_max_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epu8(a, b).as_u8x32();
@@ -1745,21 +1729,22 @@ pub unsafe fn _mm256_mask_max_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_max_epu8&expand=3632)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_max_epu8&expand=3632)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm256_maskz_max_epu8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epu8(a, b).as_u8x32();
-    let zero = _mm256_setzero_si256().as_u8x32();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u8x32::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_max_epu8&expand=3628)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_max_epu8&expand=3628)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm_mask_max_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epu8(a, b).as_u8x16();
@@ -1768,31 +1753,35 @@ pub unsafe fn _mm_mask_max_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_max_epu8&expand=3629)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_max_epu8&expand=3629)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxub))]
 pub unsafe fn _mm_maskz_max_epu8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epu8(a, b).as_u8x16();
-    let zero = _mm_setzero_si128().as_u8x16();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, u8x16::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_max_epi16&expand=3573)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_max_epi16&expand=3573)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm512_max_epi16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmaxsw(a.as_i16x32(), b.as_i16x32()))
+    let a = a.as_i16x32();
+    let b = b.as_i16x32();
+    transmute(simd_select::<i16x32, _>(simd_gt(a, b), a, b))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_max_epi16&expand=3571)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_max_epi16&expand=3571)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm512_mask_max_epi16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epi16(a, b).as_i16x32();
@@ -1801,21 +1790,22 @@ pub unsafe fn _mm512_mask_max_epi16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_max_epi16&expand=3572)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_max_epi16&expand=3572)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm512_maskz_max_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i16x32::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_max_epi16&expand=3568)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_max_epi16&expand=3568)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm256_mask_max_epi16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epi16(a, b).as_i16x16();
@@ -1824,21 +1814,22 @@ pub unsafe fn _mm256_mask_max_epi16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_max_epi16&expand=3569)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_max_epi16&expand=3569)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm256_maskz_max_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i16x16::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_max_epi16&expand=3565)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_max_epi16&expand=3565)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm_mask_max_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epi16(a, b).as_i16x8();
@@ -1847,31 +1838,35 @@ pub unsafe fn _mm_mask_max_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Compare packed signed 16-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_max_epi16&expand=3566)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_max_epi16&expand=3566)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsw))]
 pub unsafe fn _mm_maskz_max_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i16x8::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_max_epi8&expand=3600)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_max_epi8&expand=3600)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm512_max_epi8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmaxsb(a.as_i8x64(), b.as_i8x64()))
+    let a = a.as_i8x64();
+    let b = b.as_i8x64();
+    transmute(simd_select::<i8x64, _>(simd_gt(a, b), a, b))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_max_epi8&expand=3598)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_max_epi8&expand=3598)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm512_mask_max_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epi8(a, b).as_i8x64();
@@ -1880,21 +1875,22 @@ pub unsafe fn _mm512_mask_max_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_max_epi8&expand=3599)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_max_epi8&expand=3599)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm512_maskz_max_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let max = _mm512_max_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i8x64::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_max_epi8&expand=3595)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_max_epi8&expand=3595)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm256_mask_max_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epi8(a, b).as_i8x32();
@@ -1903,21 +1899,22 @@ pub unsafe fn _mm256_mask_max_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_max_epi8&expand=3596)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_max_epi8&expand=3596)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm256_maskz_max_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let max = _mm256_max_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i8x32::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_max_epi8&expand=3592)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_max_epi8&expand=3592)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm_mask_max_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epi8(a, b).as_i8x16();
@@ -1926,31 +1923,35 @@ pub unsafe fn _mm_mask_max_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Compare packed signed 8-bit integers in a and b, and store packed maximum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_max_epi8&expand=3593)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_max_epi8&expand=3593)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaxsb))]
 pub unsafe fn _mm_maskz_max_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let max = _mm_max_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, max, zero))
+    transmute(simd_select_bitmask(k, max, i8x16::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_min_epu16&expand=3723)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_min_epu16&expand=3723)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm512_min_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpminuw(a.as_u16x32(), b.as_u16x32()))
+    let a = a.as_u16x32();
+    let b = b.as_u16x32();
+    transmute(simd_select::<i16x32, _>(simd_lt(a, b), a, b))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_min_epu16&expand=3721)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_min_epu16&expand=3721)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm512_mask_min_epu16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epu16(a, b).as_u16x32();
@@ -1959,21 +1960,22 @@ pub unsafe fn _mm512_mask_min_epu16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_min_epu16&expand=3722)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_min_epu16&expand=3722)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm512_maskz_min_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epu16(a, b).as_u16x32();
-    let zero = _mm512_setzero_si512().as_u16x32();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u16x32::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_min_epu16&expand=3718)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_min_epu16&expand=3718)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm256_mask_min_epu16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epu16(a, b).as_u16x16();
@@ -1982,21 +1984,22 @@ pub unsafe fn _mm256_mask_min_epu16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_min_epu16&expand=3719)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_min_epu16&expand=3719)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm256_maskz_min_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epu16(a, b).as_u16x16();
-    let zero = _mm256_setzero_si256().as_u16x16();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u16x16::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_min_epu16&expand=3715)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_min_epu16&expand=3715)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm_mask_min_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epu16(a, b).as_u16x8();
@@ -2005,31 +2008,35 @@ pub unsafe fn _mm_mask_min_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Compare packed unsigned 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_min_epu16&expand=3716)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_min_epu16&expand=3716)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminuw))]
 pub unsafe fn _mm_maskz_min_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epu16(a, b).as_u16x8();
-    let zero = _mm_setzero_si128().as_u16x8();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u16x8::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_min_epu8&expand=3750)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_min_epu8&expand=3750)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm512_min_epu8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpminub(a.as_u8x64(), b.as_u8x64()))
+    let a = a.as_u8x64();
+    let b = b.as_u8x64();
+    transmute(simd_select::<i8x64, _>(simd_lt(a, b), a, b))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_min_epu8&expand=3748)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_min_epu8&expand=3748)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm512_mask_min_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epu8(a, b).as_u8x64();
@@ -2038,21 +2045,22 @@ pub unsafe fn _mm512_mask_min_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_min_epu8&expand=3749)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_min_epu8&expand=3749)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm512_maskz_min_epu8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epu8(a, b).as_u8x64();
-    let zero = _mm512_setzero_si512().as_u8x64();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u8x64::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_min_epu8&expand=3745)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_min_epu8&expand=3745)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm256_mask_min_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epu8(a, b).as_u8x32();
@@ -2061,21 +2069,22 @@ pub unsafe fn _mm256_mask_min_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_min_epu8&expand=3746)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_min_epu8&expand=3746)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm256_maskz_min_epu8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epu8(a, b).as_u8x32();
-    let zero = _mm256_setzero_si256().as_u8x32();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u8x32::ZERO))
 }
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_min_epu8&expand=3742)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_min_epu8&expand=3742)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm_mask_min_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epu8(a, b).as_u8x16();
@@ -2084,31 +2093,35 @@ pub unsafe fn _mm_mask_min_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Compare packed unsigned 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_min_epu8&expand=3743)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_min_epu8&expand=3743)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminub))]
 pub unsafe fn _mm_maskz_min_epu8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epu8(a, b).as_u8x16();
-    let zero = _mm_setzero_si128().as_u8x16();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, u8x16::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_min_epi16&expand=3687)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_min_epi16&expand=3687)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm512_min_epi16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpminsw(a.as_i16x32(), b.as_i16x32()))
+    let a = a.as_i16x32();
+    let b = b.as_i16x32();
+    transmute(simd_select::<i16x32, _>(simd_lt(a, b), a, b))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_min_epi16&expand=3685)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_min_epi16&expand=3685)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm512_mask_min_epi16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epi16(a, b).as_i16x32();
@@ -2117,21 +2130,22 @@ pub unsafe fn _mm512_mask_min_epi16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_min_epi16&expand=3686)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_min_epi16&expand=3686)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm512_maskz_min_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i16x32::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_min_epi16&expand=3682)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_min_epi16&expand=3682)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm256_mask_min_epi16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epi16(a, b).as_i16x16();
@@ -2140,21 +2154,22 @@ pub unsafe fn _mm256_mask_min_epi16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_min_epi16&expand=3683)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_min_epi16&expand=3683)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm256_maskz_min_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i16x16::ZERO))
 }
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_min_epi16&expand=3679)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_min_epi16&expand=3679)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm_mask_min_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epi16(a, b).as_i16x8();
@@ -2163,31 +2178,35 @@ pub unsafe fn _mm_mask_min_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Compare packed signed 16-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_min_epi16&expand=3680)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_min_epi16&expand=3680)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsw))]
 pub unsafe fn _mm_maskz_min_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i16x8::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_min_epi8&expand=3714)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_min_epi8&expand=3714)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm512_min_epi8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpminsb(a.as_i8x64(), b.as_i8x64()))
+    let a = a.as_i8x64();
+    let b = b.as_i8x64();
+    transmute(simd_select::<i8x64, _>(simd_lt(a, b), a, b))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_min_epi8&expand=3712)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_min_epi8&expand=3712)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm512_mask_min_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epi8(a, b).as_i8x64();
@@ -2196,21 +2215,22 @@ pub unsafe fn _mm512_mask_min_epi8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_min_epi8&expand=3713)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_min_epi8&expand=3713)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm512_maskz_min_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let min = _mm512_min_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i8x64::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_min_epi8&expand=3709)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_min_epi8&expand=3709)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm256_mask_min_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epi8(a, b).as_i8x32();
@@ -2219,21 +2239,22 @@ pub unsafe fn _mm256_mask_min_epi8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_min_epi8&expand=3710)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_min_epi8&expand=3710)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm256_maskz_min_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let min = _mm256_min_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i8x32::ZERO))
 }
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_min_epi8&expand=3706)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_min_epi8&expand=3706)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm_mask_min_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epi8(a, b).as_i8x16();
@@ -2242,21 +2263,22 @@ pub unsafe fn _mm_mask_min_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Compare packed signed 8-bit integers in a and b, and store packed minimum values in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_min_epi8&expand=3707)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_min_epi8&expand=3707)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpminsb))]
 pub unsafe fn _mm_maskz_min_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let min = _mm_min_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, min, zero))
+    transmute(simd_select_bitmask(k, min, i8x16::ZERO))
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=512_cmplt_epu16_mask&expand=1050)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmplt_epu16_mask&expand=1050)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmplt_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_lt(a.as_u16x32(), b.as_u16x32()))
@@ -2264,19 +2286,21 @@ pub unsafe fn _mm512_cmplt_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmplt_epu16_mask&expand=1051)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmplt_epu16_mask&expand=1051)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmplt_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmplt_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=512_cmplt_epu16_mask&expand=1050)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmplt_epu16_mask&expand=1050)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmplt_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_lt(a.as_u16x16(), b.as_u16x16()))
@@ -2284,19 +2308,21 @@ pub unsafe fn _mm256_cmplt_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmplt_epu16_mask&expand=1049)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmplt_epu16_mask&expand=1049)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmplt_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmplt_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmplt_epi16_mask&expand=1018)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmplt_epu16_mask&expand=1018)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmplt_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_lt(a.as_u16x8(), b.as_u16x8()))
@@ -2304,19 +2330,21 @@ pub unsafe fn _mm_cmplt_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmplt_epi16_mask&expand=1019)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmplt_epu16_mask&expand=1019)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmplt_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmplt_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=mm512_cmplt_epu8_mask&expand=1068)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=mm512_cmplt_epu8_mask&expand=1068)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmplt_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_lt(a.as_u8x64(), b.as_u8x64()))
@@ -2324,19 +2352,21 @@ pub unsafe fn _mm512_cmplt_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmplt_epu8_mask&expand=1069)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmplt_epu8_mask&expand=1069)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmplt_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmplt_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmplt_epu8_mask&expand=1066)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmplt_epu8_mask&expand=1066)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmplt_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_lt(a.as_u8x32(), b.as_u8x32()))
@@ -2344,19 +2374,21 @@ pub unsafe fn _mm256_cmplt_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmplt_epu8_mask&expand=1067)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmplt_epu8_mask&expand=1067)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmplt_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmplt_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmplt_epu8_mask&expand=1064)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmplt_epu8_mask&expand=1064)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmplt_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_lt(a.as_u8x16(), b.as_u8x16()))
@@ -2364,19 +2396,21 @@ pub unsafe fn _mm_cmplt_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmplt_epu8_mask&expand=1065)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmplt_epu8_mask&expand=1065)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmplt_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmplt_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmplt_epi16_mask&expand=1022)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmplt_epi16_mask&expand=1022)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmplt_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_lt(a.as_i16x32(), b.as_i16x32()))
@@ -2384,19 +2418,21 @@ pub unsafe fn _mm512_cmplt_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmplt_epi16_mask&expand=1023)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmplt_epi16_mask&expand=1023)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmplt_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmplt_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmplt_epi16_mask&expand=1020)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmplt_epi16_mask&expand=1020)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmplt_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_lt(a.as_i16x16(), b.as_i16x16()))
@@ -2404,19 +2440,21 @@ pub unsafe fn _mm256_cmplt_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmplt_epi16_mask&expand=1021)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmplt_epi16_mask&expand=1021)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmplt_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmplt_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmplt_epi16_mask&expand=1018)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmplt_epi16_mask&expand=1018)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmplt_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_lt(a.as_i16x8(), b.as_i16x8()))
@@ -2424,19 +2462,21 @@ pub unsafe fn _mm_cmplt_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmplt_epi16_mask&expand=1019)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmplt_epi16_mask&expand=1019)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmplt_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmplt_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmplt_epi8_mask&expand=1044)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmplt_epi8_mask&expand=1044)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmplt_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_lt(a.as_i8x64(), b.as_i8x64()))
@@ -2444,19 +2484,21 @@ pub unsafe fn _mm512_cmplt_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmplt_epi8_mask&expand=1045)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmplt_epi8_mask&expand=1045)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmplt_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmplt_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmplt_epi8_mask&expand=1042)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmplt_epi8_mask&expand=1042)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmplt_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_lt(a.as_i8x32(), b.as_i8x32()))
@@ -2464,19 +2506,21 @@ pub unsafe fn _mm256_cmplt_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmplt_epi8_mask&expand=1043)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmplt_epi8_mask&expand=1043)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmplt_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmplt_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmplt_epi8_mask&expand=1040)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmplt_epi8_mask&expand=1040)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmplt_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_lt(a.as_i8x16(), b.as_i8x16()))
@@ -2484,19 +2528,21 @@ pub unsafe fn _mm_cmplt_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmplt_epi8_mask&expand=1041)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmplt_epi8_mask&expand=1041)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmplt_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmplt_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_LT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpgt_epu16_mask&expand=927)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpgt_epu16_mask&expand=927)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpgt_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_gt(a.as_u16x32(), b.as_u16x32()))
@@ -2504,19 +2550,21 @@ pub unsafe fn _mm512_cmpgt_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpgt_epu16_mask&expand=928)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpgt_epu16_mask&expand=928)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpgt_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpgt_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpgt_epu16_mask&expand=925)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpgt_epu16_mask&expand=925)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpgt_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_gt(a.as_u16x16(), b.as_u16x16()))
@@ -2524,19 +2572,21 @@ pub unsafe fn _mm256_cmpgt_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpgt_epu16_mask&expand=926)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpgt_epu16_mask&expand=926)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpgt_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpgt_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpgt_epu16_mask&expand=923)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpgt_epu16_mask&expand=923)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpgt_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_gt(a.as_u16x8(), b.as_u16x8()))
@@ -2544,19 +2594,21 @@ pub unsafe fn _mm_cmpgt_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpgt_epu16_mask&expand=924)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpgt_epu16_mask&expand=924)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpgt_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpgt_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpgt_epu8_mask&expand=945)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpgt_epu8_mask&expand=945)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpgt_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_gt(a.as_u8x64(), b.as_u8x64()))
@@ -2564,19 +2616,21 @@ pub unsafe fn _mm512_cmpgt_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpgt_epu8_mask&expand=946)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpgt_epu8_mask&expand=946)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpgt_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpgt_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpgt_epu8_mask&expand=943)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpgt_epu8_mask&expand=943)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpgt_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_gt(a.as_u8x32(), b.as_u8x32()))
@@ -2584,19 +2638,21 @@ pub unsafe fn _mm256_cmpgt_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpgt_epu8_mask&expand=944)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpgt_epu8_mask&expand=944)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpgt_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpgt_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpgt_epu8_mask&expand=941)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpgt_epu8_mask&expand=941)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpgt_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_gt(a.as_u8x16(), b.as_u8x16()))
@@ -2604,19 +2660,21 @@ pub unsafe fn _mm_cmpgt_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpgt_epu8_mask&expand=942)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpgt_epu8_mask&expand=942)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpgt_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpgt_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpgt_epi16_mask&expand=897)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpgt_epi16_mask&expand=897)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpgt_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_gt(a.as_i16x32(), b.as_i16x32()))
@@ -2624,19 +2682,21 @@ pub unsafe fn _mm512_cmpgt_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpgt_epi16_mask&expand=898)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpgt_epi16_mask&expand=898)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpgt_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpgt_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpgt_epi16_mask&expand=895)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpgt_epi16_mask&expand=895)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpgt_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_gt(a.as_i16x16(), b.as_i16x16()))
@@ -2644,19 +2704,21 @@ pub unsafe fn _mm256_cmpgt_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpgt_epi16_mask&expand=896)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpgt_epi16_mask&expand=896)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpgt_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpgt_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpgt_epi16_mask&expand=893)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpgt_epi16_mask&expand=893)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpgt_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_gt(a.as_i16x8(), b.as_i16x8()))
@@ -2664,19 +2726,21 @@ pub unsafe fn _mm_cmpgt_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpgt_epi16_mask&expand=894)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpgt_epi16_mask&expand=894)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpgt_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpgt_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpgt_epi8_mask&expand=921)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpgt_epi8_mask&expand=921)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpgt_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_gt(a.as_i8x64(), b.as_i8x64()))
@@ -2684,19 +2748,21 @@ pub unsafe fn _mm512_cmpgt_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpgt_epi8_mask&expand=922)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpgt_epi8_mask&expand=922)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpgt_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpgt_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpgt_epi8_mask&expand=919)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpgt_epi8_mask&expand=919)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpgt_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_gt(a.as_i8x32(), b.as_i8x32()))
@@ -2704,19 +2770,21 @@ pub unsafe fn _mm256_cmpgt_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpgt_epi8_mask&expand=920)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpgt_epi8_mask&expand=920)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpgt_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpgt_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpgt_epi8_mask&expand=917)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpgt_epi8_mask&expand=917)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpgt_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_gt(a.as_i8x16(), b.as_i8x16()))
@@ -2724,19 +2792,21 @@ pub unsafe fn _mm_cmpgt_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpgt_epi8_mask&expand=918)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpgt_epi8_mask&expand=918)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpgt_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpgt_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_NLE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmple_epu16_mask&expand=989)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmple_epu16_mask&expand=989)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmple_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_le(a.as_u16x32(), b.as_u16x32()))
@@ -2744,19 +2814,21 @@ pub unsafe fn _mm512_cmple_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmple_epu16_mask&expand=990)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmple_epu16_mask&expand=990)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmple_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmple_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmple_epu16_mask&expand=987)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmple_epu16_mask&expand=987)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmple_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_le(a.as_u16x16(), b.as_u16x16()))
@@ -2764,19 +2836,21 @@ pub unsafe fn _mm256_cmple_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmple_epu16_mask&expand=988)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmple_epu16_mask&expand=988)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmple_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmple_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmple_epu16_mask&expand=985)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmple_epu16_mask&expand=985)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmple_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_le(a.as_u16x8(), b.as_u16x8()))
@@ -2784,19 +2858,21 @@ pub unsafe fn _mm_cmple_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmple_epu16_mask&expand=986)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmple_epu16_mask&expand=986)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmple_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmple_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.   
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmple_epu8_mask&expand=1007)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmple_epu8_mask&expand=1007)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmple_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_le(a.as_u8x64(), b.as_u8x64()))
@@ -2804,19 +2880,21 @@ pub unsafe fn _mm512_cmple_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmple_epu8_mask&expand=1008)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmple_epu8_mask&expand=1008)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmple_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmple_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.   
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmple_epu8_mask&expand=1005)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmple_epu8_mask&expand=1005)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmple_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_le(a.as_u8x32(), b.as_u8x32()))
@@ -2824,19 +2902,21 @@ pub unsafe fn _mm256_cmple_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmple_epu8_mask&expand=1006)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmple_epu8_mask&expand=1006)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmple_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmple_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.   
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmple_epu8_mask&expand=1003)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmple_epu8_mask&expand=1003)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmple_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_le(a.as_u8x16(), b.as_u8x16()))
@@ -2844,19 +2924,21 @@ pub unsafe fn _mm_cmple_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmple_epu8_mask&expand=1004)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmple_epu8_mask&expand=1004)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmple_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmple_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmple_epi16_mask&expand=965)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmple_epi16_mask&expand=965)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmple_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_le(a.as_i16x32(), b.as_i16x32()))
@@ -2864,19 +2946,21 @@ pub unsafe fn _mm512_cmple_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmple_epi16_mask&expand=966)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmple_epi16_mask&expand=966)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmple_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmple_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmple_epi16_mask&expand=963)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmple_epi16_mask&expand=963)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmple_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_le(a.as_i16x16(), b.as_i16x16()))
@@ -2884,19 +2968,21 @@ pub unsafe fn _mm256_cmple_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmple_epi16_mask&expand=964)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmple_epi16_mask&expand=964)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmple_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmple_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmple_epi16_mask&expand=961)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmple_epi16_mask&expand=961)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmple_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_le(a.as_i16x8(), b.as_i16x8()))
@@ -2904,19 +2990,21 @@ pub unsafe fn _mm_cmple_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmple_epi16_mask&expand=962)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmple_epi16_mask&expand=962)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmple_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmple_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmple_epi8_mask&expand=983)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmple_epi8_mask&expand=983)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmple_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_le(a.as_i8x64(), b.as_i8x64()))
@@ -2924,19 +3012,21 @@ pub unsafe fn _mm512_cmple_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmple_epi8_mask&expand=984)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmple_epi8_mask&expand=984)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmple_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmple_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmple_epi8_mask&expand=981)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmple_epi8_mask&expand=981)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmple_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_le(a.as_i8x32(), b.as_i8x32()))
@@ -2944,19 +3034,21 @@ pub unsafe fn _mm256_cmple_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmple_epi8_mask&expand=982)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmple_epi8_mask&expand=982)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmple_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmple_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmple_epi8_mask&expand=979)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmple_epi8_mask&expand=979)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmple_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_le(a.as_i8x16(), b.as_i8x16()))
@@ -2964,19 +3056,21 @@ pub unsafe fn _mm_cmple_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for less-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmple_epi8_mask&expand=980)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmple_epi8_mask&expand=980)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmple_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmple_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_LE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpge_epu16_mask&expand=867)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpge_epu16_mask&expand=867)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpge_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_ge(a.as_u16x32(), b.as_u16x32()))
@@ -2984,19 +3078,21 @@ pub unsafe fn _mm512_cmpge_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpge_epu16_mask&expand=868)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpge_epu16_mask&expand=868)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpge_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpge_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpge_epu16_mask&expand=865)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpge_epu16_mask&expand=865)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpge_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_ge(a.as_u16x16(), b.as_u16x16()))
@@ -3004,19 +3100,21 @@ pub unsafe fn _mm256_cmpge_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpge_epu16_mask&expand=866)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpge_epu16_mask&expand=866)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpge_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpge_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpge_epu16_mask&expand=863)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpge_epu16_mask&expand=863)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpge_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_ge(a.as_u16x8(), b.as_u16x8()))
@@ -3024,19 +3122,21 @@ pub unsafe fn _mm_cmpge_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpge_epu16_mask&expand=864)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpge_epu16_mask&expand=864)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpge_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpge_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpge_epu8_mask&expand=885)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpge_epu8_mask&expand=885)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpge_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_ge(a.as_u8x64(), b.as_u8x64()))
@@ -3044,19 +3144,21 @@ pub unsafe fn _mm512_cmpge_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpge_epu8_mask&expand=886)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpge_epu8_mask&expand=886)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpge_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpge_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpge_epu8_mask&expand=883)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpge_epu8_mask&expand=883)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpge_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_ge(a.as_u8x32(), b.as_u8x32()))
@@ -3064,19 +3166,21 @@ pub unsafe fn _mm256_cmpge_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpge_epu8_mask&expand=884)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpge_epu8_mask&expand=884)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpge_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpge_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpge_epu8_mask&expand=881)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpge_epu8_mask&expand=881)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpge_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_ge(a.as_u8x16(), b.as_u8x16()))
@@ -3084,19 +3188,21 @@ pub unsafe fn _mm_cmpge_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpge_epu8_mask&expand=882)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpge_epu8_mask&expand=882)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpge_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpge_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpge_epi16_mask&expand=843)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpge_epi16_mask&expand=843)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpge_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_ge(a.as_i16x32(), b.as_i16x32()))
@@ -3104,19 +3210,21 @@ pub unsafe fn _mm512_cmpge_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpge_epi16_mask&expand=844)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpge_epi16_mask&expand=844)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpge_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpge_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpge_epi16_mask&expand=841)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpge_epi16_mask&expand=841)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpge_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_ge(a.as_i16x16(), b.as_i16x16()))
@@ -3124,19 +3232,21 @@ pub unsafe fn _mm256_cmpge_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpge_epi16_mask&expand=842)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpge_epi16_mask&expand=842)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpge_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpge_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpge_epi16_mask&expand=839)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpge_epi16_mask&expand=839)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpge_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_ge(a.as_i16x8(), b.as_i16x8()))
@@ -3144,19 +3254,21 @@ pub unsafe fn _mm_cmpge_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpge_epi16_mask&expand=840)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpge_epi16_mask&expand=840)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpge_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpge_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpge_epi8_mask&expand=861)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpge_epi8_mask&expand=861)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpge_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_ge(a.as_i8x64(), b.as_i8x64()))
@@ -3164,19 +3276,21 @@ pub unsafe fn _mm512_cmpge_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpge_epi8_mask&expand=862)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpge_epi8_mask&expand=862)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpge_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpge_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpge_epi8_mask&expand=859)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpge_epi8_mask&expand=859)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpge_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_ge(a.as_i8x32(), b.as_i8x32()))
@@ -3184,19 +3298,21 @@ pub unsafe fn _mm256_cmpge_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpge_epi8_mask&expand=860)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpge_epi8_mask&expand=860)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpge_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpge_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpge_epi8_mask&expand=857)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpge_epi8_mask&expand=857)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpge_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_ge(a.as_i8x16(), b.as_i8x16()))
@@ -3204,19 +3320,21 @@ pub unsafe fn _mm_cmpge_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for greater-than-or-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpge_epi8_mask&expand=858)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpge_epi8_mask&expand=858)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpge_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpge_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_NLT>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpeq_epu16_mask&expand=801)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpeq_epu16_mask&expand=801)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpeq_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_eq(a.as_u16x32(), b.as_u16x32()))
@@ -3224,19 +3342,21 @@ pub unsafe fn _mm512_cmpeq_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpeq_epu16_mask&expand=802)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpeq_epu16_mask&expand=802)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpeq_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpeq_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpeq_epu16_mask&expand=799)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpeq_epu16_mask&expand=799)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpeq_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_eq(a.as_u16x16(), b.as_u16x16()))
@@ -3244,19 +3364,21 @@ pub unsafe fn _mm256_cmpeq_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpeq_epu16_mask&expand=800)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpeq_epu16_mask&expand=800)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpeq_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpeq_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpeq_epu16_mask&expand=797)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpeq_epu16_mask&expand=797)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpeq_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_eq(a.as_u16x8(), b.as_u16x8()))
@@ -3264,19 +3386,21 @@ pub unsafe fn _mm_cmpeq_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpeq_epu16_mask&expand=798)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpeq_epu16_mask&expand=798)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpeq_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpeq_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpeq_epu8_mask&expand=819)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpeq_epu8_mask&expand=819)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpeq_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_eq(a.as_u8x64(), b.as_u8x64()))
@@ -3284,19 +3408,21 @@ pub unsafe fn _mm512_cmpeq_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpeq_epu8_mask&expand=820)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpeq_epu8_mask&expand=820)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpeq_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpeq_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpeq_epu8_mask&expand=817)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpeq_epu8_mask&expand=817)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpeq_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_eq(a.as_u8x32(), b.as_u8x32()))
@@ -3304,19 +3430,21 @@ pub unsafe fn _mm256_cmpeq_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpeq_epu8_mask&expand=818)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpeq_epu8_mask&expand=818)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpeq_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpeq_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpeq_epu8_mask&expand=815)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpeq_epu8_mask&expand=815)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpeq_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_eq(a.as_u8x16(), b.as_u8x16()))
@@ -3324,19 +3452,21 @@ pub unsafe fn _mm_cmpeq_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpeq_epu8_mask&expand=816)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpeq_epu8_mask&expand=816)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpeq_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpeq_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpeq_epi16_mask&expand=771)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpeq_epi16_mask&expand=771)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpeq_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_eq(a.as_i16x32(), b.as_i16x32()))
@@ -3344,19 +3474,21 @@ pub unsafe fn _mm512_cmpeq_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpeq_epi16_mask&expand=772)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpeq_epi16_mask&expand=772)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpeq_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpeq_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpeq_epi16_mask&expand=769)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpeq_epi16_mask&expand=769)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpeq_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_eq(a.as_i16x16(), b.as_i16x16()))
@@ -3364,19 +3496,21 @@ pub unsafe fn _mm256_cmpeq_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpeq_epi16_mask&expand=770)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpeq_epi16_mask&expand=770)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpeq_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpeq_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpeq_epi16_mask&expand=767)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpeq_epi16_mask&expand=767)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpeq_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_eq(a.as_i16x8(), b.as_i16x8()))
@@ -3384,19 +3518,21 @@ pub unsafe fn _mm_cmpeq_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpeq_epi16_mask&expand=768)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpeq_epi16_mask&expand=768)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpeq_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpeq_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpeq_epi8_mask&expand=795)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpeq_epi8_mask&expand=795)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpeq_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_eq(a.as_i8x64(), b.as_i8x64()))
@@ -3404,19 +3540,21 @@ pub unsafe fn _mm512_cmpeq_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpeq_epi8_mask&expand=796)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpeq_epi8_mask&expand=796)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpeq_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpeq_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpeq_epi8_mask&expand=793)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpeq_epi8_mask&expand=793)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpeq_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_eq(a.as_i8x32(), b.as_i8x32()))
@@ -3424,19 +3562,21 @@ pub unsafe fn _mm256_cmpeq_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpeq_epi8_mask&expand=794)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpeq_epi8_mask&expand=794)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpeq_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpeq_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpeq_epi8_mask&expand=791)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpeq_epi8_mask&expand=791)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpeq_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_eq(a.as_i8x16(), b.as_i8x16()))
@@ -3444,19 +3584,21 @@ pub unsafe fn _mm_cmpeq_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for equality, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpeq_epi8_mask&expand=792)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpeq_epi8_mask&expand=792)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpeq_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpeq_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_EQ>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpneq_epu16_mask&expand=1106)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpneq_epu16_mask&expand=1106)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpneq_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<u16x32, _>(simd_ne(a.as_u16x32(), b.as_u16x32()))
@@ -3464,19 +3606,21 @@ pub unsafe fn _mm512_cmpneq_epu16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpneq_epu16_mask&expand=1107)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpneq_epu16_mask&expand=1107)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpneq_epu16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpneq_epu16_mask(a, b) & k1
+    _mm512_mask_cmp_epu16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpneq_epu16_mask&expand=1104)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpneq_epu16_mask&expand=1104)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpneq_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<u16x16, _>(simd_ne(a.as_u16x16(), b.as_u16x16()))
@@ -3484,19 +3628,21 @@ pub unsafe fn _mm256_cmpneq_epu16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpneq_epu16_mask&expand=1105)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpneq_epu16_mask&expand=1105)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpneq_epu16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpneq_epu16_mask(a, b) & k1
+    _mm256_mask_cmp_epu16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpneq_epu16_mask&expand=1102)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpneq_epu16_mask&expand=1102)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpneq_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<u16x8, _>(simd_ne(a.as_u16x8(), b.as_u16x8()))
@@ -3504,19 +3650,21 @@ pub unsafe fn _mm_cmpneq_epu16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed unsigned 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpneq_epu16_mask&expand=1103)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpneq_epu16_mask&expand=1103)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpneq_epu16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpneq_epu16_mask(a, b) & k1
+    _mm_mask_cmp_epu16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpneq_epu8_mask&expand=1124)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpneq_epu8_mask&expand=1124)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpneq_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<u8x64, _>(simd_ne(a.as_u8x64(), b.as_u8x64()))
@@ -3524,19 +3672,21 @@ pub unsafe fn _mm512_cmpneq_epu8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpneq_epu8_mask&expand=1125)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpneq_epu8_mask&expand=1125)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpneq_epu8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpneq_epu8_mask(a, b) & k1
+    _mm512_mask_cmp_epu8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpneq_epu8_mask&expand=1122)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpneq_epu8_mask&expand=1122)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpneq_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<u8x32, _>(simd_ne(a.as_u8x32(), b.as_u8x32()))
@@ -3544,19 +3694,21 @@ pub unsafe fn _mm256_cmpneq_epu8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpneq_epu8_mask&expand=1123)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpneq_epu8_mask&expand=1123)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpneq_epu8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpneq_epu8_mask(a, b) & k1
+    _mm256_mask_cmp_epu8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpneq_epu8_mask&expand=1120)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpneq_epu8_mask&expand=1120)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpneq_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<u8x16, _>(simd_ne(a.as_u8x16(), b.as_u8x16()))
@@ -3564,19 +3716,21 @@ pub unsafe fn _mm_cmpneq_epu8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed unsigned 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpneq_epu8_mask&expand=1121)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpneq_epu8_mask&expand=1121)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpneq_epu8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpneq_epu8_mask(a, b) & k1
+    _mm_mask_cmp_epu8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpneq_epi16_mask&expand=1082)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpneq_epi16_mask&expand=1082)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpneq_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     simd_bitmask::<i16x32, _>(simd_ne(a.as_i16x32(), b.as_i16x32()))
@@ -3584,19 +3738,21 @@ pub unsafe fn _mm512_cmpneq_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpneq_epi16_mask&expand=1083)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpneq_epi16_mask&expand=1083)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpneq_epi16_mask(k1: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
-    _mm512_cmpneq_epi16_mask(a, b) & k1
+    _mm512_mask_cmp_epi16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpneq_epi16_mask&expand=1080)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpneq_epi16_mask&expand=1080)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpneq_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     simd_bitmask::<i16x16, _>(simd_ne(a.as_i16x16(), b.as_i16x16()))
@@ -3604,19 +3760,21 @@ pub unsafe fn _mm256_cmpneq_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpneq_epi16_mask&expand=1081)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpneq_epi16_mask&expand=1081)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpneq_epi16_mask(k1: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
-    _mm256_cmpneq_epi16_mask(a, b) & k1
+    _mm256_mask_cmp_epi16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpneq_epi16_mask&expand=1078)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpneq_epi16_mask&expand=1078)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpneq_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     simd_bitmask::<i16x8, _>(simd_ne(a.as_i16x8(), b.as_i16x8()))
@@ -3624,19 +3782,21 @@ pub unsafe fn _mm_cmpneq_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compare packed signed 16-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpneq_epi16_mask&expand=1079)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpneq_epi16_mask&expand=1079)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpneq_epi16_mask(k1: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
-    _mm_cmpneq_epi16_mask(a, b) & k1
+    _mm_mask_cmp_epi16_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmpneq_epi8_mask&expand=1100)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmpneq_epi8_mask&expand=1100)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_cmpneq_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     simd_bitmask::<i8x64, _>(simd_ne(a.as_i8x64(), b.as_i8x64()))
@@ -3644,19 +3804,21 @@ pub unsafe fn _mm512_cmpneq_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmpneq_epi8_mask&expand=1101)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmpneq_epi8_mask&expand=1101)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm512_mask_cmpneq_epi8_mask(k1: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
-    _mm512_cmpneq_epi8_mask(a, b) & k1
+    _mm512_mask_cmp_epi8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmpneq_epi8_mask&expand=1098)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpneq_epi8_mask&expand=1098)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_cmpneq_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     simd_bitmask::<i8x32, _>(simd_ne(a.as_i8x32(), b.as_i8x32()))
@@ -3664,19 +3826,21 @@ pub unsafe fn _mm256_cmpneq_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmpneq_epi8_mask&expand=1099)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmpneq_epi8_mask&expand=1099)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm256_mask_cmpneq_epi8_mask(k1: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
-    _mm256_cmpneq_epi8_mask(a, b) & k1
+    _mm256_mask_cmp_epi8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmpneq_epi8_mask&expand=1096)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpneq_epi8_mask&expand=1096)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_cmpneq_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     simd_bitmask::<i8x16, _>(simd_ne(a.as_i8x16(), b.as_i8x16()))
@@ -3684,34 +3848,46 @@ pub unsafe fn _mm_cmpneq_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compare packed signed 8-bit integers in a and b for not-equal, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmpneq_epi8_mask&expand=1097)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmpneq_epi8_mask&expand=1097)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpcmp))]
 pub unsafe fn _mm_mask_cmpneq_epi8_mask(k1: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
-    _mm_cmpneq_epi8_mask(a, b) & k1
+    _mm_mask_cmp_epi8_mask::<_MM_CMPINT_NE>(k1, a, b)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by `IMM8`, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmp_epu16_mask&expand=715)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmp_epu16_mask&expand=715)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_cmp_epu16_mask<const IMM8: i32>(a: __m512i, b: __m512i) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x32();
     let b = b.as_u16x32();
-    let r = vpcmpuw(a, b, IMM8, 0b11111111_11111111_11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x32::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmp_epu16_mask&expand=716)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmp_epu16_mask&expand=716)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_mask_cmp_epu16_mask<const IMM8: i32>(
@@ -3719,33 +3895,54 @@ pub unsafe fn _mm512_mask_cmp_epu16_mask<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x32();
     let b = b.as_u16x32();
-    let r = vpcmpuw(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x32::splat(-1), i16x32::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x32::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmp_epu16_mask&expand=713)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmp_epu16_mask&expand=713)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_cmp_epu16_mask<const IMM8: i32>(a: __m256i, b: __m256i) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x16();
     let b = b.as_u16x16();
-    let r = vpcmpuw256(a, b, IMM8, 0b11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x16::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmp_epu16_mask&expand=714)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmp_epu16_mask&expand=714)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_mask_cmp_epu16_mask<const IMM8: i32>(
@@ -3753,33 +3950,54 @@ pub unsafe fn _mm256_mask_cmp_epu16_mask<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x16();
     let b = b.as_u16x16();
-    let r = vpcmpuw256(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x16::splat(-1), i16x16::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x16::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmp_epu16_mask&expand=711)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmp_epu16_mask&expand=711)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_cmp_epu16_mask<const IMM8: i32>(a: __m128i, b: __m128i) -> __mmask8 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x8();
     let b = b.as_u16x8();
-    let r = vpcmpuw128(a, b, IMM8, 0b11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x8::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x8::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmp_epu16_mask&expand=712)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmp_epu16_mask&expand=712)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_mask_cmp_epu16_mask<const IMM8: i32>(
@@ -3787,38 +4005,54 @@ pub unsafe fn _mm_mask_cmp_epu16_mask<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __mmask8 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u16x8();
     let b = b.as_u16x8();
-    let r = vpcmpuw128(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x8::splat(-1), i16x8::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x8::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x8::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmp_epu8_mask&expand=733)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmp_epu8_mask&expand=733)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_cmp_epu8_mask<const IMM8: i32>(a: __m512i, b: __m512i) -> __mmask64 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x64();
     let b = b.as_u8x64();
-    let r = vpcmpub(
-        a,
-        b,
-        IMM8,
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    );
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x64::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x64::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmp_epu8_mask&expand=734)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmp_epu8_mask&expand=734)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_mask_cmp_epu8_mask<const IMM8: i32>(
@@ -3826,33 +4060,54 @@ pub unsafe fn _mm512_mask_cmp_epu8_mask<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __mmask64 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x64();
     let b = b.as_u8x64();
-    let r = vpcmpub(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x64::splat(-1), i8x64::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x64::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x64::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmp_epu8_mask&expand=731)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmp_epu8_mask&expand=731)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_cmp_epu8_mask<const IMM8: i32>(a: __m256i, b: __m256i) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x32();
     let b = b.as_u8x32();
-    let r = vpcmpub256(a, b, IMM8, 0b11111111_11111111_11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x32::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmp_epu8_mask&expand=732)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmp_epu8_mask&expand=732)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_mask_cmp_epu8_mask<const IMM8: i32>(
@@ -3860,33 +4115,54 @@ pub unsafe fn _mm256_mask_cmp_epu8_mask<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x32();
     let b = b.as_u8x32();
-    let r = vpcmpub256(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x32::splat(-1), i8x32::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x32::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmp_epu8_mask&expand=729)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmp_epu8_mask&expand=729)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_cmp_epu8_mask<const IMM8: i32>(a: __m128i, b: __m128i) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x16();
     let b = b.as_u8x16();
-    let r = vpcmpub128(a, b, IMM8, 0b11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x16::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed unsigned 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmp_epu8_mask&expand=730)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmp_epu8_mask&expand=730)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_mask_cmp_epu8_mask<const IMM8: i32>(
@@ -3894,33 +4170,54 @@ pub unsafe fn _mm_mask_cmp_epu8_mask<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_u8x16();
     let b = b.as_u8x16();
-    let r = vpcmpub128(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x16::splat(-1), i8x16::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x16::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmp_epi16_mask&expand=691)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmp_epi16_mask&expand=691)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_cmp_epi16_mask<const IMM8: i32>(a: __m512i, b: __m512i) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x32();
     let b = b.as_i16x32();
-    let r = vpcmpw(a, b, IMM8, 0b11111111_11111111_11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x32::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmp_epi16_mask&expand=692)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmp_epi16_mask&expand=692)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_mask_cmp_epi16_mask<const IMM8: i32>(
@@ -3928,33 +4225,54 @@ pub unsafe fn _mm512_mask_cmp_epi16_mask<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x32();
     let b = b.as_i16x32();
-    let r = vpcmpw(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x32::splat(-1), i16x32::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x32::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmp_epi16_mask&expand=689)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmp_epi16_mask&expand=689)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_cmp_epi16_mask<const IMM8: i32>(a: __m256i, b: __m256i) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x16();
     let b = b.as_i16x16();
-    let r = vpcmpw256(a, b, IMM8, 0b11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x16::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmp_epi16_mask&expand=690)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmp_epi16_mask&expand=690)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_mask_cmp_epi16_mask<const IMM8: i32>(
@@ -3962,33 +4280,54 @@ pub unsafe fn _mm256_mask_cmp_epi16_mask<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x16();
     let b = b.as_i16x16();
-    let r = vpcmpw256(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x16::splat(-1), i16x16::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x16::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmp_epi16_mask&expand=687)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmp_epi16_mask&expand=687)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_cmp_epi16_mask<const IMM8: i32>(a: __m128i, b: __m128i) -> __mmask8 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x8();
     let b = b.as_i16x8();
-    let r = vpcmpw128(a, b, IMM8, 0b11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i16x8::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i16x8::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 16-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmp_epi16_mask&expand=688)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmp_epi16_mask&expand=688)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_mask_cmp_epi16_mask<const IMM8: i32>(
@@ -3996,38 +4335,54 @@ pub unsafe fn _mm_mask_cmp_epi16_mask<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __mmask8 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i16x8();
     let b = b.as_i16x8();
-    let r = vpcmpw128(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i16x8::splat(-1), i16x8::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i16x8::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i16x8::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cmp_epi8_mask&expand=709)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cmp_epi8_mask&expand=709)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_cmp_epi8_mask<const IMM8: i32>(a: __m512i, b: __m512i) -> __mmask64 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x64();
     let b = b.as_i8x64();
-    let r = vpcmpb(
-        a,
-        b,
-        IMM8,
-        0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111,
-    );
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x64::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x64::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cmp_epi8_mask&expand=710)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cmp_epi8_mask&expand=710)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm512_mask_cmp_epi8_mask<const IMM8: i32>(
@@ -4035,33 +4390,54 @@ pub unsafe fn _mm512_mask_cmp_epi8_mask<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __mmask64 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x64();
     let b = b.as_i8x64();
-    let r = vpcmpb(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x64::splat(-1), i8x64::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x64::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x64::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cmp_epi8_mask&expand=707)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmp_epi8_mask&expand=707)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_cmp_epi8_mask<const IMM8: i32>(a: __m256i, b: __m256i) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x32();
     let b = b.as_i8x32();
-    let r = vpcmpb256(a, b, IMM8, 0b11111111_11111111_11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x32::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cmp_epi8_mask&expand=708)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cmp_epi8_mask&expand=708)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm256_mask_cmp_epi8_mask<const IMM8: i32>(
@@ -4069,33 +4445,54 @@ pub unsafe fn _mm256_mask_cmp_epi8_mask<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __mmask32 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x32();
     let b = b.as_i8x32();
-    let r = vpcmpb256(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x32::splat(-1), i8x32::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x32::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x32::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cmp_epi8_mask&expand=705)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmp_epi8_mask&expand=705)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_cmp_epi8_mask<const IMM8: i32>(a: __m128i, b: __m128i) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x16();
     let b = b.as_i8x16();
-    let r = vpcmpb128(a, b, IMM8, 0b11111111_11111111);
-    transmute(r)
+    let r = match IMM8 {
+        0 => simd_eq(a, b),
+        1 => simd_lt(a, b),
+        2 => simd_le(a, b),
+        3 => i8x16::ZERO,
+        4 => simd_ne(a, b),
+        5 => simd_ge(a, b),
+        6 => simd_gt(a, b),
+        _ => i8x16::splat(-1),
+    };
+    simd_bitmask(r)
 }
 
 /// Compare packed signed 8-bit integers in a and b based on the comparison operand specified by imm8, and store the results in mask vector k using zeromask k1 (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cmp_epi8_mask&expand=706)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cmp_epi8_mask&expand=706)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpcmp, IMM8 = 0))]
 pub unsafe fn _mm_mask_cmp_epi8_mask<const IMM8: i32>(
@@ -4103,18 +4500,685 @@ pub unsafe fn _mm_mask_cmp_epi8_mask<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __mmask16 {
-    static_assert_imm3!(IMM8);
+    static_assert_uimm_bits!(IMM8, 3);
     let a = a.as_i8x16();
     let b = b.as_i8x16();
-    let r = vpcmpb128(a, b, IMM8, k1);
-    transmute(r)
+    let k1 = simd_select_bitmask(k1, i8x16::splat(-1), i8x16::ZERO);
+    let r = match IMM8 {
+        0 => simd_and(k1, simd_eq(a, b)),
+        1 => simd_and(k1, simd_lt(a, b)),
+        2 => simd_and(k1, simd_le(a, b)),
+        3 => i8x16::ZERO,
+        4 => simd_and(k1, simd_ne(a, b)),
+        5 => simd_and(k1, simd_ge(a, b)),
+        6 => simd_and(k1, simd_gt(a, b)),
+        _ => i8x16::splat(-1),
+    };
+    simd_bitmask(r)
+}
+
+/// Reduce the packed 16-bit integers in a by addition. Returns the sum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_add_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_add_epi16(a: __m256i) -> i16 {
+    simd_reduce_add_unordered(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by addition using mask k. Returns the sum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_add_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_add_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_add_unordered(simd_select_bitmask(k, a.as_i16x16(), i16x16::ZERO))
+}
+
+/// Reduce the packed 16-bit integers in a by addition. Returns the sum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_add_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_add_epi16(a: __m128i) -> i16 {
+    simd_reduce_add_unordered(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by addition using mask k. Returns the sum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_add_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_add_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_add_unordered(simd_select_bitmask(k, a.as_i16x8(), i16x8::ZERO))
+}
+
+/// Reduce the packed 8-bit integers in a by addition. Returns the sum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_add_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_add_epi8(a: __m256i) -> i8 {
+    simd_reduce_add_unordered(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by addition using mask k. Returns the sum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_add_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_add_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_add_unordered(simd_select_bitmask(k, a.as_i8x32(), i8x32::ZERO))
+}
+
+/// Reduce the packed 8-bit integers in a by addition. Returns the sum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_add_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_add_epi8(a: __m128i) -> i8 {
+    simd_reduce_add_unordered(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by addition using mask k. Returns the sum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_add_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_add_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_add_unordered(simd_select_bitmask(k, a.as_i8x16(), i8x16::ZERO))
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise AND. Returns the bitwise AND of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_and_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_and_epi16(a: __m256i) -> i16 {
+    simd_reduce_and(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise AND using mask k. Returns the bitwise AND of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_and_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_and_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_and(simd_select_bitmask(
+        k,
+        a.as_i16x16(),
+        _mm256_set1_epi64x(-1).as_i16x16(),
+    ))
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise AND. Returns the bitwise AND of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_and_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_and_epi16(a: __m128i) -> i16 {
+    simd_reduce_and(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise AND using mask k. Returns the bitwise AND of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_and_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_and_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_and(simd_select_bitmask(
+        k,
+        a.as_i16x8(),
+        _mm_set1_epi64x(-1).as_i16x8(),
+    ))
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise AND. Returns the bitwise AND of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_and_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_and_epi8(a: __m256i) -> i8 {
+    simd_reduce_and(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise AND using mask k. Returns the bitwise AND of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_and_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_and_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_and(simd_select_bitmask(
+        k,
+        a.as_i8x32(),
+        _mm256_set1_epi64x(-1).as_i8x32(),
+    ))
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise AND. Returns the bitwise AND of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_and_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_and_epi8(a: __m128i) -> i8 {
+    simd_reduce_and(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise AND using mask k. Returns the bitwise AND of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_and_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_and_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_and(simd_select_bitmask(
+        k,
+        a.as_i8x16(),
+        _mm_set1_epi64x(-1).as_i8x16(),
+    ))
+}
+
+/// Reduce the packed 16-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_max_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_max_epi16(a: __m256i) -> i16 {
+    simd_reduce_max(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_max_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_max_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_i16x16(), i16x16::splat(-32768)))
+}
+
+/// Reduce the packed 16-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_max_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_max_epi16(a: __m128i) -> i16 {
+    simd_reduce_max(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_max_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_max_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_i16x8(), i16x8::splat(-32768)))
+}
+
+/// Reduce the packed 8-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_max_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_max_epi8(a: __m256i) -> i8 {
+    simd_reduce_max(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_max_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_max_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_i8x32(), i8x32::splat(-128)))
+}
+
+/// Reduce the packed 8-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_max_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_max_epi8(a: __m128i) -> i8 {
+    simd_reduce_max(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_max_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_max_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_i8x16(), i8x16::splat(-128)))
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_max_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_max_epu16(a: __m256i) -> u16 {
+    simd_reduce_max(a.as_u16x16())
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_max_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_max_epu16(k: __mmask16, a: __m256i) -> u16 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_u16x16(), u16x16::ZERO))
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_max_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_max_epu16(a: __m128i) -> u16 {
+    simd_reduce_max(a.as_u16x8())
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_max_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_max_epu16(k: __mmask8, a: __m128i) -> u16 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_u16x8(), u16x8::ZERO))
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_max_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_max_epu8(a: __m256i) -> u8 {
+    simd_reduce_max(a.as_u8x32())
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_max_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_max_epu8(k: __mmask32, a: __m256i) -> u8 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_u8x32(), u8x32::ZERO))
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by maximum. Returns the maximum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_max_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_max_epu8(a: __m128i) -> u8 {
+    simd_reduce_max(a.as_u8x16())
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by maximum using mask k. Returns the maximum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_max_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_max_epu8(k: __mmask16, a: __m128i) -> u8 {
+    simd_reduce_max(simd_select_bitmask(k, a.as_u8x16(), u8x16::ZERO))
+}
+
+/// Reduce the packed 16-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_min_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_min_epi16(a: __m256i) -> i16 {
+    simd_reduce_min(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_min_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_min_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_i16x16(), i16x16::splat(0x7fff)))
+}
+
+/// Reduce the packed 16-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_min_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_min_epi16(a: __m128i) -> i16 {
+    simd_reduce_min(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_min_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_min_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_i16x8(), i16x8::splat(0x7fff)))
+}
+
+/// Reduce the packed 8-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_min_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_min_epi8(a: __m256i) -> i8 {
+    simd_reduce_min(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_min_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_min_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_i8x32(), i8x32::splat(0x7f)))
+}
+
+/// Reduce the packed 8-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_min_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_min_epi8(a: __m128i) -> i8 {
+    simd_reduce_min(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_min_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_min_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_i8x16(), i8x16::splat(0x7f)))
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_min_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_min_epu16(a: __m256i) -> u16 {
+    simd_reduce_min(a.as_u16x16())
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_min_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_min_epu16(k: __mmask16, a: __m256i) -> u16 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_u16x16(), u16x16::splat(0xffff)))
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_min_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_min_epu16(a: __m128i) -> u16 {
+    simd_reduce_min(a.as_u16x8())
+}
+
+/// Reduce the packed unsigned 16-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_min_epu16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_min_epu16(k: __mmask8, a: __m128i) -> u16 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_u16x8(), u16x8::splat(0xffff)))
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_min_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_min_epu8(a: __m256i) -> u8 {
+    simd_reduce_min(a.as_u8x32())
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_min_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_min_epu8(k: __mmask32, a: __m256i) -> u8 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_u8x32(), u8x32::splat(0xff)))
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by minimum. Returns the minimum of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_min_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_min_epu8(a: __m128i) -> u8 {
+    simd_reduce_min(a.as_u8x16())
+}
+
+/// Reduce the packed unsigned 8-bit integers in a by minimum using mask k. Returns the minimum of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_min_epu8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_min_epu8(k: __mmask16, a: __m128i) -> u8 {
+    simd_reduce_min(simd_select_bitmask(k, a.as_u8x16(), u8x16::splat(0xff)))
+}
+
+/// Reduce the packed 16-bit integers in a by multiplication. Returns the product of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_mul_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_mul_epi16(a: __m256i) -> i16 {
+    simd_reduce_mul_unordered(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by multiplication using mask k. Returns the product of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_mul_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_mul_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_mul_unordered(simd_select_bitmask(k, a.as_i16x16(), i16x16::splat(1)))
+}
+
+/// Reduce the packed 16-bit integers in a by multiplication. Returns the product of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_mul_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_mul_epi16(a: __m128i) -> i16 {
+    simd_reduce_mul_unordered(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by multiplication using mask k. Returns the product of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_mul_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_mul_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_mul_unordered(simd_select_bitmask(k, a.as_i16x8(), i16x8::splat(1)))
+}
+
+/// Reduce the packed 8-bit integers in a by multiplication. Returns the product of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_mul_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_mul_epi8(a: __m256i) -> i8 {
+    simd_reduce_mul_unordered(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by multiplication using mask k. Returns the product of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_mul_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_mul_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_mul_unordered(simd_select_bitmask(k, a.as_i8x32(), i8x32::splat(1)))
+}
+
+/// Reduce the packed 8-bit integers in a by multiplication. Returns the product of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_mul_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_mul_epi8(a: __m128i) -> i8 {
+    simd_reduce_mul_unordered(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by multiplication using mask k. Returns the product of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_mul_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_mul_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_mul_unordered(simd_select_bitmask(k, a.as_i8x16(), i8x16::splat(1)))
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise OR. Returns the bitwise OR of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_or_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_or_epi16(a: __m256i) -> i16 {
+    simd_reduce_or(a.as_i16x16())
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise OR using mask k. Returns the bitwise OR of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_or_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_or_epi16(k: __mmask16, a: __m256i) -> i16 {
+    simd_reduce_or(simd_select_bitmask(k, a.as_i16x16(), i16x16::ZERO))
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise OR. Returns the bitwise OR of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_or_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_or_epi16(a: __m128i) -> i16 {
+    simd_reduce_or(a.as_i16x8())
+}
+
+/// Reduce the packed 16-bit integers in a by bitwise OR using mask k. Returns the bitwise OR of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_or_epi16)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_or_epi16(k: __mmask8, a: __m128i) -> i16 {
+    simd_reduce_or(simd_select_bitmask(k, a.as_i16x8(), i16x8::ZERO))
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise OR. Returns the bitwise OR of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_reduce_or_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_reduce_or_epi8(a: __m256i) -> i8 {
+    simd_reduce_or(a.as_i8x32())
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise OR using mask k. Returns the bitwise OR of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_reduce_or_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm256_mask_reduce_or_epi8(k: __mmask32, a: __m256i) -> i8 {
+    simd_reduce_or(simd_select_bitmask(k, a.as_i8x32(), i8x32::ZERO))
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise OR. Returns the bitwise OR of all elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_reduce_or_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_reduce_or_epi8(a: __m128i) -> i8 {
+    simd_reduce_or(a.as_i8x16())
+}
+
+/// Reduce the packed 8-bit integers in a by bitwise OR using mask k. Returns the bitwise OR of all active elements in a.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_reduce_or_epi8)
+#[inline]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _mm_mask_reduce_or_epi8(k: __mmask16, a: __m128i) -> i8 {
+    simd_reduce_or(simd_select_bitmask(k, a.as_i8x16(), i8x16::ZERO))
 }
 
 /// Load 512-bits (composed of 32 packed 16-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_loadu_epi16&expand=3368)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_loadu_epi16&expand=3368)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm512_loadu_epi16(mem_addr: *const i16) -> __m512i {
     ptr::read_unaligned(mem_addr as *const __m512i)
@@ -4122,9 +5186,10 @@ pub unsafe fn _mm512_loadu_epi16(mem_addr: *const i16) -> __m512i {
 
 /// Load 256-bits (composed of 16 packed 16-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_loadu_epi16&expand=3365)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_loadu_epi16&expand=3365)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm256_loadu_epi16(mem_addr: *const i16) -> __m256i {
     ptr::read_unaligned(mem_addr as *const __m256i)
@@ -4132,9 +5197,10 @@ pub unsafe fn _mm256_loadu_epi16(mem_addr: *const i16) -> __m256i {
 
 /// Load 128-bits (composed of 8 packed 16-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_loadu_epi16&expand=3362)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_loadu_epi16&expand=3362)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm_loadu_epi16(mem_addr: *const i16) -> __m128i {
     ptr::read_unaligned(mem_addr as *const __m128i)
@@ -4142,9 +5208,10 @@ pub unsafe fn _mm_loadu_epi16(mem_addr: *const i16) -> __m128i {
 
 /// Load 512-bits (composed of 64 packed 8-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_loadu_epi8&expand=3395)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_loadu_epi8&expand=3395)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm512_loadu_epi8(mem_addr: *const i8) -> __m512i {
     ptr::read_unaligned(mem_addr as *const __m512i)
@@ -4152,9 +5219,10 @@ pub unsafe fn _mm512_loadu_epi8(mem_addr: *const i8) -> __m512i {
 
 /// Load 256-bits (composed of 32 packed 8-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_loadu_epi8&expand=3392)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_loadu_epi8&expand=3392)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm256_loadu_epi8(mem_addr: *const i8) -> __m256i {
     ptr::read_unaligned(mem_addr as *const __m256i)
@@ -4162,9 +5230,10 @@ pub unsafe fn _mm256_loadu_epi8(mem_addr: *const i8) -> __m256i {
 
 /// Load 128-bits (composed of 16 packed 8-bit integers) from memory into dst. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_loadu_epi8&expand=3389)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_loadu_epi8&expand=3389)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm_loadu_epi8(mem_addr: *const i8) -> __m128i {
     ptr::read_unaligned(mem_addr as *const __m128i)
@@ -4172,9 +5241,10 @@ pub unsafe fn _mm_loadu_epi8(mem_addr: *const i8) -> __m128i {
 
 /// Store 512-bits (composed of 32 packed 16-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_storeu_epi16&expand=5622)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_storeu_epi16&expand=5622)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm512_storeu_epi16(mem_addr: *mut i16, a: __m512i) {
     ptr::write_unaligned(mem_addr as *mut __m512i, a);
@@ -4182,9 +5252,10 @@ pub unsafe fn _mm512_storeu_epi16(mem_addr: *mut i16, a: __m512i) {
 
 /// Store 256-bits (composed of 16 packed 16-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_storeu_epi16&expand=5620)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_storeu_epi16&expand=5620)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm256_storeu_epi16(mem_addr: *mut i16, a: __m256i) {
     ptr::write_unaligned(mem_addr as *mut __m256i, a);
@@ -4192,9 +5263,10 @@ pub unsafe fn _mm256_storeu_epi16(mem_addr: *mut i16, a: __m256i) {
 
 /// Store 128-bits (composed of 8 packed 16-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_storeu_epi16&expand=5618)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_storeu_epi16&expand=5618)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu16
 pub unsafe fn _mm_storeu_epi16(mem_addr: *mut i16, a: __m128i) {
     ptr::write_unaligned(mem_addr as *mut __m128i, a);
@@ -4202,9 +5274,10 @@ pub unsafe fn _mm_storeu_epi16(mem_addr: *mut i16, a: __m128i) {
 
 /// Store 512-bits (composed of 64 packed 8-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_storeu_epi8&expand=5640)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_storeu_epi8&expand=5640)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm512_storeu_epi8(mem_addr: *mut i8, a: __m512i) {
     ptr::write_unaligned(mem_addr as *mut __m512i, a);
@@ -4212,9 +5285,10 @@ pub unsafe fn _mm512_storeu_epi8(mem_addr: *mut i8, a: __m512i) {
 
 /// Store 256-bits (composed of 32 packed 8-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_storeu_epi8&expand=5638)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_storeu_epi8&expand=5638)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm256_storeu_epi8(mem_addr: *mut i8, a: __m256i) {
     ptr::write_unaligned(mem_addr as *mut __m256i, a);
@@ -4222,9 +5296,10 @@ pub unsafe fn _mm256_storeu_epi8(mem_addr: *mut i8, a: __m256i) {
 
 /// Store 128-bits (composed of 16 packed 8-bit integers) from a into memory. mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_storeu_epi8&expand=5636)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_storeu_epi8&expand=5636)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovups))] //should be vmovdqu8
 pub unsafe fn _mm_storeu_epi8(mem_addr: *mut i8, a: __m128i) {
     ptr::write_unaligned(mem_addr as *mut __m128i, a);
@@ -4234,331 +5309,236 @@ pub unsafe fn _mm_storeu_epi8(mem_addr: *mut i8, a: __m128i) {
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_mask_loadu_epi16(src: __m512i, k: __mmask32, mem_addr: *const i16) -> __m512i {
-    let mut dst: __m512i = src;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(zmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu16_512(mem_addr, src.as_i16x32(), k))
 }
 
 /// Load packed 16-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_maskz_loadu_epi16(k: __mmask32, mem_addr: *const i16) -> __m512i {
-    let mut dst: __m512i;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(zmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm512_mask_loadu_epi16(_mm512_setzero_si512(), k, mem_addr)
 }
 
 /// Load packed 8-bit integers from memory into dst using writemask k
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_mask_loadu_epi8(src: __m512i, k: __mmask64, mem_addr: *const i8) -> __m512i {
-    let mut dst: __m512i = src;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(zmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu8_512(mem_addr, src.as_i8x64(), k))
 }
 
 /// Load packed 8-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_maskz_loadu_epi8(k: __mmask64, mem_addr: *const i8) -> __m512i {
-    let mut dst: __m512i;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(zmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm512_mask_loadu_epi8(_mm512_setzero_si512(), k, mem_addr)
 }
 
 /// Load packed 16-bit integers from memory into dst using writemask k
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_mask_loadu_epi16(src: __m256i, k: __mmask16, mem_addr: *const i16) -> __m256i {
-    let mut dst: __m256i = src;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(ymm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu16_256(mem_addr, src.as_i16x16(), k))
 }
 
 /// Load packed 16-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_maskz_loadu_epi16(k: __mmask16, mem_addr: *const i16) -> __m256i {
-    let mut dst: __m256i;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(ymm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm256_mask_loadu_epi16(_mm256_setzero_si256(), k, mem_addr)
 }
 
 /// Load packed 8-bit integers from memory into dst using writemask k
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_mask_loadu_epi8(src: __m256i, k: __mmask32, mem_addr: *const i8) -> __m256i {
-    let mut dst: __m256i = src;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(ymm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu8_256(mem_addr, src.as_i8x32(), k))
 }
 
 /// Load packed 8-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_maskz_loadu_epi8(k: __mmask32, mem_addr: *const i8) -> __m256i {
-    let mut dst: __m256i;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(ymm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm256_mask_loadu_epi8(_mm256_setzero_si256(), k, mem_addr)
 }
 
 /// Load packed 16-bit integers from memory into dst using writemask k
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_mask_loadu_epi16(src: __m128i, k: __mmask8, mem_addr: *const i16) -> __m128i {
-    let mut dst: __m128i = src;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(xmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu16_128(mem_addr, src.as_i16x8(), k))
 }
 
 /// Load packed 16-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_loadu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_loadu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_maskz_loadu_epi16(k: __mmask8, mem_addr: *const i16) -> __m128i {
-    let mut dst: __m128i;
-    asm!(
-        vpl!("vmovdqu16 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(xmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm_mask_loadu_epi16(_mm_setzero_si128(), k, mem_addr)
 }
 
 /// Load packed 8-bit integers from memory into dst using writemask k
 /// (elements are copied from src when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_mask_loadu_epi8(src: __m128i, k: __mmask16, mem_addr: *const i8) -> __m128i {
-    let mut dst: __m128i = src;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = inout(xmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    transmute(loaddqu8_128(mem_addr, src.as_i8x16(), k))
 }
 
 /// Load packed 8-bit integers from memory into dst using zeromask k
 /// (elements are zeroed out when the corresponding mask bit is not set).
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_loadu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_loadu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_maskz_loadu_epi8(k: __mmask16, mem_addr: *const i8) -> __m128i {
-    let mut dst: __m128i;
-    asm!(
-        vpl!("vmovdqu8 {dst}{{{k}}} {{z}}"),
-        p = in(reg) mem_addr,
-        k = in(kreg) k,
-        dst = out(xmm_reg) dst,
-        options(pure, readonly, nostack)
-    );
-    dst
+    _mm_mask_loadu_epi8(_mm_setzero_si128(), k, mem_addr)
 }
 
 /// Store packed 16-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_storeu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_storeu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_mask_storeu_epi16(mem_addr: *mut i16, mask: __mmask32, a: __m512i) {
-    asm!(
-        vps!("vmovdqu16", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(zmm_reg) a,
-        options(nostack)
-    );
+    storedqu16_512(mem_addr, a.as_i16x32(), mask)
 }
 
 /// Store packed 8-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_storeu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_storeu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw")]
+#[target_feature(enable = "avx512bw")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm512_mask_storeu_epi8(mem_addr: *mut i8, mask: __mmask64, a: __m512i) {
-    asm!(
-        vps!("vmovdqu8", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(zmm_reg) a,
-        options(nostack)
-    );
+    storedqu8_512(mem_addr, a.as_i8x64(), mask)
 }
 
 /// Store packed 16-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_storeu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_storeu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_mask_storeu_epi16(mem_addr: *mut i16, mask: __mmask16, a: __m256i) {
-    asm!(
-        vps!("vmovdqu16", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(ymm_reg) a,
-        options(nostack)
-    );
+    storedqu16_256(mem_addr, a.as_i16x16(), mask)
 }
 
 /// Store packed 8-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_storeu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_storeu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm256_mask_storeu_epi8(mem_addr: *mut i8, mask: __mmask32, a: __m256i) {
-    asm!(
-        vps!("vmovdqu8", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(ymm_reg) a,
-        options(nostack)
-    );
+    storedqu8_256(mem_addr, a.as_i8x32(), mask)
 }
 
 /// Store packed 16-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_storeu_epi16)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_storeu_epi16)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu16))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_mask_storeu_epi16(mem_addr: *mut i16, mask: __mmask8, a: __m128i) {
-    asm!(
-        vps!("vmovdqu16", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(xmm_reg) a,
-        options(nostack)
-    );
+    storedqu16_128(mem_addr, a.as_i16x8(), mask)
 }
 
 /// Store packed 8-bit integers from a into memory using writemask k.
 /// mem_addr does not need to be aligned on any particular boundary.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_storeu_epi8)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_storeu_epi8)
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx,sse")]
+#[target_feature(enable = "avx512bw,avx512vl")]
+#[cfg_attr(test, assert_instr(vmovdqu8))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _mm_mask_storeu_epi8(mem_addr: *mut i8, mask: __mmask16, a: __m128i) {
-    asm!(
-        vps!("vmovdqu8", "{{{mask}}}, {a}"),
-        p = in(reg) mem_addr,
-        mask = in(kreg) mask,
-        a = in(xmm_reg) a,
-        options(nostack)
-    );
+    storedqu8_128(mem_addr, a.as_i8x16(), mask)
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_madd_epi16&expand=3511)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_madd_epi16&expand=3511)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm512_madd_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpmaddwd(a.as_i16x32(), b.as_i16x32()))
@@ -4566,9 +5546,10 @@ pub unsafe fn _mm512_madd_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_madd_epi16&expand=3512)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_madd_epi16&expand=3512)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm512_mask_madd_epi16(
     src: __m512i,
@@ -4582,21 +5563,22 @@ pub unsafe fn _mm512_mask_madd_epi16(
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_madd_epi16&expand=3513)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_madd_epi16&expand=3513)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm512_maskz_madd_epi16(k: __mmask16, a: __m512i, b: __m512i) -> __m512i {
     let madd = _mm512_madd_epi16(a, b).as_i32x16();
-    let zero = _mm512_setzero_si512().as_i32x16();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i32x16::ZERO))
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_madd_epi16&expand=3509)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_madd_epi16&expand=3509)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm256_mask_madd_epi16(src: __m256i, k: __mmask8, a: __m256i, b: __m256i) -> __m256i {
     let madd = _mm256_madd_epi16(a, b).as_i32x8();
@@ -4605,21 +5587,22 @@ pub unsafe fn _mm256_mask_madd_epi16(src: __m256i, k: __mmask8, a: __m256i, b: _
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_madd_epi16&expand=3510)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_madd_epi16&expand=3510)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm256_maskz_madd_epi16(k: __mmask8, a: __m256i, b: __m256i) -> __m256i {
     let madd = _mm256_madd_epi16(a, b).as_i32x8();
-    let zero = _mm256_setzero_si256().as_i32x8();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i32x8::ZERO))
 }
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_madd_epi16&expand=3506)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_madd_epi16&expand=3506)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm_mask_madd_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let madd = _mm_madd_epi16(a, b).as_i32x4();
@@ -4628,21 +5611,22 @@ pub unsafe fn _mm_mask_madd_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m1
 
 /// Multiply packed signed 16-bit integers in a and b, producing intermediate signed 32-bit integers. Horizontally add adjacent pairs of intermediate 32-bit integers, and pack the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_madd_epi16&expand=3507)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_madd_epi16&expand=3507)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddwd))]
 pub unsafe fn _mm_maskz_madd_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let madd = _mm_madd_epi16(a, b).as_i32x4();
-    let zero = _mm_setzero_si128().as_i32x4();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i32x4::ZERO))
 }
 
 /// Vertically multiply each unsigned 8-bit integer from a with the corresponding signed 8-bit integer from b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maddubs_epi16&expand=3539)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maddubs_epi16&expand=3539)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm512_maddubs_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpmaddubsw(a.as_i8x64(), b.as_i8x64()))
@@ -4650,9 +5634,10 @@ pub unsafe fn _mm512_maddubs_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_maddubs_epi16&expand=3540)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_maddubs_epi16&expand=3540)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm512_mask_maddubs_epi16(
     src: __m512i,
@@ -4666,21 +5651,22 @@ pub unsafe fn _mm512_mask_maddubs_epi16(
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_maddubs_epi16&expand=3541)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_maddubs_epi16&expand=3541)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm512_maskz_maddubs_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let madd = _mm512_maddubs_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i16x32::ZERO))
 }
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_maddubs_epi16&expand=3537)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_maddubs_epi16&expand=3537)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm256_mask_maddubs_epi16(
     src: __m256i,
@@ -4694,21 +5680,22 @@ pub unsafe fn _mm256_mask_maddubs_epi16(
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_maddubs_epi16&expand=3538)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_maddubs_epi16&expand=3538)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm256_maskz_maddubs_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let madd = _mm256_maddubs_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i16x16::ZERO))
 }
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_maddubs_epi16&expand=3534)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_maddubs_epi16&expand=3534)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm_mask_maddubs_epi16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let madd = _mm_maddubs_epi16(a, b).as_i16x8();
@@ -4717,21 +5704,22 @@ pub unsafe fn _mm_mask_maddubs_epi16(src: __m128i, k: __mmask8, a: __m128i, b: _
 
 /// Multiply packed unsigned 8-bit integers in a by packed signed 8-bit integers in b, producing intermediate signed 16-bit integers. Horizontally add adjacent pairs of intermediate signed 16-bit integers, and pack the saturated results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_maddubs_epi16&expand=3535)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_maddubs_epi16&expand=3535)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmaddubsw))]
 pub unsafe fn _mm_maskz_maddubs_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let madd = _mm_maddubs_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, madd, zero))
+    transmute(simd_select_bitmask(k, madd, i16x8::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_packs_epi32&expand=4091)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_packs_epi32&expand=4091)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm512_packs_epi32(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpackssdw(a.as_i32x16(), b.as_i32x16()))
@@ -4739,9 +5727,10 @@ pub unsafe fn _mm512_packs_epi32(a: __m512i, b: __m512i) -> __m512i {
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_packs_epi32&expand=4089)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_packs_epi32&expand=4089)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm512_mask_packs_epi32(
     src: __m512i,
@@ -4755,21 +5744,22 @@ pub unsafe fn _mm512_mask_packs_epi32(
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_packs_epi32&expand=4090)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_packs_epi32&expand=4090)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm512_maskz_packs_epi32(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let pack = _mm512_packs_epi32(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x32::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_packs_epi32&expand=4086)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_packs_epi32&expand=4086)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm256_mask_packs_epi32(
     src: __m256i,
@@ -4783,21 +5773,22 @@ pub unsafe fn _mm256_mask_packs_epi32(
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_packs_epi32&expand=4087)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_packs_epi32&expand=4087)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm256_maskz_packs_epi32(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let pack = _mm256_packs_epi32(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x16::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_packs_epi32&expand=4083)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_packs_epi32&expand=4083)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm_mask_packs_epi32(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packs_epi32(a, b).as_i16x8();
@@ -4806,21 +5797,22 @@ pub unsafe fn _mm_mask_packs_epi32(src: __m128i, k: __mmask8, a: __m128i, b: __m
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_packs_epi32&expand=4084)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_packs_epi32&expand=4084)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackssdw))]
 pub unsafe fn _mm_maskz_packs_epi32(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packs_epi32(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x8::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_packs_epi16&expand=4082)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_packs_epi16&expand=4082)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm512_packs_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpacksswb(a.as_i16x32(), b.as_i16x32()))
@@ -4828,9 +5820,10 @@ pub unsafe fn _mm512_packs_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_packs_epi16&expand=4080)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_packs_epi16&expand=4080)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm512_mask_packs_epi16(
     src: __m512i,
@@ -4844,21 +5837,22 @@ pub unsafe fn _mm512_mask_packs_epi16(
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_packs_epi16&expand=4081)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_packs_epi16&expand=4081)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm512_maskz_packs_epi16(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let pack = _mm512_packs_epi16(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x64::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_packs_epi16&expand=4077)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_packs_epi16&expand=4077)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm256_mask_packs_epi16(
     src: __m256i,
@@ -4872,21 +5866,22 @@ pub unsafe fn _mm256_mask_packs_epi16(
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=#text=_mm256_maskz_packs_epi16&expand=4078)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=#text=_mm256_maskz_packs_epi16&expand=4078)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm256_maskz_packs_epi16(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let pack = _mm256_packs_epi16(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x32::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_packs_epi16&expand=4074)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_packs_epi16&expand=4074)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm_mask_packs_epi16(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packs_epi16(a, b).as_i8x16();
@@ -4895,21 +5890,22 @@ pub unsafe fn _mm_mask_packs_epi16(src: __m128i, k: __mmask16, a: __m128i, b: __
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_packs_epi16&expand=4075)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_packs_epi16&expand=4075)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpacksswb))]
 pub unsafe fn _mm_maskz_packs_epi16(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packs_epi16(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x16::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_packus_epi32&expand=4130)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_packus_epi32&expand=4130)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm512_packus_epi32(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpackusdw(a.as_i32x16(), b.as_i32x16()))
@@ -4917,9 +5913,10 @@ pub unsafe fn _mm512_packus_epi32(a: __m512i, b: __m512i) -> __m512i {
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_packus_epi32&expand=4128)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_packus_epi32&expand=4128)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm512_mask_packus_epi32(
     src: __m512i,
@@ -4933,21 +5930,22 @@ pub unsafe fn _mm512_mask_packus_epi32(
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_packus_epi32&expand=4129)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_packus_epi32&expand=4129)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm512_maskz_packus_epi32(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let pack = _mm512_packus_epi32(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x32::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_packus_epi32&expand=4125)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_packus_epi32&expand=4125)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm256_mask_packus_epi32(
     src: __m256i,
@@ -4961,21 +5959,22 @@ pub unsafe fn _mm256_mask_packus_epi32(
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_packus_epi32&expand=4126)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_packus_epi32&expand=4126)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm256_maskz_packus_epi32(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let pack = _mm256_packus_epi32(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x16::ZERO))
 }
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_packus_epi32&expand=4122)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_packus_epi32&expand=4122)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm_mask_packus_epi32(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packus_epi32(a, b).as_i16x8();
@@ -4984,21 +5983,22 @@ pub unsafe fn _mm_mask_packus_epi32(src: __m128i, k: __mmask8, a: __m128i, b: __
 
 /// Convert packed signed 32-bit integers from a and b to packed 16-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_packus_epi32&expand=4123)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_packus_epi32&expand=4123)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackusdw))]
 pub unsafe fn _mm_maskz_packus_epi32(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packus_epi32(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i16x8::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_packus_epi16&expand=4121)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_packus_epi16&expand=4121)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm512_packus_epi16(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpackuswb(a.as_i16x32(), b.as_i16x32()))
@@ -5006,9 +6006,10 @@ pub unsafe fn _mm512_packus_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_packus_epi16&expand=4119)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_packus_epi16&expand=4119)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm512_mask_packus_epi16(
     src: __m512i,
@@ -5022,21 +6023,22 @@ pub unsafe fn _mm512_mask_packus_epi16(
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_packus_epi16&expand=4120)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_packus_epi16&expand=4120)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm512_maskz_packus_epi16(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let pack = _mm512_packus_epi16(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x64::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_packus_epi16&expand=4116)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_packus_epi16&expand=4116)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm256_mask_packus_epi16(
     src: __m256i,
@@ -5050,21 +6052,22 @@ pub unsafe fn _mm256_mask_packus_epi16(
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_packus_epi16&expand=4117)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_packus_epi16&expand=4117)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm256_maskz_packus_epi16(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let pack = _mm256_packus_epi16(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x32::ZERO))
 }
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_packus_epi16&expand=4113)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_packus_epi16&expand=4113)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm_mask_packus_epi16(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packus_epi16(a, b).as_i8x16();
@@ -5073,31 +6076,36 @@ pub unsafe fn _mm_mask_packus_epi16(src: __m128i, k: __mmask16, a: __m128i, b: _
 
 /// Convert packed signed 16-bit integers from a and b to packed 8-bit integers using unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_packus_epi16&expand=4114)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_packus_epi16&expand=4114)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpackuswb))]
 pub unsafe fn _mm_maskz_packus_epi16(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let pack = _mm_packus_epi16(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, pack, zero))
+    transmute(simd_select_bitmask(k, pack, i8x16::ZERO))
 }
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_avg_epu16&expand=388)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_avg_epu16&expand=388)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm512_avg_epu16(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpavgw(a.as_u16x32(), b.as_u16x32()))
+    let a = simd_cast::<_, u32x32>(a.as_u16x32());
+    let b = simd_cast::<_, u32x32>(b.as_u16x32());
+    let r = simd_shr(simd_add(simd_add(a, b), u32x32::splat(1)), u32x32::splat(1));
+    transmute(simd_cast::<_, u16x32>(r))
 }
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_avg_epu16&expand=389)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_avg_epu16&expand=389)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm512_mask_avg_epu16(src: __m512i, k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let avg = _mm512_avg_epu16(a, b).as_u16x32();
@@ -5106,21 +6114,22 @@ pub unsafe fn _mm512_mask_avg_epu16(src: __m512i, k: __mmask32, a: __m512i, b: _
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_avg_epu16&expand=390)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_avg_epu16&expand=390)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm512_maskz_avg_epu16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let avg = _mm512_avg_epu16(a, b).as_u16x32();
-    let zero = _mm512_setzero_si512().as_u16x32();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u16x32::ZERO))
 }
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_avg_epu16&expand=386)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_avg_epu16&expand=386)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm256_mask_avg_epu16(src: __m256i, k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let avg = _mm256_avg_epu16(a, b).as_u16x16();
@@ -5129,21 +6138,22 @@ pub unsafe fn _mm256_mask_avg_epu16(src: __m256i, k: __mmask16, a: __m256i, b: _
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_avg_epu16&expand=387)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_avg_epu16&expand=387)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm256_maskz_avg_epu16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let avg = _mm256_avg_epu16(a, b).as_u16x16();
-    let zero = _mm256_setzero_si256().as_u16x16();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u16x16::ZERO))
 }
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_avg_epu16&expand=383)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_avg_epu16&expand=383)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm_mask_avg_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let avg = _mm_avg_epu16(a, b).as_u16x8();
@@ -5152,31 +6162,36 @@ pub unsafe fn _mm_mask_avg_epu16(src: __m128i, k: __mmask8, a: __m128i, b: __m12
 
 /// Average packed unsigned 16-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_avg_epu16&expand=384)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_avg_epu16&expand=384)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgw))]
 pub unsafe fn _mm_maskz_avg_epu16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let avg = _mm_avg_epu16(a, b).as_u16x8();
-    let zero = _mm_setzero_si128().as_u16x8();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u16x8::ZERO))
 }
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_avg_epu8&expand=397)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_avg_epu8&expand=397)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm512_avg_epu8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpavgb(a.as_u8x64(), b.as_u8x64()))
+    let a = simd_cast::<_, u16x64>(a.as_u8x64());
+    let b = simd_cast::<_, u16x64>(b.as_u8x64());
+    let r = simd_shr(simd_add(simd_add(a, b), u16x64::splat(1)), u16x64::splat(1));
+    transmute(simd_cast::<_, u8x64>(r))
 }
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_avg_epu8&expand=398)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_avg_epu8&expand=398)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm512_mask_avg_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let avg = _mm512_avg_epu8(a, b).as_u8x64();
@@ -5185,21 +6200,22 @@ pub unsafe fn _mm512_mask_avg_epu8(src: __m512i, k: __mmask64, a: __m512i, b: __
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_avg_epu8&expand=399)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_avg_epu8&expand=399)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm512_maskz_avg_epu8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let avg = _mm512_avg_epu8(a, b).as_u8x64();
-    let zero = _mm512_setzero_si512().as_u8x64();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u8x64::ZERO))
 }
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_avg_epu8&expand=395)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_avg_epu8&expand=395)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm256_mask_avg_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let avg = _mm256_avg_epu8(a, b).as_u8x32();
@@ -5208,21 +6224,22 @@ pub unsafe fn _mm256_mask_avg_epu8(src: __m256i, k: __mmask32, a: __m256i, b: __
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_avg_epu8&expand=396)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_avg_epu8&expand=396)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm256_maskz_avg_epu8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let avg = _mm256_avg_epu8(a, b).as_u8x32();
-    let zero = _mm256_setzero_si256().as_u8x32();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u8x32::ZERO))
 }
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_avg_epu8&expand=392)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_avg_epu8&expand=392)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm_mask_avg_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let avg = _mm_avg_epu8(a, b).as_u8x16();
@@ -5231,21 +6248,22 @@ pub unsafe fn _mm_mask_avg_epu8(src: __m128i, k: __mmask16, a: __m128i, b: __m12
 
 /// Average packed unsigned 8-bit integers in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_avg_epu8&expand=393)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_avg_epu8&expand=393)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpavgb))]
 pub unsafe fn _mm_maskz_avg_epu8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let avg = _mm_avg_epu8(a, b).as_u8x16();
-    let zero = _mm_setzero_si128().as_u8x16();
-    transmute(simd_select_bitmask(k, avg, zero))
+    transmute(simd_select_bitmask(k, avg, u8x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sll_epi16&expand=5271)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sll_epi16&expand=5271)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm512_sll_epi16(a: __m512i, count: __m128i) -> __m512i {
     transmute(vpsllw(a.as_i16x32(), count.as_i16x8()))
@@ -5253,9 +6271,10 @@ pub unsafe fn _mm512_sll_epi16(a: __m512i, count: __m128i) -> __m512i {
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_sll_epi16&expand=5269)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_sll_epi16&expand=5269)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm512_mask_sll_epi16(
     src: __m512i,
@@ -5269,21 +6288,22 @@ pub unsafe fn _mm512_mask_sll_epi16(
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_sll_epi16&expand=5270)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_sll_epi16&expand=5270)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm512_maskz_sll_epi16(k: __mmask32, a: __m512i, count: __m128i) -> __m512i {
     let shf = _mm512_sll_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_sll_epi16&expand=5266)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_sll_epi16&expand=5266)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm256_mask_sll_epi16(
     src: __m256i,
@@ -5297,21 +6317,22 @@ pub unsafe fn _mm256_mask_sll_epi16(
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_sll_epi16&expand=5267)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_sll_epi16&expand=5267)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm256_maskz_sll_epi16(k: __mmask16, a: __m256i, count: __m128i) -> __m256i {
     let shf = _mm256_sll_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_sll_epi16&expand=5263)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_sll_epi16&expand=5263)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm_mask_sll_epi16(src: __m128i, k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_sll_epi16(a, count).as_i16x8();
@@ -5320,35 +6341,39 @@ pub unsafe fn _mm_mask_sll_epi16(src: __m128i, k: __mmask8, a: __m128i, count: _
 
 /// Shift packed 16-bit integers in a left by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_sll_epi16&expand=5264)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_sll_epi16&expand=5264)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw))]
 pub unsafe fn _mm_maskz_sll_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_sll_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_slli_epi16&expand=5301)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_slli_epi16&expand=5301)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_slli_epi16<const IMM8: u32>(a: __m512i) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let r = vpslliw(a, IMM8);
-    transmute(r)
+    static_assert_uimm_bits!(IMM8, 8);
+    if IMM8 >= 16 {
+        _mm512_setzero_si512()
+    } else {
+        transmute(simd_shl(a.as_u16x32(), u16x32::splat(IMM8 as u16)))
+    }
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_slli_epi16&expand=5299)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_slli_epi16&expand=5299)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_mask_slli_epi16<const IMM8: u32>(
@@ -5356,32 +6381,39 @@ pub unsafe fn _mm512_mask_slli_epi16<const IMM8: u32>(
     k: __mmask32,
     a: __m512i,
 ) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let shf = vpslliw(a, IMM8);
-    transmute(simd_select_bitmask(k, shf, src.as_i16x32()))
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = if IMM8 >= 16 {
+        u16x32::ZERO
+    } else {
+        simd_shl(a.as_u16x32(), u16x32::splat(IMM8 as u16))
+    };
+    transmute(simd_select_bitmask(k, shf, src.as_u16x32()))
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_slli_epi16&expand=5300)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_slli_epi16&expand=5300)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_maskz_slli_epi16<const IMM8: u32>(k: __mmask32, a: __m512i) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let shf = vpslliw(a, IMM8);
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    if IMM8 >= 16 {
+        _mm512_setzero_si512()
+    } else {
+        let shf = simd_shl(a.as_u16x32(), u16x32::splat(IMM8 as u16));
+        transmute(simd_select_bitmask(k, shf, u16x32::ZERO))
+    }
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_slli_epi16&expand=5296)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_slli_epi16&expand=5296)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm256_mask_slli_epi16<const IMM8: u32>(
@@ -5389,32 +6421,39 @@ pub unsafe fn _mm256_mask_slli_epi16<const IMM8: u32>(
     k: __mmask16,
     a: __m256i,
 ) -> __m256i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = pslliw256(a.as_i16x16(), imm8);
-    transmute(simd_select_bitmask(k, r, src.as_i16x16()))
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = if IMM8 >= 16 {
+        u16x16::ZERO
+    } else {
+        simd_shl(a.as_u16x16(), u16x16::splat(IMM8 as u16))
+    };
+    transmute(simd_select_bitmask(k, shf, src.as_u16x16()))
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_slli_epi16&expand=5297)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_slli_epi16&expand=5297)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm256_maskz_slli_epi16<const IMM8: u32>(k: __mmask16, a: __m256i) -> __m256i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = pslliw256(a.as_i16x16(), imm8);
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, r, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    if IMM8 >= 16 {
+        _mm256_setzero_si256()
+    } else {
+        let shf = simd_shl(a.as_u16x16(), u16x16::splat(IMM8 as u16));
+        transmute(simd_select_bitmask(k, shf, u16x16::ZERO))
+    }
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_slli_epi16&expand=5293)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_slli_epi16&expand=5293)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm_mask_slli_epi16<const IMM8: u32>(
@@ -5422,32 +6461,39 @@ pub unsafe fn _mm_mask_slli_epi16<const IMM8: u32>(
     k: __mmask8,
     a: __m128i,
 ) -> __m128i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = pslliw128(a.as_i16x8(), imm8);
-    transmute(simd_select_bitmask(k, r, src.as_i16x8()))
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = if IMM8 >= 16 {
+        u16x8::ZERO
+    } else {
+        simd_shl(a.as_u16x8(), u16x8::splat(IMM8 as u16))
+    };
+    transmute(simd_select_bitmask(k, shf, src.as_u16x8()))
 }
 
 /// Shift packed 16-bit integers in a left by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_slli_epi16&expand=5294)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_slli_epi16&expand=5294)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm_maskz_slli_epi16<const IMM8: u32>(k: __mmask8, a: __m128i) -> __m128i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = pslliw128(a.as_i16x8(), imm8);
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, r, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    if IMM8 >= 16 {
+        _mm_setzero_si128()
+    } else {
+        let shf = simd_shl(a.as_u16x8(), u16x8::splat(IMM8 as u16));
+        transmute(simd_select_bitmask(k, shf, u16x8::ZERO))
+    }
 }
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sllv_epi16&expand=5333)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sllv_epi16&expand=5333)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm512_sllv_epi16(a: __m512i, count: __m512i) -> __m512i {
     transmute(vpsllvw(a.as_i16x32(), count.as_i16x32()))
@@ -5455,9 +6501,10 @@ pub unsafe fn _mm512_sllv_epi16(a: __m512i, count: __m512i) -> __m512i {
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_sllv_epi16&expand=5331)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_sllv_epi16&expand=5331)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm512_mask_sllv_epi16(
     src: __m512i,
@@ -5471,21 +6518,22 @@ pub unsafe fn _mm512_mask_sllv_epi16(
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_sllv_epi16&expand=5332)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_sllv_epi16&expand=5332)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm512_maskz_sllv_epi16(k: __mmask32, a: __m512i, count: __m512i) -> __m512i {
     let shf = _mm512_sllv_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sllv_epi16&expand=5330)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_sllv_epi16&expand=5330)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm256_sllv_epi16(a: __m256i, count: __m256i) -> __m256i {
     transmute(vpsllvw256(a.as_i16x16(), count.as_i16x16()))
@@ -5493,9 +6541,10 @@ pub unsafe fn _mm256_sllv_epi16(a: __m256i, count: __m256i) -> __m256i {
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_sllv_epi16&expand=5328)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_sllv_epi16&expand=5328)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm256_mask_sllv_epi16(
     src: __m256i,
@@ -5509,21 +6558,22 @@ pub unsafe fn _mm256_mask_sllv_epi16(
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_sllv_epi16&expand=5329)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_sllv_epi16&expand=5329)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm256_maskz_sllv_epi16(k: __mmask16, a: __m256i, count: __m256i) -> __m256i {
     let shf = _mm256_sllv_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sllv_epi16&expand=5327)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_sllv_epi16&expand=5327)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm_sllv_epi16(a: __m128i, count: __m128i) -> __m128i {
     transmute(vpsllvw128(a.as_i16x8(), count.as_i16x8()))
@@ -5531,9 +6581,10 @@ pub unsafe fn _mm_sllv_epi16(a: __m128i, count: __m128i) -> __m128i {
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_sllv_epi16&expand=5325)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_sllv_epi16&expand=5325)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm_mask_sllv_epi16(
     src: __m128i,
@@ -5547,21 +6598,22 @@ pub unsafe fn _mm_mask_sllv_epi16(
 
 /// Shift packed 16-bit integers in a left by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_sllv_epi16&expand=5326)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_sllv_epi16&expand=5326)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsllvw))]
 pub unsafe fn _mm_maskz_sllv_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_sllv_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_srl_epi16&expand=5483)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_srl_epi16&expand=5483)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm512_srl_epi16(a: __m512i, count: __m128i) -> __m512i {
     transmute(vpsrlw(a.as_i16x32(), count.as_i16x8()))
@@ -5569,9 +6621,10 @@ pub unsafe fn _mm512_srl_epi16(a: __m512i, count: __m128i) -> __m512i {
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_srl_epi16&expand=5481)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_srl_epi16&expand=5481)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm512_mask_srl_epi16(
     src: __m512i,
@@ -5585,21 +6638,22 @@ pub unsafe fn _mm512_mask_srl_epi16(
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_srl_epi16&expand=5482)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_srl_epi16&expand=5482)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm512_maskz_srl_epi16(k: __mmask32, a: __m512i, count: __m128i) -> __m512i {
     let shf = _mm512_srl_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_srl_epi16&expand=5478)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_srl_epi16&expand=5478)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm256_mask_srl_epi16(
     src: __m256i,
@@ -5613,21 +6667,22 @@ pub unsafe fn _mm256_mask_srl_epi16(
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_srl_epi16&expand=5479)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_srl_epi16&expand=5479)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm256_maskz_srl_epi16(k: __mmask16, a: __m256i, count: __m128i) -> __m256i {
     let shf = _mm256_srl_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_srl_epi16&expand=5475)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_srl_epi16&expand=5475)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm_mask_srl_epi16(src: __m128i, k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_srl_epi16(a, count).as_i16x8();
@@ -5636,35 +6691,39 @@ pub unsafe fn _mm_mask_srl_epi16(src: __m128i, k: __mmask8, a: __m128i, count: _
 
 /// Shift packed 16-bit integers in a right by count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_srl_epi16&expand=5476)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_srl_epi16&expand=5476)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw))]
 pub unsafe fn _mm_maskz_srl_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_srl_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_srli_epi16&expand=5513)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_srli_epi16&expand=5513)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_srli_epi16<const IMM8: u32>(a: __m512i) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let r = vpsrliw(a, IMM8);
-    transmute(r)
+    static_assert_uimm_bits!(IMM8, 8);
+    if IMM8 >= 16 {
+        _mm512_setzero_si512()
+    } else {
+        transmute(simd_shr(a.as_u16x32(), u16x32::splat(IMM8 as u16)))
+    }
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_srli_epi16&expand=5511)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_srli_epi16&expand=5511)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_mask_srli_epi16<const IMM8: u32>(
@@ -5672,33 +6731,40 @@ pub unsafe fn _mm512_mask_srli_epi16<const IMM8: u32>(
     k: __mmask32,
     a: __m512i,
 ) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let shf = vpsrliw(a, IMM8);
-    transmute(simd_select_bitmask(k, shf, src.as_i16x32()))
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = if IMM8 >= 16 {
+        u16x32::ZERO
+    } else {
+        simd_shr(a.as_u16x32(), u16x32::splat(IMM8 as u16))
+    };
+    transmute(simd_select_bitmask(k, shf, src.as_u16x32()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_srli_epi16&expand=5512)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_srli_epi16&expand=5512)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_maskz_srli_epi16<const IMM8: i32>(k: __mmask32, a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     //imm8 should be u32, it seems the document to verify is incorrect
-    let a = a.as_i16x32();
-    let shf = vpsrliw(a, IMM8 as u32);
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    if IMM8 >= 16 {
+        _mm512_setzero_si512()
+    } else {
+        let shf = simd_shr(a.as_u16x32(), u16x32::splat(IMM8 as u16));
+        transmute(simd_select_bitmask(k, shf, u16x32::ZERO))
+    }
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_srli_epi16&expand=5508)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_srli_epi16&expand=5508)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm256_mask_srli_epi16<const IMM8: i32>(
@@ -5706,30 +6772,31 @@ pub unsafe fn _mm256_mask_srli_epi16<const IMM8: i32>(
     k: __mmask16,
     a: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shf = _mm256_srli_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shf.as_i16x16(), src.as_i16x16()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_srli_epi16&expand=5509)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_srli_epi16&expand=5509)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm256_maskz_srli_epi16<const IMM8: i32>(k: __mmask16, a: __m256i) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shf = _mm256_srli_epi16::<IMM8>(a);
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf.as_i16x16(), zero))
+    transmute(simd_select_bitmask(k, shf.as_i16x16(), i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_srli_epi16&expand=5505)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_srli_epi16&expand=5505)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm_mask_srli_epi16<const IMM8: i32>(
@@ -5737,30 +6804,31 @@ pub unsafe fn _mm_mask_srli_epi16<const IMM8: i32>(
     k: __mmask8,
     a: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shf = _mm_srli_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shf.as_i16x8(), src.as_i16x8()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_srli_epi16&expand=5506)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_srli_epi16&expand=5506)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm_maskz_srli_epi16<const IMM8: i32>(k: __mmask8, a: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shf = _mm_srli_epi16::<IMM8>(a);
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf.as_i16x8(), zero))
+    transmute(simd_select_bitmask(k, shf.as_i16x8(), i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_srlv_epi16&expand=5545)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_srlv_epi16&expand=5545)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm512_srlv_epi16(a: __m512i, count: __m512i) -> __m512i {
     transmute(vpsrlvw(a.as_i16x32(), count.as_i16x32()))
@@ -5768,9 +6836,10 @@ pub unsafe fn _mm512_srlv_epi16(a: __m512i, count: __m512i) -> __m512i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_srlv_epi16&expand=5543)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_srlv_epi16&expand=5543)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm512_mask_srlv_epi16(
     src: __m512i,
@@ -5784,21 +6853,22 @@ pub unsafe fn _mm512_mask_srlv_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_srlv_epi16&expand=5544)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_srlv_epi16&expand=5544)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm512_maskz_srlv_epi16(k: __mmask32, a: __m512i, count: __m512i) -> __m512i {
     let shf = _mm512_srlv_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_srlv_epi16&expand=5542)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_srlv_epi16&expand=5542)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm256_srlv_epi16(a: __m256i, count: __m256i) -> __m256i {
     transmute(vpsrlvw256(a.as_i16x16(), count.as_i16x16()))
@@ -5806,9 +6876,10 @@ pub unsafe fn _mm256_srlv_epi16(a: __m256i, count: __m256i) -> __m256i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_srlv_epi16&expand=5540)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_srlv_epi16&expand=5540)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm256_mask_srlv_epi16(
     src: __m256i,
@@ -5822,21 +6893,22 @@ pub unsafe fn _mm256_mask_srlv_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_srlv_epi16&expand=5541)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_srlv_epi16&expand=5541)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm256_maskz_srlv_epi16(k: __mmask16, a: __m256i, count: __m256i) -> __m256i {
     let shf = _mm256_srlv_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_srlv_epi16&expand=5539)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_srlv_epi16&expand=5539)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm_srlv_epi16(a: __m128i, count: __m128i) -> __m128i {
     transmute(vpsrlvw128(a.as_i16x8(), count.as_i16x8()))
@@ -5844,9 +6916,10 @@ pub unsafe fn _mm_srlv_epi16(a: __m128i, count: __m128i) -> __m128i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_srlv_epi16&expand=5537)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_srlv_epi16&expand=5537)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm_mask_srlv_epi16(
     src: __m128i,
@@ -5860,21 +6933,22 @@ pub unsafe fn _mm_mask_srlv_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in zeros, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_srlv_epi16&expand=5538)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_srlv_epi16&expand=5538)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrlvw))]
 pub unsafe fn _mm_maskz_srlv_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_srlv_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sra_epi16&expand=5398)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sra_epi16&expand=5398)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm512_sra_epi16(a: __m512i, count: __m128i) -> __m512i {
     transmute(vpsraw(a.as_i16x32(), count.as_i16x8()))
@@ -5882,9 +6956,10 @@ pub unsafe fn _mm512_sra_epi16(a: __m512i, count: __m128i) -> __m512i {
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_sra_epi16&expand=5396)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_sra_epi16&expand=5396)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm512_mask_sra_epi16(
     src: __m512i,
@@ -5898,21 +6973,22 @@ pub unsafe fn _mm512_mask_sra_epi16(
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_sra_epi16&expand=5397)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_sra_epi16&expand=5397)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm512_maskz_sra_epi16(k: __mmask32, a: __m512i, count: __m128i) -> __m512i {
     let shf = _mm512_sra_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_sra_epi16&expand=5393)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_sra_epi16&expand=5393)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm256_mask_sra_epi16(
     src: __m256i,
@@ -5926,21 +7002,22 @@ pub unsafe fn _mm256_mask_sra_epi16(
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_sra_epi16&expand=5394)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_sra_epi16&expand=5394)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm256_maskz_sra_epi16(k: __mmask16, a: __m256i, count: __m128i) -> __m256i {
     let shf = _mm256_sra_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_sra_epi16&expand=5390)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_sra_epi16&expand=5390)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm_mask_sra_epi16(src: __m128i, k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_sra_epi16(a, count).as_i16x8();
@@ -5949,35 +7026,35 @@ pub unsafe fn _mm_mask_sra_epi16(src: __m128i, k: __mmask8, a: __m128i, count: _
 
 /// Shift packed 16-bit integers in a right by count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_sra_epi16&expand=5391)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_sra_epi16&expand=5391)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw))]
 pub unsafe fn _mm_maskz_sra_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_sra_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_srai_epi16&expand=5427)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_srai_epi16&expand=5427)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_srai_epi16<const IMM8: u32>(a: __m512i) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let r = vpsraiw(a, IMM8);
-    transmute(r)
+    static_assert_uimm_bits!(IMM8, 8);
+    transmute(simd_shr(a.as_i16x32(), i16x32::splat(IMM8.min(15) as i16)))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_srai_epi16&expand=5425)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_srai_epi16&expand=5425)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_mask_srai_epi16<const IMM8: u32>(
@@ -5985,32 +7062,31 @@ pub unsafe fn _mm512_mask_srai_epi16<const IMM8: u32>(
     k: __mmask32,
     a: __m512i,
 ) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let shf = vpsraiw(a, IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = simd_shr(a.as_i16x32(), i16x32::splat(IMM8.min(15) as i16));
     transmute(simd_select_bitmask(k, shf, src.as_i16x32()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_srai_epi16&expand=5426)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_srai_epi16&expand=5426)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_maskz_srai_epi16<const IMM8: u32>(k: __mmask32, a: __m512i) -> __m512i {
-    static_assert_imm_u8!(IMM8);
-    let a = a.as_i16x32();
-    let shf = vpsraiw(a, IMM8);
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    let shf = simd_shr(a.as_i16x32(), i16x32::splat(IMM8.min(15) as i16));
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_srai_epi16&expand=5422)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_srai_epi16&expand=5422)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm256_mask_srai_epi16<const IMM8: u32>(
@@ -6018,32 +7094,31 @@ pub unsafe fn _mm256_mask_srai_epi16<const IMM8: u32>(
     k: __mmask16,
     a: __m256i,
 ) -> __m256i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = psraiw256(a.as_i16x16(), imm8);
+    static_assert_uimm_bits!(IMM8, 8);
+    let r = simd_shr(a.as_i16x16(), i16x16::splat(IMM8.min(15) as i16));
     transmute(simd_select_bitmask(k, r, src.as_i16x16()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_srai_epi16&expand=5423)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_srai_epi16&expand=5423)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm256_maskz_srai_epi16<const IMM8: u32>(k: __mmask16, a: __m256i) -> __m256i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = psraiw256(a.as_i16x16(), imm8);
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, r, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    let r = simd_shr(a.as_i16x16(), i16x16::splat(IMM8.min(15) as i16));
+    transmute(simd_select_bitmask(k, r, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_srai_epi16&expand=5419)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_srai_epi16&expand=5419)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm_mask_srai_epi16<const IMM8: u32>(
@@ -6051,32 +7126,31 @@ pub unsafe fn _mm_mask_srai_epi16<const IMM8: u32>(
     k: __mmask8,
     a: __m128i,
 ) -> __m128i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = psraiw128(a.as_i16x8(), imm8);
+    static_assert_uimm_bits!(IMM8, 8);
+    let r = simd_shr(a.as_i16x8(), i16x8::splat(IMM8.min(15) as i16));
     transmute(simd_select_bitmask(k, r, src.as_i16x8()))
 }
 
 /// Shift packed 16-bit integers in a right by imm8 while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_srai_epi16&expand=5420)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_srai_epi16&expand=5420)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsraw, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm_maskz_srai_epi16<const IMM8: u32>(k: __mmask8, a: __m128i) -> __m128i {
-    static_assert_imm_u8!(IMM8);
-    let imm8 = IMM8 as i32;
-    let r = psraiw128(a.as_i16x8(), imm8);
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, r, zero))
+    static_assert_uimm_bits!(IMM8, 8);
+    let r = simd_shr(a.as_i16x8(), i16x8::splat(IMM8.min(15) as i16));
+    transmute(simd_select_bitmask(k, r, i16x8::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_srav_epi16&expand=5456)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_srav_epi16&expand=5456)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm512_srav_epi16(a: __m512i, count: __m512i) -> __m512i {
     transmute(vpsravw(a.as_i16x32(), count.as_i16x32()))
@@ -6084,9 +7158,10 @@ pub unsafe fn _mm512_srav_epi16(a: __m512i, count: __m512i) -> __m512i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_srav_epi16&expand=5454)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_srav_epi16&expand=5454)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm512_mask_srav_epi16(
     src: __m512i,
@@ -6100,21 +7175,22 @@ pub unsafe fn _mm512_mask_srav_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_srav_epi16&expand=5455)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_srav_epi16&expand=5455)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm512_maskz_srav_epi16(k: __mmask32, a: __m512i, count: __m512i) -> __m512i {
     let shf = _mm512_srav_epi16(a, count).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x32::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_srav_epi16&expand=5453)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_srav_epi16&expand=5453)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm256_srav_epi16(a: __m256i, count: __m256i) -> __m256i {
     transmute(vpsravw256(a.as_i16x16(), count.as_i16x16()))
@@ -6122,9 +7198,10 @@ pub unsafe fn _mm256_srav_epi16(a: __m256i, count: __m256i) -> __m256i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_srav_epi16&expand=5451)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_srav_epi16&expand=5451)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm256_mask_srav_epi16(
     src: __m256i,
@@ -6138,21 +7215,22 @@ pub unsafe fn _mm256_mask_srav_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_srav_epi16&expand=5452)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_srav_epi16&expand=5452)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm256_maskz_srav_epi16(k: __mmask16, a: __m256i, count: __m256i) -> __m256i {
     let shf = _mm256_srav_epi16(a, count).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x16::ZERO))
 }
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_srav_epi16&expand=5450)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_srav_epi16&expand=5450)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm_srav_epi16(a: __m128i, count: __m128i) -> __m128i {
     transmute(vpsravw128(a.as_i16x8(), count.as_i16x8()))
@@ -6160,9 +7238,10 @@ pub unsafe fn _mm_srav_epi16(a: __m128i, count: __m128i) -> __m128i {
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_srav_epi16&expand=5448)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_srav_epi16&expand=5448)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm_mask_srav_epi16(
     src: __m128i,
@@ -6176,21 +7255,22 @@ pub unsafe fn _mm_mask_srav_epi16(
 
 /// Shift packed 16-bit integers in a right by the amount specified by the corresponding element in count while shifting in sign bits, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_srav_epi16&expand=5449)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_srav_epi16&expand=5449)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsravw))]
 pub unsafe fn _mm_maskz_srav_epi16(k: __mmask8, a: __m128i, count: __m128i) -> __m128i {
     let shf = _mm_srav_epi16(a, count).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shf, zero))
+    transmute(simd_select_bitmask(k, shf, i16x8::ZERO))
 }
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_permutex2var_epi16&expand=4226)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_permutex2var_epi16&expand=4226)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm512_permutex2var_epi16(a: __m512i, idx: __m512i, b: __m512i) -> __m512i {
     transmute(vpermi2w(a.as_i16x32(), idx.as_i16x32(), b.as_i16x32()))
@@ -6198,9 +7278,10 @@ pub unsafe fn _mm512_permutex2var_epi16(a: __m512i, idx: __m512i, b: __m512i) ->
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_permutex2var_epi16&expand=4223)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_permutex2var_epi16&expand=4223)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermt2w))]
 pub unsafe fn _mm512_mask_permutex2var_epi16(
     a: __m512i,
@@ -6214,9 +7295,10 @@ pub unsafe fn _mm512_mask_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_permutex2var_epi16&expand=4225)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_permutex2var_epi16&expand=4225)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm512_maskz_permutex2var_epi16(
     k: __mmask32,
@@ -6225,15 +7307,15 @@ pub unsafe fn _mm512_maskz_permutex2var_epi16(
     b: __m512i,
 ) -> __m512i {
     let permute = _mm512_permutex2var_epi16(a, idx, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x32::ZERO))
 }
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from idx when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask2_permutex2var_epi16&expand=4224)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask2_permutex2var_epi16&expand=4224)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermi2w))]
 pub unsafe fn _mm512_mask2_permutex2var_epi16(
     a: __m512i,
@@ -6247,9 +7329,10 @@ pub unsafe fn _mm512_mask2_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_permutex2var_epi16&expand=4222)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_permutex2var_epi16&expand=4222)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm256_permutex2var_epi16(a: __m256i, idx: __m256i, b: __m256i) -> __m256i {
     transmute(vpermi2w256(a.as_i16x16(), idx.as_i16x16(), b.as_i16x16()))
@@ -6257,9 +7340,10 @@ pub unsafe fn _mm256_permutex2var_epi16(a: __m256i, idx: __m256i, b: __m256i) ->
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_permutex2var_epi16&expand=4219)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_permutex2var_epi16&expand=4219)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermt2w))]
 pub unsafe fn _mm256_mask_permutex2var_epi16(
     a: __m256i,
@@ -6273,9 +7357,10 @@ pub unsafe fn _mm256_mask_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_permutex2var_epi16&expand=4221)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_permutex2var_epi16&expand=4221)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm256_maskz_permutex2var_epi16(
     k: __mmask16,
@@ -6284,15 +7369,15 @@ pub unsafe fn _mm256_maskz_permutex2var_epi16(
     b: __m256i,
 ) -> __m256i {
     let permute = _mm256_permutex2var_epi16(a, idx, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x16::ZERO))
 }
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from idx when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask2_permutex2var_epi16&expand=4220)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask2_permutex2var_epi16&expand=4220)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermi2w))]
 pub unsafe fn _mm256_mask2_permutex2var_epi16(
     a: __m256i,
@@ -6306,9 +7391,10 @@ pub unsafe fn _mm256_mask2_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_permutex2var_epi16&expand=4218)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_permutex2var_epi16&expand=4218)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm_permutex2var_epi16(a: __m128i, idx: __m128i, b: __m128i) -> __m128i {
     transmute(vpermi2w128(a.as_i16x8(), idx.as_i16x8(), b.as_i16x8()))
@@ -6316,9 +7402,10 @@ pub unsafe fn _mm_permutex2var_epi16(a: __m128i, idx: __m128i, b: __m128i) -> __
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_permutex2var_epi16&expand=4215)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_permutex2var_epi16&expand=4215)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermt2w))]
 pub unsafe fn _mm_mask_permutex2var_epi16(
     a: __m128i,
@@ -6332,9 +7419,10 @@ pub unsafe fn _mm_mask_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_permutex2var_epi16&expand=4217)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_permutex2var_epi16&expand=4217)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vperm))] //vpermi2w or vpermt2w
 pub unsafe fn _mm_maskz_permutex2var_epi16(
     k: __mmask8,
@@ -6343,15 +7431,15 @@ pub unsafe fn _mm_maskz_permutex2var_epi16(
     b: __m128i,
 ) -> __m128i {
     let permute = _mm_permutex2var_epi16(a, idx, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x8::ZERO))
 }
 
 /// Shuffle 16-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from idx when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask2_permutex2var_epi16&expand=4216)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask2_permutex2var_epi16&expand=4216)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermi2w))]
 pub unsafe fn _mm_mask2_permutex2var_epi16(
     a: __m128i,
@@ -6365,9 +7453,10 @@ pub unsafe fn _mm_mask2_permutex2var_epi16(
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_permutexvar_epi16&expand=4295)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_permutexvar_epi16&expand=4295)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm512_permutexvar_epi16(idx: __m512i, a: __m512i) -> __m512i {
     transmute(vpermw(a.as_i16x32(), idx.as_i16x32()))
@@ -6375,9 +7464,10 @@ pub unsafe fn _mm512_permutexvar_epi16(idx: __m512i, a: __m512i) -> __m512i {
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_permutexvar_epi16&expand=4293)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_permutexvar_epi16&expand=4293)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm512_mask_permutexvar_epi16(
     src: __m512i,
@@ -6391,21 +7481,22 @@ pub unsafe fn _mm512_mask_permutexvar_epi16(
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_permutexvar_epi16&expand=4294)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_permutexvar_epi16&expand=4294)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm512_maskz_permutexvar_epi16(k: __mmask32, idx: __m512i, a: __m512i) -> __m512i {
     let permute = _mm512_permutexvar_epi16(idx, a).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x32::ZERO))
 }
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_permutexvar_epi16&expand=4292)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_permutexvar_epi16&expand=4292)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm256_permutexvar_epi16(idx: __m256i, a: __m256i) -> __m256i {
     transmute(vpermw256(a.as_i16x16(), idx.as_i16x16()))
@@ -6413,9 +7504,10 @@ pub unsafe fn _mm256_permutexvar_epi16(idx: __m256i, a: __m256i) -> __m256i {
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_permutexvar_epi16&expand=4290)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_permutexvar_epi16&expand=4290)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm256_mask_permutexvar_epi16(
     src: __m256i,
@@ -6429,21 +7521,22 @@ pub unsafe fn _mm256_mask_permutexvar_epi16(
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_permutexvar_epi16&expand=4291)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_permutexvar_epi16&expand=4291)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm256_maskz_permutexvar_epi16(k: __mmask16, idx: __m256i, a: __m256i) -> __m256i {
     let permute = _mm256_permutexvar_epi16(idx, a).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x16::ZERO))
 }
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_permutexvar_epi16&expand=4289)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_permutexvar_epi16&expand=4289)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm_permutexvar_epi16(idx: __m128i, a: __m128i) -> __m128i {
     transmute(vpermw128(a.as_i16x8(), idx.as_i16x8()))
@@ -6451,9 +7544,10 @@ pub unsafe fn _mm_permutexvar_epi16(idx: __m128i, a: __m128i) -> __m128i {
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_permutexvar_epi16&expand=4287)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_permutexvar_epi16&expand=4287)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm_mask_permutexvar_epi16(
     src: __m128i,
@@ -6467,21 +7561,22 @@ pub unsafe fn _mm_mask_permutexvar_epi16(
 
 /// Shuffle 16-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_permutexvar_epi16&expand=4288)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_permutexvar_epi16&expand=4288)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpermw))]
 pub unsafe fn _mm_maskz_permutexvar_epi16(k: __mmask8, idx: __m128i, a: __m128i) -> __m128i {
     let permute = _mm_permutexvar_epi16(idx, a).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, permute, zero))
+    transmute(simd_select_bitmask(k, permute, i16x8::ZERO))
 }
 
 /// Blend packed 16-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_blend_epi16&expand=430)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_blend_epi16&expand=430)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))] //should be vpblendmw
 pub unsafe fn _mm512_mask_blend_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_select_bitmask(k, b.as_i16x32(), a.as_i16x32()))
@@ -6489,9 +7584,10 @@ pub unsafe fn _mm512_mask_blend_epi16(k: __mmask32, a: __m512i, b: __m512i) -> _
 
 /// Blend packed 16-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_blend_epi16&expand=429)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_blend_epi16&expand=429)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))] //should be vpblendmw
 pub unsafe fn _mm256_mask_blend_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     transmute(simd_select_bitmask(k, b.as_i16x16(), a.as_i16x16()))
@@ -6499,9 +7595,10 @@ pub unsafe fn _mm256_mask_blend_epi16(k: __mmask16, a: __m256i, b: __m256i) -> _
 
 /// Blend packed 16-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_blend_epi16&expand=427)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_blend_epi16&expand=427)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))] //should be vpblendmw
 pub unsafe fn _mm_mask_blend_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     transmute(simd_select_bitmask(k, b.as_i16x8(), a.as_i16x8()))
@@ -6509,9 +7606,10 @@ pub unsafe fn _mm_mask_blend_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m12
 
 /// Blend packed 8-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_blend_epi8&expand=441)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_blend_epi8&expand=441)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))] //should be vpblendmb
 pub unsafe fn _mm512_mask_blend_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     transmute(simd_select_bitmask(k, b.as_i8x64(), a.as_i8x64()))
@@ -6519,9 +7617,10 @@ pub unsafe fn _mm512_mask_blend_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __
 
 /// Blend packed 8-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_blend_epi8&expand=440)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_blend_epi8&expand=440)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))] //should be vpblendmb
 pub unsafe fn _mm256_mask_blend_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     transmute(simd_select_bitmask(k, b.as_i8x32(), a.as_i8x32()))
@@ -6529,9 +7628,10 @@ pub unsafe fn _mm256_mask_blend_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __
 
 /// Blend packed 8-bit integers from a and b using control mask k, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_blend_epi8&expand=439)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_blend_epi8&expand=439)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))] //should be vpblendmb
 pub unsafe fn _mm_mask_blend_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     transmute(simd_select_bitmask(k, b.as_i8x16(), a.as_i8x16()))
@@ -6539,13 +7639,14 @@ pub unsafe fn _mm_mask_blend_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m12
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_broadcastw_epi16&expand=587)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcastw_epi16&expand=587)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm512_broadcastw_epi16(a: __m128i) -> __m512i {
     let a = _mm512_castsi128_si512(a).as_i16x32();
-    let ret: i16x32 = simd_shuffle32!(
+    let ret: i16x32 = simd_shuffle!(
         a,
         a,
         [
@@ -6558,9 +7659,10 @@ pub unsafe fn _mm512_broadcastw_epi16(a: __m128i) -> __m512i {
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_broadcastw_epi16&expand=588)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcastw_epi16&expand=588)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm512_mask_broadcastw_epi16(src: __m512i, k: __mmask32, a: __m128i) -> __m512i {
     let broadcast = _mm512_broadcastw_epi16(a).as_i16x32();
@@ -6569,21 +7671,22 @@ pub unsafe fn _mm512_mask_broadcastw_epi16(src: __m512i, k: __mmask32, a: __m128
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_broadcastw_epi16&expand=589)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcastw_epi16&expand=589)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm512_maskz_broadcastw_epi16(k: __mmask32, a: __m128i) -> __m512i {
     let broadcast = _mm512_broadcastw_epi16(a).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i16x32::ZERO))
 }
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_broadcastw_epi16&expand=585)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_broadcastw_epi16&expand=585)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm256_mask_broadcastw_epi16(src: __m256i, k: __mmask16, a: __m128i) -> __m256i {
     let broadcast = _mm256_broadcastw_epi16(a).as_i16x16();
@@ -6592,21 +7695,22 @@ pub unsafe fn _mm256_mask_broadcastw_epi16(src: __m256i, k: __mmask16, a: __m128
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_broadcastw_epi16&expand=586)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_broadcastw_epi16&expand=586)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm256_maskz_broadcastw_epi16(k: __mmask16, a: __m128i) -> __m256i {
     let broadcast = _mm256_broadcastw_epi16(a).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i16x16::ZERO))
 }
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_broadcastw_epi16&expand=582)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_broadcastw_epi16&expand=582)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm_mask_broadcastw_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let broadcast = _mm_broadcastw_epi16(a).as_i16x8();
@@ -6615,25 +7719,26 @@ pub unsafe fn _mm_mask_broadcastw_epi16(src: __m128i, k: __mmask8, a: __m128i) -
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_broadcastw_epi16&expand=583)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_broadcastw_epi16&expand=583)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm_maskz_broadcastw_epi16(k: __mmask8, a: __m128i) -> __m128i {
     let broadcast = _mm_broadcastw_epi16(a).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i16x8::ZERO))
 }
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_broadcastb_epi8&expand=536)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcastb_epi8&expand=536)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm512_broadcastb_epi8(a: __m128i) -> __m512i {
     let a = _mm512_castsi128_si512(a).as_i8x64();
-    let ret: i8x64 = simd_shuffle64!(
+    let ret: i8x64 = simd_shuffle!(
         a,
         a,
         [
@@ -6647,9 +7752,10 @@ pub unsafe fn _mm512_broadcastb_epi8(a: __m128i) -> __m512i {
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_broadcastb_epi8&expand=537)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcastb_epi8&expand=537)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm512_mask_broadcastb_epi8(src: __m512i, k: __mmask64, a: __m128i) -> __m512i {
     let broadcast = _mm512_broadcastb_epi8(a).as_i8x64();
@@ -6658,21 +7764,22 @@ pub unsafe fn _mm512_mask_broadcastb_epi8(src: __m512i, k: __mmask64, a: __m128i
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_broadcastb_epi8&expand=538)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcastb_epi8&expand=538)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm512_maskz_broadcastb_epi8(k: __mmask64, a: __m128i) -> __m512i {
     let broadcast = _mm512_broadcastb_epi8(a).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i8x64::ZERO))
 }
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_broadcastb_epi8&expand=534)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_broadcastb_epi8&expand=534)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm256_mask_broadcastb_epi8(src: __m256i, k: __mmask32, a: __m128i) -> __m256i {
     let broadcast = _mm256_broadcastb_epi8(a).as_i8x32();
@@ -6681,21 +7788,22 @@ pub unsafe fn _mm256_mask_broadcastb_epi8(src: __m256i, k: __mmask32, a: __m128i
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_broadcastb_epi8&expand=535)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_broadcastb_epi8&expand=535)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm256_maskz_broadcastb_epi8(k: __mmask32, a: __m128i) -> __m256i {
     let broadcast = _mm256_broadcastb_epi8(a).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i8x32::ZERO))
 }
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_broadcastb_epi8&expand=531)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_broadcastb_epi8&expand=531)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm_mask_broadcastb_epi8(src: __m128i, k: __mmask16, a: __m128i) -> __m128i {
     let broadcast = _mm_broadcastb_epi8(a).as_i8x16();
@@ -6704,27 +7812,28 @@ pub unsafe fn _mm_mask_broadcastb_epi8(src: __m128i, k: __mmask16, a: __m128i) -
 
 /// Broadcast the low packed 8-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_broadcastb_epi8&expand=532)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_broadcastb_epi8&expand=532)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastb))]
 pub unsafe fn _mm_maskz_broadcastb_epi8(k: __mmask16, a: __m128i) -> __m128i {
     let broadcast = _mm_broadcastb_epi8(a).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, broadcast, zero))
+    transmute(simd_select_bitmask(k, broadcast, i8x16::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_unpackhi_epi16&expand=6012)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_unpackhi_epi16&expand=6012)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm512_unpackhi_epi16(a: __m512i, b: __m512i) -> __m512i {
     let a = a.as_i16x32();
     let b = b.as_i16x32();
     #[rustfmt::skip]
-    let r: i16x32 = simd_shuffle32!(
+    let r: i16x32 = simd_shuffle!(
         a,
         b,
         [
@@ -6743,9 +7852,10 @@ pub unsafe fn _mm512_unpackhi_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_unpackhi_epi16&expand=6010)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_unpackhi_epi16&expand=6010)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm512_mask_unpackhi_epi16(
     src: __m512i,
@@ -6759,21 +7869,22 @@ pub unsafe fn _mm512_mask_unpackhi_epi16(
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_unpackhi_epi16&expand=6011)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_unpackhi_epi16&expand=6011)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm512_maskz_unpackhi_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let unpackhi = _mm512_unpackhi_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i16x32::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_unpackhi_epi16&expand=6007)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_unpackhi_epi16&expand=6007)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm256_mask_unpackhi_epi16(
     src: __m256i,
@@ -6787,21 +7898,22 @@ pub unsafe fn _mm256_mask_unpackhi_epi16(
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_unpackhi_epi16&expand=6008)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_unpackhi_epi16&expand=6008)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm256_maskz_unpackhi_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let unpackhi = _mm256_unpackhi_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i16x16::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_unpackhi_epi16&expand=6004)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_unpackhi_epi16&expand=6004)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm_mask_unpackhi_epi16(
     src: __m128i,
@@ -6815,27 +7927,28 @@ pub unsafe fn _mm_mask_unpackhi_epi16(
 
 /// Unpack and interleave 16-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_unpackhi_epi16&expand=6005)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_unpackhi_epi16&expand=6005)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhwd))]
 pub unsafe fn _mm_maskz_unpackhi_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let unpackhi = _mm_unpackhi_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i16x8::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_unpackhi_epi8&expand=6039)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_unpackhi_epi8&expand=6039)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm512_unpackhi_epi8(a: __m512i, b: __m512i) -> __m512i {
     let a = a.as_i8x64();
     let b = b.as_i8x64();
     #[rustfmt::skip]
-    let r: i8x64 = simd_shuffle64!(
+    let r: i8x64 = simd_shuffle!(
         a,
         b,
         [
@@ -6862,9 +7975,10 @@ pub unsafe fn _mm512_unpackhi_epi8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_unpackhi_epi8&expand=6037)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_unpackhi_epi8&expand=6037)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm512_mask_unpackhi_epi8(
     src: __m512i,
@@ -6878,21 +7992,22 @@ pub unsafe fn _mm512_mask_unpackhi_epi8(
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_unpackhi_epi8&expand=6038)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_unpackhi_epi8&expand=6038)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm512_maskz_unpackhi_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let unpackhi = _mm512_unpackhi_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i8x64::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_unpackhi_epi8&expand=6034)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_unpackhi_epi8&expand=6034)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm256_mask_unpackhi_epi8(
     src: __m256i,
@@ -6906,21 +8021,22 @@ pub unsafe fn _mm256_mask_unpackhi_epi8(
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_unpackhi_epi8&expand=6035)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_unpackhi_epi8&expand=6035)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm256_maskz_unpackhi_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let unpackhi = _mm256_unpackhi_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i8x32::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_unpackhi_epi8&expand=6031)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_unpackhi_epi8&expand=6031)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm_mask_unpackhi_epi8(
     src: __m128i,
@@ -6934,27 +8050,28 @@ pub unsafe fn _mm_mask_unpackhi_epi8(
 
 /// Unpack and interleave 8-bit integers from the high half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_unpackhi_epi8&expand=6032)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_unpackhi_epi8&expand=6032)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpckhbw))]
 pub unsafe fn _mm_maskz_unpackhi_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let unpackhi = _mm_unpackhi_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, unpackhi, zero))
+    transmute(simd_select_bitmask(k, unpackhi, i8x16::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_unpacklo_epi16&expand=6069)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_unpacklo_epi16&expand=6069)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm512_unpacklo_epi16(a: __m512i, b: __m512i) -> __m512i {
     let a = a.as_i16x32();
     let b = b.as_i16x32();
     #[rustfmt::skip]
-    let r: i16x32 = simd_shuffle32!(
+    let r: i16x32 = simd_shuffle!(
         a,
         b,
         [
@@ -6973,9 +8090,10 @@ pub unsafe fn _mm512_unpacklo_epi16(a: __m512i, b: __m512i) -> __m512i {
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_unpacklo_epi16&expand=6067)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_unpacklo_epi16&expand=6067)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm512_mask_unpacklo_epi16(
     src: __m512i,
@@ -6989,21 +8107,22 @@ pub unsafe fn _mm512_mask_unpacklo_epi16(
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_unpacklo_epi16&expand=6068)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_unpacklo_epi16&expand=6068)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm512_maskz_unpacklo_epi16(k: __mmask32, a: __m512i, b: __m512i) -> __m512i {
     let unpacklo = _mm512_unpacklo_epi16(a, b).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i16x32::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_unpacklo_epi16&expand=6064)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_unpacklo_epi16&expand=6064)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm256_mask_unpacklo_epi16(
     src: __m256i,
@@ -7017,21 +8136,22 @@ pub unsafe fn _mm256_mask_unpacklo_epi16(
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_unpacklo_epi16&expand=6065)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_unpacklo_epi16&expand=6065)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm256_maskz_unpacklo_epi16(k: __mmask16, a: __m256i, b: __m256i) -> __m256i {
     let unpacklo = _mm256_unpacklo_epi16(a, b).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i16x16::ZERO))
 }
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_unpacklo_epi16&expand=6061)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_unpacklo_epi16&expand=6061)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm_mask_unpacklo_epi16(
     src: __m128i,
@@ -7045,27 +8165,28 @@ pub unsafe fn _mm_mask_unpacklo_epi16(
 
 /// Unpack and interleave 16-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_unpacklo_epi16&expand=6062)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_unpacklo_epi16&expand=6062)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklwd))]
 pub unsafe fn _mm_maskz_unpacklo_epi16(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
     let unpacklo = _mm_unpacklo_epi16(a, b).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i16x8::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_unpacklo_epi8&expand=6096)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_unpacklo_epi8&expand=6096)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm512_unpacklo_epi8(a: __m512i, b: __m512i) -> __m512i {
     let a = a.as_i8x64();
     let b = b.as_i8x64();
     #[rustfmt::skip]
-    let r: i8x64 = simd_shuffle64!(
+    let r: i8x64 = simd_shuffle!(
         a,
         b,
         [
@@ -7092,9 +8213,10 @@ pub unsafe fn _mm512_unpacklo_epi8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_unpacklo_epi8&expand=6094)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_unpacklo_epi8&expand=6094)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm512_mask_unpacklo_epi8(
     src: __m512i,
@@ -7108,21 +8230,22 @@ pub unsafe fn _mm512_mask_unpacklo_epi8(
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_unpacklo_epi8&expand=6095)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_unpacklo_epi8&expand=6095)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm512_maskz_unpacklo_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let unpacklo = _mm512_unpacklo_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i8x64::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_unpacklo_epi8&expand=6091)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_unpacklo_epi8&expand=6091)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm256_mask_unpacklo_epi8(
     src: __m256i,
@@ -7136,21 +8259,22 @@ pub unsafe fn _mm256_mask_unpacklo_epi8(
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_unpacklo_epi8&expand=6092)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_unpacklo_epi8&expand=6092)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm256_maskz_unpacklo_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let unpacklo = _mm256_unpacklo_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i8x32::ZERO))
 }
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_unpacklo_epi8&expand=6088)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_unpacklo_epi8&expand=6088)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm_mask_unpacklo_epi8(
     src: __m128i,
@@ -7164,21 +8288,22 @@ pub unsafe fn _mm_mask_unpacklo_epi8(
 
 /// Unpack and interleave 8-bit integers from the low half of each 128-bit lane in a and b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_unpacklo_epi8&expand=6089)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_unpacklo_epi8&expand=6089)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpunpcklbw))]
 pub unsafe fn _mm_maskz_unpacklo_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let unpacklo = _mm_unpacklo_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, unpacklo, zero))
+    transmute(simd_select_bitmask(k, unpacklo, i8x16::ZERO))
 }
 
 /// Move packed 16-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mov_epi16&expand=3795)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mov_epi16&expand=3795)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm512_mask_mov_epi16(src: __m512i, k: __mmask32, a: __m512i) -> __m512i {
     let mov = a.as_i16x32();
@@ -7187,21 +8312,22 @@ pub unsafe fn _mm512_mask_mov_epi16(src: __m512i, k: __mmask32, a: __m512i) -> _
 
 /// Move packed 16-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mov_epi16&expand=3796)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mov_epi16&expand=3796)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm512_maskz_mov_epi16(k: __mmask32, a: __m512i) -> __m512i {
     let mov = a.as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i16x32::ZERO))
 }
 
 /// Move packed 16-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mov_epi16&expand=3793)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mov_epi16&expand=3793)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm256_mask_mov_epi16(src: __m256i, k: __mmask16, a: __m256i) -> __m256i {
     let mov = a.as_i16x16();
@@ -7210,21 +8336,22 @@ pub unsafe fn _mm256_mask_mov_epi16(src: __m256i, k: __mmask16, a: __m256i) -> _
 
 /// Move packed 16-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mov_epi16&expand=3794)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mov_epi16&expand=3794)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm256_maskz_mov_epi16(k: __mmask16, a: __m256i) -> __m256i {
     let mov = a.as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i16x16::ZERO))
 }
 
 /// Move packed 16-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mov_epi16&expand=3791)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mov_epi16&expand=3791)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm_mask_mov_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let mov = a.as_i16x8();
@@ -7233,21 +8360,22 @@ pub unsafe fn _mm_mask_mov_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m12
 
 /// Move packed 16-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mov_epi16&expand=3792)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mov_epi16&expand=3792)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu16))]
 pub unsafe fn _mm_maskz_mov_epi16(k: __mmask8, a: __m128i) -> __m128i {
     let mov = a.as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i16x8::ZERO))
 }
 
 /// Move packed 8-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_mov_epi8&expand=3813)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_mov_epi8&expand=3813)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm512_mask_mov_epi8(src: __m512i, k: __mmask64, a: __m512i) -> __m512i {
     let mov = a.as_i8x64();
@@ -7256,21 +8384,22 @@ pub unsafe fn _mm512_mask_mov_epi8(src: __m512i, k: __mmask64, a: __m512i) -> __
 
 /// Move packed 8-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_mov_epi8&expand=3814)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_mov_epi8&expand=3814)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm512_maskz_mov_epi8(k: __mmask64, a: __m512i) -> __m512i {
     let mov = a.as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i8x64::ZERO))
 }
 
 /// Move packed 8-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_mov_epi8&expand=3811)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_mov_epi8&expand=3811)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm256_mask_mov_epi8(src: __m256i, k: __mmask32, a: __m256i) -> __m256i {
     let mov = a.as_i8x32();
@@ -7279,21 +8408,22 @@ pub unsafe fn _mm256_mask_mov_epi8(src: __m256i, k: __mmask32, a: __m256i) -> __
 
 /// Move packed 8-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_mov_epi8&expand=3812)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_mov_epi8&expand=3812)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm256_maskz_mov_epi8(k: __mmask32, a: __m256i) -> __m256i {
     let mov = a.as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i8x32::ZERO))
 }
 
 /// Move packed 8-bit integers from a into dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_mov_epi8&expand=3809)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_mov_epi8&expand=3809)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm_mask_mov_epi8(src: __m128i, k: __mmask16, a: __m128i) -> __m128i {
     let mov = a.as_i8x16();
@@ -7302,21 +8432,22 @@ pub unsafe fn _mm_mask_mov_epi8(src: __m128i, k: __mmask16, a: __m128i) -> __m12
 
 /// Move packed 8-bit integers from a into dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_mov_epi8&expand=3810)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_mov_epi8&expand=3810)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vmovdqu8))]
 pub unsafe fn _mm_maskz_mov_epi8(k: __mmask16, a: __m128i) -> __m128i {
     let mov = a.as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, mov, zero))
+    transmute(simd_select_bitmask(k, mov, i8x16::ZERO))
 }
 
 /// Broadcast 16-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_set1_epi16&expand=4942)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_set1_epi16&expand=4942)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm512_mask_set1_epi16(src: __m512i, k: __mmask32, a: i16) -> __m512i {
     let r = _mm512_set1_epi16(a).as_i16x32();
@@ -7325,21 +8456,22 @@ pub unsafe fn _mm512_mask_set1_epi16(src: __m512i, k: __mmask32, a: i16) -> __m5
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_set1_epi16&expand=4943)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_set1_epi16&expand=4943)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm512_maskz_set1_epi16(k: __mmask32, a: i16) -> __m512i {
     let r = _mm512_set1_epi16(a).as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i16x32::ZERO))
 }
 
 /// Broadcast 16-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_set1_epi16&expand=4939)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_set1_epi16&expand=4939)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm256_mask_set1_epi16(src: __m256i, k: __mmask16, a: i16) -> __m256i {
     let r = _mm256_set1_epi16(a).as_i16x16();
@@ -7348,21 +8480,22 @@ pub unsafe fn _mm256_mask_set1_epi16(src: __m256i, k: __mmask16, a: i16) -> __m2
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_set1_epi16&expand=4940)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_set1_epi16&expand=4940)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm256_maskz_set1_epi16(k: __mmask16, a: i16) -> __m256i {
     let r = _mm256_set1_epi16(a).as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i16x16::ZERO))
 }
 
 /// Broadcast 16-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_set1_epi16&expand=4936)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_set1_epi16&expand=4936)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm_mask_set1_epi16(src: __m128i, k: __mmask8, a: i16) -> __m128i {
     let r = _mm_set1_epi16(a).as_i16x8();
@@ -7371,22 +8504,23 @@ pub unsafe fn _mm_mask_set1_epi16(src: __m128i, k: __mmask8, a: i16) -> __m128i 
 
 /// Broadcast the low packed 16-bit integer from a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_set1_epi16&expand=4937)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_set1_epi16&expand=4937)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpbroadcastw))]
 pub unsafe fn _mm_maskz_set1_epi16(k: __mmask8, a: i16) -> __m128i {
     let r = _mm_set1_epi16(a).as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i16x8::ZERO))
 }
 
 /// Broadcast 8-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_set1_epi8&expand=4970)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_set1_epi8&expand=4970)
 #[inline]
 #[target_feature(enable = "avx512bw")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm512_mask_set1_epi8(src: __m512i, k: __mmask64, a: i8) -> __m512i {
     let r = _mm512_set1_epi8(a).as_i8x64();
     transmute(simd_select_bitmask(k, r, src.as_i8x64()))
@@ -7394,22 +8528,23 @@ pub unsafe fn _mm512_mask_set1_epi8(src: __m512i, k: __mmask64, a: i8) -> __m512
 
 /// Broadcast 8-bit integer a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_set1_epi8&expand=4971)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_set1_epi8&expand=4971)
 #[inline]
 #[target_feature(enable = "avx512bw")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm512_maskz_set1_epi8(k: __mmask64, a: i8) -> __m512i {
     let r = _mm512_set1_epi8(a).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i8x64::ZERO))
 }
 
 /// Broadcast 8-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_set1_epi8&expand=4967)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_set1_epi8&expand=4967)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm256_mask_set1_epi8(src: __m256i, k: __mmask32, a: i8) -> __m256i {
     let r = _mm256_set1_epi8(a).as_i8x32();
     transmute(simd_select_bitmask(k, r, src.as_i8x32()))
@@ -7417,22 +8552,23 @@ pub unsafe fn _mm256_mask_set1_epi8(src: __m256i, k: __mmask32, a: i8) -> __m256
 
 /// Broadcast 8-bit integer a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_set1_epi8&expand=4968)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_set1_epi8&expand=4968)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm256_maskz_set1_epi8(k: __mmask32, a: i8) -> __m256i {
     let r = _mm256_set1_epi8(a).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i8x32::ZERO))
 }
 
 /// Broadcast 8-bit integer a to all elements of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_set1_epi8&expand=4964)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_set1_epi8&expand=4964)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm_mask_set1_epi8(src: __m128i, k: __mmask16, a: i8) -> __m128i {
     let r = _mm_set1_epi8(a).as_i8x16();
     transmute(simd_select_bitmask(k, r, src.as_i8x16()))
@@ -7440,30 +8576,31 @@ pub unsafe fn _mm_mask_set1_epi8(src: __m128i, k: __mmask16, a: i8) -> __m128i {
 
 /// Broadcast 8-bit integer a to all elements of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_set1_epi8&expand=4965)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_set1_epi8&expand=4965)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
-#[cfg_attr(test, assert_instr(vpbroadcastb))]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(vpbroadcast))]
 pub unsafe fn _mm_maskz_set1_epi8(k: __mmask16, a: i8) -> __m128i {
     let r = _mm_set1_epi8(a).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, r, zero))
+    transmute(simd_select_bitmask(k, r, i8x16::ZERO))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst.
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_shufflelo_epi16&expand=5221)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_shufflelo_epi16&expand=5221)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_shufflelo_epi16<const IMM8: i32>(a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_i16x32();
-    let r: i16x32 = simd_shuffle32!(
+    let r: i16x32 = simd_shuffle!(
         a,
         a,
-        <const IMM8: i32> [
+        [
             IMM8 as u32 & 0b11,
             (IMM8 as u32 >> 2) & 0b11,
             (IMM8 as u32 >> 4) & 0b11,
@@ -7501,11 +8638,12 @@ pub unsafe fn _mm512_shufflelo_epi16<const IMM8: i32>(a: __m512i) -> __m512i {
     transmute(r)
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_shufflelo_epi16&expand=5219)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_shufflelo_epi16&expand=5219)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_mask_shufflelo_epi16<const IMM8: i32>(
@@ -7513,30 +8651,31 @@ pub unsafe fn _mm512_mask_shufflelo_epi16<const IMM8: i32>(
     k: __mmask32,
     a: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_shufflelo_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, r.as_i16x32(), src.as_i16x32()))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_shufflelo_epi16&expand=5220)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_shufflelo_epi16&expand=5220)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_maskz_shufflelo_epi16<const IMM8: i32>(k: __mmask32, a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_shufflelo_epi16::<IMM8>(a);
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, r.as_i16x32(), zero))
+    transmute(simd_select_bitmask(k, r.as_i16x32(), i16x32::ZERO))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_shufflelo_epi16&expand=5216)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_shufflelo_epi16&expand=5216)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm256_mask_shufflelo_epi16<const IMM8: i32>(
@@ -7544,30 +8683,31 @@ pub unsafe fn _mm256_mask_shufflelo_epi16<const IMM8: i32>(
     k: __mmask16,
     a: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm256_shufflelo_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shuffle.as_i16x16(), src.as_i16x16()))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_shufflelo_epi16&expand=5217)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_shufflelo_epi16&expand=5217)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm256_maskz_shufflelo_epi16<const IMM8: i32>(k: __mmask16, a: __m256i) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm256_shufflelo_epi16::<IMM8>(a);
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shuffle.as_i16x16(), zero))
+    transmute(simd_select_bitmask(k, shuffle.as_i16x16(), i16x16::ZERO))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_shufflelo_epi16&expand=5213)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_shufflelo_epi16&expand=5213)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm_mask_shufflelo_epi16<const IMM8: i32>(
@@ -7575,39 +8715,40 @@ pub unsafe fn _mm_mask_shufflelo_epi16<const IMM8: i32>(
     k: __mmask8,
     a: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm_shufflelo_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shuffle.as_i16x8(), src.as_i16x8()))
 }
 
-/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the low 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the low 64 bits of 128-bit lanes of dst, with the high 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_shufflelo_epi16&expand=5214)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_shufflelo_epi16&expand=5214)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshuflw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm_maskz_shufflelo_epi16<const IMM8: i32>(k: __mmask8, a: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm_shufflelo_epi16::<IMM8>(a);
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shuffle.as_i16x8(), zero))
+    transmute(simd_select_bitmask(k, shuffle.as_i16x8(), i16x8::ZERO))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst.
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_shufflehi_epi16&expand=5212)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_shufflehi_epi16&expand=5212)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_shufflehi_epi16<const IMM8: i32>(a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_i16x32();
-    let r: i16x32 = simd_shuffle32!(
+    let r: i16x32 = simd_shuffle!(
         a,
         a,
-        <const IMM8: i32> [
+        [
             0,
             1,
             2,
@@ -7645,11 +8786,12 @@ pub unsafe fn _mm512_shufflehi_epi16<const IMM8: i32>(a: __m512i) -> __m512i {
     transmute(r)
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_shufflehi_epi16&expand=5210)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_shufflehi_epi16&expand=5210)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_mask_shufflehi_epi16<const IMM8: i32>(
@@ -7657,30 +8799,31 @@ pub unsafe fn _mm512_mask_shufflehi_epi16<const IMM8: i32>(
     k: __mmask32,
     a: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_shufflehi_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, r.as_i16x32(), src.as_i16x32()))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_shufflehi_epi16&expand=5211)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_shufflehi_epi16&expand=5211)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_maskz_shufflehi_epi16<const IMM8: i32>(k: __mmask32, a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_shufflehi_epi16::<IMM8>(a);
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, r.as_i16x32(), zero))
+    transmute(simd_select_bitmask(k, r.as_i16x32(), i16x32::ZERO))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_shufflehi_epi16&expand=5207)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_shufflehi_epi16&expand=5207)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm256_mask_shufflehi_epi16<const IMM8: i32>(
@@ -7688,30 +8831,31 @@ pub unsafe fn _mm256_mask_shufflehi_epi16<const IMM8: i32>(
     k: __mmask16,
     a: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm256_shufflehi_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shuffle.as_i16x16(), src.as_i16x16()))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_shufflehi_epi16&expand=5208)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_shufflehi_epi16&expand=5208)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm256_maskz_shufflehi_epi16<const IMM8: i32>(k: __mmask16, a: __m256i) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm256_shufflehi_epi16::<IMM8>(a);
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, shuffle.as_i16x16(), zero))
+    transmute(simd_select_bitmask(k, shuffle.as_i16x16(), i16x16::ZERO))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_shufflehi_epi16&expand=5204)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_shufflehi_epi16&expand=5204)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm_mask_shufflehi_epi16<const IMM8: i32>(
@@ -7719,30 +8863,31 @@ pub unsafe fn _mm_mask_shufflehi_epi16<const IMM8: i32>(
     k: __mmask8,
     a: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm_shufflehi_epi16::<IMM8>(a);
     transmute(simd_select_bitmask(k, shuffle.as_i16x8(), src.as_i16x8()))
 }
 
-/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
+/// Shuffle 16-bit integers in the high 64 bits of 128-bit lanes of a using the control in imm8. Store the results in the high 64 bits of 128-bit lanes of dst, with the low 64 bits of 128-bit lanes being copied from a to dst, using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_shufflehi_epi16&expand=5205)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_shufflehi_epi16&expand=5205)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufhw, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm_maskz_shufflehi_epi16<const IMM8: i32>(k: __mmask8, a: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let shuffle = _mm_shufflehi_epi16::<IMM8>(a);
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, shuffle.as_i16x8(), zero))
+    transmute(simd_select_bitmask(k, shuffle.as_i16x8(), i16x8::ZERO))
 }
 
 /// Shuffle packed 8-bit integers in a according to shuffle control mask in the corresponding 8-bit element of b, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_shuffle_epi8&expand=5159)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_shuffle_epi8&expand=5159)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm512_shuffle_epi8(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpshufb(a.as_i8x64(), b.as_i8x64()))
@@ -7750,9 +8895,10 @@ pub unsafe fn _mm512_shuffle_epi8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Shuffle 8-bit integers in a within 128-bit lanes using the control in the corresponding 8-bit element of b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_shuffle_epi8&expand=5157)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_shuffle_epi8&expand=5157)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm512_mask_shuffle_epi8(
     src: __m512i,
@@ -7766,21 +8912,22 @@ pub unsafe fn _mm512_mask_shuffle_epi8(
 
 /// Shuffle packed 8-bit integers in a according to shuffle control mask in the corresponding 8-bit element of b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_shuffle_epi8&expand=5158)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_shuffle_epi8&expand=5158)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm512_maskz_shuffle_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
     let shuffle = _mm512_shuffle_epi8(a, b).as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, shuffle, zero))
+    transmute(simd_select_bitmask(k, shuffle, i8x64::ZERO))
 }
 
 /// Shuffle 8-bit integers in a within 128-bit lanes using the control in the corresponding 8-bit element of b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_shuffle_epi8&expand=5154)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_shuffle_epi8&expand=5154)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm256_mask_shuffle_epi8(
     src: __m256i,
@@ -7794,21 +8941,22 @@ pub unsafe fn _mm256_mask_shuffle_epi8(
 
 /// Shuffle packed 8-bit integers in a according to shuffle control mask in the corresponding 8-bit element of b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_shuffle_epi8&expand=5155)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_shuffle_epi8&expand=5155)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm256_maskz_shuffle_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
     let shuffle = _mm256_shuffle_epi8(a, b).as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, shuffle, zero))
+    transmute(simd_select_bitmask(k, shuffle, i8x32::ZERO))
 }
 
 /// Shuffle 8-bit integers in a within 128-bit lanes using the control in the corresponding 8-bit element of b, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_shuffle_epi8&expand=5151)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_shuffle_epi8&expand=5151)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm_mask_shuffle_epi8(src: __m128i, k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let shuffle = _mm_shuffle_epi8(a, b).as_i8x16();
@@ -7817,21 +8965,22 @@ pub unsafe fn _mm_mask_shuffle_epi8(src: __m128i, k: __mmask16, a: __m128i, b: _
 
 /// Shuffle packed 8-bit integers in a according to shuffle control mask in the corresponding 8-bit element of b, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_shuffle_epi8&expand=5152)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_shuffle_epi8&expand=5152)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpshufb))]
 pub unsafe fn _mm_maskz_shuffle_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
     let shuffle = _mm_shuffle_epi8(a, b).as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, shuffle, zero))
+    transmute(simd_select_bitmask(k, shuffle, i8x16::ZERO))
 }
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_test_epi16_mask&expand=5884)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_test_epi16_mask&expand=5884)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm512_test_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     let and = _mm512_and_si512(a, b);
@@ -7841,9 +8990,10 @@ pub unsafe fn _mm512_test_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_test_epi16_mask&expand=5883)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_test_epi16_mask&expand=5883)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm512_mask_test_epi16_mask(k: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
     let and = _mm512_and_si512(a, b);
@@ -7853,9 +9003,10 @@ pub unsafe fn _mm512_mask_test_epi16_mask(k: __mmask32, a: __m512i, b: __m512i) 
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_test_epi16_mask&expand=5882)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_test_epi16_mask&expand=5882)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm256_test_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     let and = _mm256_and_si256(a, b);
@@ -7865,9 +9016,10 @@ pub unsafe fn _mm256_test_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_test_epi16_mask&expand=5881)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_test_epi16_mask&expand=5881)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm256_mask_test_epi16_mask(k: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
     let and = _mm256_and_si256(a, b);
@@ -7877,9 +9029,10 @@ pub unsafe fn _mm256_mask_test_epi16_mask(k: __mmask16, a: __m256i, b: __m256i) 
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_test_epi16_mask&expand=5880)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_test_epi16_mask&expand=5880)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm_test_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     let and = _mm_and_si128(a, b);
@@ -7889,9 +9042,10 @@ pub unsafe fn _mm_test_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compute the bitwise AND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_test_epi16_mask&expand=5879)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_test_epi16_mask&expand=5879)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmw))]
 pub unsafe fn _mm_mask_test_epi16_mask(k: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
     let and = _mm_and_si128(a, b);
@@ -7901,9 +9055,10 @@ pub unsafe fn _mm_mask_test_epi16_mask(k: __mmask8, a: __m128i, b: __m128i) -> _
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_test_epi8_mask&expand=5902)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_test_epi8_mask&expand=5902)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm512_test_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     let and = _mm512_and_si512(a, b);
@@ -7913,9 +9068,10 @@ pub unsafe fn _mm512_test_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_test_epi8_mask&expand=5901)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_test_epi8_mask&expand=5901)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm512_mask_test_epi8_mask(k: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
     let and = _mm512_and_si512(a, b);
@@ -7925,9 +9081,10 @@ pub unsafe fn _mm512_mask_test_epi8_mask(k: __mmask64, a: __m512i, b: __m512i) -
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_test_epi8_mask&expand=5900)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_test_epi8_mask&expand=5900)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm256_test_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     let and = _mm256_and_si256(a, b);
@@ -7937,9 +9094,10 @@ pub unsafe fn _mm256_test_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_test_epi8_mask&expand=5899)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_test_epi8_mask&expand=5899)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm256_mask_test_epi8_mask(k: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
     let and = _mm256_and_si256(a, b);
@@ -7949,9 +9107,10 @@ pub unsafe fn _mm256_mask_test_epi8_mask(k: __mmask32, a: __m256i, b: __m256i) -
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_test_epi8_mask&expand=5898)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_test_epi8_mask&expand=5898)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm_test_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     let and = _mm_and_si128(a, b);
@@ -7961,9 +9120,10 @@ pub unsafe fn _mm_test_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compute the bitwise AND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is non-zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_test_epi8_mask&expand=5897)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_test_epi8_mask&expand=5897)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestmb))]
 pub unsafe fn _mm_mask_test_epi8_mask(k: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
     let and = _mm_and_si128(a, b);
@@ -7973,9 +9133,10 @@ pub unsafe fn _mm_mask_test_epi8_mask(k: __mmask16, a: __m128i, b: __m128i) -> _
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_testn_epi16_mask&expand=5915)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_testn_epi16_mask&expand=5915)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm512_testn_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
     let and = _mm512_and_si512(a, b);
@@ -7985,9 +9146,10 @@ pub unsafe fn _mm512_testn_epi16_mask(a: __m512i, b: __m512i) -> __mmask32 {
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_testn_epi16&expand=5914)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_testn_epi16_mask&expand=5914)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm512_mask_testn_epi16_mask(k: __mmask32, a: __m512i, b: __m512i) -> __mmask32 {
     let and = _mm512_and_si512(a, b);
@@ -7997,9 +9159,10 @@ pub unsafe fn _mm512_mask_testn_epi16_mask(k: __mmask32, a: __m512i, b: __m512i)
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_testn_epi16_mask&expand=5913)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_testn_epi16_mask&expand=5913)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm256_testn_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
     let and = _mm256_and_si256(a, b);
@@ -8009,9 +9172,10 @@ pub unsafe fn _mm256_testn_epi16_mask(a: __m256i, b: __m256i) -> __mmask16 {
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_testn_epi16_mask&expand=5912)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_testn_epi16_mask&expand=5912)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm256_mask_testn_epi16_mask(k: __mmask16, a: __m256i, b: __m256i) -> __mmask16 {
     let and = _mm256_and_si256(a, b);
@@ -8021,9 +9185,10 @@ pub unsafe fn _mm256_mask_testn_epi16_mask(k: __mmask16, a: __m256i, b: __m256i)
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_testn_epi16_mask&expand=5911)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_testn_epi16_mask&expand=5911)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm_testn_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
     let and = _mm_and_si128(a, b);
@@ -8033,9 +9198,10 @@ pub unsafe fn _mm_testn_epi16_mask(a: __m128i, b: __m128i) -> __mmask8 {
 
 /// Compute the bitwise NAND of packed 16-bit integers in a and b, producing intermediate 16-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_testn_epi16_mask&expand=5910)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_testn_epi16_mask&expand=5910)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmw))]
 pub unsafe fn _mm_mask_testn_epi16_mask(k: __mmask8, a: __m128i, b: __m128i) -> __mmask8 {
     let and = _mm_and_si128(a, b);
@@ -8045,9 +9211,10 @@ pub unsafe fn _mm_mask_testn_epi16_mask(k: __mmask8, a: __m128i, b: __m128i) -> 
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_testn_epi8_mask&expand=5933)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_testn_epi8_mask&expand=5933)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm512_testn_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
     let and = _mm512_and_si512(a, b);
@@ -8057,9 +9224,10 @@ pub unsafe fn _mm512_testn_epi8_mask(a: __m512i, b: __m512i) -> __mmask64 {
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_testn_epi8_mask&expand=5932)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_testn_epi8_mask&expand=5932)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm512_mask_testn_epi8_mask(k: __mmask64, a: __m512i, b: __m512i) -> __mmask64 {
     let and = _mm512_and_si512(a, b);
@@ -8069,9 +9237,10 @@ pub unsafe fn _mm512_mask_testn_epi8_mask(k: __mmask64, a: __m512i, b: __m512i) 
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_testn_epi8_mask&expand=5931)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_testn_epi8_mask&expand=5931)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm256_testn_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
     let and = _mm256_and_si256(a, b);
@@ -8081,9 +9250,10 @@ pub unsafe fn _mm256_testn_epi8_mask(a: __m256i, b: __m256i) -> __mmask32 {
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_testn_epi8_mask&expand=5930)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_testn_epi8_mask&expand=5930)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm256_mask_testn_epi8_mask(k: __mmask32, a: __m256i, b: __m256i) -> __mmask32 {
     let and = _mm256_and_si256(a, b);
@@ -8093,9 +9263,10 @@ pub unsafe fn _mm256_mask_testn_epi8_mask(k: __mmask32, a: __m256i, b: __m256i) 
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_testn_epi8_mask&expand=5929)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_testn_epi8_mask&expand=5929)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm_testn_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
     let and = _mm_and_si128(a, b);
@@ -8105,9 +9276,10 @@ pub unsafe fn _mm_testn_epi8_mask(a: __m128i, b: __m128i) -> __mmask16 {
 
 /// Compute the bitwise NAND of packed 8-bit integers in a and b, producing intermediate 8-bit values, and set the corresponding bit in result mask k (subject to writemask k) if the intermediate value is zero.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_testn_epi8_mask&expand=5928)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_testn_epi8_mask&expand=5928)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vptestnmb))]
 pub unsafe fn _mm_mask_testn_epi8_mask(k: __mmask16, a: __m128i, b: __m128i) -> __mmask16 {
     let and = _mm_and_si128(a, b);
@@ -8117,49 +9289,54 @@ pub unsafe fn _mm_mask_testn_epi8_mask(k: __mmask16, a: __m128i, b: __m128i) -> 
 
 /// Store 64-bit mask from a into memory.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_store_mask64&expand=5578)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_store_mask64&expand=5578)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(mov))] //should be kmovq
-pub unsafe fn _store_mask64(mem_addr: *mut u64, a: __mmask64) {
+pub unsafe fn _store_mask64(mem_addr: *mut __mmask64, a: __mmask64) {
     ptr::write(mem_addr as *mut __mmask64, a);
 }
 
 /// Store 32-bit mask from a into memory.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_store_mask32&expand=5577)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_store_mask32&expand=5577)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(mov))] //should be kmovd
-pub unsafe fn _store_mask32(mem_addr: *mut u32, a: __mmask32) {
+pub unsafe fn _store_mask32(mem_addr: *mut __mmask32, a: __mmask32) {
     ptr::write(mem_addr as *mut __mmask32, a);
 }
 
 /// Load 64-bit mask from memory into k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_load_mask64&expand=3318)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_load_mask64&expand=3318)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(mov))] //should be kmovq
-pub unsafe fn _load_mask64(mem_addr: *const u64) -> __mmask64 {
+pub unsafe fn _load_mask64(mem_addr: *const __mmask64) -> __mmask64 {
     ptr::read(mem_addr as *const __mmask64)
 }
 
 /// Load 32-bit mask from memory into k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_load_mask32&expand=3317)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_load_mask32&expand=3317)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(mov))] //should be kmovd
-pub unsafe fn _load_mask32(mem_addr: *const u32) -> __mmask32 {
+pub unsafe fn _load_mask32(mem_addr: *const __mmask32) -> __mmask32 {
     ptr::read(mem_addr as *const __mmask32)
 }
 
 /// Compute the absolute differences of packed unsigned 8-bit integers in a and b, then horizontally sum each consecutive 8 differences to produce eight unsigned 16-bit integers, and pack these unsigned 16-bit integers in the low 16 bits of 64-bit elements in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_sad_epu8&expand=4855)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_sad_epu8&expand=4855)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsadbw))]
 pub unsafe fn _mm512_sad_epu8(a: __m512i, b: __m512i) -> __m512i {
     transmute(vpsadbw(a.as_u8x64(), b.as_u8x64()))
@@ -8167,13 +9344,14 @@ pub unsafe fn _mm512_sad_epu8(a: __m512i, b: __m512i) -> __m512i {
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst. Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_dbsad_epu8&expand=2114)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_dbsad_epu8&expand=2114)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm512_dbsad_epu8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x64();
     let b = b.as_u8x64();
     let r = vdbpsadbw(a, b, IMM8);
@@ -8182,9 +9360,10 @@ pub unsafe fn _mm512_dbsad_epu8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m5
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_dbsad_epu8&expand=2115)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_dbsad_epu8&expand=2115)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(4)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm512_mask_dbsad_epu8<const IMM8: i32>(
@@ -8193,7 +9372,7 @@ pub unsafe fn _mm512_mask_dbsad_epu8<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x64();
     let b = b.as_u8x64();
     let r = vdbpsadbw(a, b, IMM8);
@@ -8202,9 +9381,10 @@ pub unsafe fn _mm512_mask_dbsad_epu8<const IMM8: i32>(
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_dbsad_epu8&expand=2116)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_dbsad_epu8&expand=2116)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm512_maskz_dbsad_epu8<const IMM8: i32>(
@@ -8212,26 +9392,23 @@ pub unsafe fn _mm512_maskz_dbsad_epu8<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x64();
     let b = b.as_u8x64();
     let r = vdbpsadbw(a, b, IMM8);
-    transmute(simd_select_bitmask(
-        k,
-        r,
-        _mm512_setzero_si512().as_u16x32(),
-    ))
+    transmute(simd_select_bitmask(k, r, u16x32::ZERO))
 }
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst. Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_dbsad_epu8&expand=2111)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_dbsad_epu8&expand=2111)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm256_dbsad_epu8<const IMM8: i32>(a: __m256i, b: __m256i) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x32();
     let b = b.as_u8x32();
     let r = vdbpsadbw256(a, b, IMM8);
@@ -8240,9 +9417,10 @@ pub unsafe fn _mm256_dbsad_epu8<const IMM8: i32>(a: __m256i, b: __m256i) -> __m2
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_dbsad_epu8&expand=2112)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_dbsad_epu8&expand=2112)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(4)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm256_mask_dbsad_epu8<const IMM8: i32>(
@@ -8251,7 +9429,7 @@ pub unsafe fn _mm256_mask_dbsad_epu8<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x32();
     let b = b.as_u8x32();
     let r = vdbpsadbw256(a, b, IMM8);
@@ -8260,9 +9438,10 @@ pub unsafe fn _mm256_mask_dbsad_epu8<const IMM8: i32>(
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_dbsad_epu8&expand=2113)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_dbsad_epu8&expand=2113)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm256_maskz_dbsad_epu8<const IMM8: i32>(
@@ -8270,26 +9449,23 @@ pub unsafe fn _mm256_maskz_dbsad_epu8<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x32();
     let b = b.as_u8x32();
     let r = vdbpsadbw256(a, b, IMM8);
-    transmute(simd_select_bitmask(
-        k,
-        r,
-        _mm256_setzero_si256().as_u16x16(),
-    ))
+    transmute(simd_select_bitmask(k, r, u16x16::ZERO))
 }
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst. Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_dbsad_epu8&expand=2108)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_dbsad_epu8&expand=2108)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(2)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm_dbsad_epu8<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x16();
     let b = b.as_u8x16();
     let r = vdbpsadbw128(a, b, IMM8);
@@ -8298,9 +9474,10 @@ pub unsafe fn _mm_dbsad_epu8<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128i
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_dbsad_epu8&expand=2109)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_dbsad_epu8&expand=2109)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(4)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm_mask_dbsad_epu8<const IMM8: i32>(
@@ -8309,7 +9486,7 @@ pub unsafe fn _mm_mask_dbsad_epu8<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x16();
     let b = b.as_u8x16();
     let r = vdbpsadbw128(a, b, IMM8);
@@ -8318,9 +9495,10 @@ pub unsafe fn _mm_mask_dbsad_epu8<const IMM8: i32>(
 
 /// Compute the sum of absolute differences (SADs) of quadruplets of unsigned 8-bit integers in a compared to those in b, and store the 16-bit results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set). Four SADs are performed on four 8-bit quadruplets for each 64-bit lane. The first two SADs use the lower 8-bit quadruplet of the lane from a, and the last two SADs use the uppper 8-bit quadruplet of the lane from a. Quadruplets from b are selected from within 128-bit lanes according to the control in imm8, and each SAD in each 64-bit lane uses the selected quadruplet at 8-bit offsets.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_dbsad_epu8&expand=2110)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_dbsad_epu8&expand=2110)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vdbpsadbw, IMM8 = 0))]
 pub unsafe fn _mm_maskz_dbsad_epu8<const IMM8: i32>(
@@ -8328,18 +9506,19 @@ pub unsafe fn _mm_maskz_dbsad_epu8<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_u8x16();
     let b = b.as_u8x16();
     let r = vdbpsadbw128(a, b, IMM8);
-    transmute(simd_select_bitmask(k, r, _mm_setzero_si128().as_u16x8()))
+    transmute(simd_select_bitmask(k, r, u16x8::ZERO))
 }
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 16-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_movepi16_mask&expand=3873)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movepi16_mask&expand=3873)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovw2m))]
 pub unsafe fn _mm512_movepi16_mask(a: __m512i) -> __mmask32 {
     let filter = _mm512_set1_epi16(1 << 15);
@@ -8349,9 +9528,10 @@ pub unsafe fn _mm512_movepi16_mask(a: __m512i) -> __mmask32 {
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 16-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_movepi16_mask&expand=3872)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movepi16_mask&expand=3872)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovw2m))]
 pub unsafe fn _mm256_movepi16_mask(a: __m256i) -> __mmask16 {
     let filter = _mm256_set1_epi16(1 << 15);
@@ -8361,9 +9541,10 @@ pub unsafe fn _mm256_movepi16_mask(a: __m256i) -> __mmask16 {
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 16-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_movepi16_mask&expand=3871)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movepi16_mask&expand=3871)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovw2m))]
 pub unsafe fn _mm_movepi16_mask(a: __m128i) -> __mmask8 {
     let filter = _mm_set1_epi16(1 << 15);
@@ -8373,9 +9554,10 @@ pub unsafe fn _mm_movepi16_mask(a: __m128i) -> __mmask8 {
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 8-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_movepi8_mask&expand=3883)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movepi8_mask&expand=3883)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovb2m))]
 pub unsafe fn _mm512_movepi8_mask(a: __m512i) -> __mmask64 {
     let filter = _mm512_set1_epi8(1 << 7);
@@ -8385,9 +9567,10 @@ pub unsafe fn _mm512_movepi8_mask(a: __m512i) -> __mmask64 {
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 8-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_movepi8_mask&expand=3882)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movepi8_mask&expand=3882)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovmskb))] // should be vpmovb2m but compiled to vpmovmskb in the test shim because that takes less cycles than
                                            // using vpmovb2m plus converting the mask register to a standard register.
 pub unsafe fn _mm256_movepi8_mask(a: __m256i) -> __mmask32 {
@@ -8398,9 +9581,10 @@ pub unsafe fn _mm256_movepi8_mask(a: __m256i) -> __mmask32 {
 
 /// Set each bit of mask register k based on the most significant bit of the corresponding packed 8-bit integer in a.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_movepi8_mask&expand=3881)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movepi8_mask&expand=3881)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovmskb))] // should be vpmovb2m but compiled to vpmovmskb in the test shim because that takes less cycles than
                                            // using vpmovb2m plus converting the mask register to a standard register.
 pub unsafe fn _mm_movepi8_mask(a: __m128i) -> __mmask16 {
@@ -8411,9 +9595,10 @@ pub unsafe fn _mm_movepi8_mask(a: __m128i) -> __mmask16 {
 
 /// Set each packed 16-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_movm_epi16&expand=3886)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movm_epi16&expand=3886)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2w))]
 pub unsafe fn _mm512_movm_epi16(k: __mmask32) -> __m512i {
     let one = _mm512_set1_epi16(
@@ -8435,15 +9620,15 @@ pub unsafe fn _mm512_movm_epi16(k: __mmask32) -> __m512i {
             | 1 << 0,
     )
     .as_i16x32();
-    let zero = _mm512_setzero_si512().as_i16x32();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i16x32::ZERO))
 }
 
 /// Set each packed 16-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_movm_epi16&expand=3885)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movm_epi16&expand=3885)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2w))]
 pub unsafe fn _mm256_movm_epi16(k: __mmask16) -> __m256i {
     let one = _mm256_set1_epi16(
@@ -8465,15 +9650,15 @@ pub unsafe fn _mm256_movm_epi16(k: __mmask16) -> __m256i {
             | 1 << 0,
     )
     .as_i16x16();
-    let zero = _mm256_setzero_si256().as_i16x16();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i16x16::ZERO))
 }
 
 /// Set each packed 16-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_movm_epi16&expand=3884)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movm_epi16&expand=3884)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2w))]
 pub unsafe fn _mm_movm_epi16(k: __mmask8) -> __m128i {
     let one = _mm_set1_epi16(
@@ -8495,182 +9680,422 @@ pub unsafe fn _mm_movm_epi16(k: __mmask8) -> __m128i {
             | 1 << 0,
     )
     .as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i16x8::ZERO))
 }
 
 /// Set each packed 8-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_movm_epi8&expand=3895)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movm_epi8&expand=3895)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2b))]
 pub unsafe fn _mm512_movm_epi8(k: __mmask64) -> __m512i {
     let one =
         _mm512_set1_epi8(1 << 7 | 1 << 6 | 1 << 5 | 1 << 4 | 1 << 3 | 1 << 2 | 1 << 1 | 1 << 0)
             .as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i8x64::ZERO))
 }
 
 /// Set each packed 8-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_movm_epi8&expand=3894)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movm_epi8&expand=3894)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2b))]
 pub unsafe fn _mm256_movm_epi8(k: __mmask32) -> __m256i {
     let one =
         _mm256_set1_epi8(1 << 7 | 1 << 6 | 1 << 5 | 1 << 4 | 1 << 3 | 1 << 2 | 1 << 1 | 1 << 0)
             .as_i8x32();
-    let zero = _mm256_setzero_si256().as_i8x32();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i8x32::ZERO))
 }
 
 /// Set each packed 8-bit integer in dst to all ones or all zeros based on the value of the corresponding bit in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_movm_epi8&expand=3893)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movm_epi8&expand=3893)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovm2b))]
 pub unsafe fn _mm_movm_epi8(k: __mmask16) -> __m128i {
     let one = _mm_set1_epi8(1 << 7 | 1 << 6 | 1 << 5 | 1 << 4 | 1 << 3 | 1 << 2 | 1 << 1 | 1 << 0)
         .as_i8x16();
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, one, zero))
+    transmute(simd_select_bitmask(k, one, i8x16::ZERO))
+}
+
+/// Convert 32-bit mask a into an integer value, and store the result in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#_cvtmask32_u32)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _cvtmask32_u32(a: __mmask32) -> u32 {
+    a
+}
+
+/// Convert integer value a into an 32-bit mask, and store the result in k.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_cvtu32_mask32)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _cvtu32_mask32(a: u32) -> __mmask32 {
+    a
 }
 
 /// Add 32-bit masks in a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kadd_mask32&expand=3207)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kadd_mask32&expand=3207)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kadd_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(a + b)
+    a + b
 }
 
 /// Add 64-bit masks in a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kadd_mask64&expand=3208)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kadd_mask64&expand=3208)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kadd_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(a + b)
+    a + b
 }
 
 /// Compute the bitwise AND of 32-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kand_mask32&expand=3213)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kand_mask32&expand=3213)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kand_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(a & b)
+    a & b
 }
 
 /// Compute the bitwise AND of 64-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kand_mask64&expand=3214)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kand_mask64&expand=3214)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kand_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(a & b)
+    a & b
 }
 
 /// Compute the bitwise NOT of 32-bit mask a, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_knot_mask32&expand=3234)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_knot_mask32&expand=3234)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _knot_mask32(a: __mmask32) -> __mmask32 {
-    transmute(a ^ 0b11111111_11111111_11111111_11111111)
+    !a
 }
 
 /// Compute the bitwise NOT of 64-bit mask a, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_knot_mask64&expand=3235)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_knot_mask64&expand=3235)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _knot_mask64(a: __mmask64) -> __mmask64 {
-    transmute(a ^ 0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111)
+    !a
 }
 
 /// Compute the bitwise NOT of 32-bit masks a and then AND with b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kandn_mask32&expand=3219)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kandn_mask32&expand=3219)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kandn_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(_knot_mask32(a) & b)
+    _knot_mask32(a) & b
 }
 
 /// Compute the bitwise NOT of 64-bit masks a and then AND with b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kandn_mask64&expand=3220)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kandn_mask64&expand=3220)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kandn_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(_knot_mask64(a) & b)
+    _knot_mask64(a) & b
 }
 
 /// Compute the bitwise OR of 32-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kor_mask32&expand=3240)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kor_mask32&expand=3240)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kor_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(a | b)
+    a | b
 }
 
 /// Compute the bitwise OR of 64-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kor_mask64&expand=3241)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kor_mask64&expand=3241)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kor_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(a | b)
+    a | b
 }
 
 /// Compute the bitwise XOR of 32-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kxor_mask32&expand=3292)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxor_mask32&expand=3292)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kxor_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(a ^ b)
+    a ^ b
 }
 
 /// Compute the bitwise XOR of 64-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kxor_mask64&expand=3293)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxor_mask64&expand=3293)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kxor_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(a ^ b)
+    a ^ b
 }
 
 /// Compute the bitwise XNOR of 32-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kxnor_mask32&expand=3286)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxnor_mask32&expand=3286)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kxnor_mask32(a: __mmask32, b: __mmask32) -> __mmask32 {
-    transmute(_knot_mask32(a ^ b))
+    _knot_mask32(a ^ b)
 }
 
 /// Compute the bitwise XNOR of 64-bit masks a and b, and store the result in k.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_kxnor_mask64&expand=3287)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxnor_mask64&expand=3287)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 pub unsafe fn _kxnor_mask64(a: __mmask64, b: __mmask64) -> __mmask64 {
-    transmute(_knot_mask64(a ^ b))
+    _knot_mask64(a ^ b)
+}
+
+/// Compute the bitwise OR of 32-bit masks a and b. If the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst. If the result is all ones, store 1 in all_ones, otherwise store 0 in all_ones.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortest_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortest_mask32_u8(a: __mmask32, b: __mmask32, all_ones: *mut u8) -> u8 {
+    let tmp = _kor_mask32(a, b);
+    *all_ones = (tmp == 0xffffffff) as u8;
+    (tmp == 0) as u8
+}
+
+/// Compute the bitwise OR of 64-bit masks a and b. If the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst. If the result is all ones, store 1 in all_ones, otherwise store 0 in all_ones.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortest_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortest_mask64_u8(a: __mmask64, b: __mmask64, all_ones: *mut u8) -> u8 {
+    let tmp = _kor_mask64(a, b);
+    *all_ones = (tmp == 0xffffffff_ffffffff) as u8;
+    (tmp == 0) as u8
+}
+
+/// Compute the bitwise OR of 32-bit masks a and b. If the result is all ones, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestc_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortestc_mask32_u8(a: __mmask32, b: __mmask32) -> u8 {
+    (_kor_mask32(a, b) == 0xffffffff) as u8
+}
+
+/// Compute the bitwise OR of 64-bit masks a and b. If the result is all ones, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestc_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortestc_mask64_u8(a: __mmask64, b: __mmask64) -> u8 {
+    (_kor_mask64(a, b) == 0xffffffff_ffffffff) as u8
+}
+
+/// Compute the bitwise OR of 32-bit masks a and b. If the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestz_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortestz_mask32_u8(a: __mmask32, b: __mmask32) -> u8 {
+    (_kor_mask32(a, b) == 0) as u8
+}
+
+/// Compute the bitwise OR of 64-bit masks a and b. If the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestz_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kortestz_mask64_u8(a: __mmask64, b: __mmask64) -> u8 {
+    (_kor_mask64(a, b) == 0) as u8
+}
+
+/// Shift the bits of 32-bit mask a left by count while shifting in zeros, and store the least significant 32 bits of the result in k.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kshiftli_mask32)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kshiftli_mask32<const COUNT: u32>(a: __mmask32) -> __mmask32 {
+    a << COUNT
+}
+
+/// Shift the bits of 64-bit mask a left by count while shifting in zeros, and store the least significant 32 bits of the result in k.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kshiftli_mask64)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kshiftli_mask64<const COUNT: u32>(a: __mmask64) -> __mmask64 {
+    a << COUNT
+}
+
+/// Shift the bits of 32-bit mask a right by count while shifting in zeros, and store the least significant 32 bits of the result in k.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kshiftri_mask32)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kshiftri_mask32<const COUNT: u32>(a: __mmask32) -> __mmask32 {
+    a >> COUNT
+}
+
+/// Shift the bits of 64-bit mask a right by count while shifting in zeros, and store the least significant 32 bits of the result in k.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kshiftri_mask64)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[rustc_legacy_const_generics(1)]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _kshiftri_mask64<const COUNT: u32>(a: __mmask64) -> __mmask64 {
+    a >> COUNT
+}
+
+/// Compute the bitwise AND of 32-bit masks a and b, and if the result is all zeros, store 1 in dst,
+/// otherwise store 0 in dst. Compute the bitwise NOT of a and then AND with b, if the result is all
+/// zeros, store 1 in and_not, otherwise store 0 in and_not.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktest_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktest_mask32_u8(a: __mmask32, b: __mmask32, and_not: *mut u8) -> u8 {
+    *and_not = (_kandn_mask32(a, b) == 0) as u8;
+    (_kand_mask32(a, b) == 0) as u8
+}
+
+/// Compute the bitwise AND of 64-bit masks a and b, and if the result is all zeros, store 1 in dst,
+/// otherwise store 0 in dst. Compute the bitwise NOT of a and then AND with b, if the result is all
+/// zeros, store 1 in and_not, otherwise store 0 in and_not.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktest_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktest_mask64_u8(a: __mmask64, b: __mmask64, and_not: *mut u8) -> u8 {
+    *and_not = (_kandn_mask64(a, b) == 0) as u8;
+    (_kand_mask64(a, b) == 0) as u8
+}
+
+/// Compute the bitwise NOT of 32-bit mask a and then AND with 16-bit mask b, if the result is all
+/// zeros, store 1 in dst, otherwise store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestc_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktestc_mask32_u8(a: __mmask32, b: __mmask32) -> u8 {
+    (_kandn_mask32(a, b) == 0) as u8
+}
+
+/// Compute the bitwise NOT of 64-bit mask a and then AND with 8-bit mask b, if the result is all
+/// zeros, store 1 in dst, otherwise store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestc_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktestc_mask64_u8(a: __mmask64, b: __mmask64) -> u8 {
+    (_kandn_mask64(a, b) == 0) as u8
+}
+
+/// Compute the bitwise AND of 32-bit masks a and  b, if the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestz_mask32_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktestz_mask32_u8(a: __mmask32, b: __mmask32) -> u8 {
+    (_kand_mask32(a, b) == 0) as u8
+}
+
+/// Compute the bitwise AND of 64-bit masks a and  b, if the result is all zeros, store 1 in dst, otherwise
+/// store 0 in dst.
+///
+/// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestz_mask64_u8)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+pub unsafe fn _ktestz_mask64_u8(a: __mmask64, b: __mmask64) -> u8 {
+    (_kand_mask64(a, b) == 0) as u8
+}
+
+/// Unpack and interleave 16 bits from masks a and b, and store the 32-bit result in k.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_kunpackw)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(mov))] // generate normal and code instead of kunpckwd
+pub unsafe fn _mm512_kunpackw(a: __mmask32, b: __mmask32) -> __mmask32 {
+    ((a & 0xffff) << 16) | (b & 0xffff)
+}
+
+/// Unpack and interleave 32 bits from masks a and b, and store the 64-bit result in k.
+///
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_kunpackd)
+#[inline]
+#[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[cfg_attr(test, assert_instr(mov))] // generate normal and code instead of kunpckdq
+pub unsafe fn _mm512_kunpackd(a: __mmask64, b: __mmask64) -> __mmask64 {
+    ((a & 0xffffffff) << 32) | (b & 0xffffffff)
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cvtepi16_epi8&expand=1407)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cvtepi16_epi8&expand=1407)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm512_cvtepi16_epi8(a: __m512i) -> __m256i {
     let a = a.as_i16x32();
@@ -8679,9 +10104,10 @@ pub unsafe fn _mm512_cvtepi16_epi8(a: __m512i) -> __m256i {
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtepi16_epi8&expand=1408)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtepi16_epi8&expand=1408)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm512_mask_cvtepi16_epi8(src: __m256i, k: __mmask32, a: __m512i) -> __m256i {
     let convert = _mm512_cvtepi16_epi8(a).as_i8x32();
@@ -8690,24 +10116,22 @@ pub unsafe fn _mm512_mask_cvtepi16_epi8(src: __m256i, k: __mmask32, a: __m512i) 
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_cvtepi16_epi8&expand=1409)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_cvtepi16_epi8&expand=1409)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm512_maskz_cvtepi16_epi8(k: __mmask32, a: __m512i) -> __m256i {
     let convert = _mm512_cvtepi16_epi8(a).as_i8x32();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm256_setzero_si256().as_i8x32(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i8x32::ZERO))
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cvtepi16_epi8&expand=1404)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cvtepi16_epi8&expand=1404)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm256_cvtepi16_epi8(a: __m256i) -> __m128i {
     let a = a.as_i16x16();
@@ -8716,9 +10140,10 @@ pub unsafe fn _mm256_cvtepi16_epi8(a: __m256i) -> __m128i {
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtepi16_epi8&expand=1405)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtepi16_epi8&expand=1405)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm256_mask_cvtepi16_epi8(src: __m128i, k: __mmask16, a: __m256i) -> __m128i {
     let convert = _mm256_cvtepi16_epi8(a).as_i8x16();
@@ -8727,37 +10152,39 @@ pub unsafe fn _mm256_mask_cvtepi16_epi8(src: __m128i, k: __mmask16, a: __m256i) 
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_cvtepi16_epi8&expand=1406)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_cvtepi16_epi8&expand=1406)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm256_maskz_cvtepi16_epi8(k: __mmask16, a: __m256i) -> __m128i {
     let convert = _mm256_cvtepi16_epi8(a).as_i8x16();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm_setzero_si128().as_i8x16(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i8x16::ZERO))
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtepi16_epi8&expand=1401)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtepi16_epi8&expand=1401)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm_cvtepi16_epi8(a: __m128i) -> __m128i {
     let a = a.as_i16x8();
-    let zero = _mm_setzero_si128().as_i16x8();
-    let v256: i16x16 = simd_shuffle16!(a, zero, [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 8, 8, 8, 8, 8]);
+    let v256: i16x16 = simd_shuffle!(
+        a,
+        i16x8::ZERO,
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 8, 8, 8, 8, 8]
+    );
     transmute::<i8x16, _>(simd_cast(v256))
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtepi16_epi8&expand=1402)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtepi16_epi8&expand=1402)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm_mask_cvtepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepi16_epi8(a).as_i8x16();
@@ -8767,36 +10194,38 @@ pub unsafe fn _mm_mask_cvtepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) -> _
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_cvtepi16_epi8&expand=1403)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_cvtepi16_epi8&expand=1403)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm_maskz_cvtepi16_epi8(k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepi16_epi8(a).as_i8x16();
     let k: __mmask16 = 0b11111111_11111111 & k as __mmask16;
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, convert, zero))
+    transmute(simd_select_bitmask(k, convert, i8x16::ZERO))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cvtsepi16_epi8&expand=1807)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cvtsepi16_epi8&expand=1807)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm512_cvtsepi16_epi8(a: __m512i) -> __m256i {
     transmute(vpmovswb(
         a.as_i16x32(),
-        _mm256_setzero_si256().as_i8x32(),
+        i8x32::ZERO,
         0b11111111_11111111_11111111_11111111,
     ))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtsepi16_epi8&expand=1808)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtsepi16_epi8&expand=1808)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm512_mask_cvtsepi16_epi8(src: __m256i, k: __mmask32, a: __m512i) -> __m256i {
     transmute(vpmovswb(a.as_i16x32(), src.as_i8x32(), k))
@@ -8804,37 +10233,32 @@ pub unsafe fn _mm512_mask_cvtsepi16_epi8(src: __m256i, k: __mmask32, a: __m512i)
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_cvtsepi16_epi8&expand=1809)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_cvtsepi16_epi8&expand=1809)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm512_maskz_cvtsepi16_epi8(k: __mmask32, a: __m512i) -> __m256i {
-    transmute(vpmovswb(
-        a.as_i16x32(),
-        _mm256_setzero_si256().as_i8x32(),
-        k,
-    ))
+    transmute(vpmovswb(a.as_i16x32(), i8x32::ZERO, k))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cvtsepi16_epi8&expand=1804)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cvtsepi16_epi8&expand=1804)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm256_cvtsepi16_epi8(a: __m256i) -> __m128i {
-    transmute(vpmovswb256(
-        a.as_i16x16(),
-        _mm_setzero_si128().as_i8x16(),
-        0b11111111_11111111,
-    ))
+    transmute(vpmovswb256(a.as_i16x16(), i8x16::ZERO, 0b11111111_11111111))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtsepi16_epi8&expand=1805)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtsepi16_epi8&expand=1805)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm256_mask_cvtsepi16_epi8(src: __m128i, k: __mmask16, a: __m256i) -> __m128i {
     transmute(vpmovswb256(a.as_i16x16(), src.as_i8x16(), k))
@@ -8842,37 +10266,32 @@ pub unsafe fn _mm256_mask_cvtsepi16_epi8(src: __m128i, k: __mmask16, a: __m256i)
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_cvtsepi16_epi8&expand=1806)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_cvtsepi16_epi8&expand=1806)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm256_maskz_cvtsepi16_epi8(k: __mmask16, a: __m256i) -> __m128i {
-    transmute(vpmovswb256(
-        a.as_i16x16(),
-        _mm_setzero_si128().as_i8x16(),
-        k,
-    ))
+    transmute(vpmovswb256(a.as_i16x16(), i8x16::ZERO, k))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtsepi16_epi8&expand=1801)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtsepi16_epi8&expand=1801)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm_cvtsepi16_epi8(a: __m128i) -> __m128i {
-    transmute(vpmovswb128(
-        a.as_i16x8(),
-        _mm_setzero_si128().as_i8x16(),
-        0b11111111,
-    ))
+    transmute(vpmovswb128(a.as_i16x8(), i8x16::ZERO, 0b11111111))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtsepi16_epi8&expand=1802)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtsepi16_epi8&expand=1802)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm_mask_cvtsepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     transmute(vpmovswb128(a.as_i16x8(), src.as_i8x16(), k))
@@ -8880,33 +10299,36 @@ pub unsafe fn _mm_mask_cvtsepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) -> 
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_cvtsepi16_epi8&expand=1803)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_cvtsepi16_epi8&expand=1803)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm_maskz_cvtsepi16_epi8(k: __mmask8, a: __m128i) -> __m128i {
-    transmute(vpmovswb128(a.as_i16x8(), _mm_setzero_si128().as_i8x16(), k))
+    transmute(vpmovswb128(a.as_i16x8(), i8x16::ZERO, k))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cvtusepi16_epi8&expand=2042)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cvtusepi16_epi8&expand=2042)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm512_cvtusepi16_epi8(a: __m512i) -> __m256i {
     transmute(vpmovuswb(
         a.as_u16x32(),
-        _mm256_setzero_si256().as_u8x32(),
+        u8x32::ZERO,
         0b11111111_11111111_11111111_11111111,
     ))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtusepi16_epi8&expand=2043)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtusepi16_epi8&expand=2043)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm512_mask_cvtusepi16_epi8(src: __m256i, k: __mmask32, a: __m512i) -> __m256i {
     transmute(vpmovuswb(a.as_u16x32(), src.as_u8x32(), k))
@@ -8914,37 +10336,36 @@ pub unsafe fn _mm512_mask_cvtusepi16_epi8(src: __m256i, k: __mmask32, a: __m512i
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_cvtusepi16_epi8&expand=2044)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_cvtusepi16_epi8&expand=2044)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm512_maskz_cvtusepi16_epi8(k: __mmask32, a: __m512i) -> __m256i {
-    transmute(vpmovuswb(
-        a.as_u16x32(),
-        _mm256_setzero_si256().as_u8x32(),
-        k,
-    ))
+    transmute(vpmovuswb(a.as_u16x32(), u8x32::ZERO, k))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_cvtusepi16_epi8&expand=2039)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cvtusepi16_epi8&expand=2039)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm256_cvtusepi16_epi8(a: __m256i) -> __m128i {
     transmute(vpmovuswb256(
         a.as_u16x16(),
-        _mm_setzero_si128().as_u8x16(),
+        u8x16::ZERO,
         0b11111111_11111111,
     ))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtusepi16_epi8&expand=2040)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtusepi16_epi8&expand=2040)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm256_mask_cvtusepi16_epi8(src: __m128i, k: __mmask16, a: __m256i) -> __m128i {
     transmute(vpmovuswb256(a.as_u16x16(), src.as_u8x16(), k))
@@ -8952,37 +10373,32 @@ pub unsafe fn _mm256_mask_cvtusepi16_epi8(src: __m128i, k: __mmask16, a: __m256i
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_cvtusepi16_epi8&expand=2041)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_cvtusepi16_epi8&expand=2041)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm256_maskz_cvtusepi16_epi8(k: __mmask16, a: __m256i) -> __m128i {
-    transmute(vpmovuswb256(
-        a.as_u16x16(),
-        _mm_setzero_si128().as_u8x16(),
-        k,
-    ))
+    transmute(vpmovuswb256(a.as_u16x16(), u8x16::ZERO, k))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_cvtusepi16_epi8&expand=2036)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtusepi16_epi8&expand=2036)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm_cvtusepi16_epi8(a: __m128i) -> __m128i {
-    transmute(vpmovuswb128(
-        a.as_u16x8(),
-        _mm_setzero_si128().as_u8x16(),
-        0b11111111,
-    ))
+    transmute(vpmovuswb128(a.as_u16x8(), u8x16::ZERO, 0b11111111))
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtusepi16_epi8&expand=2037)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtusepi16_epi8&expand=2037)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm_mask_cvtusepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     transmute(vpmovuswb128(a.as_u16x8(), src.as_u8x16(), k))
@@ -8990,23 +10406,21 @@ pub unsafe fn _mm_mask_cvtusepi16_epi8(src: __m128i, k: __mmask8, a: __m128i) ->
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_cvtusepi16_epi8&expand=2038)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_cvtusepi16_epi8&expand=2038)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm_maskz_cvtusepi16_epi8(k: __mmask8, a: __m128i) -> __m128i {
-    transmute(vpmovuswb128(
-        a.as_u16x8(),
-        _mm_setzero_si128().as_u8x16(),
-        k,
-    ))
+    transmute(vpmovuswb128(a.as_u16x8(), u8x16::ZERO, k))
 }
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cvtepi8_epi16&expand=1526)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cvtepi8_epi16&expand=1526)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm512_cvtepi8_epi16(a: __m256i) -> __m512i {
     let a = a.as_i8x32();
@@ -9015,9 +10429,10 @@ pub unsafe fn _mm512_cvtepi8_epi16(a: __m256i) -> __m512i {
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtepi8_epi16&expand=1527)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtepi8_epi16&expand=1527)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm512_mask_cvtepi8_epi16(src: __m512i, k: __mmask32, a: __m256i) -> __m512i {
     let convert = _mm512_cvtepi8_epi16(a).as_i16x32();
@@ -9026,24 +10441,22 @@ pub unsafe fn _mm512_mask_cvtepi8_epi16(src: __m512i, k: __mmask32, a: __m256i) 
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_cvtepi8_epi16&expand=1528)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_cvtepi8_epi16&expand=1528)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm512_maskz_cvtepi8_epi16(k: __mmask32, a: __m256i) -> __m512i {
     let convert = _mm512_cvtepi8_epi16(a).as_i16x32();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm512_setzero_si512().as_i16x32(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x32::ZERO))
 }
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtepi8_epi16&expand=1524)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtepi8_epi16&expand=1524)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm256_mask_cvtepi8_epi16(src: __m256i, k: __mmask16, a: __m128i) -> __m256i {
     let convert = _mm256_cvtepi8_epi16(a).as_i16x16();
@@ -9052,24 +10465,22 @@ pub unsafe fn _mm256_mask_cvtepi8_epi16(src: __m256i, k: __mmask16, a: __m128i) 
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_cvtepi8_epi16&expand=1525)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_cvtepi8_epi16&expand=1525)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm256_maskz_cvtepi8_epi16(k: __mmask16, a: __m128i) -> __m256i {
     let convert = _mm256_cvtepi8_epi16(a).as_i16x16();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm256_setzero_si256().as_i16x16(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x16::ZERO))
 }
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtepi8_epi16&expand=1521)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtepi8_epi16&expand=1521)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm_mask_cvtepi8_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepi8_epi16(a).as_i16x8();
@@ -9078,24 +10489,22 @@ pub unsafe fn _mm_mask_cvtepi8_epi16(src: __m128i, k: __mmask8, a: __m128i) -> _
 
 /// Sign extend packed 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_cvtepi8_epi16&expand=1522)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_cvtepi8_epi16&expand=1522)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovsxbw))]
 pub unsafe fn _mm_maskz_cvtepi8_epi16(k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepi8_epi16(a).as_i16x8();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm_setzero_si128().as_i16x8(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x8::ZERO))
 }
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_cvtepu8_epi16&expand=1612)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_cvtepu8_epi16&expand=1612)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm512_cvtepu8_epi16(a: __m256i) -> __m512i {
     let a = a.as_u8x32();
@@ -9104,9 +10513,10 @@ pub unsafe fn _mm512_cvtepu8_epi16(a: __m256i) -> __m512i {
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtepu8_epi16&expand=1613)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtepu8_epi16&expand=1613)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm512_mask_cvtepu8_epi16(src: __m512i, k: __mmask32, a: __m256i) -> __m512i {
     let convert = _mm512_cvtepu8_epi16(a).as_i16x32();
@@ -9115,24 +10525,22 @@ pub unsafe fn _mm512_mask_cvtepu8_epi16(src: __m512i, k: __mmask32, a: __m256i) 
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_cvtepu8_epi16&expand=1614)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_cvtepu8_epi16&expand=1614)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm512_maskz_cvtepu8_epi16(k: __mmask32, a: __m256i) -> __m512i {
     let convert = _mm512_cvtepu8_epi16(a).as_i16x32();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm512_setzero_si512().as_i16x32(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x32::ZERO))
 }
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtepu8_epi16&expand=1610)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtepu8_epi16&expand=1610)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm256_mask_cvtepu8_epi16(src: __m256i, k: __mmask16, a: __m128i) -> __m256i {
     let convert = _mm256_cvtepu8_epi16(a).as_i16x16();
@@ -9141,24 +10549,22 @@ pub unsafe fn _mm256_mask_cvtepu8_epi16(src: __m256i, k: __mmask16, a: __m128i) 
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_cvtepu8_epi16&expand=1611)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_cvtepu8_epi16&expand=1611)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm256_maskz_cvtepu8_epi16(k: __mmask16, a: __m128i) -> __m256i {
     let convert = _mm256_cvtepu8_epi16(a).as_i16x16();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm256_setzero_si256().as_i16x16(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x16::ZERO))
 }
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtepu8_epi16&expand=1607)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtepu8_epi16&expand=1607)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm_mask_cvtepu8_epi16(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepu8_epi16(a).as_i16x8();
@@ -9167,28 +10573,26 @@ pub unsafe fn _mm_mask_cvtepu8_epi16(src: __m128i, k: __mmask8, a: __m128i) -> _
 
 /// Zero extend packed unsigned 8-bit integers in a to packed 16-bit integers, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_cvtepu8_epi16&expand=1608)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_cvtepu8_epi16&expand=1608)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovzxbw))]
 pub unsafe fn _mm_maskz_cvtepu8_epi16(k: __mmask8, a: __m128i) -> __m128i {
     let convert = _mm_cvtepu8_epi16(a).as_i16x8();
-    transmute(simd_select_bitmask(
-        k,
-        convert,
-        _mm_setzero_si128().as_i16x8(),
-    ))
+    transmute(simd_select_bitmask(k, convert, i16x8::ZERO))
 }
 
 /// Shift 128-bit lanes in a left by imm8 bytes while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_bslli_epi128&expand=591)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_bslli_epi128&expand=591)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpslldq, IMM8 = 3))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_bslli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     const fn mask(shift: i32, i: u32) -> u32 {
         let shift = shift as u32 & 0xff;
         if shift > 15 || i % 16 < shift {
@@ -9198,11 +10602,11 @@ pub unsafe fn _mm512_bslli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
         }
     }
     let a = a.as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
-    let r: i8x64 = simd_shuffle64!(
+    let zero = i8x64::ZERO;
+    let r: i8x64 = simd_shuffle!(
         zero,
         a,
-        <const IMM8: i32> [
+        [
             mask(IMM8, 0),
             mask(IMM8, 1),
             mask(IMM8, 2),
@@ -9274,17 +10678,18 @@ pub unsafe fn _mm512_bslli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
 
 /// Shift 128-bit lanes in a right by imm8 bytes while shifting in zeros, and store the results in dst.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_bsrli_epi128&expand=594)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_bsrli_epi128&expand=594)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpsrldq, IMM8 = 3))]
 #[rustc_legacy_const_generics(1)]
 pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let a = a.as_i8x64();
-    let zero = _mm512_setzero_si512().as_i8x64();
+    let zero = i8x64::ZERO;
     let r: i8x64 = match IMM8 % 16 {
-        0 => simd_shuffle64!(
+        0 => simd_shuffle!(
             a,
             zero,
             [
@@ -9293,7 +10698,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
             ],
         ),
-        1 => simd_shuffle64!(
+        1 => simd_shuffle!(
             a,
             zero,
             [
@@ -9302,7 +10707,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 45, 46, 47, 96, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 112,
             ],
         ),
-        2 => simd_shuffle64!(
+        2 => simd_shuffle!(
             a,
             zero,
             [
@@ -9311,7 +10716,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 46, 47, 96, 97, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 112, 113,
             ],
         ),
-        3 => simd_shuffle64!(
+        3 => simd_shuffle!(
             a,
             zero,
             [
@@ -9321,7 +10726,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 114,
             ],
         ),
-        4 => simd_shuffle64!(
+        4 => simd_shuffle!(
             a,
             zero,
             [
@@ -9331,7 +10736,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 115,
             ],
         ),
-        5 => simd_shuffle64!(
+        5 => simd_shuffle!(
             a,
             zero,
             [
@@ -9341,7 +10746,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 115, 116,
             ],
         ),
-        6 => simd_shuffle64!(
+        6 => simd_shuffle!(
             a,
             zero,
             [
@@ -9351,7 +10756,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 116, 117,
             ],
         ),
-        7 => simd_shuffle64!(
+        7 => simd_shuffle!(
             a,
             zero,
             [
@@ -9361,7 +10766,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 116, 117, 118,
             ],
         ),
-        8 => simd_shuffle64!(
+        8 => simd_shuffle!(
             a,
             zero,
             [
@@ -9371,7 +10776,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 116, 117, 118, 119,
             ],
         ),
-        9 => simd_shuffle64!(
+        9 => simd_shuffle!(
             a,
             zero,
             [
@@ -9381,7 +10786,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 117, 118, 119, 120,
             ],
         ),
-        10 => simd_shuffle64!(
+        10 => simd_shuffle!(
             a,
             zero,
             [
@@ -9391,7 +10796,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 118, 119, 120, 121,
             ],
         ),
-        11 => simd_shuffle64!(
+        11 => simd_shuffle!(
             a,
             zero,
             [
@@ -9401,7 +10806,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 117, 118, 119, 120, 121, 122,
             ],
         ),
-        12 => simd_shuffle64!(
+        12 => simd_shuffle!(
             a,
             zero,
             [
@@ -9411,7 +10816,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 118, 119, 120, 121, 122, 123,
             ],
         ),
-        13 => simd_shuffle64!(
+        13 => simd_shuffle!(
             a,
             zero,
             [
@@ -9421,7 +10826,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 119, 120, 121, 122, 123, 124,
             ],
         ),
-        14 => simd_shuffle64!(
+        14 => simd_shuffle!(
             a,
             zero,
             [
@@ -9431,7 +10836,7 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
                 120, 121, 122, 123, 124, 125,
             ],
         ),
-        15 => simd_shuffle64!(
+        15 => simd_shuffle!(
             a,
             zero,
             [
@@ -9447,30 +10852,37 @@ pub unsafe fn _mm512_bsrli_epi128<const IMM8: i32>(a: __m512i) -> __m512i {
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst.
+/// Unlike [`_mm_alignr_epi8`], [`_mm256_alignr_epi8`] functions, where the entire input vectors are concatenated to the temporary result,
+/// this concatenation happens in 4 steps, where each step builds 32-byte temporary result.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_alignr_epi8&expand=263)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_alignr_epi8&expand=263)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
 pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m512i {
     // If palignr is shifting the pair of vectors more than the size of two
     // lanes, emit zero.
-    if IMM8 > 32 {
-        return _mm512_set1_epi8(0);
+    if IMM8 >= 32 {
+        return _mm512_setzero_si512();
     }
     // If palignr is shifting the pair of input vectors more than one lane,
     // but less than two lanes, convert to shifting in zeroes.
     let (a, b) = if IMM8 > 16 {
-        (_mm512_set1_epi8(0), a)
+        (_mm512_setzero_si512(), a)
     } else {
         (a, b)
     };
     let a = a.as_i8x64();
     let b = b.as_i8x64();
 
+    if IMM8 == 16 {
+        return transmute(a);
+    }
+
     let r: i8x64 = match IMM8 % 16 {
-        0 => simd_shuffle64!(
+        0 => simd_shuffle!(
             b,
             a,
             [
@@ -9479,7 +10891,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
             ],
         ),
-        1 => simd_shuffle64!(
+        1 => simd_shuffle!(
             b,
             a,
             [
@@ -9488,7 +10900,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 45, 46, 47, 96, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 112,
             ],
         ),
-        2 => simd_shuffle64!(
+        2 => simd_shuffle!(
             b,
             a,
             [
@@ -9497,7 +10909,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 46, 47, 96, 97, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 112, 113,
             ],
         ),
-        3 => simd_shuffle64!(
+        3 => simd_shuffle!(
             b,
             a,
             [
@@ -9507,7 +10919,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 114,
             ],
         ),
-        4 => simd_shuffle64!(
+        4 => simd_shuffle!(
             b,
             a,
             [
@@ -9517,7 +10929,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 115,
             ],
         ),
-        5 => simd_shuffle64!(
+        5 => simd_shuffle!(
             b,
             a,
             [
@@ -9527,7 +10939,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 115, 116,
             ],
         ),
-        6 => simd_shuffle64!(
+        6 => simd_shuffle!(
             b,
             a,
             [
@@ -9537,7 +10949,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 116, 117,
             ],
         ),
-        7 => simd_shuffle64!(
+        7 => simd_shuffle!(
             b,
             a,
             [
@@ -9547,7 +10959,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 116, 117, 118,
             ],
         ),
-        8 => simd_shuffle64!(
+        8 => simd_shuffle!(
             b,
             a,
             [
@@ -9557,7 +10969,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 116, 117, 118, 119,
             ],
         ),
-        9 => simd_shuffle64!(
+        9 => simd_shuffle!(
             b,
             a,
             [
@@ -9567,7 +10979,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 117, 118, 119, 120,
             ],
         ),
-        10 => simd_shuffle64!(
+        10 => simd_shuffle!(
             b,
             a,
             [
@@ -9577,7 +10989,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 118, 119, 120, 121,
             ],
         ),
-        11 => simd_shuffle64!(
+        11 => simd_shuffle!(
             b,
             a,
             [
@@ -9587,7 +10999,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 117, 118, 119, 120, 121, 122,
             ],
         ),
-        12 => simd_shuffle64!(
+        12 => simd_shuffle!(
             b,
             a,
             [
@@ -9597,7 +11009,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 118, 119, 120, 121, 122, 123,
             ],
         ),
-        13 => simd_shuffle64!(
+        13 => simd_shuffle!(
             b,
             a,
             [
@@ -9607,7 +11019,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 119, 120, 121, 122, 123, 124,
             ],
         ),
-        14 => simd_shuffle64!(
+        14 => simd_shuffle!(
             b,
             a,
             [
@@ -9617,7 +11029,7 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 120, 121, 122, 123, 124, 125,
             ],
         ),
-        15 => simd_shuffle64!(
+        15 => simd_shuffle!(
             b,
             a,
             [
@@ -9627,16 +11039,17 @@ pub unsafe fn _mm512_alignr_epi8<const IMM8: i32>(a: __m512i, b: __m512i) -> __m
                 121, 122, 123, 124, 125, 126,
             ],
         ),
-        _ => b,
+        _ => unreachable_unchecked(),
     };
     transmute(r)
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_alignr_epi8&expand=264)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_alignr_epi8&expand=264)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 1))]
 #[rustc_legacy_const_generics(4)]
 pub unsafe fn _mm512_mask_alignr_epi8<const IMM8: i32>(
@@ -9645,16 +11058,17 @@ pub unsafe fn _mm512_mask_alignr_epi8<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_alignr_epi8::<IMM8>(a, b);
     transmute(simd_select_bitmask(k, r.as_i8x64(), src.as_i8x64()))
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_maskz_alignr_epi8&expand=265)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_alignr_epi8&expand=265)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
 pub unsafe fn _mm512_maskz_alignr_epi8<const IMM8: i32>(
@@ -9662,17 +11076,17 @@ pub unsafe fn _mm512_maskz_alignr_epi8<const IMM8: i32>(
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm512_alignr_epi8::<IMM8>(a, b);
-    let zero = _mm512_setzero_si512().as_i8x64();
-    transmute(simd_select_bitmask(k, r.as_i8x64(), zero))
+    transmute(simd_select_bitmask(k, r.as_i8x64(), i8x64::ZERO))
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_alignr_epi8&expand=261)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_alignr_epi8&expand=261)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(4)]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 5))]
 pub unsafe fn _mm256_mask_alignr_epi8<const IMM8: i32>(
@@ -9681,16 +11095,17 @@ pub unsafe fn _mm256_mask_alignr_epi8<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm256_alignr_epi8::<IMM8>(a, b);
     transmute(simd_select_bitmask(k, r.as_i8x32(), src.as_i8x32()))
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_maskz_alignr_epi8&expand=262)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_alignr_epi8&expand=262)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 5))]
 pub unsafe fn _mm256_maskz_alignr_epi8<const IMM8: i32>(
@@ -9698,20 +11113,17 @@ pub unsafe fn _mm256_maskz_alignr_epi8<const IMM8: i32>(
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm256_alignr_epi8::<IMM8>(a, b);
-    transmute(simd_select_bitmask(
-        k,
-        r.as_i8x32(),
-        _mm256_setzero_si256().as_i8x32(),
-    ))
+    transmute(simd_select_bitmask(k, r.as_i8x32(), i8x32::ZERO))
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_alignr_epi8&expand=258)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_alignr_epi8&expand=258)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(4)]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 5))]
 pub unsafe fn _mm_mask_alignr_epi8<const IMM8: i32>(
@@ -9720,16 +11132,17 @@ pub unsafe fn _mm_mask_alignr_epi8<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm_alignr_epi8::<IMM8>(a, b);
     transmute(simd_select_bitmask(k, r.as_i8x16(), src.as_i8x16()))
 }
 
 /// Concatenate pairs of 16-byte blocks in a and b into a 32-byte temporary result, shift the result right by imm8 bytes, and store the low 16 bytes in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_maskz_alignr_epi8&expand=259)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_alignr_epi8&expand=259)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[rustc_legacy_const_generics(3)]
 #[cfg_attr(test, assert_instr(vpalignr, IMM8 = 5))]
 pub unsafe fn _mm_maskz_alignr_epi8<const IMM8: i32>(
@@ -9737,212 +11150,114 @@ pub unsafe fn _mm_maskz_alignr_epi8<const IMM8: i32>(
     a: __m128i,
     b: __m128i,
 ) -> __m128i {
-    static_assert_imm8!(IMM8);
+    static_assert_uimm_bits!(IMM8, 8);
     let r = _mm_alignr_epi8::<IMM8>(a, b);
-    let zero = _mm_setzero_si128().as_i8x16();
-    transmute(simd_select_bitmask(k, r.as_i8x16(), zero))
+    transmute(simd_select_bitmask(k, r.as_i8x16(), i8x16::ZERO))
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtsepi16_storeu_epi8&expand=1812)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtsepi16_storeu_epi8&expand=1812)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm512_mask_cvtsepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask32, a: __m512i) {
-    vpmovswbmem(mem_addr as *mut i8, a.as_i16x32(), k);
+    vpmovswbmem(mem_addr, a.as_i16x32(), k);
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtsepi16_storeu_epi8&expand=1811)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtsepi16_storeu_epi8&expand=1811)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm256_mask_cvtsepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask16, a: __m256i) {
-    vpmovswbmem256(mem_addr as *mut i8, a.as_i16x16(), k);
+    vpmovswbmem256(mem_addr, a.as_i16x16(), k);
 }
 
 /// Convert packed signed 16-bit integers in a to packed 8-bit integers with signed saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtsepi16_storeu_epi8&expand=1810)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtsepi16_storeu_epi8&expand=1810)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovswb))]
 pub unsafe fn _mm_mask_cvtsepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask8, a: __m128i) {
-    vpmovswbmem128(mem_addr as *mut i8, a.as_i16x8(), k);
+    vpmovswbmem128(mem_addr, a.as_i16x8(), k);
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtepi16_storeu_epi8&expand=1412)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtepi16_storeu_epi8&expand=1412)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm512_mask_cvtepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask32, a: __m512i) {
-    vpmovwbmem(mem_addr as *mut i8, a.as_i16x32(), k);
+    vpmovwbmem(mem_addr, a.as_i16x32(), k);
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtepi16_storeu_epi8&expand=1411)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtepi16_storeu_epi8&expand=1411)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm256_mask_cvtepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask16, a: __m256i) {
-    vpmovwbmem256(mem_addr as *mut i8, a.as_i16x16(), k);
+    vpmovwbmem256(mem_addr, a.as_i16x16(), k);
 }
 
 /// Convert packed 16-bit integers in a to packed 8-bit integers with truncation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtepi16_storeu_epi8&expand=1410)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtepi16_storeu_epi8&expand=1410)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovwb))]
 pub unsafe fn _mm_mask_cvtepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask8, a: __m128i) {
-    vpmovwbmem128(mem_addr as *mut i8, a.as_i16x8(), k);
+    vpmovwbmem128(mem_addr, a.as_i16x8(), k);
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm512_mask_cvtusepi16_storeu_epi8&expand=2047)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_cvtusepi16_storeu_epi8&expand=2047)
 #[inline]
 #[target_feature(enable = "avx512bw")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm512_mask_cvtusepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask32, a: __m512i) {
-    vpmovuswbmem(mem_addr as *mut i8, a.as_i16x32(), k);
+    vpmovuswbmem(mem_addr, a.as_i16x32(), k);
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_mask_cvtusepi16_storeu_epi8&expand=2046)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_cvtusepi16_storeu_epi8&expand=2046)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm256_mask_cvtusepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask16, a: __m256i) {
-    vpmovuswbmem256(mem_addr as *mut i8, a.as_i16x16(), k);
+    vpmovuswbmem256(mem_addr, a.as_i16x16(), k);
 }
 
 /// Convert packed unsigned 16-bit integers in a to packed unsigned 8-bit integers with unsigned saturation, and store the active results (those with their respective bit set in writemask k) to unaligned memory at base_addr.
 ///
-/// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_mask_cvtusepi16_storeu_epi8&expand=2045)
+/// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_cvtusepi16_storeu_epi8&expand=2045)
 #[inline]
 #[target_feature(enable = "avx512bw,avx512vl")]
+#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
 #[cfg_attr(test, assert_instr(vpmovuswb))]
 pub unsafe fn _mm_mask_cvtusepi16_storeu_epi8(mem_addr: *mut i8, k: __mmask8, a: __m128i) {
-    vpmovuswbmem128(mem_addr as *mut i8, a.as_i16x8(), k);
+    vpmovuswbmem128(mem_addr, a.as_i16x8(), k);
 }
 
 #[allow(improper_ctypes)]
 extern "C" {
-    #[link_name = "llvm.x86.avx512.mask.paddus.w.512"]
-    fn vpaddusw(a: u16x32, b: u16x32, src: u16x32, mask: u32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.mask.paddus.w.256"]
-    fn vpaddusw256(a: u16x16, b: u16x16, src: u16x16, mask: u16) -> u16x16;
-    #[link_name = "llvm.x86.avx512.mask.paddus.w.128"]
-    fn vpaddusw128(a: u16x8, b: u16x8, src: u16x8, mask: u8) -> u16x8;
-
-    #[link_name = "llvm.x86.avx512.mask.paddus.b.512"]
-    fn vpaddusb(a: u8x64, b: u8x64, src: u8x64, mask: u64) -> u8x64;
-    #[link_name = "llvm.x86.avx512.mask.paddus.b.256"]
-    fn vpaddusb256(a: u8x32, b: u8x32, src: u8x32, mask: u32) -> u8x32;
-    #[link_name = "llvm.x86.avx512.mask.paddus.b.128"]
-    fn vpaddusb128(a: u8x16, b: u8x16, src: u8x16, mask: u16) -> u8x16;
-
-    #[link_name = "llvm.x86.avx512.mask.padds.w.512"]
-    fn vpaddsw(a: i16x32, b: i16x32, src: i16x32, mask: u32) -> i16x32;
-    #[link_name = "llvm.x86.avx512.mask.padds.w.256"]
-    fn vpaddsw256(a: i16x16, b: i16x16, src: i16x16, mask: u16) -> i16x16;
-    #[link_name = "llvm.x86.avx512.mask.padds.w.128"]
-    fn vpaddsw128(a: i16x8, b: i16x8, src: i16x8, mask: u8) -> i16x8;
-
-    #[link_name = "llvm.x86.avx512.mask.padds.b.512"]
-    fn vpaddsb(a: i8x64, b: i8x64, src: i8x64, mask: u64) -> i8x64;
-    #[link_name = "llvm.x86.avx512.mask.padds.b.256"]
-    fn vpaddsb256(a: i8x32, b: i8x32, src: i8x32, mask: u32) -> i8x32;
-    #[link_name = "llvm.x86.avx512.mask.padds.b.128"]
-    fn vpaddsb128(a: i8x16, b: i8x16, src: i8x16, mask: u16) -> i8x16;
-
-    #[link_name = "llvm.x86.avx512.mask.psubus.w.512"]
-    fn vpsubusw(a: u16x32, b: u16x32, src: u16x32, mask: u32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.mask.psubus.w.256"]
-    fn vpsubusw256(a: u16x16, b: u16x16, src: u16x16, mask: u16) -> u16x16;
-    #[link_name = "llvm.x86.avx512.mask.psubus.w.128"]
-    fn vpsubusw128(a: u16x8, b: u16x8, src: u16x8, mask: u8) -> u16x8;
-
-    #[link_name = "llvm.x86.avx512.mask.psubus.b.512"]
-    fn vpsubusb(a: u8x64, b: u8x64, src: u8x64, mask: u64) -> u8x64;
-    #[link_name = "llvm.x86.avx512.mask.psubus.b.256"]
-    fn vpsubusb256(a: u8x32, b: u8x32, src: u8x32, mask: u32) -> u8x32;
-    #[link_name = "llvm.x86.avx512.mask.psubus.b.128"]
-    fn vpsubusb128(a: u8x16, b: u8x16, src: u8x16, mask: u16) -> u8x16;
-
-    #[link_name = "llvm.x86.avx512.mask.psubs.w.512"]
-    fn vpsubsw(a: i16x32, b: i16x32, src: i16x32, mask: u32) -> i16x32;
-    #[link_name = "llvm.x86.avx512.mask.psubs.w.256"]
-    fn vpsubsw256(a: i16x16, b: i16x16, src: i16x16, mask: u16) -> i16x16;
-    #[link_name = "llvm.x86.avx512.mask.psubs.w.128"]
-    fn vpsubsw128(a: i16x8, b: i16x8, src: i16x8, mask: u8) -> i16x8;
-
-    #[link_name = "llvm.x86.avx512.mask.psubs.b.512"]
-    fn vpsubsb(a: i8x64, b: i8x64, src: i8x64, mask: u64) -> i8x64;
-    #[link_name = "llvm.x86.avx512.mask.psubs.b.256"]
-    fn vpsubsb256(a: i8x32, b: i8x32, src: i8x32, mask: u32) -> i8x32;
-    #[link_name = "llvm.x86.avx512.mask.psubs.b.128"]
-    fn vpsubsb128(a: i8x16, b: i8x16, src: i8x16, mask: u16) -> i8x16;
-
-    #[link_name = "llvm.x86.avx512.pmulhu.w.512"]
-    fn vpmulhuw(a: u16x32, b: u16x32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.pmulh.w.512"]
-    fn vpmulhw(a: i16x32, b: i16x32) -> i16x32;
     #[link_name = "llvm.x86.avx512.pmul.hr.sw.512"]
     fn vpmulhrsw(a: i16x32, b: i16x32) -> i16x32;
-
-    #[link_name = "llvm.x86.avx512.mask.ucmp.w.512"]
-    fn vpcmpuw(a: u16x32, b: u16x32, op: i32, mask: u32) -> u32;
-    #[link_name = "llvm.x86.avx512.mask.ucmp.w.256"]
-    fn vpcmpuw256(a: u16x16, b: u16x16, op: i32, mask: u16) -> u16;
-    #[link_name = "llvm.x86.avx512.mask.ucmp.w.128"]
-    fn vpcmpuw128(a: u16x8, b: u16x8, op: i32, mask: u8) -> u8;
-
-    #[link_name = "llvm.x86.avx512.mask.ucmp.b.512"]
-    fn vpcmpub(a: u8x64, b: u8x64, op: i32, mask: u64) -> u64;
-    #[link_name = "llvm.x86.avx512.mask.ucmp.b.256"]
-    fn vpcmpub256(a: u8x32, b: u8x32, op: i32, mask: u32) -> u32;
-    #[link_name = "llvm.x86.avx512.mask.ucmp.b.128"]
-    fn vpcmpub128(a: u8x16, b: u8x16, op: i32, mask: u16) -> u16;
-
-    #[link_name = "llvm.x86.avx512.mask.cmp.w.512"]
-    fn vpcmpw(a: i16x32, b: i16x32, op: i32, mask: u32) -> u32;
-    #[link_name = "llvm.x86.avx512.mask.cmp.w.256"]
-    fn vpcmpw256(a: i16x16, b: i16x16, op: i32, mask: u16) -> u16;
-    #[link_name = "llvm.x86.avx512.mask.cmp.w.128"]
-    fn vpcmpw128(a: i16x8, b: i16x8, op: i32, mask: u8) -> u8;
-
-    #[link_name = "llvm.x86.avx512.mask.cmp.b.512"]
-    fn vpcmpb(a: i8x64, b: i8x64, op: i32, mask: u64) -> u64;
-    #[link_name = "llvm.x86.avx512.mask.cmp.b.256"]
-    fn vpcmpb256(a: i8x32, b: i8x32, op: i32, mask: u32) -> u32;
-    #[link_name = "llvm.x86.avx512.mask.cmp.b.128"]
-    fn vpcmpb128(a: i8x16, b: i8x16, op: i32, mask: u16) -> u16;
-
-    #[link_name = "llvm.x86.avx512.mask.pmaxu.w.512"]
-    fn vpmaxuw(a: u16x32, b: u16x32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.mask.pmaxu.b.512"]
-    fn vpmaxub(a: u8x64, b: u8x64) -> u8x64;
-    #[link_name = "llvm.x86.avx512.mask.pmaxs.w.512"]
-    fn vpmaxsw(a: i16x32, b: i16x32) -> i16x32;
-    #[link_name = "llvm.x86.avx512.mask.pmaxs.b.512"]
-    fn vpmaxsb(a: i8x64, b: i8x64) -> i8x64;
-
-    #[link_name = "llvm.x86.avx512.mask.pminu.w.512"]
-    fn vpminuw(a: u16x32, b: u16x32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.mask.pminu.b.512"]
-    fn vpminub(a: u8x64, b: u8x64) -> u8x64;
-    #[link_name = "llvm.x86.avx512.mask.pmins.w.512"]
-    fn vpminsw(a: i16x32, b: i16x32) -> i16x32;
-    #[link_name = "llvm.x86.avx512.mask.pmins.b.512"]
-    fn vpminsb(a: i8x64, b: i8x64) -> i8x64;
 
     #[link_name = "llvm.x86.avx512.pmaddw.d.512"]
     fn vpmaddwd(a: i16x32, b: i16x32) -> i32x16;
@@ -9958,20 +11273,8 @@ extern "C" {
     #[link_name = "llvm.x86.avx512.packuswb.512"]
     fn vpackuswb(a: i16x32, b: i16x32) -> u8x64;
 
-    #[link_name = "llvm.x86.avx512.pavg.w.512"]
-    fn vpavgw(a: u16x32, b: u16x32) -> u16x32;
-    #[link_name = "llvm.x86.avx512.pavg.b.512"]
-    fn vpavgb(a: u8x64, b: u8x64) -> u8x64;
-
     #[link_name = "llvm.x86.avx512.psll.w.512"]
     fn vpsllw(a: i16x32, count: i16x8) -> i16x32;
-    #[link_name = "llvm.x86.avx512.pslli.w.512"]
-    fn vpslliw(a: i16x32, imm8: u32) -> i16x32;
-
-    #[link_name = "llvm.x86.avx2.pslli.w"]
-    fn pslliw256(a: i16x16, imm8: i32) -> i16x16;
-    #[link_name = "llvm.x86.sse2.pslli.w"]
-    fn pslliw128(a: i16x8, imm8: i32) -> i16x8;
 
     #[link_name = "llvm.x86.avx512.psllv.w.512"]
     fn vpsllvw(a: i16x32, b: i16x32) -> i16x32;
@@ -9982,8 +11285,6 @@ extern "C" {
 
     #[link_name = "llvm.x86.avx512.psrl.w.512"]
     fn vpsrlw(a: i16x32, count: i16x8) -> i16x32;
-    #[link_name = "llvm.x86.avx512.psrli.w.512"]
-    fn vpsrliw(a: i16x32, imm8: u32) -> i16x32;
 
     #[link_name = "llvm.x86.avx512.psrlv.w.512"]
     fn vpsrlvw(a: i16x32, b: i16x32) -> i16x32;
@@ -9994,13 +11295,6 @@ extern "C" {
 
     #[link_name = "llvm.x86.avx512.psra.w.512"]
     fn vpsraw(a: i16x32, count: i16x8) -> i16x32;
-    #[link_name = "llvm.x86.avx512.psrai.w.512"]
-    fn vpsraiw(a: i16x32, imm8: u32) -> i16x32;
-
-    #[link_name = "llvm.x86.avx2.psrai.w"]
-    fn psraiw256(a: i16x16, imm8: i32) -> i16x16;
-    #[link_name = "llvm.x86.sse2.psrai.w"]
-    fn psraiw128(a: i16x8, imm8: i32) -> i16x8;
 
     #[link_name = "llvm.x86.avx512.psrav.w.512"]
     fn vpsravw(a: i16x32, count: i16x32) -> i16x32;
@@ -10070,6 +11364,33 @@ extern "C" {
     fn vpmovuswbmem256(mem_addr: *mut i8, a: i16x16, mask: u16);
     #[link_name = "llvm.x86.avx512.mask.pmovus.wb.mem.128"]
     fn vpmovuswbmem128(mem_addr: *mut i8, a: i16x8, mask: u8);
+
+    #[link_name = "llvm.x86.avx512.mask.loadu.b.128"]
+    fn loaddqu8_128(mem_addr: *const i8, a: i8x16, mask: u16) -> i8x16;
+    #[link_name = "llvm.x86.avx512.mask.loadu.w.128"]
+    fn loaddqu16_128(mem_addr: *const i16, a: i16x8, mask: u8) -> i16x8;
+    #[link_name = "llvm.x86.avx512.mask.loadu.b.256"]
+    fn loaddqu8_256(mem_addr: *const i8, a: i8x32, mask: u32) -> i8x32;
+    #[link_name = "llvm.x86.avx512.mask.loadu.w.256"]
+    fn loaddqu16_256(mem_addr: *const i16, a: i16x16, mask: u16) -> i16x16;
+    #[link_name = "llvm.x86.avx512.mask.loadu.b.512"]
+    fn loaddqu8_512(mem_addr: *const i8, a: i8x64, mask: u64) -> i8x64;
+    #[link_name = "llvm.x86.avx512.mask.loadu.w.512"]
+    fn loaddqu16_512(mem_addr: *const i16, a: i16x32, mask: u32) -> i16x32;
+
+    #[link_name = "llvm.x86.avx512.mask.storeu.b.128"]
+    fn storedqu8_128(mem_addr: *mut i8, a: i8x16, mask: u16);
+    #[link_name = "llvm.x86.avx512.mask.storeu.w.128"]
+    fn storedqu16_128(mem_addr: *mut i16, a: i16x8, mask: u8);
+    #[link_name = "llvm.x86.avx512.mask.storeu.b.256"]
+    fn storedqu8_256(mem_addr: *mut i8, a: i8x32, mask: u32);
+    #[link_name = "llvm.x86.avx512.mask.storeu.w.256"]
+    fn storedqu16_256(mem_addr: *mut i16, a: i16x16, mask: u16);
+    #[link_name = "llvm.x86.avx512.mask.storeu.b.512"]
+    fn storedqu8_512(mem_addr: *mut i8, a: i8x64, mask: u64);
+    #[link_name = "llvm.x86.avx512.mask.storeu.w.512"]
+    fn storedqu16_512(mem_addr: *mut i16, a: i16x32, mask: u32);
+
 }
 
 #[cfg(test)]
@@ -14033,6 +15354,496 @@ mod tests {
         assert_eq!(r, 0b01010101_01010101);
     }
 
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_add_epi16() {
+        let a = _mm256_set1_epi16(1);
+        let e = _mm256_reduce_add_epi16(a);
+        assert_eq!(16, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_add_epi16() {
+        let a = _mm256_set1_epi16(1);
+        let e = _mm256_mask_reduce_add_epi16(0b11111111_00000000, a);
+        assert_eq!(8, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_add_epi16() {
+        let a = _mm_set1_epi16(1);
+        let e = _mm_reduce_add_epi16(a);
+        assert_eq!(8, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_add_epi16() {
+        let a = _mm_set1_epi16(1);
+        let e = _mm_mask_reduce_add_epi16(0b11110000, a);
+        assert_eq!(4, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_add_epi8() {
+        let a = _mm256_set1_epi8(1);
+        let e = _mm256_reduce_add_epi8(a);
+        assert_eq!(32, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_add_epi8() {
+        let a = _mm256_set1_epi8(1);
+        let e = _mm256_mask_reduce_add_epi8(0b11111111_00000000_11111111_00000000, a);
+        assert_eq!(16, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_add_epi8() {
+        let a = _mm_set1_epi8(1);
+        let e = _mm_reduce_add_epi8(a);
+        assert_eq!(16, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_add_epi8() {
+        let a = _mm_set1_epi8(1);
+        let e = _mm_mask_reduce_add_epi8(0b11111111_00000000, a);
+        assert_eq!(8, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_and_epi16() {
+        let a = _mm256_set_epi16(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm256_reduce_and_epi16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_and_epi16() {
+        let a = _mm256_set_epi16(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm256_mask_reduce_and_epi16(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_and_epi16() {
+        let a = _mm_set_epi16(1, 1, 1, 1, 2, 2, 2, 2);
+        let e = _mm_reduce_and_epi16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_and_epi16() {
+        let a = _mm_set_epi16(1, 1, 1, 1, 2, 2, 2, 2);
+        let e = _mm_mask_reduce_and_epi16(0b11110000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_and_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            2, 2, 2,
+        );
+        let e = _mm256_reduce_and_epi8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_and_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            2, 2, 2,
+        );
+        let e = _mm256_mask_reduce_and_epi8(0b11111111_00000000_11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_and_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm_reduce_and_epi8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_and_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm_mask_reduce_and_epi8(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_mul_epi16() {
+        let a = _mm256_set_epi16(2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1);
+        let e = _mm256_reduce_mul_epi16(a);
+        assert_eq!(256, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_mul_epi16() {
+        let a = _mm256_set_epi16(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm256_mask_reduce_mul_epi16(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_mul_epi16() {
+        let a = _mm_set_epi16(2, 2, 2, 2, 1, 1, 1, 1);
+        let e = _mm_reduce_mul_epi16(a);
+        assert_eq!(16, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_mul_epi16() {
+        let a = _mm_set_epi16(1, 1, 1, 1, 2, 2, 2, 2);
+        let e = _mm_mask_reduce_mul_epi16(0b11110000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_mul_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            2, 2, 2,
+        );
+        let e = _mm256_reduce_mul_epi8(a);
+        assert_eq!(64, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_mul_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            2, 2, 2,
+        );
+        let e = _mm256_mask_reduce_mul_epi8(0b11111111_00000000_11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_mul_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2);
+        let e = _mm_reduce_mul_epi8(a);
+        assert_eq!(8, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_mul_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2);
+        let e = _mm_mask_reduce_mul_epi8(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_max_epi16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i16 = _mm256_reduce_max_epi16(a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_max_epi16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i16 = _mm256_mask_reduce_max_epi16(0b11111111_00000000, a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_max_epi16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: i16 = _mm_reduce_max_epi16(a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_max_epi16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: i16 = _mm_mask_reduce_max_epi16(0b11110000, a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_max_epi8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: i8 = _mm256_reduce_max_epi8(a);
+        assert_eq!(31, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_max_epi8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: i8 = _mm256_mask_reduce_max_epi8(0b1111111111111111_0000000000000000, a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_max_epi8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i8 = _mm_reduce_max_epi8(a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_max_epi8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i8 = _mm_mask_reduce_max_epi8(0b11111111_00000000, a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_max_epu16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u16 = _mm256_reduce_max_epu16(a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_max_epu16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u16 = _mm256_mask_reduce_max_epu16(0b11111111_00000000, a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_max_epu16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: u16 = _mm_reduce_max_epu16(a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_max_epu16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: u16 = _mm_mask_reduce_max_epu16(0b11110000, a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_max_epu8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: u8 = _mm256_reduce_max_epu8(a);
+        assert_eq!(31, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_max_epu8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: u8 = _mm256_mask_reduce_max_epu8(0b1111111111111111_0000000000000000, a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_max_epu8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u8 = _mm_reduce_max_epu8(a);
+        assert_eq!(15, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_max_epu8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u8 = _mm_mask_reduce_max_epu8(0b11111111_00000000, a);
+        assert_eq!(7, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_min_epi16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i16 = _mm256_reduce_min_epi16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_min_epi16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i16 = _mm256_mask_reduce_min_epi16(0b11111111_00000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_min_epi16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: i16 = _mm_reduce_min_epi16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_min_epi16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: i16 = _mm_mask_reduce_min_epi16(0b11110000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_min_epi8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: i8 = _mm256_reduce_min_epi8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_min_epi8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: i8 = _mm256_mask_reduce_min_epi8(0b1111111111111111_0000000000000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_min_epi8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i8 = _mm_reduce_min_epi8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_min_epi8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: i8 = _mm_mask_reduce_min_epi8(0b11111111_00000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_min_epu16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u16 = _mm256_reduce_min_epu16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_min_epu16() {
+        let a = _mm256_set_epi16(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u16 = _mm256_mask_reduce_min_epu16(0b11111111_00000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_min_epu16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: u16 = _mm_reduce_min_epu16(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_min_epu16() {
+        let a = _mm_set_epi16(0, 1, 2, 3, 4, 5, 6, 7);
+        let e: u16 = _mm_mask_reduce_min_epu16(0b11110000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_min_epu8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: u8 = _mm256_reduce_min_epu8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_min_epu8() {
+        let a = _mm256_set_epi8(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        );
+        let e: u8 = _mm256_mask_reduce_min_epu8(0b1111111111111111_0000000000000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_min_epu8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u8 = _mm_reduce_min_epu8(a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_min_epu8() {
+        let a = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+        let e: u8 = _mm_mask_reduce_min_epu8(0b11111111_00000000, a);
+        assert_eq!(0, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_or_epi16() {
+        let a = _mm256_set_epi16(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm256_reduce_or_epi16(a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_or_epi16() {
+        let a = _mm256_set_epi16(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm256_mask_reduce_or_epi16(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_or_epi16() {
+        let a = _mm_set_epi16(1, 1, 1, 1, 2, 2, 2, 2);
+        let e = _mm_reduce_or_epi16(a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_or_epi16() {
+        let a = _mm_set_epi16(1, 1, 1, 1, 2, 2, 2, 2);
+        let e = _mm_mask_reduce_or_epi16(0b11110000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_reduce_or_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            2, 2, 2,
+        );
+        let e = _mm256_reduce_or_epi8(a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm256_mask_reduce_or_epi8() {
+        let a = _mm256_set_epi8(
+            1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            2, 2, 2,
+        );
+        let e = _mm256_mask_reduce_or_epi8(0b11111111_00000000_11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_reduce_or_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm_reduce_or_epi8(a);
+        assert_eq!(3, e);
+    }
+
+    #[simd_test(enable = "avx512bw,avx512vl")]
+    unsafe fn test_mm_mask_reduce_or_epi8() {
+        let a = _mm_set_epi8(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2);
+        let e = _mm_mask_reduce_or_epi8(0b11111111_00000000, a);
+        assert_eq!(1, e);
+    }
+
     #[simd_test(enable = "avx512bw")]
     unsafe fn test_mm512_loadu_epi16() {
         #[rustfmt::skip]
@@ -17654,7 +19465,7 @@ mod tests {
         let a: __mmask64 =
             0b11111111_00000000_11111111_00000000_11111111_00000000_11111111_00000000;
         let mut r = 0;
-        _store_mask64(&mut r as *mut _ as *mut u64, a);
+        _store_mask64(&mut r, a);
         assert_eq!(r, a);
     }
 
@@ -17662,7 +19473,7 @@ mod tests {
     unsafe fn test_store_mask32() {
         let a: __mmask32 = 0b11111111_00000000_11111111_00000000;
         let mut r = 0;
-        _store_mask32(&mut r as *mut _ as *mut u32, a);
+        _store_mask32(&mut r, a);
         assert_eq!(r, a);
     }
 
@@ -17942,6 +19753,22 @@ mod tests {
     }
 
     #[simd_test(enable = "avx512bw")]
+    unsafe fn test_cvtmask32_u32() {
+        let a: __mmask32 = 0b11001100_00110011_01100110_10011001;
+        let r = _cvtmask32_u32(a);
+        let e: u32 = 0b11001100_00110011_01100110_10011001;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_cvtu32_mask32() {
+        let a: u32 = 0b11001100_00110011_01100110_10011001;
+        let r = _cvtu32_mask32(a);
+        let e: __mmask32 = 0b11001100_00110011_01100110_10011001;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
     unsafe fn test_kadd_mask32() {
         let a: __mmask32 = 11;
         let b: __mmask32 = 22;
@@ -18079,6 +19906,160 @@ mod tests {
         let r = _kxnor_mask64(a, b);
         let e: __mmask64 =
             0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortest_mask32_u8() {
+        let a: __mmask32 = 0b0110100101101001_0110100101101001;
+        let b: __mmask32 = 0b1011011010110110_1011011010110110;
+        let mut all_ones: u8 = 0;
+        let r = _kortest_mask32_u8(a, b, &mut all_ones);
+        assert_eq!(r, 0);
+        assert_eq!(all_ones, 1);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortest_mask64_u8() {
+        let a: __mmask64 = 0b0110100101101001_0110100101101001;
+        let b: __mmask64 = 0b1011011010110110_1011011010110110;
+        let mut all_ones: u8 = 0;
+        let r = _kortest_mask64_u8(a, b, &mut all_ones);
+        assert_eq!(r, 0);
+        assert_eq!(all_ones, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortestc_mask32_u8() {
+        let a: __mmask32 = 0b0110100101101001_0110100101101001;
+        let b: __mmask32 = 0b1011011010110110_1011011010110110;
+        let r = _kortestc_mask32_u8(a, b);
+        assert_eq!(r, 1);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortestc_mask64_u8() {
+        let a: __mmask64 = 0b0110100101101001_0110100101101001;
+        let b: __mmask64 = 0b1011011010110110_1011011010110110;
+        let r = _kortestc_mask64_u8(a, b);
+        assert_eq!(r, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortestz_mask32_u8() {
+        let a: __mmask32 = 0b0110100101101001_0110100101101001;
+        let b: __mmask32 = 0b1011011010110110_1011011010110110;
+        let r = _kortestz_mask32_u8(a, b);
+        assert_eq!(r, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kortestz_mask64_u8() {
+        let a: __mmask64 = 0b0110100101101001_0110100101101001;
+        let b: __mmask64 = 0b1011011010110110_1011011010110110;
+        let r = _kortestz_mask64_u8(a, b);
+        assert_eq!(r, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kshiftli_mask32() {
+        let a: __mmask32 = 0b0110100101101001_0110100101101001;
+        let r = _kshiftli_mask32::<3>(a);
+        let e: __mmask32 = 0b0100101101001011_0100101101001000;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kshiftli_mask64() {
+        let a: __mmask64 = 0b0110100101101001_0110100101101001;
+        let r = _kshiftli_mask64::<3>(a);
+        let e: __mmask64 = 0b0110100101101001011_0100101101001000;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kshiftri_mask32() {
+        let a: __mmask32 = 0b0110100101101001_0110100101101001;
+        let r = _kshiftri_mask32::<3>(a);
+        let e: __mmask32 = 0b0000110100101101_0010110100101101;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_kshiftri_mask64() {
+        let a: __mmask64 = 0b0110100101101001011_0100101101001000;
+        let r = _kshiftri_mask64::<3>(a);
+        let e: __mmask64 = 0b0110100101101001_0110100101101001;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktest_mask32_u8() {
+        let a: __mmask32 = 0b0110100100111100_0110100100111100;
+        let b: __mmask32 = 0b1001011011000011_1001011011000011;
+        let mut and_not: u8 = 0;
+        let r = _ktest_mask32_u8(a, b, &mut and_not);
+        assert_eq!(r, 1);
+        assert_eq!(and_not, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktestc_mask32_u8() {
+        let a: __mmask32 = 0b0110100100111100_0110100100111100;
+        let b: __mmask32 = 0b1001011011000011_1001011011000011;
+        let r = _ktestc_mask32_u8(a, b);
+        assert_eq!(r, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktestz_mask32_u8() {
+        let a: __mmask32 = 0b0110100100111100_0110100100111100;
+        let b: __mmask32 = 0b1001011011000011_1001011011000011;
+        let r = _ktestz_mask32_u8(a, b);
+        assert_eq!(r, 1);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktest_mask64_u8() {
+        let a: __mmask64 = 0b0110100100111100_0110100100111100;
+        let b: __mmask64 = 0b1001011011000011_1001011011000011;
+        let mut and_not: u8 = 0;
+        let r = _ktest_mask64_u8(a, b, &mut and_not);
+        assert_eq!(r, 1);
+        assert_eq!(and_not, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktestc_mask64_u8() {
+        let a: __mmask64 = 0b0110100100111100_0110100100111100;
+        let b: __mmask64 = 0b1001011011000011_1001011011000011;
+        let r = _ktestc_mask64_u8(a, b);
+        assert_eq!(r, 0);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_ktestz_mask64_u8() {
+        let a: __mmask64 = 0b0110100100111100_0110100100111100;
+        let b: __mmask64 = 0b1001011011000011_1001011011000011;
+        let r = _ktestz_mask64_u8(a, b);
+        assert_eq!(r, 1);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_mm512_kunpackw() {
+        let a: u32 = 0x00110011;
+        let b: u32 = 0x00001011;
+        let r = _mm512_kunpackw(a, b);
+        let e: u32 = 0x00111011;
+        assert_eq!(r, e);
+    }
+
+    #[simd_test(enable = "avx512bw")]
+    unsafe fn test_mm512_kunpackd() {
+        let a: u64 = 0x11001100_00110011;
+        let b: u64 = 0x00101110_00001011;
+        let r = _mm512_kunpackd(a, b);
+        let e: u64 = 0x00110011_00001011;
         assert_eq!(r, e);
     }
 

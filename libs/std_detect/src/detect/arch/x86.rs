@@ -57,6 +57,9 @@ features! {
     /// * `"sha"`
     /// * `"avx"`
     /// * `"avx2"`
+    /// * `"sha512"`
+    /// * `"sm3"`
+    /// * `"sm4"`
     /// * `"avx512f"`
     /// * `"avx512cd"`
     /// * `"avx512er"`
@@ -68,13 +71,24 @@ features! {
     /// * `"avx512vbmi"`
     /// * `"avx512vpopcntdq"`
     /// * `"avx512vbmi2"`
-    /// * `"avx512gfni"`
-    /// * `"avx512vaes"`
-    /// * `"avx512vpclmulqdq"`
+    /// * `"gfni"`
+    /// * `"vaes"`
+    /// * `"vpclmulqdq"`
     /// * `"avx512vnni"`
     /// * `"avx512bitalg"`
     /// * `"avx512bf16"`
     /// * `"avx512vp2intersect"`
+    /// * `"avx512fp16"`
+    /// * `"avxvnni"`
+    /// * `"avxifma"`
+    /// * `"avxneconvert"`
+    /// * `"avxvnniint8"`
+    /// * `"avxvnniint16"`
+    /// * `"amx-tile"`
+    /// * `"amx-int8"`
+    /// * `"amx-bf16"`
+    /// * `"amx-fp16"`
+    /// * `"amx-complex"`
     /// * `"f16c"`
     /// * `"fma"`
     /// * `"bmi1"`
@@ -91,10 +105,15 @@ features! {
     /// * `"cmpxchg16b"`
     /// * `"adx"`
     /// * `"rtm"`
+    /// * `"movbe"`
+    /// * `"ermsb"`
     ///
     /// [docs]: https://software.intel.com/sites/landingpage/IntrinsicsGuide
     #[stable(feature = "simd_x86", since = "1.27.0")]
     @BIND_FEATURE_NAME: "abm"; "lzcnt"; // abm is a synonym for lzcnt
+    @BIND_FEATURE_NAME: "avx512gfni"; "gfni"; #[deprecated(since = "1.67.0", note = "the `avx512gfni` feature has been renamed to `gfni`")];
+    @BIND_FEATURE_NAME: "avx512vaes"; "vaes"; #[deprecated(since = "1.67.0", note = "the `avx512vaes` feature has been renamed to `vaes`")];
+    @BIND_FEATURE_NAME: "avx512vpclmulqdq"; "vpclmulqdq"; #[deprecated(since = "1.67.0", note = "the `avx512vpclmulqdq` feature has been renamed to `vpclmulqdq`")];
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] aes: "aes";
     /// AES (Advanced Encryption Standard New Instructions AES-NI)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] pclmulqdq: "pclmulqdq";
@@ -104,8 +123,10 @@ features! {
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] rdseed: "rdseed";
     /// RDSEED
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] tsc: "tsc";
+    without cfg check: true;
     /// TSC (Time Stamp Counter)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] mmx: "mmx";
+    without cfg check: true;
     /// MMX (MultiMedia eXtensions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] sse: "sse";
     /// SSE (Streaming SIMD Extensions)
@@ -127,13 +148,21 @@ features! {
     /// AVX (Advanced Vector Extensions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx2: "avx2";
     /// AVX2 (Advanced Vector Extensions 2)
+    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sha512: "sha512";
+    /// SHA512
+    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sm3: "sm3";
+    /// SM3
+    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sm4: "sm4";
+    /// SM4
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512f: "avx512f" ;
     /// AVX-512 F (Foundation)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512cd: "avx512cd" ;
     /// AVX-512 CD (Conflict Detection Instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512er: "avx512er";
+    without cfg check: true;
     /// AVX-512 ER (Expo nential and Reciprocal Instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512pf: "avx512pf";
+    without cfg check: true;
     /// AVX-512 PF (Prefetch Instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512bw: "avx512bw";
     /// AVX-512 BW (Byte and Word Instructions)
@@ -150,11 +179,11 @@ features! {
     /// Quadword)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vbmi2: "avx512vbmi2";
     /// AVX-512 VBMI2 (Additional byte, word, dword and qword capabilities)
-    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512gfni: "avx512gfni";
+    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] gfni: "gfni";
     /// AVX-512 GFNI (Galois Field New Instruction)
-    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vaes: "avx512vaes";
+    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] vaes: "vaes";
     /// AVX-512 VAES (Vector AES instruction)
-    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vpclmulqdq: "avx512vpclmulqdq";
+    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] vpclmulqdq: "vpclmulqdq";
     /// AVX-512 VPCLMULQDQ (Vector PCLMULQDQ instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vnni: "avx512vnni";
     /// AVX-512 VNNI (Vector Neural Network Instructions)
@@ -164,6 +193,28 @@ features! {
     /// AVX-512 BF16 (BFLOAT16 instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vp2intersect: "avx512vp2intersect";
     /// AVX-512 P2INTERSECT
+    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512fp16: "avx512fp16";
+    /// AVX-512 FP16 (FLOAT16 instructions)
+    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxifma: "avxifma";
+    /// AVX-IFMA (Integer Fused Multiply Add)
+    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxneconvert: "avxneconvert";
+    /// AVX-NE-CONVERT (Exceptionless Convert)
+    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnni: "avxvnni";
+    /// AVX-VNNI (Vector Neural Network Instructions)
+    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnniint16: "avxvnniint16";
+    /// AVX-VNNI_INT8 (VNNI with 16-bit Integers)
+    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnniint8: "avxvnniint8";
+    /// AVX-VNNI_INT16 (VNNI with 8-bit integers)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_tile: "amx-tile";
+    /// AMX (Advanced Matrix Extensions) - Tile load/store
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_int8: "amx-int8";
+    /// AMX-INT8 (Operations on 8-bit integers)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_bf16: "amx-bf16";
+    /// AMX-BF16 (BFloat16 Operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_fp16: "amx-fp16";
+    /// AMX-FP16 (Float16 Operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_complex: "amx-complex";
+    /// AMX-COMPLEX (Complex number Operations)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] f16c: "f16c";
     /// F16C (Conversions between IEEE-754 `binary16` and `binary32` formats)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] fma: "fma";
@@ -194,4 +245,10 @@ features! {
     /// ADX, Intel ADX (Multi-Precision Add-Carry Instruction Extensions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] rtm: "rtm";
     /// RTM, Intel (Restricted Transactional Memory)
+    @FEATURE: #[stable(feature = "movbe_target_feature", since = "1.67.0")] movbe: "movbe";
+    /// MOVBE (Move Data After Swapping Bytes)
+    @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] ermsb: "ermsb";
+    /// ERMSB, Enhanced REP MOVSB and STOSB
+    @FEATURE: #[unstable(feature = "xop_target_feature", issue = "127208")] xop: "xop";
+    /// XOP: eXtended Operations (AMD)
 }

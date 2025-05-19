@@ -2,6 +2,8 @@
 
 use core::fmt;
 use core::future::Future;
+use core::marker::Tuple;
+use core::ops::{Coroutine, CoroutineState};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
@@ -17,7 +19,7 @@ use core::task::{Context, Poll};
 ///
 /// Certain constructs like [`Future`]s can only be used with _exclusive_ access,
 /// and are often `Send` but not `Sync`, so `Exclusive` can be used as hint to the
-/// rust compiler that something is `Sync` in practice.
+/// Rust compiler that something is `Sync` in practice.
 ///
 /// ## Examples
 /// Using a non-`Sync` future prevents the wrapping struct from being `Sync`
@@ -69,9 +71,6 @@ use core::task::{Context, Poll};
 /// for any value. This is a parallel with the fact that
 /// `&` and `&mut` references together can be thought of as a _compile-time_
 /// version of a read-write lock.
-///
-///
-/// [`Sync`]: core::marker::Sync
 #[unstable(feature = "exclusive_wrapper", issue = "98407")]
 #[doc(alias = "SyncWrapper")]
 #[doc(alias = "SyncCell")]
@@ -107,6 +106,7 @@ impl<T: Sized> Exclusive<T> {
 
     /// Unwrap the value contained in the `Exclusive`
     #[unstable(feature = "exclusive_wrapper", issue = "98407")]
+    #[rustc_const_unstable(feature = "exclusive_wrapper", issue = "98407")]
     #[must_use]
     #[inline]
     pub const fn into_inner(self) -> T {
@@ -115,7 +115,7 @@ impl<T: Sized> Exclusive<T> {
 }
 
 impl<T: ?Sized> Exclusive<T> {
-    /// Get exclusive access to the underlying value.
+    /// Gets exclusive access to the underlying value.
     #[unstable(feature = "exclusive_wrapper", issue = "98407")]
     #[must_use]
     #[inline]
@@ -123,7 +123,7 @@ impl<T: ?Sized> Exclusive<T> {
         &mut self.inner
     }
 
-    /// Get pinned exclusive access to the underlying value.
+    /// Gets pinned exclusive access to the underlying value.
     ///
     /// `Exclusive` is considered to _structurally pin_ the underlying
     /// value, which means _unpinned_ `Exclusive`s can produce _unpinned_
@@ -171,10 +171,52 @@ impl<T> From<T> for Exclusive<T> {
 }
 
 #[unstable(feature = "exclusive_wrapper", issue = "98407")]
-impl<T: Future + ?Sized> Future for Exclusive<T> {
+impl<F, Args> FnOnce<Args> for Exclusive<F>
+where
+    F: FnOnce<Args>,
+    Args: Tuple,
+{
+    type Output = F::Output;
+
+    extern "rust-call" fn call_once(self, args: Args) -> Self::Output {
+        self.into_inner().call_once(args)
+    }
+}
+
+#[unstable(feature = "exclusive_wrapper", issue = "98407")]
+impl<F, Args> FnMut<Args> for Exclusive<F>
+where
+    F: FnMut<Args>,
+    Args: Tuple,
+{
+    extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
+        self.get_mut().call_mut(args)
+    }
+}
+
+#[unstable(feature = "exclusive_wrapper", issue = "98407")]
+impl<T> Future for Exclusive<T>
+where
+    T: Future + ?Sized,
+{
     type Output = T::Output;
+
     #[inline]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.get_pin_mut().poll(cx)
+    }
+}
+
+#[unstable(feature = "coroutine_trait", issue = "43122")] // also #98407
+impl<R, G> Coroutine<R> for Exclusive<G>
+where
+    G: Coroutine<R> + ?Sized,
+{
+    type Yield = G::Yield;
+    type Return = G::Return;
+
+    #[inline]
+    fn resume(self: Pin<&mut Self>, arg: R) -> CoroutineState<Self::Yield, Self::Return> {
+        G::resume(self.get_pin_mut(), arg)
     }
 }

@@ -1,16 +1,14 @@
-use crate::convert::{TryFrom, TryInto};
-use crate::intrinsics::assert_unsafe_precondition;
-use crate::num::NonZeroUsize;
+use crate::num::NonZero;
+use crate::ub_checks::assert_unsafe_precondition;
 use crate::{cmp, fmt, hash, mem, num};
 
 /// A type storing a `usize` which is a power of two, and thus
-/// represents a possible alignment in the rust abstract machine.
+/// represents a possible alignment in the Rust abstract machine.
 ///
 /// Note that particularly large alignments, while representable in this type,
 /// are likely not to be supported by actual allocators and linkers.
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-#[derive(Copy, Clone, Eq)]
-#[derive_const(PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Alignment(AlignmentEnum);
 
@@ -41,12 +39,13 @@ impl Alignment {
     /// Returns the alignment for a type.
     ///
     /// This provides the same numerical value as [`mem::align_of`],
-    /// but in an `Alignment` instead of a `usize.
+    /// but in an `Alignment` instead of a `usize`.
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
+    #[must_use]
     pub const fn of<T>() -> Self {
-        // SAFETY: rustc ensures that type alignment is always a power of two.
-        unsafe { Alignment::new_unchecked(mem::align_of::<T>()) }
+        // This can't actually panic since type alignment is always a power of two.
+        const { Alignment::new(mem::align_of::<T>()).unwrap() }
     }
 
     /// Creates an `Alignment` from a `usize`, or returns `None` if it's
@@ -73,36 +72,157 @@ impl Alignment {
     /// Equivalently, it must be `1 << exp` for some `exp` in `0..usize::BITS`.
     /// It must *not* be zero.
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-    #[rustc_const_unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const unsafe fn new_unchecked(align: usize) -> Self {
-        // SAFETY: Precondition passed to the caller.
-        unsafe {
-            assert_unsafe_precondition!(
-               "Alignment::new_unchecked requires a power of two",
-                (align: usize) => align.is_power_of_two()
-            )
-        };
+        assert_unsafe_precondition!(
+            check_language_ub,
+            "Alignment::new_unchecked requires a power of two",
+            (align: usize = align) => align.is_power_of_two()
+        );
 
-        // SAFETY: By precondition, this must be a power of two, and
-        // our variants encompass all possible powers of two.
-        unsafe { mem::transmute::<usize, Alignment>(align) }
+        match align {
+            const { 1 << 0 } => Alignment(AlignmentEnum::_Align1Shl0),
+            const { 1 << 1 } => Alignment(AlignmentEnum::_Align1Shl1),
+            const { 1 << 2 } => Alignment(AlignmentEnum::_Align1Shl2),
+            const { 1 << 3 } => Alignment(AlignmentEnum::_Align1Shl3),
+            const { 1 << 4 } => Alignment(AlignmentEnum::_Align1Shl4),
+            const { 1 << 5 } => Alignment(AlignmentEnum::_Align1Shl5),
+            const { 1 << 6 } => Alignment(AlignmentEnum::_Align1Shl6),
+            const { 1 << 7 } => Alignment(AlignmentEnum::_Align1Shl7),
+            const { 1 << 8 } => Alignment(AlignmentEnum::_Align1Shl8),
+            const { 1 << 9 } => Alignment(AlignmentEnum::_Align1Shl9),
+            const { 1 << 10 } => Alignment(AlignmentEnum::_Align1Shl10),
+            const { 1 << 11 } => Alignment(AlignmentEnum::_Align1Shl11),
+            const { 1 << 12 } => Alignment(AlignmentEnum::_Align1Shl12),
+            const { 1 << 13 } => Alignment(AlignmentEnum::_Align1Shl13),
+            const { 1 << 14 } => Alignment(AlignmentEnum::_Align1Shl14),
+            const { 1 << 15 } => Alignment(AlignmentEnum::_Align1Shl15),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 16 } => Alignment(AlignmentEnum::_Align1Shl16),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 17 } => Alignment(AlignmentEnum::_Align1Shl17),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 18 } => Alignment(AlignmentEnum::_Align1Shl18),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 19 } => Alignment(AlignmentEnum::_Align1Shl19),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 20 } => Alignment(AlignmentEnum::_Align1Shl20),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 21 } => Alignment(AlignmentEnum::_Align1Shl21),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 22 } => Alignment(AlignmentEnum::_Align1Shl22),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 23 } => Alignment(AlignmentEnum::_Align1Shl23),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 24 } => Alignment(AlignmentEnum::_Align1Shl24),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 25 } => Alignment(AlignmentEnum::_Align1Shl25),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 26 } => Alignment(AlignmentEnum::_Align1Shl26),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 27 } => Alignment(AlignmentEnum::_Align1Shl27),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 28 } => Alignment(AlignmentEnum::_Align1Shl28),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 29 } => Alignment(AlignmentEnum::_Align1Shl29),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 30 } => Alignment(AlignmentEnum::_Align1Shl30),
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            const { 1 << 31 } => Alignment(AlignmentEnum::_Align1Shl31),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 32 } => Alignment(AlignmentEnum::_Align1Shl32),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 33 } => Alignment(AlignmentEnum::_Align1Shl33),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 34 } => Alignment(AlignmentEnum::_Align1Shl34),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 35 } => Alignment(AlignmentEnum::_Align1Shl35),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 36 } => Alignment(AlignmentEnum::_Align1Shl36),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 37 } => Alignment(AlignmentEnum::_Align1Shl37),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 38 } => Alignment(AlignmentEnum::_Align1Shl38),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 39 } => Alignment(AlignmentEnum::_Align1Shl39),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 40 } => Alignment(AlignmentEnum::_Align1Shl40),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 41 } => Alignment(AlignmentEnum::_Align1Shl41),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 42 } => Alignment(AlignmentEnum::_Align1Shl42),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 43 } => Alignment(AlignmentEnum::_Align1Shl43),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 44 } => Alignment(AlignmentEnum::_Align1Shl44),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 45 } => Alignment(AlignmentEnum::_Align1Shl45),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 46 } => Alignment(AlignmentEnum::_Align1Shl46),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 47 } => Alignment(AlignmentEnum::_Align1Shl47),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 48 } => Alignment(AlignmentEnum::_Align1Shl48),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 49 } => Alignment(AlignmentEnum::_Align1Shl49),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 50 } => Alignment(AlignmentEnum::_Align1Shl50),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 51 } => Alignment(AlignmentEnum::_Align1Shl51),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 52 } => Alignment(AlignmentEnum::_Align1Shl52),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 53 } => Alignment(AlignmentEnum::_Align1Shl53),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 54 } => Alignment(AlignmentEnum::_Align1Shl54),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 55 } => Alignment(AlignmentEnum::_Align1Shl55),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 56 } => Alignment(AlignmentEnum::_Align1Shl56),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 57 } => Alignment(AlignmentEnum::_Align1Shl57),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 58 } => Alignment(AlignmentEnum::_Align1Shl58),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 59 } => Alignment(AlignmentEnum::_Align1Shl59),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 60 } => Alignment(AlignmentEnum::_Align1Shl60),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 61 } => Alignment(AlignmentEnum::_Align1Shl61),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 62 } => Alignment(AlignmentEnum::_Align1Shl62),
+            #[cfg(target_pointer_width = "64")]
+            const { 1 << 63 } => Alignment(AlignmentEnum::_Align1Shl63),
+            _ => panic!("invalid alignment (not a power of two)"),
+        }
     }
 
-    /// Returns the alignment as a [`usize`]
+    /// Returns the alignment as a [`usize`].
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-    #[rustc_const_unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const fn as_usize(self) -> usize {
         self.0 as usize
     }
 
-    /// Returns the alignment as a [`NonZeroUsize`]
+    /// Returns the alignment as a <code>[NonZero]<[usize]></code>.
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
-    pub const fn as_nonzero(self) -> NonZeroUsize {
+    pub const fn as_nonzero(self) -> NonZero<usize> {
+        // This transmutes directly to avoid the UbCheck in `NonZero::new_unchecked`
+        // since there's no way for the user to trip that check anyway -- the
+        // validity invariant of the type would have to have been broken earlier --
+        // and emitting it in an otherwise simple method is bad for compile time.
+
+        #[cfg(target_pointer_width = "16")]
+        let x = self.0 as u16;
+        #[cfg(target_pointer_width = "32")]
+        let x = self.0 as u32;
+        #[cfg(target_pointer_width = "64")]
+        let x = self.0 as u64;
+
         // SAFETY: All the discriminants are non-zero.
-        unsafe { NonZeroUsize::new_unchecked(self.as_usize()) }
+        unsafe { NonZero::new_unchecked(self.0 as usize) }
     }
 
     /// Returns the base-2 logarithm of the alignment.
@@ -120,8 +240,43 @@ impl Alignment {
     /// ```
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
-    pub fn log2(self) -> u32 {
+    pub const fn log2(self) -> u32 {
         self.as_nonzero().trailing_zeros()
+    }
+
+    /// Returns a bit mask that can be used to match this alignment.
+    ///
+    /// This is equivalent to `!(self.as_usize() - 1)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ptr_alignment_type)]
+    /// #![feature(ptr_mask)]
+    /// use std::ptr::{Alignment, NonNull};
+    ///
+    /// #[repr(align(1))] struct Align1(u8);
+    /// #[repr(align(2))] struct Align2(u16);
+    /// #[repr(align(4))] struct Align4(u32);
+    /// let one = <NonNull<Align1>>::dangling().as_ptr();
+    /// let two = <NonNull<Align2>>::dangling().as_ptr();
+    /// let four = <NonNull<Align4>>::dangling().as_ptr();
+    ///
+    /// assert_eq!(four.mask(Alignment::of::<Align1>().mask()), four);
+    /// assert_eq!(four.mask(Alignment::of::<Align2>().mask()), four);
+    /// assert_eq!(four.mask(Alignment::of::<Align4>().mask()), four);
+    /// assert_ne!(one.mask(Alignment::of::<Align4>().mask()), one);
+    /// ```
+    #[unstable(feature = "ptr_alignment_type", issue = "102070")]
+    #[inline]
+    pub const fn mask(self) -> usize {
+        // SAFETY: The alignment is always nonzero, and therefore decrementing won't overflow.
+        !(unsafe { self.as_usize().unchecked_sub(1) })
+    }
+
+    // FIXME(const-hack) Remove me once `Ord::max` is usable in const
+    pub(crate) const fn max(a: Self, b: Self) -> Self {
+        if a.as_usize() > b.as_usize() { a } else { b }
     }
 }
 
@@ -133,11 +288,11 @@ impl fmt::Debug for Alignment {
 }
 
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-impl TryFrom<NonZeroUsize> for Alignment {
+impl TryFrom<NonZero<usize>> for Alignment {
     type Error = num::TryFromIntError;
 
     #[inline]
-    fn try_from(align: NonZeroUsize) -> Result<Alignment, Self::Error> {
+    fn try_from(align: NonZero<usize>) -> Result<Alignment, Self::Error> {
         align.get().try_into()
     }
 }
@@ -153,9 +308,9 @@ impl TryFrom<usize> for Alignment {
 }
 
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-impl From<Alignment> for NonZeroUsize {
+impl From<Alignment> for NonZero<usize> {
     #[inline]
-    fn from(align: Alignment) -> NonZeroUsize {
+    fn from(align: Alignment) -> NonZero<usize> {
         align.as_nonzero()
     }
 }
@@ -168,18 +323,16 @@ impl From<Alignment> for usize {
     }
 }
 
-#[rustc_const_unstable(feature = "const_alloc_layout", issue = "67521")]
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-impl const cmp::Ord for Alignment {
+impl cmp::Ord for Alignment {
     #[inline]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.as_nonzero().get().cmp(&other.as_nonzero().get())
     }
 }
 
-#[rustc_const_unstable(feature = "const_alloc_layout", issue = "67521")]
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-impl const cmp::PartialOrd for Alignment {
+impl cmp::PartialOrd for Alignment {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
@@ -194,17 +347,18 @@ impl hash::Hash for Alignment {
     }
 }
 
-#[cfg(target_pointer_width = "16")]
-type AlignmentEnum = AlignmentEnum16;
-#[cfg(target_pointer_width = "32")]
-type AlignmentEnum = AlignmentEnum32;
-#[cfg(target_pointer_width = "64")]
-type AlignmentEnum = AlignmentEnum64;
+/// Returns [`Alignment::MIN`], which is valid for any type.
+#[unstable(feature = "ptr_alignment_type", issue = "102070")]
+impl Default for Alignment {
+    fn default() -> Alignment {
+        Alignment::MIN
+    }
+}
 
-#[derive(Copy, Clone, Eq)]
-#[derive_const(PartialEq)]
+#[cfg(target_pointer_width = "16")]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u16)]
-enum AlignmentEnum16 {
+enum AlignmentEnum {
     _Align1Shl0 = 1 << 0,
     _Align1Shl1 = 1 << 1,
     _Align1Shl2 = 1 << 2,
@@ -223,10 +377,10 @@ enum AlignmentEnum16 {
     _Align1Shl15 = 1 << 15,
 }
 
-#[derive(Copy, Clone, Eq)]
-#[derive_const(PartialEq)]
+#[cfg(target_pointer_width = "32")]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u32)]
-enum AlignmentEnum32 {
+enum AlignmentEnum {
     _Align1Shl0 = 1 << 0,
     _Align1Shl1 = 1 << 1,
     _Align1Shl2 = 1 << 2,
@@ -261,10 +415,10 @@ enum AlignmentEnum32 {
     _Align1Shl31 = 1 << 31,
 }
 
-#[derive(Copy, Clone, Eq)]
-#[derive_const(PartialEq)]
+#[cfg(target_pointer_width = "64")]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u64)]
-enum AlignmentEnum64 {
+enum AlignmentEnum {
     _Align1Shl0 = 1 << 0,
     _Align1Shl1 = 1 << 1,
     _Align1Shl2 = 1 << 2,

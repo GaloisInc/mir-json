@@ -127,6 +127,21 @@
 //! trait, which provides a [`from_wide`] method to convert a native Windows
 //! string (without the terminating nul character) to an [`OsString`].
 //!
+//! ## Other platforms
+//!
+//! Many other platforms provide their own extension traits in a
+//! `std::os::*::ffi` module.
+//!
+//! ## On all platforms
+//!
+//! On all platforms, [`OsStr`] consists of a sequence of bytes that is encoded as a superset of
+//! UTF-8; see [`OsString`] for more details on its encoding on different platforms.
+//!
+//! For limited, inexpensive conversions from and to bytes, see [`OsStr::as_encoded_bytes`] and
+//! [`OsStr::from_encoded_bytes_unchecked`].
+//!
+//! For basic string processing, see [`OsStr::slice_encoded_bytes`].
+//!
 //! [Unicode scalar value]: https://www.unicode.org/glossary/#unicode_scalar_value
 //! [Unicode code point]: https://www.unicode.org/glossary/#code_point
 //! [`env::set_var()`]: crate::env::set_var "env::set_var"
@@ -146,23 +161,11 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-#[stable(feature = "alloc_c_string", since = "1.64.0")]
-pub use alloc::ffi::{CString, FromVecWithNulError, IntoStringError, NulError};
-#[stable(feature = "core_c_str", since = "1.64.0")]
-pub use core::ffi::{CStr, FromBytesWithNulError};
-
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::os_str::{OsStr, OsString};
-
-#[stable(feature = "core_ffi_c", since = "1.64.0")]
-pub use core::ffi::{
-    c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short, c_uchar, c_uint,
-    c_ulong, c_ulonglong, c_ushort,
-};
+#[unstable(feature = "c_str_module", issue = "112134")]
+pub mod c_str;
 
 #[stable(feature = "core_c_void", since = "1.30.0")]
 pub use core::ffi::c_void;
-
 #[unstable(
     feature = "c_variadic",
     reason = "the `c_variadic` feature has not been properly tested on \
@@ -170,5 +173,33 @@ pub use core::ffi::c_void;
     issue = "44930"
 )]
 pub use core::ffi::{VaList, VaListImpl};
+#[stable(feature = "core_ffi_c", since = "1.64.0")]
+pub use core::ffi::{
+    c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short, c_uchar, c_uint,
+    c_ulong, c_ulonglong, c_ushort,
+};
 
-mod os_str;
+#[doc(inline)]
+#[stable(feature = "cstr_from_bytes_until_nul", since = "1.69.0")]
+pub use self::c_str::FromBytesUntilNulError;
+#[doc(inline)]
+#[stable(feature = "cstr_from_bytes", since = "1.10.0")]
+pub use self::c_str::FromBytesWithNulError;
+#[doc(inline)]
+#[stable(feature = "cstring_from_vec_with_nul", since = "1.58.0")]
+pub use self::c_str::FromVecWithNulError;
+#[doc(inline)]
+#[stable(feature = "cstring_into", since = "1.7.0")]
+pub use self::c_str::IntoStringError;
+#[doc(inline)]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::c_str::NulError;
+#[doc(inline)]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::c_str::{CStr, CString};
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(inline)]
+pub use self::os_str::{OsStr, OsString};
+
+#[unstable(feature = "os_str_display", issue = "120048")]
+pub mod os_str;

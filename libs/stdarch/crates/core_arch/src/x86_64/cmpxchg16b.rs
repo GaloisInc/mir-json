@@ -16,9 +16,12 @@ use stdarch_test::assert_instr;
 ///
 /// # Memory Orderings
 ///
-/// This atomic operations has the same semantics of memory orderings as
+/// This atomic operation has the same semantics of memory orderings as
 /// `AtomicUsize::compare_exchange` does, only operating on 16 bytes of memory
 /// instead of just a pointer.
+///
+/// The failure ordering must be [`Ordering::SeqCst`], [`Ordering::Acquire`] or
+/// [`Ordering::Relaxed`].
 ///
 /// For more information on memory orderings here see the `compare_exchange`
 /// documentation for other `Atomic*` types in the standard library.
@@ -33,15 +36,11 @@ use stdarch_test::assert_instr;
 /// runtime to work correctly. If the CPU running the binary does not actually
 /// support `cmpxchg16b` and the program enters an execution path that
 /// eventually would reach this function the behavior is undefined.
-///
-/// The failure ordering must be [`Ordering::SeqCst`], [`Ordering::Acquire`] or
-/// [`Ordering::Relaxed`], or this function call is undefined. See the `Atomic*`
-/// documentation's `compare_exchange` function for more information. When
-/// `compare_exchange` panics, this is undefined behavior. Currently this
-/// function aborts the process with an undefined instruction.
 #[inline]
+#[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
 #[cfg_attr(test, assert_instr(cmpxchg16b, success = Ordering::SeqCst, failure = Ordering::SeqCst))]
 #[target_feature(enable = "cmpxchg16b")]
+#[stable(feature = "cmpxchg16b_intrinsic", since = "1.67.0")]
 pub unsafe fn cmpxchg16b(
     dst: *mut u128,
     old: u128,
@@ -53,6 +52,8 @@ pub unsafe fn cmpxchg16b(
 
     debug_assert!(dst as usize % 16 == 0);
 
+    // Copied from `atomic_compare_exchange` in `core`.
+    // https://github.com/rust-lang/rust/blob/f8a2e49/library/core/src/sync/atomic.rs#L3046-L3079
     let (val, _ok) = match (success, failure) {
         (Relaxed, Relaxed) => intrinsics::atomic_cxchg_relaxed_relaxed(dst, old, new),
         (Relaxed, Acquire) => intrinsics::atomic_cxchg_relaxed_acquire(dst, old, new),
@@ -69,11 +70,12 @@ pub unsafe fn cmpxchg16b(
         (SeqCst, Relaxed) => intrinsics::atomic_cxchg_seqcst_relaxed(dst, old, new),
         (SeqCst, Acquire) => intrinsics::atomic_cxchg_seqcst_acquire(dst, old, new),
         (SeqCst, SeqCst) => intrinsics::atomic_cxchg_seqcst_seqcst(dst, old, new),
+        (_, AcqRel) => panic!("there is no such thing as an acquire-release failure ordering"),
+        (_, Release) => panic!("there is no such thing as a release failure ordering"),
 
-        // The above block is all copied from libcore, and this statement is
-        // also copied from libcore except that it's a panic in libcore and we
-        // have a little bit more of a lightweight panic here.
-        _ => crate::core_arch::x86::ud2(),
+        // `atomic::Ordering` is non_exhaustive. It warns when `core_arch` is built as a part of `core`.
+        #[allow(unreachable_patterns)]
+        (_, _) => unreachable!(),
     };
     val
 }

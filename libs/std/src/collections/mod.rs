@@ -79,41 +79,49 @@
 //! see each type's documentation, and note that the names of actual methods may
 //! differ from the tables below on certain collections.
 //!
-//! Throughout the documentation, we will follow a few conventions. For all
-//! operations, the collection's size is denoted by n. If another collection is
-//! involved in the operation, it contains m elements. Operations which have an
-//! *amortized* cost are suffixed with a `*`. Operations with an *expected*
-//! cost are suffixed with a `~`.
+//! Throughout the documentation, we will adhere to the following conventions
+//! for operation notation:
 //!
-//! All amortized costs are for the potential need to resize when capacity is
-//! exhausted. If a resize occurs it will take *O*(*n*) time. Our collections never
-//! automatically shrink, so removal operations aren't amortized. Over a
-//! sufficiently large series of operations, the average cost per operation will
-//! deterministically equal the given cost.
+//! * The collection's size is denoted by `n`.
+//! * If a second collection is involved, its size is denoted by `m`.
+//! * Item indices are denoted by `i`.
+//! * Operations which have an *amortized* cost are suffixed with a `*`.
+//! * Operations with an *expected* cost are suffixed with a `~`.
 //!
-//! Only [`HashMap`] has expected costs, due to the probabilistic nature of hashing.
-//! It is theoretically possible, though very unlikely, for [`HashMap`] to
-//! experience worse performance.
+//! Calling operations that add to a collection will occasionally require a
+//! collection to be resized - an extra operation that takes *O*(*n*) time.
 //!
-//! ## Sequences
+//! *Amortized* costs are calculated to account for the time cost of such resize
+//! operations *over a sufficiently large series of operations*. An individual
+//! operation may be slower or faster due to the sporadic nature of collection
+//! resizing, however the average cost per operation will approach the amortized
+//! cost.
 //!
-//! |                | get(i)                 | insert(i)               | remove(i)              | append    | split_off(i)           |
-//! |----------------|------------------------|-------------------------|------------------------|-----------|------------------------|
-//! | [`Vec`]        | *O*(1)                 | *O*(*n*-*i*)*           | *O*(*n*-*i*)           | *O*(*m*)* | *O*(*n*-*i*)           |
-//! | [`VecDeque`]   | *O*(1)                 | *O*(min(*i*, *n*-*i*))* | *O*(min(*i*, *n*-*i*)) | *O*(*m*)* | *O*(min(*i*, *n*-*i*)) |
-//! | [`LinkedList`] | *O*(min(*i*, *n*-*i*)) | *O*(min(*i*, *n*-*i*))  | *O*(min(*i*, *n*-*i*)) | *O*(1)    | *O*(min(*i*, *n*-*i*)) |
+//! Rust's collections never automatically shrink, so removal operations aren't
+//! amortized.
 //!
-//! Note that where ties occur, [`Vec`] is generally going to be faster than [`VecDeque`], and
-//! [`VecDeque`] is generally going to be faster than [`LinkedList`].
+//! [`HashMap`] uses *expected* costs. It is theoretically possible, though very
+//! unlikely, for [`HashMap`] to experience significantly worse performance than
+//! the expected cost. This is due to the probabilistic nature of hashing - i.e.
+//! it is possible to generate a duplicate hash given some input key that will
+//! requires extra computation to correct.
 //!
-//! ## Maps
+//! ## Cost of Collection Operations
+//!
+//!
+//! |                | get(i)                 | insert(i)               | remove(i)              | append(Vec(m))    | split_off(i)           | range           | append       |
+//! |----------------|------------------------|-------------------------|------------------------|-------------------|------------------------|-----------------|--------------|
+//! | [`Vec`]        | *O*(1)                 | *O*(*n*-*i*)*           | *O*(*n*-*i*)           | *O*(*m*)*         | *O*(*n*-*i*)           | N/A             | N/A          |
+//! | [`VecDeque`]   | *O*(1)                 | *O*(min(*i*, *n*-*i*))* | *O*(min(*i*, *n*-*i*)) | *O*(*m*)*         | *O*(min(*i*, *n*-*i*)) | N/A             | N/A          |
+//! | [`LinkedList`] | *O*(min(*i*, *n*-*i*)) | *O*(min(*i*, *n*-*i*))  | *O*(min(*i*, *n*-*i*)) | *O*(1)            | *O*(min(*i*, *n*-*i*)) | N/A             | N/A          |
+//! | [`HashMap`]    | *O*(1)~                | *O*(1)~*                | *O*(1)~                | N/A               | N/A                    | N/A             | N/A          |
+//! | [`BTreeMap`]   | *O*(log(*n*))          | *O*(log(*n*))           | *O*(log(*n*))          | N/A               | N/A                    | *O*(log(*n*))   | *O*(*n*+*m*) |
+//!
+//! Note that where ties occur, [`Vec`] is generally going to be faster than
+//! [`VecDeque`], and [`VecDeque`] is generally going to be faster than
+//! [`LinkedList`].
 //!
 //! For Sets, all operations have the cost of the equivalent Map operation.
-//!
-//! |              | get           | insert        | remove        | range         | append       |
-//! |--------------|---------------|---------------|---------------|---------------|--------------|
-//! | [`HashMap`]  | *O*(1)~       | *O*(1)~*      | *O*(1)~       | N/A           | N/A          |
-//! | [`BTreeMap`] | *O*(log(*n*)) | *O*(log(*n*)) | *O*(log(*n*)) | *O*(log(*n*)) | *O*(*n*+*m*) |
 //!
 //! # Correct and Efficient Usage of Collections
 //!
@@ -172,7 +180,8 @@
 //!
 //! ## Iterators
 //!
-//! Iterators are a powerful and robust mechanism used throughout Rust's
+//! [Iterators][crate::iter]
+//! are a powerful and robust mechanism used throughout Rust's
 //! standard libraries. Iterators provide a sequence of values in a generic,
 //! safe, efficient and convenient way. The contents of an iterator are usually
 //! *lazily* evaluated, so that only the values that are actually needed are
@@ -252,7 +261,9 @@
 //!
 //! Several other collection methods also return iterators to yield a sequence
 //! of results but avoid allocating an entire collection to store the result in.
-//! This provides maximum flexibility as `collect` or `extend` can be called to
+//! This provides maximum flexibility as
+//! [`collect`][crate::iter::Iterator::collect] or
+//! [`extend`][crate::iter::Extend::extend] can be called to
 //! "pipe" the sequence into any collection if desired. Otherwise, the sequence
 //! can be looped over with a `for` loop. The iterator can also be discarded
 //! after partial use, preventing the computation of the unused items.
@@ -395,30 +406,8 @@
 //! // ...but the key hasn't changed. b is still "baz", not "xyz".
 //! assert_eq!(map.keys().next().unwrap().b, "baz");
 //! ```
-//!
-//! [IntoIterator]: crate::iter::IntoIterator "iter::IntoIterator"
 
 #![stable(feature = "rust1", since = "1.0.0")]
-
-#[stable(feature = "rust1", since = "1.0.0")]
-// FIXME(#82080) The deprecation here is only theoretical, and does not actually produce a warning.
-#[deprecated(note = "moved to `std::ops::Bound`", since = "1.26.0")]
-#[doc(hidden)]
-pub use crate::ops::Bound;
-
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use alloc_crate::collections::{binary_heap, btree_map, btree_set};
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use alloc_crate::collections::{linked_list, vec_deque};
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use alloc_crate::collections::{BTreeMap, BTreeSet, BinaryHeap};
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use alloc_crate::collections::{LinkedList, VecDeque};
-
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::hash_map::HashMap;
-#[stable(feature = "rust1", since = "1.0.0")]
-pub use self::hash_set::HashSet;
 
 #[stable(feature = "try_reserve", since = "1.57.0")]
 pub use alloc_crate::collections::TryReserveError;
@@ -428,6 +417,26 @@ pub use alloc_crate::collections::TryReserveError;
     issue = "48043"
 )]
 pub use alloc_crate::collections::TryReserveErrorKind;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use alloc_crate::collections::{BTreeMap, BTreeSet, BinaryHeap};
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use alloc_crate::collections::{LinkedList, VecDeque};
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use alloc_crate::collections::{binary_heap, btree_map, btree_set};
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use alloc_crate::collections::{linked_list, vec_deque};
+
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(inline)]
+pub use self::hash_map::HashMap;
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(inline)]
+pub use self::hash_set::HashSet;
+#[stable(feature = "rust1", since = "1.0.0")]
+// FIXME(#82080) The deprecation here is only theoretical, and does not actually produce a warning.
+#[deprecated(note = "moved to `std::ops::Bound`", since = "1.26.0")]
+#[doc(hidden)]
+pub use crate::ops::Bound;
 
 mod hash;
 
@@ -436,6 +445,10 @@ pub mod hash_map {
     //! A hash map implemented with quadratic probing and SIMD lookup.
     #[stable(feature = "rust1", since = "1.0.0")]
     pub use super::hash::map::*;
+    #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
+    pub use crate::hash::random::DefaultHasher;
+    #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
+    pub use crate::hash::random::RandomState;
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]

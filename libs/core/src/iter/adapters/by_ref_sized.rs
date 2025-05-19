@@ -1,7 +1,5 @@
-use crate::{
-    const_closure::ConstFnMutClosure,
-    ops::{NeverShortCircuit, Try},
-};
+use crate::num::NonZero;
+use crate::ops::{NeverShortCircuit, Try};
 
 /// Like `Iterator::by_ref`, but requiring `Sized` so it can forward generics.
 ///
@@ -29,7 +27,7 @@ impl<I: Iterator> Iterator for ByRefSized<'_, I> {
     }
 
     #[inline]
-    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         I::advance_by(self.0, n)
     }
 
@@ -39,13 +37,12 @@ impl<I: Iterator> Iterator for ByRefSized<'_, I> {
     }
 
     #[inline]
-    fn fold<B, F>(self, init: B, mut f: F) -> B
+    fn fold<B, F>(self, init: B, f: F) -> B
     where
         F: FnMut(B, Self::Item) -> B,
     {
         // `fold` needs ownership, so this can't forward directly.
-        I::try_fold(self.0, init, ConstFnMutClosure::new(&mut f, NeverShortCircuit::wrap_mut_2_imp))
-            .0
+        I::try_fold(self.0, init, NeverShortCircuit::wrap_mut_2(f)).0
     }
 
     #[inline]
@@ -66,7 +63,7 @@ impl<I: DoubleEndedIterator> DoubleEndedIterator for ByRefSized<'_, I> {
     }
 
     #[inline]
-    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         I::advance_back_by(self.0, n)
     }
 
@@ -76,17 +73,12 @@ impl<I: DoubleEndedIterator> DoubleEndedIterator for ByRefSized<'_, I> {
     }
 
     #[inline]
-    fn rfold<B, F>(self, init: B, mut f: F) -> B
+    fn rfold<B, F>(self, init: B, f: F) -> B
     where
         F: FnMut(B, Self::Item) -> B,
     {
         // `rfold` needs ownership, so this can't forward directly.
-        I::try_rfold(
-            self.0,
-            init,
-            ConstFnMutClosure::new(&mut f, NeverShortCircuit::wrap_mut_2_imp),
-        )
-        .0
+        I::try_rfold(self.0, init, NeverShortCircuit::wrap_mut_2(f)).0
     }
 
     #[inline]

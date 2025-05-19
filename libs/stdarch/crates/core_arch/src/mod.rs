@@ -6,7 +6,12 @@ mod macros;
 #[cfg(any(target_arch = "riscv32", target_arch = "riscv64", doc))]
 mod riscv_shared;
 
-#[cfg(any(target_arch = "arm", target_arch = "aarch64", doc))]
+#[cfg(any(
+    target_arch = "arm",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    doc
+))]
 mod arm_shared;
 
 mod simd;
@@ -43,16 +48,17 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "arm", doc))]
     #[doc(cfg(target_arch = "arm"))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "stdarch_arm_neon_intrinsics", issue = "111800")]
     pub mod arm {
+        #[unstable(feature = "stdarch_arm_neon_intrinsics", issue = "111800")]
         pub use crate::core_arch::arm::*;
     }
 
     /// Platform-specific intrinsics for the `aarch64` platform.
     ///
     /// See the [module documentation](../index.html) for more details.
-    #[cfg(any(target_arch = "aarch64", doc))]
-    #[doc(cfg(target_arch = "aarch64"))]
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm64ec", doc))]
+    #[doc(cfg(any(target_arch = "aarch64", target_arch = "arm64ec")))]
     #[stable(feature = "neon_intrinsics", since = "1.59.0")]
     pub mod aarch64 {
         #[stable(feature = "neon_intrinsics", since = "1.59.0")]
@@ -64,8 +70,9 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "riscv32", doc))]
     #[doc(cfg(any(target_arch = "riscv32")))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "riscv_ext_intrinsics", issue = "114544")]
     pub mod riscv32 {
+        pub use crate::core_arch::riscv32::*;
         pub use crate::core_arch::riscv_shared::*;
     }
 
@@ -74,7 +81,7 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "riscv64", doc))]
     #[doc(cfg(any(target_arch = "riscv64")))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "riscv_ext_intrinsics", issue = "114544")]
     pub mod riscv64 {
         pub use crate::core_arch::riscv64::*;
         // RISC-V RV64 supports all RV32 instructions as well in current specifications (2022-01-05).
@@ -155,7 +162,7 @@ pub mod arch {
     /// which support SIMD, or it will not have SIMD at all. For compatibility
     /// the standard library itself does not use any SIMD internally.
     /// Determining how best to ship your WebAssembly binary with SIMD is
-    /// largely left up to you as it can can be pretty nuanced depending on
+    /// largely left up to you as it can be pretty nuanced depending on
     /// your situation.
     ///
     /// [condsections]: https://github.com/webassembly/conditional-sections
@@ -217,7 +224,7 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "mips", doc))]
     #[doc(cfg(target_arch = "mips"))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "stdarch_mips", issue = "111198")]
     pub mod mips {
         pub use crate::core_arch::mips::*;
     }
@@ -227,7 +234,7 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "mips64", doc))]
     #[doc(cfg(target_arch = "mips64"))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "stdarch_mips", issue = "111198")]
     pub mod mips64 {
         pub use crate::core_arch::mips::*;
     }
@@ -237,7 +244,7 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "powerpc", doc))]
     #[doc(cfg(target_arch = "powerpc"))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub mod powerpc {
         pub use crate::core_arch::powerpc::*;
     }
@@ -247,7 +254,7 @@ pub mod arch {
     /// See the [module documentation](../index.html) for more details.
     #[cfg(any(target_arch = "powerpc64", doc))]
     #[doc(cfg(target_arch = "powerpc64"))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub mod powerpc64 {
         pub use crate::core_arch::powerpc64::*;
     }
@@ -255,15 +262,23 @@ pub mod arch {
     /// Platform-specific intrinsics for the `NVPTX` platform.
     ///
     /// See the [module documentation](../index.html) for more details.
-    #[cfg(any(target_arch = "nvptx", target_arch = "nvptx64", doc))]
-    #[doc(cfg(any(target_arch = "nvptx", target_arch = "nvptx64")))]
-    #[unstable(feature = "stdsimd", issue = "27731")]
+    #[cfg(any(target_arch = "nvptx64", doc))]
+    #[doc(cfg(target_arch = "nvptx64"))]
+    #[unstable(feature = "stdarch_nvptx", issue = "111199")]
     pub mod nvptx {
         pub use crate::core_arch::nvptx::*;
     }
-}
 
-mod simd_llvm;
+    /// Platform-specific intrinsics for the `loongarch` platform.
+    ///
+    /// See the [module documentation](../index.html) for more details.
+    #[cfg(any(target_arch = "loongarch64", doc))]
+    #[doc(cfg(target_arch = "loongarch64"))]
+    #[unstable(feature = "stdarch_loongarch", issue = "117427")]
+    pub mod loongarch64 {
+        pub use crate::core_arch::loongarch64::*;
+    }
+}
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64", doc))]
 #[doc(cfg(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -272,12 +287,16 @@ mod x86;
 #[doc(cfg(target_arch = "x86_64"))]
 mod x86_64;
 
-#[cfg(any(target_arch = "aarch64", doc))]
-#[doc(cfg(target_arch = "aarch64"))]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm64ec", doc))]
+#[doc(cfg(any(target_arch = "aarch64", target_arch = "arm64ec")))]
 mod aarch64;
 #[cfg(any(target_arch = "arm", doc))]
 #[doc(cfg(any(target_arch = "arm")))]
 mod arm;
+
+#[cfg(any(target_arch = "riscv32", doc))]
+#[doc(cfg(any(target_arch = "riscv32")))]
+mod riscv32;
 
 #[cfg(any(target_arch = "riscv64", doc))]
 #[doc(cfg(any(target_arch = "riscv64")))]
@@ -299,6 +318,10 @@ mod powerpc;
 #[doc(cfg(target_arch = "powerpc64"))]
 mod powerpc64;
 
-#[cfg(any(target_arch = "nvptx", target_arch = "nvptx64", doc))]
-#[doc(cfg(any(target_arch = "nvptx", target_arch = "nvptx64")))]
+#[cfg(any(target_arch = "nvptx64", doc))]
+#[doc(cfg(target_arch = "nvptx64"))]
 mod nvptx;
+
+#[cfg(any(target_arch = "loongarch64", doc))]
+#[doc(cfg(target_arch = "loongarch64"))]
+mod loongarch64;

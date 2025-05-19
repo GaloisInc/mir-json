@@ -47,7 +47,7 @@ the AVX2 feature as [documented by Intel][intel-dox] so to correctly call
 this function we need to (a) guarantee we only call it on `x86`/`x86_64`
 and (b) ensure that the CPU feature is available
 
-[intel-dox]: https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_add_epi64&expand=100
+[intel-dox]: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_add_epi64&expand=100
 
 ## Static CPU Feature Detection
 
@@ -142,8 +142,8 @@ detail!
   the standard library, this macro will perform necessary runtime detection
   to determine whether the CPU the program is running on supports the
   specified feature. In this case the macro will expand to a boolean
-expression evaluating to whether the local CPU has the AVX2 feature or
-not.
+  expression evaluating to whether the local CPU has the AVX2 feature or
+  not.
 
   Note that this macro, like the `arch` module, is platform-specific. For
   example calling `is_x86_feature_detected!("avx2")` on ARM will be a

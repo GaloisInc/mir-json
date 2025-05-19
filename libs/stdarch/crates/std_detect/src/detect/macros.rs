@@ -1,5 +1,6 @@
 #[macro_export]
-#[allow_internal_unstable(stdsimd)]
+#[allow_internal_unstable(stdarch_internal)]
+#[unstable(feature = "stdarch_internal", issue = "none")]
 macro_rules! detect_feature {
     ($feature:tt, $feature_lit:tt) => {
         $crate::detect_feature!($feature, $feature_lit : $feature_lit)
@@ -7,6 +8,23 @@ macro_rules! detect_feature {
     ($feature:tt, $feature_lit:tt : $($target_feature_lit:tt),*) => {
         $(cfg!(target_feature = $target_feature_lit) ||)*
             $crate::detect::__is_feature_detected::$feature()
+    };
+    ($feature:tt, $feature_lit:tt, without cfg check: true) => {
+        $crate::detect::__is_feature_detected::$feature()
+    };
+}
+
+#[allow(unused_macros, reason = "it's used in the features! macro below")]
+macro_rules! check_cfg_feature {
+    ($feature:tt, $feature_lit:tt) => {
+        check_cfg_feature!($feature, $feature_lit : $feature_lit)
+    };
+    ($feature:tt, $feature_lit:tt : $($target_feature_lit:tt),*) => {
+        $(cfg!(target_feature = $target_feature_lit);)*
+    };
+    ($feature:tt, $feature_lit:tt, without cfg check: $feature_cfg_check:literal) => {
+        #[expect(unexpected_cfgs, reason = $feature_lit)]
+        { cfg!(target_feature = $feature_lit) }
     };
 }
 
@@ -17,25 +35,34 @@ macro_rules! features {
       @CFG: $cfg:meta;
       @MACRO_NAME: $macro_name:ident;
       @MACRO_ATTRS: $(#[$macro_attrs:meta])*
-      $(@BIND_FEATURE_NAME: $bind_feature:tt; $feature_impl:tt; )*
+      $(@BIND_FEATURE_NAME: $bind_feature:tt; $feature_impl:tt; $(#[$deprecate_attr:meta];)?)*
       $(@NO_RUNTIME_DETECTION: $nort_feature:tt; )*
       $(@FEATURE: #[$stability_attr:meta] $feature:ident: $feature_lit:tt;
+          $(without cfg check: $feature_cfg_check:tt;)?
           $(implied by target_features: [$($target_feature_lit:tt),*];)?
           $(#[$feature_comment:meta])*)*
     ) => {
         #[macro_export]
         $(#[$macro_attrs])*
-        #[allow_internal_unstable(stdsimd_internal, stdsimd)]
+        #[allow_internal_unstable(stdarch_internal)]
         #[cfg($cfg)]
         #[doc(cfg($cfg))]
         macro_rules! $macro_name {
             $(
                 ($feature_lit) => {
-                    $crate::detect_feature!($feature, $feature_lit $(: $($target_feature_lit),*)?)
+                    $crate::detect_feature!($feature, $feature_lit $(, without cfg check: $feature_cfg_check)? $(: $($target_feature_lit),*)?)
                 };
             )*
             $(
-                ($bind_feature) => { $crate::$macro_name!($feature_impl) };
+                ($bind_feature) => {
+                    {
+                        $(
+                            #[$deprecate_attr] macro_rules! deprecated_feature { {} => {}; }
+                            deprecated_feature! {};
+                        )?
+                        $crate::$macro_name!($feature_impl)
+                    }
+                };
             )*
             $(
                 ($nort_feature) => {
@@ -104,6 +131,15 @@ macro_rules! features {
             };
         }
 
+        #[test]
+        #[deny(unexpected_cfgs)]
+        #[deny(unfulfilled_lint_expectations)]
+        fn unexpected_cfgs() {
+            $(
+                check_cfg_feature!($feature, $feature_lit $(, without cfg check: $feature_cfg_check)? $(: $($target_feature_lit),*)?);
+            )*
+        }
+
         /// Each variant denotes a position in a bitset for a particular feature.
         ///
         /// PLEASE: do not use this, it is an implementation detail subject
@@ -112,7 +148,7 @@ macro_rules! features {
         #[allow(non_camel_case_types)]
         #[derive(Copy, Clone)]
         #[repr(u8)]
-        #[unstable(feature = "stdsimd_internal", issue = "none")]
+        #[unstable(feature = "stdarch_internal", issue = "none")]
         #[cfg($cfg)]
         pub(crate) enum Feature {
             $(
@@ -149,6 +185,7 @@ macro_rules! features {
         /// to change.
         #[doc(hidden)]
         #[cfg($cfg)]
+        #[unstable(feature = "stdarch_internal", issue = "none")]
         pub mod __is_feature_detected {
             $(
 

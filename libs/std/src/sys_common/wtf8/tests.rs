@@ -1,5 +1,4 @@
 use super::*;
-use crate::borrow::Cow;
 
 #[test]
 fn code_point_from_u32() {
@@ -521,11 +520,11 @@ fn wtf8_code_points() {
 
 #[test]
 fn wtf8_as_str() {
-    assert_eq!(Wtf8::from_str("").as_str(), Some(""));
-    assert_eq!(Wtf8::from_str("aé 💩").as_str(), Some("aé 💩"));
+    assert_eq!(Wtf8::from_str("").as_str(), Ok(""));
+    assert_eq!(Wtf8::from_str("aé 💩").as_str(), Ok("aé 💩"));
     let mut string = Wtf8Buf::new();
     string.push(CodePoint::from_u32(0xD800).unwrap());
-    assert_eq!(string.as_str(), None);
+    assert!(string.as_str().is_err());
 }
 
 #[test]
@@ -663,4 +662,90 @@ fn wtf8_to_owned() {
     let string = unsafe { Wtf8::from_bytes_unchecked(b"\xED\xA0\x80").to_owned() };
     assert_eq!(string.bytes, b"\xED\xA0\x80");
     assert!(!string.is_known_utf8);
+}
+
+#[test]
+fn wtf8_valid_utf8_boundaries() {
+    let mut string = Wtf8Buf::from_str("aé 💩");
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    check_utf8_boundary(&string, 0);
+    check_utf8_boundary(&string, 1);
+    check_utf8_boundary(&string, 3);
+    check_utf8_boundary(&string, 4);
+    check_utf8_boundary(&string, 8);
+    check_utf8_boundary(&string, 14);
+    assert_eq!(string.len(), 14);
+
+    string.push_char('a');
+    check_utf8_boundary(&string, 14);
+    check_utf8_boundary(&string, 15);
+
+    let mut string = Wtf8Buf::from_str("a");
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    check_utf8_boundary(&string, 1);
+
+    let mut string = Wtf8Buf::from_str("\u{D7FF}");
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    check_utf8_boundary(&string, 3);
+
+    let mut string = Wtf8Buf::new();
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    string.push_char('\u{D7FF}');
+    check_utf8_boundary(&string, 3);
+}
+
+#[test]
+#[should_panic(expected = "byte index 4 is out of bounds")]
+fn wtf8_utf8_boundary_out_of_bounds() {
+    let string = Wtf8::from_str("aé");
+    check_utf8_boundary(&string, 4);
+}
+
+#[test]
+#[should_panic(expected = "byte index 1 is not a codepoint boundary")]
+fn wtf8_utf8_boundary_inside_codepoint() {
+    let string = Wtf8::from_str("é");
+    check_utf8_boundary(&string, 1);
+}
+
+#[test]
+#[should_panic(expected = "byte index 1 is not a codepoint boundary")]
+fn wtf8_utf8_boundary_inside_surrogate() {
+    let mut string = Wtf8Buf::new();
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    check_utf8_boundary(&string, 1);
+}
+
+#[test]
+#[should_panic(expected = "byte index 3 lies between surrogate codepoints")]
+fn wtf8_utf8_boundary_between_surrogates() {
+    let mut string = Wtf8Buf::new();
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    string.push(CodePoint::from_u32(0xD800).unwrap());
+    check_utf8_boundary(&string, 3);
+}
+
+#[test]
+fn wobbled_wtf8_plus_bytes_isnt_utf8() {
+    let mut string: Wtf8Buf = unsafe { Wtf8::from_bytes_unchecked(b"\xED\xA0\x80").to_owned() };
+    assert!(!string.is_known_utf8);
+    string.extend_from_slice(b"some utf-8");
+    assert!(!string.is_known_utf8);
+}
+
+#[test]
+fn wobbled_wtf8_plus_str_isnt_utf8() {
+    let mut string: Wtf8Buf = unsafe { Wtf8::from_bytes_unchecked(b"\xED\xA0\x80").to_owned() };
+    assert!(!string.is_known_utf8);
+    string.push_str("some utf-8");
+    assert!(!string.is_known_utf8);
+}
+
+#[test]
+fn unwobbly_wtf8_plus_utf8_is_utf8() {
+    let mut string: Wtf8Buf = Wtf8Buf::from_str("hello world");
+    assert!(string.is_known_utf8);
+    string.push_str("some utf-8");
+    assert!(string.is_known_utf8);
 }

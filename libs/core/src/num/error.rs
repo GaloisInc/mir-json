@@ -9,36 +9,32 @@ use crate::fmt;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TryFromIntError(pub(crate) ());
 
-impl TryFromIntError {
-    #[unstable(
-        feature = "int_error_internals",
-        reason = "available through Error trait and this method should \
-                  not be exposed publicly",
-        issue = "none"
-    )]
-    #[doc(hidden)]
-    pub fn __description(&self) -> &str {
+#[stable(feature = "try_from", since = "1.34.0")]
+impl fmt::Display for TryFromIntError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[allow(deprecated)]
+        self.description().fmt(fmt)
+    }
+}
+
+#[stable(feature = "try_from", since = "1.34.0")]
+impl Error for TryFromIntError {
+    #[allow(deprecated)]
+    fn description(&self) -> &str {
         "out of range integral type conversion attempted"
     }
 }
 
 #[stable(feature = "try_from", since = "1.34.0")]
-impl fmt::Display for TryFromIntError {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.__description().fmt(fmt)
-    }
-}
-
-#[stable(feature = "try_from", since = "1.34.0")]
-#[rustc_const_unstable(feature = "const_convert", issue = "88674")]
-impl const From<Infallible> for TryFromIntError {
+impl From<Infallible> for TryFromIntError {
     fn from(x: Infallible) -> TryFromIntError {
         match x {}
     }
 }
 
 #[unstable(feature = "never_type", issue = "35121")]
-impl const From<!> for TryFromIntError {
+impl From<!> for TryFromIntError {
+    #[inline]
     fn from(never: !) -> TryFromIntError {
         // Match rather than coerce to make sure that code like
         // `From<Infallible> for TryFromIntError` above will keep working
@@ -117,32 +113,18 @@ pub enum IntErrorKind {
 impl ParseIntError {
     /// Outputs the detailed cause of parsing an integer failing.
     #[must_use]
+    #[rustc_const_stable(feature = "const_int_from_str", since = "1.82.0")]
     #[stable(feature = "int_error_matching", since = "1.55.0")]
-    pub fn kind(&self) -> &IntErrorKind {
+    pub const fn kind(&self) -> &IntErrorKind {
         &self.kind
-    }
-    #[unstable(
-        feature = "int_error_internals",
-        reason = "available through Error trait and this method should \
-                  not be exposed publicly",
-        issue = "none"
-    )]
-    #[doc(hidden)]
-    pub fn __description(&self) -> &str {
-        match self.kind {
-            IntErrorKind::Empty => "cannot parse integer from empty string",
-            IntErrorKind::InvalidDigit => "invalid digit found in string",
-            IntErrorKind::PosOverflow => "number too large to fit in target type",
-            IntErrorKind::NegOverflow => "number too small to fit in target type",
-            IntErrorKind::Zero => "number would be zero for non-zero type",
-        }
     }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl fmt::Display for ParseIntError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.__description().fmt(f)
+        #[allow(deprecated)]
+        self.description().fmt(f)
     }
 }
 
@@ -150,14 +132,12 @@ impl fmt::Display for ParseIntError {
 impl Error for ParseIntError {
     #[allow(deprecated)]
     fn description(&self) -> &str {
-        self.__description()
-    }
-}
-
-#[stable(feature = "try_from", since = "1.34.0")]
-impl Error for TryFromIntError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        self.__description()
+        match self.kind {
+            IntErrorKind::Empty => "cannot parse integer from empty string",
+            IntErrorKind::InvalidDigit => "invalid digit found in string",
+            IntErrorKind::PosOverflow => "number too large to fit in target type",
+            IntErrorKind::NegOverflow => "number too small to fit in target type",
+            IntErrorKind::Zero => "number would be zero for non-zero type",
+        }
     }
 }

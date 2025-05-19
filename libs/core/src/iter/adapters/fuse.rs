@@ -1,8 +1,8 @@
 use crate::intrinsics;
+use crate::iter::adapters::SourceIter;
 use crate::iter::adapters::zip::try_get_unchecked;
 use crate::iter::{
-    DoubleEndedIterator, ExactSizeIterator, FusedIterator, TrustedLen, TrustedRandomAccess,
-    TrustedRandomAccessNoCoerce,
+    FusedIterator, TrustedFused, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce,
 };
 use crate::ops::Try;
 
@@ -24,10 +24,17 @@ impl<I> Fuse<I> {
     pub(in crate::iter) fn new(iter: I) -> Fuse<I> {
         Fuse { iter: Some(iter) }
     }
+
+    pub(crate) fn into_inner(self) -> Option<I> {
+        self.iter
+    }
 }
 
 #[stable(feature = "fused", since = "1.26.0")]
 impl<I> FusedIterator for Fuse<I> where I: Iterator {}
+
+#[unstable(issue = "none", feature = "trusted_fused")]
+unsafe impl<I> TrustedFused for Fuse<I> where I: TrustedFused {}
 
 // Any specialized implementation here is made internal
 // to avoid exposing default fns outside this trait.
@@ -178,6 +185,21 @@ where
             Some(ref iter) => iter.is_empty(),
             None => true,
         }
+    }
+}
+
+#[stable(feature = "default_iters", since = "1.70.0")]
+impl<I: Default> Default for Fuse<I> {
+    /// Creates a `Fuse` iterator from the default value of `I`.
+    ///
+    /// ```
+    /// # use core::slice;
+    /// # use std::iter::Fuse;
+    /// let iter: Fuse<slice::Iter<'_, u8>> = Default::default();
+    /// assert_eq!(iter.len(), 0);
+    /// ```
+    fn default() -> Self {
+        Fuse { iter: Default::default() }
     }
 }
 
@@ -400,6 +422,23 @@ where
         I: DoubleEndedIterator,
     {
         self.iter.as_mut()?.rfind(predicate)
+    }
+}
+
+// This is used by Flatten's SourceIter impl
+#[unstable(issue = "none", feature = "inplace_iteration")]
+unsafe impl<I> SourceIter for Fuse<I>
+where
+    I: SourceIter + TrustedFused,
+{
+    type Source = I::Source;
+
+    #[inline]
+    unsafe fn as_inner(&mut self) -> &mut I::Source {
+        // SAFETY: unsafe function forwarding to unsafe function with the same requirements.
+        // TrustedFused guarantees that we'll never encounter a case where `self.iter` would
+        // be set to None.
+        unsafe { SourceIter::as_inner(self.iter.as_mut().unwrap_unchecked()) }
     }
 }
 

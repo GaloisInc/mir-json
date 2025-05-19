@@ -13,46 +13,68 @@
 
 #![allow(non_camel_case_types)]
 
-use crate::{
-    core_arch::{simd::*, simd_llvm::*},
-    mem::transmute,
-};
+use crate::{core_arch::simd::*, intrinsics::simd::*, mem, mem::transmute};
 
 #[cfg(test)]
 use stdarch_test::assert_instr;
 
+use super::macros::*;
+
 types! {
+    #![unstable(feature = "stdarch_powerpc", issue = "111145")]
+
     /// PowerPC-specific 128-bit wide vector of sixteen packed `i8`
-    pub struct vector_signed_char(i8, i8, i8, i8, i8, i8, i8, i8,
-                                  i8, i8, i8, i8, i8, i8, i8, i8);
+    pub struct vector_signed_char(16 x i8);
     /// PowerPC-specific 128-bit wide vector of sixteen packed `u8`
-    pub struct vector_unsigned_char(u8, u8, u8, u8, u8, u8, u8, u8,
-                                    u8, u8, u8, u8, u8, u8, u8, u8);
+    pub struct vector_unsigned_char(16 x u8);
 
     /// PowerPC-specific 128-bit wide vector mask of sixteen packed elements
-    pub struct vector_bool_char(i8, i8, i8, i8, i8, i8, i8, i8,
-                                i8, i8, i8, i8, i8, i8, i8, i8);
+    pub struct vector_bool_char(16 x i8);
     /// PowerPC-specific 128-bit wide vector of eight packed `i16`
-    pub struct vector_signed_short(i16, i16, i16, i16, i16, i16, i16, i16);
+    pub struct vector_signed_short(8 x i16);
     /// PowerPC-specific 128-bit wide vector of eight packed `u16`
-    pub struct vector_unsigned_short(u16, u16, u16, u16, u16, u16, u16, u16);
+    pub struct vector_unsigned_short(8 x u16);
     /// PowerPC-specific 128-bit wide vector mask of eight packed elements
-    pub struct vector_bool_short(i16, i16, i16, i16, i16, i16, i16, i16);
+    pub struct vector_bool_short(8 x i16);
     // pub struct vector_pixel(???);
     /// PowerPC-specific 128-bit wide vector of four packed `i32`
-    pub struct vector_signed_int(i32, i32, i32, i32);
+    pub struct vector_signed_int(4 x i32);
     /// PowerPC-specific 128-bit wide vector of four packed `u32`
-    pub struct vector_unsigned_int(u32, u32, u32, u32);
+    pub struct vector_unsigned_int(4 x u32);
     /// PowerPC-specific 128-bit wide vector mask of four packed elements
-    pub struct vector_bool_int(i32, i32, i32, i32);
+    pub struct vector_bool_int(4 x i32);
     /// PowerPC-specific 128-bit wide vector of four packed `f32`
-    pub struct vector_float(f32, f32, f32, f32);
+    pub struct vector_float(4 x f32);
 }
 
 #[allow(improper_ctypes)]
 extern "C" {
     #[link_name = "llvm.ppc.altivec.lvx"]
     fn lvx(p: *const i8) -> vector_unsigned_int;
+
+    #[link_name = "llvm.ppc.altivec.lvebx"]
+    fn lvebx(p: *const i8) -> vector_signed_char;
+    #[link_name = "llvm.ppc.altivec.lvehx"]
+    fn lvehx(p: *const i8) -> vector_signed_short;
+    #[link_name = "llvm.ppc.altivec.lvewx"]
+    fn lvewx(p: *const i8) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.lvxl"]
+    fn lvxl(p: *const i8) -> vector_unsigned_int;
+
+    #[link_name = "llvm.ppc.altivec.stvx"]
+    fn stvx(a: vector_signed_int, p: *const i8);
+
+    #[link_name = "llvm.ppc.altivec.stvebx"]
+    fn stvebx(a: vector_signed_char, p: *const i8);
+    #[link_name = "llvm.ppc.altivec.stvehx"]
+    fn stvehx(a: vector_signed_short, p: *const i8);
+    #[link_name = "llvm.ppc.altivec.stvewx"]
+    fn stvewx(a: vector_signed_int, p: *const i8);
+
+    #[link_name = "llvm.ppc.altivec.stvxl"]
+    fn stvxl(a: vector_signed_int, p: *const i8);
+
     #[link_name = "llvm.ppc.altivec.vperm"]
     fn vperm(
         a: vector_signed_int,
@@ -178,6 +200,9 @@ extern "C" {
     #[link_name = "llvm.ppc.altivec.vsubuws"]
     fn vsubuws(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
 
+    #[link_name = "llvm.ppc.altivec.vsubcuw"]
+    fn vsubcuw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
+
     #[link_name = "llvm.ppc.altivec.vaddcuw"]
     fn vaddcuw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
 
@@ -222,6 +247,13 @@ extern "C" {
     #[link_name = "llvm.ppc.altivec.vcmpequw"]
     fn vcmpequw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_bool_int;
 
+    #[link_name = "llvm.ppc.altivec.vcmpneb"]
+    fn vcmpneb(a: vector_signed_char, b: vector_signed_char) -> vector_bool_char;
+    #[link_name = "llvm.ppc.altivec.vcmpneh"]
+    fn vcmpneh(a: vector_signed_short, b: vector_signed_short) -> vector_bool_short;
+    #[link_name = "llvm.ppc.altivec.vcmpnew"]
+    fn vcmpnew(a: vector_signed_int, b: vector_signed_int) -> vector_bool_int;
+
     #[link_name = "llvm.ppc.altivec.vcmpgefp"]
     fn vcmpgefp(a: vector_float, b: vector_float) -> vector_bool_int;
 
@@ -244,188 +276,186 @@ extern "C" {
 
     #[link_name = "llvm.floor.v4f32"]
     fn vfloor(a: vector_float) -> vector_float;
-}
 
-macro_rules! s_t_l {
-    (i32x4) => {
-        vector_signed_int
-    };
-    (i16x8) => {
-        vector_signed_short
-    };
-    (i8x16) => {
-        vector_signed_char
-    };
+    #[link_name = "llvm.ppc.altivec.vcmpequb.p"]
+    fn vcmpequb_p(cr: i32, a: vector_unsigned_char, b: vector_unsigned_char) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpequh.p"]
+    fn vcmpequh_p(cr: i32, a: vector_unsigned_short, b: vector_unsigned_short) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpequw.p"]
+    fn vcmpequw_p(cr: i32, a: vector_unsigned_int, b: vector_unsigned_int) -> i32;
 
-    (u32x4) => {
-        vector_unsigned_int
-    };
-    (u16x8) => {
-        vector_unsigned_short
-    };
-    (u8x16) => {
-        vector_unsigned_char
-    };
+    #[link_name = "llvm.ppc.altivec.vcmpeqfp.p"]
+    fn vcmpeqfp_p(cr: i32, a: vector_float, b: vector_float) -> i32;
 
-    (f32x4) => {
-        vector_float
-    };
-}
+    #[link_name = "llvm.ppc.altivec.vcmpgtub.p"]
+    fn vcmpgtub_p(cr: i32, a: vector_unsigned_char, b: vector_unsigned_char) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtuh.p"]
+    fn vcmpgtuh_p(cr: i32, a: vector_unsigned_short, b: vector_unsigned_short) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtuw.p"]
+    fn vcmpgtuw_p(cr: i32, a: vector_unsigned_int, b: vector_unsigned_int) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtsb.p"]
+    fn vcmpgtsb_p(cr: i32, a: vector_signed_char, b: vector_signed_char) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtsh.p"]
+    fn vcmpgtsh_p(cr: i32, a: vector_signed_short, b: vector_signed_short) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtsw.p"]
+    fn vcmpgtsw_p(cr: i32, a: vector_signed_int, b: vector_signed_int) -> i32;
 
-macro_rules! t_t_l {
-    (i32) => {
-        vector_signed_int
-    };
-    (i16) => {
-        vector_signed_short
-    };
-    (i8) => {
-        vector_signed_char
-    };
+    #[link_name = "llvm.ppc.altivec.vcmpgefp.p"]
+    fn vcmpgefp_p(cr: i32, a: vector_float, b: vector_float) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpgtfp.p"]
+    fn vcmpgtfp_p(cr: i32, a: vector_float, b: vector_float) -> i32;
+    #[link_name = "llvm.ppc.altivec.vcmpbfp.p"]
+    fn vcmpbfp_p(cr: i32, a: vector_float, b: vector_float) -> i32;
 
-    (u32) => {
-        vector_unsigned_int
-    };
-    (u16) => {
-        vector_unsigned_short
-    };
-    (u8) => {
-        vector_unsigned_char
-    };
+    #[link_name = "llvm.ppc.altivec.vcfsx"]
+    fn vcfsx(a: vector_signed_int, b: i32) -> vector_float;
+    #[link_name = "llvm.ppc.altivec.vcfux"]
+    fn vcfux(a: vector_unsigned_int, b: i32) -> vector_float;
 
-    (f32) => {
-        vector_float
-    };
-}
+    #[link_name = "llvm.ppc.altivec.vctsxs"]
+    fn vctsxs(a: vector_float, b: i32) -> vector_signed_int;
+    #[link_name = "llvm.ppc.altivec.vctuxs"]
+    fn vctuxs(a: vector_float, b: i32) -> vector_unsigned_int;
 
-macro_rules! impl_from {
-    ($s: ident) => {
-        impl From<$s> for s_t_l!($s) {
-            fn from (v: $s) -> Self {
-                unsafe {
-                    transmute(v)
-                }
-            }
-        }
-    };
-    ($($s: ident),*) => {
-        $(
-            impl_from! { $s }
-        )*
-    };
+    #[link_name = "llvm.ppc.altivec.vpkshss"]
+    fn vpkshss(a: vector_signed_short, b: vector_signed_short) -> vector_signed_char;
+    #[link_name = "llvm.ppc.altivec.vpkshus"]
+    fn vpkshus(a: vector_signed_short, b: vector_signed_short) -> vector_unsigned_char;
+    #[link_name = "llvm.ppc.altivec.vpkuhus"]
+    fn vpkuhus(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_char;
+    #[link_name = "llvm.ppc.altivec.vpkswss"]
+    fn vpkswss(a: vector_signed_int, b: vector_signed_int) -> vector_signed_short;
+    #[link_name = "llvm.ppc.altivec.vpkswus"]
+    fn vpkswus(a: vector_signed_int, b: vector_signed_int) -> vector_unsigned_short;
+    #[link_name = "llvm.ppc.altivec.vpkuwus"]
+    fn vpkuwus(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_short;
+
+    #[link_name = "llvm.ppc.altivec.vupkhsb"]
+    fn vupkhsb(a: vector_signed_char) -> vector_signed_short;
+    #[link_name = "llvm.ppc.altivec.vupklsb"]
+    fn vupklsb(a: vector_signed_char) -> vector_signed_short;
+
+    #[link_name = "llvm.ppc.altivec.vupkhsh"]
+    fn vupkhsh(a: vector_signed_short) -> vector_signed_int;
+    #[link_name = "llvm.ppc.altivec.vupklsh"]
+    fn vupklsh(a: vector_signed_short) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.mfvscr"]
+    fn mfvscr() -> vector_unsigned_short;
+
+    #[link_name = "llvm.ppc.altivec.vlogefp"]
+    fn vlogefp(a: vector_float) -> vector_float;
+
+    #[link_name = "llvm.ppc.altivec.sll"]
+    fn vsl(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
+    #[link_name = "llvm.ppc.altivec.slo"]
+    fn vslo(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.srab"]
+    fn vsrab(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char;
+    #[link_name = "llvm.ppc.altivec.srah"]
+    fn vsrah(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short;
+    #[link_name = "llvm.ppc.altivec.sraw"]
+    fn vsraw(a: vector_signed_int, b: vector_unsigned_int) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.srl"]
+    fn vsr(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
+    #[link_name = "llvm.ppc.altivec.sro"]
+    fn vsro(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.slv"]
+    fn vslv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
+    #[link_name = "llvm.ppc.altivec.srv"]
+    fn vsrv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
+
+    #[link_name = "llvm.ctlz.v16i8"]
+    fn vclzb(a: vector_signed_char) -> vector_signed_char;
+    #[link_name = "llvm.ctlz.v8i16"]
+    fn vclzh(a: vector_signed_short) -> vector_signed_short;
+    #[link_name = "llvm.ctlz.v4i32"]
+    fn vclzw(a: vector_signed_int) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.vrlb"]
+    fn vrlb(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char;
+    #[link_name = "llvm.ppc.altivec.vrlh"]
+    fn vrlh(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short;
+    #[link_name = "llvm.ppc.altivec.vrlw"]
+    fn vrlw(a: vector_signed_int, c: vector_unsigned_int) -> vector_signed_int;
+
+    #[link_name = "llvm.ppc.altivec.vrfin"]
+    fn vrfin(a: vector_float) -> vector_float;
 }
 
 impl_from! { i8x16, u8x16,  i16x8, u16x8, i32x4, u32x4, f32x4 }
-
-macro_rules! impl_neg {
-    ($s: ident : $zero: expr) => {
-        impl crate::ops::Neg for s_t_l!($s) {
-            type Output = s_t_l!($s);
-            fn neg(self) -> Self::Output {
-                let zero = $s::splat($zero);
-                unsafe { transmute(simd_sub(zero, transmute(self))) }
-            }
-        }
-    };
-}
 
 impl_neg! { i8x16 : 0 }
 impl_neg! { i16x8 : 0 }
 impl_neg! { i32x4 : 0 }
 impl_neg! { f32x4 : 0f32 }
 
+#[macro_use]
 mod sealed {
     use super::*;
 
-    macro_rules! test_impl {
-        ($fun:ident ($($v:ident : $ty:ty),*) -> $r:ty [$call:ident, $instr:ident]) => {
-            #[inline]
-            #[target_feature(enable = "altivec")]
-            #[cfg_attr(test, assert_instr($instr))]
-            pub unsafe fn $fun ($($v : $ty),*) -> $r {
-                $call ($($v),*)
-            }
-        };
-        ($fun:ident ($($v:ident : $ty:ty),*) -> $r:ty [$call:ident, $instr_altivec:ident / $instr_vsx:ident]) => {
-            #[inline]
-            #[target_feature(enable = "altivec")]
-            #[cfg_attr(all(test, not(target_feature="vsx")), assert_instr($instr_altivec))]
-            #[cfg_attr(all(test, target_feature="vsx"), assert_instr($instr_vsx))]
-            pub unsafe fn $fun ($($v : $ty),*) -> $r {
-                $call ($($v),*)
-            }
-        }
-
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorInsert {
+        type Scalar;
+        unsafe fn vec_insert<const IDX: u32>(self, s: Self::Scalar) -> Self;
     }
 
-    #[allow(unknown_lints, unused_macro_rules)]
-    macro_rules! impl_vec_trait {
-        ([$Trait:ident $m:ident] $fun:ident ($a:ty)) => {
-            impl $Trait for $a {
-                #[inline]
-                #[target_feature(enable = "altivec")]
-                unsafe fn $m(self) -> Self {
-                    $fun(transmute(self))
-                }
-            }
-        };
-        ([$Trait:ident $m:ident] $fun:ident ($a:ty) -> $r:ty) => {
-            impl $Trait for $a {
-                type Result = $r;
-                #[inline]
-                #[target_feature(enable = "altivec")]
-                unsafe fn $m(self) -> Self::Result {
-                    $fun(transmute(self))
-                }
-            }
-        };
-        ([$Trait:ident $m:ident] 1 ($ub:ident, $sb:ident, $uh:ident, $sh:ident, $uw:ident, $sw:ident, $sf: ident)) => {
-            impl_vec_trait!{ [$Trait $m] $ub (vector_unsigned_char) -> vector_unsigned_char }
-            impl_vec_trait!{ [$Trait $m] $sb (vector_signed_char) -> vector_signed_char }
-            impl_vec_trait!{ [$Trait $m] $uh (vector_unsigned_short) -> vector_unsigned_short }
-            impl_vec_trait!{ [$Trait $m] $sh (vector_signed_short) -> vector_signed_short }
-            impl_vec_trait!{ [$Trait $m] $uw (vector_unsigned_int) -> vector_unsigned_int }
-            impl_vec_trait!{ [$Trait $m] $sw (vector_signed_int) -> vector_signed_int }
-            impl_vec_trait!{ [$Trait $m] $sf (vector_float) -> vector_float }
-        };
-        ([$Trait:ident $m:ident] $fun:ident ($a:ty, $b:ty) -> $r:ty) => {
-            impl $Trait<$b> for $a {
-                type Result = $r;
-                #[inline]
-                #[target_feature(enable = "altivec")]
-                unsafe fn $m(self, b: $b) -> Self::Result {
-                    $fun(transmute(self), transmute(b))
-                }
-            }
-        };
-        ([$Trait:ident $m:ident] $fun:ident ($a:ty, ~$b:ty) -> $r:ty) => {
-            impl_vec_trait!{ [$Trait $m] $fun ($a, $a) -> $r }
-            impl_vec_trait!{ [$Trait $m] $fun ($a, $b) -> $r }
-            impl_vec_trait!{ [$Trait $m] $fun ($b, $a) -> $r }
-        };
-        ([$Trait:ident $m:ident] ~($ub:ident, $sb:ident, $uh:ident, $sh:ident, $uw:ident, $sw:ident)) => {
-            impl_vec_trait!{ [$Trait $m] $ub (vector_unsigned_char, ~vector_bool_char) -> vector_unsigned_char }
-            impl_vec_trait!{ [$Trait $m] $sb (vector_signed_char, ~vector_bool_char) -> vector_signed_char }
-            impl_vec_trait!{ [$Trait $m] $uh (vector_unsigned_short, ~vector_bool_short) -> vector_unsigned_short }
-            impl_vec_trait!{ [$Trait $m] $sh (vector_signed_short, ~vector_bool_short) -> vector_signed_short }
-            impl_vec_trait!{ [$Trait $m] $uw (vector_unsigned_int, ~vector_bool_int) -> vector_unsigned_int }
-            impl_vec_trait!{ [$Trait $m] $sw (vector_signed_int, ~vector_bool_int) -> vector_signed_int }
-        };
-        ([$Trait:ident $m:ident] ~($fn:ident)) => {
-            impl_vec_trait!{ [$Trait $m] ~($fn, $fn, $fn, $fn, $fn, $fn) }
-        };
-        ([$Trait:ident $m:ident] 2 ($ub:ident, $sb:ident, $uh:ident, $sh:ident, $uw:ident, $sw:ident)) => {
-            impl_vec_trait!{ [$Trait $m] $ub (vector_unsigned_char, vector_unsigned_char) -> vector_unsigned_char }
-            impl_vec_trait!{ [$Trait $m] $sb (vector_signed_char, vector_signed_char) -> vector_signed_char }
-            impl_vec_trait!{ [$Trait $m] $uh (vector_unsigned_short, vector_unsigned_short) -> vector_unsigned_short }
-            impl_vec_trait!{ [$Trait $m] $sh (vector_signed_short, vector_signed_short) -> vector_signed_short }
-            impl_vec_trait!{ [$Trait $m] $uw (vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_int }
-            impl_vec_trait!{ [$Trait $m] $sw (vector_signed_int, vector_signed_int) -> vector_signed_int }
-        };
-        ([$Trait:ident $m:ident] 2 ($fn:ident)) => {
-            impl_vec_trait!{ [$Trait $m] ($fn, $fn, $fn, $fn, $fn, $fn) }
-        }
+    const fn idx_in_vec<T, const IDX: u32>() -> u32 {
+        IDX & (16 / crate::mem::size_of::<T>() as u32)
     }
+
+    macro_rules! impl_vec_insert {
+        ($ty:ident) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorInsert for t_t_l!($ty) {
+                type Scalar = $ty;
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_insert<const IDX: u32>(self, s: Self::Scalar) -> Self {
+                    simd_insert(self, const { idx_in_vec::<Self::Scalar, IDX>() }, s)
+                }
+            }
+        };
+    }
+
+    impl_vec_insert! { i8 }
+    impl_vec_insert! { u8 }
+    impl_vec_insert! { i16 }
+    impl_vec_insert! { u16 }
+    impl_vec_insert! { i32 }
+    impl_vec_insert! { u32 }
+    impl_vec_insert! { f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorExtract {
+        type Scalar;
+        unsafe fn vec_extract<const IDX: u32>(self) -> Self::Scalar;
+    }
+
+    macro_rules! impl_vec_extract {
+        ($ty:ident) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorExtract for t_t_l!($ty) {
+                type Scalar = $ty;
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_extract<const IDX: u32>(self) -> Self::Scalar {
+                    simd_extract(self, const { idx_in_vec::<Self::Scalar, IDX>() })
+                }
+            }
+        };
+    }
+
+    impl_vec_extract! { i8 }
+    impl_vec_extract! { u8 }
+    impl_vec_extract! { i16 }
+    impl_vec_extract! { u16 }
+    impl_vec_extract! { i32 }
+    impl_vec_extract! { u32 }
+    impl_vec_extract! { f32 }
 
     macro_rules! impl_vec_cmp {
         ([$Trait:ident $m:ident] ($b:ident, $h:ident, $w:ident)) => {
@@ -441,50 +471,309 @@ mod sealed {
         }
     }
 
-    #[inline(always)]
-    unsafe fn load(off: i32, p: *const i8) -> u32x4 {
-        let addr = p.offset(off as isize);
-        transmute(lvx(addr))
+    macro_rules! impl_vec_any_all {
+        ([$Trait:ident $m:ident] ($b:ident, $h:ident, $w:ident)) => {
+            impl_vec_any_all! { [$Trait $m] ($b, $b, $h, $h, $w, $w) }
+        };
+        ([$Trait:ident $m:ident] ($ub:ident, $sb:ident, $uh:ident, $sh:ident, $uw:ident, $sw:ident)) => {
+            impl_vec_trait!{ [$Trait $m] $ub (vector_unsigned_char, vector_unsigned_char) -> bool }
+            impl_vec_trait!{ [$Trait $m] $sb (vector_signed_char, vector_signed_char) -> bool }
+            impl_vec_trait!{ [$Trait $m] $uh (vector_unsigned_short, vector_unsigned_short) -> bool }
+            impl_vec_trait!{ [$Trait $m] $sh (vector_signed_short, vector_signed_short) -> bool }
+            impl_vec_trait!{ [$Trait $m] $uw (vector_unsigned_int, vector_unsigned_int) -> bool }
+            impl_vec_trait!{ [$Trait $m] $sw (vector_signed_int, vector_signed_int) -> bool }
+        }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorLd {
         type Result;
-        unsafe fn vec_ld(self, off: i32) -> Self::Result;
+        unsafe fn vec_ld(self, off: isize) -> Self::Result;
+        unsafe fn vec_ldl(self, off: isize) -> Self::Result;
     }
 
     macro_rules! impl_vec_ld {
-        ($fun:ident $ty:ident [$instr:ident]) => {
+        ($fun:ident $fun_lru:ident $ty:ident) => {
             #[inline]
             #[target_feature(enable = "altivec")]
-            #[cfg_attr(test, assert_instr($instr))]
-            pub unsafe fn $fun(off: i32, p: *const $ty) -> t_t_l!($ty) {
-                transmute(load(off, p as *const i8))
+            #[cfg_attr(test, assert_instr(lvx))]
+            pub unsafe fn $fun(off: isize, p: *const $ty) -> t_t_l!($ty) {
+                let addr = (p as *const i8).offset(off);
+                transmute(lvx(addr))
             }
 
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr(lvxl))]
+            pub unsafe fn $fun_lru(off: isize, p: *const $ty) -> t_t_l!($ty) {
+                let addr = (p as *const i8).offset(off);
+                transmute(lvxl(addr))
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
             impl VectorLd for *const $ty {
                 type Result = t_t_l!($ty);
                 #[inline]
                 #[target_feature(enable = "altivec")]
-                unsafe fn vec_ld(self, off: i32) -> Self::Result {
+                unsafe fn vec_ld(self, off: isize) -> Self::Result {
                     $fun(off, self)
+                }
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_ldl(self, off: isize) -> Self::Result {
+                    $fun_lru(off, self)
                 }
             }
         };
-        ($fun:ident $ty:ident) => {
-            impl_vec_ld! { $fun $ty [lvx] }
+    }
+
+    impl_vec_ld! { vec_ld_u8 vec_ldl_u8 u8 }
+    impl_vec_ld! { vec_ld_i8 vec_ldl_i8 i8 }
+
+    impl_vec_ld! { vec_ld_u16 vec_ldl_u16 u16 }
+    impl_vec_ld! { vec_ld_i16 vec_ldl_i16 i16 }
+
+    impl_vec_ld! { vec_ld_u32 vec_ldl_u32 u32 }
+    impl_vec_ld! { vec_ld_i32 vec_ldl_i32 i32 }
+
+    impl_vec_ld! { vec_ld_f32 vec_ldl_f32 f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorLde {
+        type Result;
+        unsafe fn vec_lde(self, a: isize) -> Self::Result;
+    }
+
+    macro_rules! impl_vec_lde {
+        ($fun:ident $instr:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr($instr))]
+            pub unsafe fn $fun(a: isize, b: *const $ty) -> t_t_l!($ty) {
+                let addr = (b as *const i8).offset(a);
+                transmute($instr(addr))
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorLde for *const $ty {
+                type Result = t_t_l!($ty);
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_lde(self, a: isize) -> Self::Result {
+                    $fun(a, self)
+                }
+            }
         };
     }
 
-    impl_vec_ld! { vec_ld_u8 u8 }
-    impl_vec_ld! { vec_ld_i8 i8 }
+    impl_vec_lde! { vec_lde_u8 lvebx u8 }
+    impl_vec_lde! { vec_lde_i8 lvebx i8 }
 
-    impl_vec_ld! { vec_ld_u16 u16 }
-    impl_vec_ld! { vec_ld_i16 i16 }
+    impl_vec_lde! { vec_lde_u16 lvehx u16 }
+    impl_vec_lde! { vec_lde_i16 lvehx i16 }
 
-    impl_vec_ld! { vec_ld_u32 u32 }
-    impl_vec_ld! { vec_ld_i32 i32 }
+    impl_vec_lde! { vec_lde_u32 lvewx u32 }
+    impl_vec_lde! { vec_lde_i32 lvewx i32 }
 
-    impl_vec_ld! { vec_ld_f32 f32 }
+    impl_vec_lde! { vec_lde_f32 lvewx f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSt {
+        type Target;
+        unsafe fn vec_st(self, off: isize, p: Self::Target);
+        unsafe fn vec_stl(self, off: isize, p: Self::Target);
+    }
+
+    macro_rules! impl_vec_st {
+        ($fun:ident $fun_lru:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr(stvx))]
+            pub unsafe fn $fun(a: t_t_l!($ty), off: isize, p: *const $ty) {
+                let addr = (p as *const i8).offset(off);
+                stvx(transmute(a), addr)
+            }
+
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr(stvxl))]
+            pub unsafe fn $fun_lru(a: t_t_l!($ty), off: isize, p: *const $ty) {
+                let addr = (p as *const i8).offset(off as isize);
+                stvxl(transmute(a), addr)
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorSt for t_t_l!($ty) {
+                type Target = *const $ty;
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_st(self, off: isize, p: Self::Target) {
+                    $fun(self, off, p)
+                }
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_stl(self, off: isize, p: Self::Target) {
+                    $fun(self, off, p)
+                }
+            }
+        };
+    }
+
+    impl_vec_st! { vec_st_u8 vec_stl_u8 u8 }
+    impl_vec_st! { vec_st_i8 vec_stl_i8 i8 }
+
+    impl_vec_st! { vec_st_u16 vec_stl_u16 u16 }
+    impl_vec_st! { vec_st_i16 vec_stl_i16 i16 }
+
+    impl_vec_st! { vec_st_u32 vec_stl_u32 u32 }
+    impl_vec_st! { vec_st_i32 vec_stl_i32 i32 }
+
+    impl_vec_st! { vec_st_f32 vec_stl_f32 f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSte {
+        type Target;
+        unsafe fn vec_ste(self, off: isize, p: Self::Target);
+    }
+
+    macro_rules! impl_vec_ste {
+        ($fun:ident $instr:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr($instr))]
+            pub unsafe fn $fun(a: t_t_l!($ty), off: isize, p: *const $ty) {
+                let addr = (p as *const i8).offset(off);
+                $instr(transmute(a), addr)
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorSte for t_t_l!($ty) {
+                type Target = *const $ty;
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_ste(self, off: isize, p: Self::Target) {
+                    $fun(self, off, p)
+                }
+            }
+        };
+    }
+
+    impl_vec_ste! { vec_ste_u8 stvebx u8 }
+    impl_vec_ste! { vec_ste_i8 stvebx i8 }
+
+    impl_vec_ste! { vec_ste_u16 stvehx u16 }
+    impl_vec_ste! { vec_ste_i16 stvehx i16 }
+
+    impl_vec_ste! { vec_ste_u32 stvewx u32 }
+    impl_vec_ste! { vec_ste_i32 stvewx i32 }
+
+    impl_vec_ste! { vec_ste_f32 stvewx f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorXl {
+        type Result;
+        unsafe fn vec_xl(self, a: isize) -> Self::Result;
+    }
+
+    macro_rules! impl_vec_xl {
+        ($fun:ident $notpwr9:ident / $pwr9:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(
+                all(test, not(target_feature = "power9-altivec")),
+                assert_instr($notpwr9)
+            )]
+            #[cfg_attr(all(test, target_feature = "power9-altivec"), assert_instr($pwr9))]
+            pub unsafe fn $fun(a: isize, b: *const $ty) -> t_t_l!($ty) {
+                let addr = (b as *const u8).offset(a);
+
+                // Workaround ptr::copy_nonoverlapping not being inlined
+                extern "rust-intrinsic" {
+                    #[rustc_nounwind]
+                    pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
+                }
+
+                let mut r = mem::MaybeUninit::uninit();
+
+                copy_nonoverlapping(
+                    addr,
+                    r.as_mut_ptr() as *mut u8,
+                    mem::size_of::<t_t_l!($ty)>(),
+                );
+
+                r.assume_init()
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorXl for *const $ty {
+                type Result = t_t_l!($ty);
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_xl(self, a: isize) -> Self::Result {
+                    $fun(a, self)
+                }
+            }
+        };
+    }
+
+    impl_vec_xl! { vec_xl_i8 lxvd2x / lxv i8 }
+    impl_vec_xl! { vec_xl_u8 lxvd2x / lxv u8 }
+    impl_vec_xl! { vec_xl_i16 lxvd2x / lxv i16 }
+    impl_vec_xl! { vec_xl_u16 lxvd2x / lxv u16 }
+    impl_vec_xl! { vec_xl_i32 lxvd2x / lxv i32 }
+    impl_vec_xl! { vec_xl_u32 lxvd2x / lxv u32 }
+    impl_vec_xl! { vec_xl_f32 lxvd2x / lxv f32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorXst {
+        type Out;
+        unsafe fn vec_xst(self, a: isize, p: Self::Out);
+    }
+
+    macro_rules! impl_vec_xst {
+        ($fun:ident $notpwr9:ident / $pwr9:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(
+                all(test, not(target_feature = "power9-altivec")),
+                assert_instr($notpwr9)
+            )]
+            #[cfg_attr(all(test, target_feature = "power9-altivec"), assert_instr($pwr9))]
+            pub unsafe fn $fun(s: t_t_l!($ty), a: isize, b: *mut $ty) {
+                let addr = (b as *mut u8).offset(a);
+
+                // Workaround ptr::copy_nonoverlapping not being inlined
+                extern "rust-intrinsic" {
+                    #[rustc_nounwind]
+                    pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
+                }
+
+                copy_nonoverlapping(
+                    &s as *const _ as *const u8,
+                    addr,
+                    mem::size_of::<t_t_l!($ty)>(),
+                );
+            }
+
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorXst for t_t_l!($ty) {
+                type Out = *mut $ty;
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_xst(self, a: isize, b: Self::Out) {
+                    $fun(self, a, b)
+                }
+            }
+        };
+    }
+
+    impl_vec_xst! { vec_xst_i8 stxvd2x / stxv i8 }
+    impl_vec_xst! { vec_xst_u8 stxvd2x / stxv u8 }
+    impl_vec_xst! { vec_xst_i16 stxvd2x / stxv i16 }
+    impl_vec_xst! { vec_xst_u16 stxvd2x / stxv u16 }
+    impl_vec_xst! { vec_xst_i32 stxvd2x / stxv i32 }
+    impl_vec_xst! { vec_xst_u32 stxvd2x / stxv u32 }
+    impl_vec_xst! { vec_xst_f32 stxvd2x / stxv f32 }
 
     test_impl! { vec_floor(a: vector_float) -> vector_float [ vfloor, vrfim / xvrspim ] }
 
@@ -498,6 +787,7 @@ mod sealed {
     test_impl! { vec_vcmpgtsh(a: vector_signed_short, b: vector_signed_short) -> vector_bool_short [ vcmpgtsh, vcmpgtsh ] }
     test_impl! { vec_vcmpgtsw(a: vector_signed_int, b: vector_signed_int) -> vector_bool_int [ vcmpgtsw, vcmpgtsw ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorCmpGt<Other> {
         type Result;
         unsafe fn vec_cmpgt(self, b: Other) -> Self::Result;
@@ -511,6 +801,7 @@ mod sealed {
     test_impl! { vec_vcmpequh(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_bool_short [ vcmpequh, vcmpequh ] }
     test_impl! { vec_vcmpequw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_bool_int [ vcmpequw, vcmpequw ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorCmpEq<Other> {
         type Result;
         unsafe fn vec_cmpeq(self, b: Other) -> Self::Result;
@@ -518,7 +809,505 @@ mod sealed {
 
     impl_vec_cmp! { [VectorCmpEq vec_cmpeq] (vec_vcmpequb, vec_vcmpequh, vec_vcmpequw) }
 
+    macro_rules! impl_cmpne {
+        ($fun:ident ($ty:ident) -> $r:ident $([ $pwr9:ident ])? ) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            $( #[cfg_attr(all(test, target_feature = "power9-altivec"), assert_instr($pwr9))] )?
+            unsafe fn $fun(a: $ty, b: $ty) -> $r {
+                $( if cfg!(target_feature = "power9-altivec") {
+                    transmute($pwr9(transmute(a), transmute(b)))
+                } else )? {
+                    let zero = transmute(i32x4::new(0, 0, 0, 0));
+                    vec_nor(vec_cmpeq(a, b), zero)
+                }
+            }
+        };
+    }
+
+    impl_cmpne! { vec_vcmpneb(vector_signed_char) -> vector_bool_char [ vcmpneb ] }
+    impl_cmpne! { vec_vcmpneh(vector_signed_short) -> vector_bool_short [ vcmpneh ] }
+    impl_cmpne! { vec_vcmpnew(vector_signed_int) -> vector_bool_int [ vcmpnew ] }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorCmpNe<Other> {
+        type Result;
+        unsafe fn vec_cmpne(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_cmp! { [VectorCmpNe vec_cmpne] (vec_vcmpneb, vec_vcmpneh, vec_vcmpnew) }
+
     test_impl! { vec_vcmpbfp(a: vector_float, b: vector_float) -> vector_signed_int [vcmpbfp, vcmpbfp] }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequb.))]
+    unsafe fn vcmpequb_all(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpequb_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequb.))]
+    unsafe fn vcmpequb_any(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpequb_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequh.))]
+    unsafe fn vcmpequh_all(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpequh_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequh.))]
+    unsafe fn vcmpequh_any(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpequh_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequw.))]
+    unsafe fn vcmpequw_all(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpequw_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequw.))]
+    unsafe fn vcmpequw_any(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpequw_p(1, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAllEq<Other> {
+        type Result;
+        unsafe fn vec_all_eq(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAllEq vec_all_eq] (vcmpequb_all, vcmpequh_all, vcmpequw_all) }
+
+    // TODO: vsx encoding
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpeqfp.))]
+    unsafe fn vcmpeqfp_all(a: vector_float, b: vector_float) -> bool {
+        vcmpeqfp_p(2, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAllEq<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_all_eq(self, b: vector_float) -> Self::Result {
+            vcmpeqfp_all(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAnyEq<Other> {
+        type Result;
+        unsafe fn vec_any_eq(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAnyEq vec_any_eq] (vcmpequb_any, vcmpequh_any, vcmpequw_any) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpeqfp.))]
+    unsafe fn vcmpeqfp_any(a: vector_float, b: vector_float) -> bool {
+        vcmpeqfp_p(1, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAnyEq<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_any_eq(self, b: vector_float) -> Self::Result {
+            vcmpeqfp_any(self, b)
+        }
+    }
+
+    // All/Any GreaterEqual
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsb.))]
+    unsafe fn vcmpgesb_all(a: vector_signed_char, b: vector_signed_char) -> bool {
+        vcmpgtsb_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsb.))]
+    unsafe fn vcmpgesb_any(a: vector_signed_char, b: vector_signed_char) -> bool {
+        vcmpgtsb_p(3, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsh.))]
+    unsafe fn vcmpgesh_all(a: vector_signed_short, b: vector_signed_short) -> bool {
+        vcmpgtsh_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsh.))]
+    unsafe fn vcmpgesh_any(a: vector_signed_short, b: vector_signed_short) -> bool {
+        vcmpgtsh_p(3, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsw.))]
+    unsafe fn vcmpgesw_all(a: vector_signed_int, b: vector_signed_int) -> bool {
+        vcmpgtsw_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsw.))]
+    unsafe fn vcmpgesw_any(a: vector_signed_int, b: vector_signed_int) -> bool {
+        vcmpgtsw_p(3, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtub.))]
+    unsafe fn vcmpgeub_all(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpgtub_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtub.))]
+    unsafe fn vcmpgeub_any(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpgtub_p(3, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuh.))]
+    unsafe fn vcmpgeuh_all(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpgtuh_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuh.))]
+    unsafe fn vcmpgeuh_any(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpgtuh_p(3, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuw.))]
+    unsafe fn vcmpgeuw_all(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpgtuw_p(0, b, a) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuw.))]
+    unsafe fn vcmpgeuw_any(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpgtuw_p(3, b, a) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAllGe<Other> {
+        type Result;
+        unsafe fn vec_all_ge(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAllGe vec_all_ge] (
+        vcmpgeub_all, vcmpgesb_all,
+        vcmpgeuh_all, vcmpgesh_all,
+        vcmpgeuw_all, vcmpgesw_all
+    ) }
+
+    // TODO: vsx encoding
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgefp.))]
+    unsafe fn vcmpgefp_all(a: vector_float, b: vector_float) -> bool {
+        vcmpgefp_p(2, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAllGe<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_all_ge(self, b: vector_float) -> Self::Result {
+            vcmpgefp_all(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAnyGe<Other> {
+        type Result;
+        unsafe fn vec_any_ge(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAnyGe vec_any_ge] (
+        vcmpgeub_any, vcmpgesb_any,
+        vcmpgeuh_any, vcmpgesh_any,
+        vcmpgeuw_any, vcmpgesw_any
+    ) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgefp.))]
+    unsafe fn vcmpgefp_any(a: vector_float, b: vector_float) -> bool {
+        vcmpgefp_p(1, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAnyGe<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_any_ge(self, b: vector_float) -> Self::Result {
+            vcmpgefp_any(self, b)
+        }
+    }
+
+    // All/Any Greater Than
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsb.))]
+    unsafe fn vcmpgtsb_all(a: vector_signed_char, b: vector_signed_char) -> bool {
+        vcmpgtsb_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsb.))]
+    unsafe fn vcmpgtsb_any(a: vector_signed_char, b: vector_signed_char) -> bool {
+        vcmpgtsb_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsh.))]
+    unsafe fn vcmpgtsh_all(a: vector_signed_short, b: vector_signed_short) -> bool {
+        vcmpgtsh_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsh.))]
+    unsafe fn vcmpgtsh_any(a: vector_signed_short, b: vector_signed_short) -> bool {
+        vcmpgtsh_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsw.))]
+    unsafe fn vcmpgtsw_all(a: vector_signed_int, b: vector_signed_int) -> bool {
+        vcmpgtsw_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtsw.))]
+    unsafe fn vcmpgtsw_any(a: vector_signed_int, b: vector_signed_int) -> bool {
+        vcmpgtsw_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtub.))]
+    unsafe fn vcmpgtub_all(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpgtub_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtub.))]
+    unsafe fn vcmpgtub_any(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpgtub_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuh.))]
+    unsafe fn vcmpgtuh_all(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpgtuh_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuh.))]
+    unsafe fn vcmpgtuh_any(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpgtuh_p(1, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuw.))]
+    unsafe fn vcmpgtuw_all(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpgtuw_p(2, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtuw.))]
+    unsafe fn vcmpgtuw_any(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpgtuw_p(1, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAllGt<Other> {
+        type Result;
+        unsafe fn vec_all_gt(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAllGt vec_all_gt] (
+        vcmpgtub_all, vcmpgtsb_all,
+        vcmpgtuh_all, vcmpgtsh_all,
+        vcmpgtuw_all, vcmpgtsw_all
+    ) }
+
+    // TODO: vsx encoding
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtfp.))]
+    unsafe fn vcmpgtfp_all(a: vector_float, b: vector_float) -> bool {
+        vcmpgtfp_p(2, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAllGt<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_all_gt(self, b: vector_float) -> Self::Result {
+            vcmpgtfp_all(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAnyGt<Other> {
+        type Result;
+        unsafe fn vec_any_gt(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAnyGt vec_any_gt] (
+        vcmpgtub_any, vcmpgtsb_any,
+        vcmpgtuh_any, vcmpgtsh_any,
+        vcmpgtuw_any, vcmpgtsw_any
+    ) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpgtfp.))]
+    unsafe fn vcmpgtfp_any(a: vector_float, b: vector_float) -> bool {
+        vcmpgtfp_p(1, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAnyGt<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_any_gt(self, b: vector_float) -> Self::Result {
+            vcmpgtfp_any(self, b)
+        }
+    }
+
+    // All/Any Elements Not Equal
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequb.))]
+    unsafe fn vcmpneub_all(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpequb_p(0, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequb.))]
+    unsafe fn vcmpneub_any(a: vector_unsigned_char, b: vector_unsigned_char) -> bool {
+        vcmpequb_p(3, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequh.))]
+    unsafe fn vcmpneuh_all(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpequh_p(0, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequh.))]
+    unsafe fn vcmpneuh_any(a: vector_unsigned_short, b: vector_unsigned_short) -> bool {
+        vcmpequh_p(3, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequw.))]
+    unsafe fn vcmpneuw_all(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpequw_p(0, a, b) != 0
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpequw.))]
+    unsafe fn vcmpneuw_any(a: vector_unsigned_int, b: vector_unsigned_int) -> bool {
+        vcmpequw_p(3, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAllNe<Other> {
+        type Result;
+        unsafe fn vec_all_ne(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAllNe vec_all_ne] (vcmpneub_all, vcmpneuh_all, vcmpneuw_all) }
+
+    // TODO: vsx encoding
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpeqfp.))]
+    unsafe fn vcmpnefp_all(a: vector_float, b: vector_float) -> bool {
+        vcmpeqfp_p(0, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAllNe<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_all_ne(self, b: vector_float) -> Self::Result {
+            vcmpnefp_all(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAnyNe<Other> {
+        type Result;
+        unsafe fn vec_any_ne(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_any_all! { [VectorAnyNe vec_any_ne] (vcmpneub_any, vcmpneuh_any, vcmpneuw_any) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcmpeqfp.))]
+    unsafe fn vcmpnefp_any(a: vector_float, b: vector_float) -> bool {
+        vcmpeqfp_p(3, a, b) != 0
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAnyNe<vector_float> for vector_float {
+        type Result = bool;
+        #[inline]
+        unsafe fn vec_any_ne(self, b: vector_float) -> Self::Result {
+            vcmpnefp_any(self, b)
+        }
+    }
 
     test_impl! { vec_vceil(a: vector_float) -> vector_float [vceil, vrfip / xvrspip ] }
 
@@ -529,6 +1318,7 @@ mod sealed {
     test_impl! { vec_vavguh(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [ vavguh, vavguh ] }
     test_impl! { vec_vavguw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [ vavguw, vavguw ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAvg<Other> {
         type Result;
         unsafe fn vec_avg(self, b: Other) -> Self::Result;
@@ -540,42 +1330,41 @@ mod sealed {
     #[target_feature(enable = "altivec")]
     #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vandc))]
     #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxlandc))]
-    unsafe fn andc(a: u8x16, b: u8x16) -> u8x16 {
-        simd_and(simd_xor(u8x16::splat(0xff), b), a)
+    unsafe fn andc(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char {
+        let a = transmute(a);
+        let b = transmute(b);
+        transmute(simd_and(simd_xor(u8x16::splat(0xff), b), a))
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAndc<Other> {
         type Result;
         unsafe fn vec_andc(self, b: Other) -> Self::Result;
     }
 
-    macro_rules! impl_vec_andc {
-        (($a:ty, $b:ty) -> $r:ty) => {
-            impl VectorAndc<$b> for $a {
-                type Result = $r;
-                #[inline]
-                #[target_feature(enable = "altivec")]
-                unsafe fn vec_andc(self, b: $b) -> Self::Result {
-                    transmute(andc(transmute(self), transmute(b)))
-                }
-            }
-        };
-        (($a:ty, ~$b:ty) -> $r:ty) => {
-            impl_vec_andc! { ($a, $a) -> $r }
-            impl_vec_andc! { ($a, $b) -> $r }
-            impl_vec_andc! { ($b, $a) -> $r }
-        };
+    impl_vec_trait! { [VectorAndc vec_andc]+ 2b (andc) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vorc))]
+    #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxlorc))]
+    unsafe fn orc(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char {
+        let a = transmute(a);
+        let b = transmute(b);
+        transmute(simd_or(simd_xor(u8x16::splat(0xff), b), a))
     }
 
-    impl_vec_andc! { (vector_unsigned_char, ~vector_bool_char) -> vector_unsigned_char }
-    impl_vec_andc! { (vector_signed_char, ~vector_bool_char) -> vector_signed_char }
-    impl_vec_andc! { (vector_unsigned_short, ~vector_bool_short) -> vector_unsigned_short }
-    impl_vec_andc! { (vector_signed_short, ~vector_bool_short) -> vector_signed_short }
-    impl_vec_andc! { (vector_unsigned_int, ~vector_bool_int) -> vector_unsigned_int }
-    impl_vec_andc! { (vector_signed_int, ~vector_bool_int) -> vector_signed_int }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorOrc<Other> {
+        type Result;
+        unsafe fn vec_orc(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorOrc vec_orc]+ 2b (orc) }
 
     test_impl! { vec_vand(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char [ simd_and, vand / xxland ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAnd<Other> {
         type Result;
         unsafe fn vec_and(self, b: Other) -> Self::Result;
@@ -590,6 +1379,7 @@ mod sealed {
     test_impl! { vec_vadduhs(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [ vadduhs, vadduhs ] }
     test_impl! { vec_vadduws(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [ vadduws, vadduws ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAdds<Other> {
         type Result;
         unsafe fn vec_adds(self, b: Other) -> Self::Result;
@@ -606,6 +1396,7 @@ mod sealed {
     test_impl! { vec_vsubuhs(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [ vsubuhs, vsubuhs ] }
     test_impl! { vec_vsubuws(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [ vsubuws, vsubuws ] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorSubs<Other> {
         type Result;
         unsafe fn vec_subs(self, b: Other) -> Self::Result;
@@ -613,6 +1404,7 @@ mod sealed {
 
     impl_vec_trait! { [VectorSubs vec_subs] ~(vsububs, vsubsbs, vsubuhs, vsubshs, vsubuws, vsubsws) }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAbs {
         unsafe fn vec_abs(self) -> Self;
     }
@@ -643,6 +1435,7 @@ mod sealed {
 
     impl_vec_trait! { [VectorAbs vec_abs] vec_abs_f32 (vector_float) }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAbss {
         unsafe fn vec_abss(self) -> Self;
     }
@@ -664,6 +1457,96 @@ mod sealed {
     impl_abss! { vec_abss_i16, i16x8 }
     impl_abss! { vec_abss_i32, i32x4 }
 
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vspltb, IMM4 = 15))]
+    unsafe fn vspltb<const IMM4: u32>(a: vector_signed_char) -> vector_signed_char {
+        static_assert_uimm_bits!(IMM4, 4);
+        let b = u8x16::splat(IMM4 as u8);
+        vec_perm(a, a, transmute(b))
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vsplth, IMM3 = 7))]
+    unsafe fn vsplth<const IMM3: u32>(a: vector_signed_short) -> vector_signed_short {
+        static_assert_uimm_bits!(IMM3, 3);
+        let b0 = IMM3 as u8 * 2;
+        let b1 = b0 + 1;
+        let b = u8x16::new(
+            b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1,
+        );
+        vec_perm(a, a, transmute(b))
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vspltw, IMM2 = 3))]
+    #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxspltw, IMM2 = 3))]
+    unsafe fn vspltw<const IMM2: u32>(a: vector_signed_int) -> vector_signed_int {
+        static_assert_uimm_bits!(IMM2, 2);
+        let b0 = IMM2 as u8 * 4;
+        let b1 = b0 + 1;
+        let b2 = b0 + 2;
+        let b3 = b0 + 3;
+        let b = u8x16::new(
+            b0, b1, b2, b3, b0, b1, b2, b3, b0, b1, b2, b3, b0, b1, b2, b3,
+        );
+        vec_perm(a, a, transmute(b))
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSplat {
+        unsafe fn vec_splat<const IMM: u32>(self) -> Self;
+    }
+
+    macro_rules! impl_vec_splat {
+        ($ty:ty, $fun:ident) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorSplat for $ty {
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_splat<const IMM: u32>(self) -> Self {
+                    transmute($fun::<IMM>(transmute(self)))
+                }
+            }
+        };
+    }
+
+    impl_vec_splat! { vector_signed_char, vspltb }
+    impl_vec_splat! { vector_unsigned_char, vspltb }
+    impl_vec_splat! { vector_bool_char, vspltb }
+    impl_vec_splat! { vector_signed_short, vsplth }
+    impl_vec_splat! { vector_unsigned_short, vsplth }
+    impl_vec_splat! { vector_bool_short, vsplth }
+    impl_vec_splat! { vector_signed_int, vspltw }
+    impl_vec_splat! { vector_unsigned_int, vspltw }
+    impl_vec_splat! { vector_bool_int, vspltw }
+
+    macro_rules! splat {
+        ($name:ident, $v:ident, $r:ident [$instr_altivec:ident / $instr_pwr9:ident, $doc:literal]) => {
+            #[doc = $doc]
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(
+                all(test, not(target_feature = "vsx")),
+                assert_instr($instr_altivec, IMM5 = 1)
+            )]
+            #[cfg_attr(
+                all(test, target_feature = "power9-vector"),
+                assert_instr($instr_pwr9, IMM5 = 1)
+            )]
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            pub unsafe fn $name<const IMM5: i8>() -> s_t_l!($r) {
+                static_assert_simm_bits!(IMM5, 5);
+                transmute($r::splat(IMM5 as $v))
+            }
+        };
+        ($name:ident, $v:ident, $r:ident [$instr:ident, $doc:literal]) => {
+            splat! { $name, $v, $r [$instr / $instr, $doc] }
+        };
+    }
+
     macro_rules! splats {
         ($name:ident, $v:ident, $r:ident) => {
             #[inline]
@@ -684,12 +1567,13 @@ mod sealed {
 
     test_impl! { vec_splats_u8 (v: u8) -> vector_unsigned_char [splats_u8, vspltb] }
     test_impl! { vec_splats_u16 (v: u16) -> vector_unsigned_short [splats_u16, vsplth] }
-    test_impl! { vec_splats_u32 (v: u32) -> vector_unsigned_int [splats_u32, vspltw / xxspltw] }
+    test_impl! { vec_splats_u32 (v: u32) -> vector_unsigned_int [splats_u32, vspltw / xxspltw / mtvsrws] }
     test_impl! { vec_splats_i8 (v: i8) -> vector_signed_char [splats_i8, vspltb] }
     test_impl! { vec_splats_i16 (v: i16) -> vector_signed_short [splats_i16, vsplth] }
-    test_impl! { vec_splats_i32 (v: i32) -> vector_signed_int [splats_i32, vspltw / xxspltw] }
-    test_impl! { vec_splats_f32 (v: f32) -> vector_float [splats_f32, vspltw / xxspltw] }
+    test_impl! { vec_splats_i32 (v: i32) -> vector_signed_int [splats_i32, vspltw / xxspltw / mtvsrws] }
+    test_impl! { vec_splats_f32 (v: f32) -> vector_float [splats_f32, vspltw / xxspltw / mtvsrws] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorSplats {
         type Result;
         unsafe fn vec_splats(self) -> Self::Result;
@@ -717,6 +1601,7 @@ mod sealed {
     test_impl! { vec_vsubuhm (a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [simd_sub, vsubuhm] }
     test_impl! { vec_vsubuwm (a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [simd_sub, vsubuwm] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorSub<Other> {
         type Result;
         unsafe fn vec_sub(self, b: Other) -> Self::Result;
@@ -724,6 +1609,17 @@ mod sealed {
 
     impl_vec_trait! { [VectorSub vec_sub] ~(simd_sub, simd_sub, simd_sub, simd_sub, simd_sub, simd_sub) }
     impl_vec_trait! { [VectorSub vec_sub] simd_sub(vector_float, vector_float) -> vector_float }
+
+    test_impl! { vec_vsubcuw (a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [vsubcuw, vsubcuw] }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSubc<Other> {
+        type Result;
+        unsafe fn vec_subc(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! {[VectorSubc vec_subc]+ vec_vsubcuw(vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_int }
+    impl_vec_trait! {[VectorSubc vec_subc]+ vec_vsubcuw(vector_signed_int, vector_signed_int) -> vector_signed_int }
 
     test_impl! { vec_vminsb (a: vector_signed_char, b: vector_signed_char) -> vector_signed_char [vminsb, vminsb] }
     test_impl! { vec_vminsh (a: vector_signed_short, b: vector_signed_short) -> vector_signed_short [vminsh, vminsh] }
@@ -733,6 +1629,7 @@ mod sealed {
     test_impl! { vec_vminuh (a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [vminuh, vminuh] }
     test_impl! { vec_vminuw (a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [vminuw, vminuw] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMin<Other> {
         type Result;
         unsafe fn vec_min(self, b: Other) -> Self::Result;
@@ -748,6 +1645,7 @@ mod sealed {
     test_impl! { vec_vmaxuh (a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short [vmaxuh, vmaxuh] }
     test_impl! { vec_vmaxuw (a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int [vmaxuw, vmaxuw] }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMax<Other> {
         type Result;
         unsafe fn vec_max(self, b: Other) -> Self::Result;
@@ -786,10 +1684,58 @@ mod sealed {
         vmulesh(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorMul {
+        unsafe fn vec_mul(self, b: Self) -> Self;
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vmuluwm))]
+    unsafe fn vec_vmuluwm(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
+        transmute(simd_mul::<i32x4>(transmute(a), transmute(b)))
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(xvmulsp))]
+    unsafe fn vec_xvmulsp(a: vector_float, b: vector_float) -> vector_float {
+        transmute(simd_mul::<f32x4>(transmute(a), transmute(b)))
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorMul for vector_signed_int {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_mul(self, b: Self) -> Self {
+            vec_vmuluwm(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorMul for vector_unsigned_int {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_mul(self, b: Self) -> Self {
+            transmute(simd_mul::<u32x4>(transmute(self), transmute(b)))
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorMul for vector_float {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_mul(self, b: Self) -> Self {
+            vec_xvmulsp(self, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMule<Result> {
         unsafe fn vec_mule(self, b: Self) -> Result;
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMule<vector_unsigned_short> for vector_unsigned_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -797,6 +1743,7 @@ mod sealed {
             vmuleub(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMule<vector_signed_short> for vector_signed_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -804,6 +1751,7 @@ mod sealed {
             vmulesb(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMule<vector_unsigned_int> for vector_unsigned_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -811,6 +1759,7 @@ mod sealed {
             vmuleuh(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMule<vector_signed_int> for vector_signed_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -850,10 +1799,12 @@ mod sealed {
         vmulosh(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMulo<Result> {
         unsafe fn vec_mulo(self, b: Self) -> Result;
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMulo<vector_unsigned_short> for vector_unsigned_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -861,6 +1812,7 @@ mod sealed {
             vmuloub(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMulo<vector_signed_short> for vector_signed_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -868,6 +1820,7 @@ mod sealed {
             vmulosb(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMulo<vector_unsigned_int> for vector_unsigned_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -875,6 +1828,7 @@ mod sealed {
             vmulouh(self, b)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMulo<vector_signed_int> for vector_signed_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -904,10 +1858,12 @@ mod sealed {
         vsum4shs(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorSum4s<Other> {
         unsafe fn vec_sum4s(self, b: Other) -> Other;
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorSum4s<vector_unsigned_int> for vector_unsigned_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -916,6 +1872,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorSum4s<vector_signed_int> for vector_signed_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -924,6 +1881,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorSum4s<vector_signed_int> for vector_signed_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -997,10 +1955,12 @@ mod sealed {
         vmsumshm(a, b, c)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMsum<B, Other> {
         unsafe fn vec_msum(self, b: B, c: Other) -> Other;
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsum<vector_unsigned_char, vector_unsigned_int> for vector_unsigned_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1013,6 +1973,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsum<vector_unsigned_char, vector_signed_int> for vector_signed_char {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1025,6 +1986,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsum<vector_unsigned_short, vector_unsigned_int> for vector_unsigned_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1037,6 +1999,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsum<vector_signed_short, vector_signed_int> for vector_signed_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1071,10 +2034,12 @@ mod sealed {
         vmsumshs(a, b, c)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMsums<Other> {
         unsafe fn vec_msums(self, b: Self, c: Other) -> Other;
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsums<vector_unsigned_int> for vector_unsigned_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1083,6 +2048,7 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorMsums<vector_signed_int> for vector_signed_short {
         #[inline]
         #[target_feature(enable = "altivec")]
@@ -1102,12 +2068,14 @@ mod sealed {
         vperm(a, b, c)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorPerm {
         unsafe fn vec_vperm(self, b: Self, c: vector_unsigned_char) -> Self;
     }
 
     macro_rules! vector_perm {
         {$impl: ident} => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
             impl VectorPerm for $impl {
             #[inline]
             #[target_feature(enable = "altivec")]
@@ -1132,6 +2100,7 @@ mod sealed {
 
     vector_perm! { vector_float }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorAdd<Other> {
         type Result;
         unsafe fn vec_add(self, other: Other) -> Self::Result;
@@ -1143,6 +2112,7 @@ mod sealed {
     pub unsafe fn vec_add_bc_sc(a: vector_bool_char, b: vector_signed_char) -> vector_signed_char {
         simd_add(transmute(a), b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_char> for vector_bool_char {
         type Result = vector_signed_char;
         #[inline]
@@ -1151,6 +2121,7 @@ mod sealed {
             vec_add_bc_sc(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_char> for vector_signed_char {
         type Result = vector_signed_char;
         #[inline]
@@ -1169,6 +2140,7 @@ mod sealed {
     ) -> vector_signed_char {
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_char> for vector_signed_char {
         type Result = vector_signed_char;
         #[inline]
@@ -1187,6 +2159,7 @@ mod sealed {
     ) -> vector_unsigned_char {
         simd_add(transmute(a), b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_char> for vector_bool_char {
         type Result = vector_unsigned_char;
         #[inline]
@@ -1195,6 +2168,7 @@ mod sealed {
             vec_add_bc_uc(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_char> for vector_unsigned_char {
         type Result = vector_unsigned_char;
         #[inline]
@@ -1213,6 +2187,7 @@ mod sealed {
     ) -> vector_unsigned_char {
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_char> for vector_unsigned_char {
         type Result = vector_unsigned_char;
         #[inline]
@@ -1234,6 +2209,7 @@ mod sealed {
         simd_add(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_short> for vector_bool_short {
         type Result = vector_signed_short;
         #[inline]
@@ -1242,6 +2218,7 @@ mod sealed {
             vec_add_bs_ss(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_short> for vector_signed_short {
         type Result = vector_signed_short;
         #[inline]
@@ -1260,6 +2237,7 @@ mod sealed {
     ) -> vector_signed_short {
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_short> for vector_signed_short {
         type Result = vector_signed_short;
         #[inline]
@@ -1280,6 +2258,7 @@ mod sealed {
         let a: vector_unsigned_short = simd_cast(a);
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_short> for vector_bool_short {
         type Result = vector_unsigned_short;
         #[inline]
@@ -1288,6 +2267,7 @@ mod sealed {
             vec_add_bs_us(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_short> for vector_unsigned_short {
         type Result = vector_unsigned_short;
         #[inline]
@@ -1307,6 +2287,7 @@ mod sealed {
         simd_add(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_short> for vector_unsigned_short {
         type Result = vector_unsigned_short;
         #[inline]
@@ -1324,6 +2305,7 @@ mod sealed {
         let a: vector_signed_int = simd_cast(a);
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_int> for vector_bool_int {
         type Result = vector_signed_int;
         #[inline]
@@ -1332,6 +2314,7 @@ mod sealed {
             vec_add_bi_si(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_int> for vector_signed_int {
         type Result = vector_signed_int;
         #[inline]
@@ -1347,6 +2330,7 @@ mod sealed {
     pub unsafe fn vec_add_si_si(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_signed_int> for vector_signed_int {
         type Result = vector_signed_int;
         #[inline]
@@ -1364,6 +2348,7 @@ mod sealed {
         let a: vector_unsigned_int = simd_cast(a);
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_int> for vector_bool_int {
         type Result = vector_unsigned_int;
         #[inline]
@@ -1372,6 +2357,7 @@ mod sealed {
             vec_add_bi_ui(self, other)
         }
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_bool_int> for vector_unsigned_int {
         type Result = vector_unsigned_int;
         #[inline]
@@ -1390,6 +2376,7 @@ mod sealed {
     ) -> vector_unsigned_int {
         simd_add(a, b)
     }
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_unsigned_int> for vector_unsigned_int {
         type Result = vector_unsigned_int;
         #[inline]
@@ -1406,6 +2393,7 @@ mod sealed {
         simd_add(a, b)
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorAdd<vector_float> for vector_float {
         type Result = vector_float;
         #[inline]
@@ -1415,6 +2403,34 @@ mod sealed {
         }
     }
 
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorAdde {
+        unsafe fn vec_adde(self, b: Self, c: Self) -> Self;
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAdde for vector_unsigned_int {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_adde(self, b: Self, c: Self) -> Self {
+            let mask: vector_unsigned_int = transmute(u32x4::new(1, 1, 1, 1));
+            let carry = vec_and(c, mask);
+            vec_add(vec_add(self, b), carry)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorAdde for vector_signed_int {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_adde(self, b: Self, c: Self) -> Self {
+            let mask: vector_signed_int = transmute(i32x4::new(1, 1, 1, 1));
+            let carry = vec_and(c, mask);
+            vec_add(vec_add(self, b), carry)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorMladd<Other> {
         type Result;
         unsafe fn vec_mladd(self, b: Other, c: Other) -> Self::Result;
@@ -1423,20 +2439,28 @@ mod sealed {
     #[inline]
     #[target_feature(enable = "altivec")]
     #[cfg_attr(test, assert_instr(vmladduhm))]
-    unsafe fn mladd(a: i16x8, b: i16x8, c: i16x8) -> i16x8 {
-        simd_add(simd_mul(a, b), c)
+    unsafe fn mladd(
+        a: vector_signed_short,
+        b: vector_signed_short,
+        c: vector_signed_short,
+    ) -> vector_signed_short {
+        let a: i16x8 = transmute(a);
+        let b: i16x8 = transmute(b);
+        let c: i16x8 = transmute(c);
+        transmute(simd_add(simd_mul(a, b), c))
     }
 
     macro_rules! vector_mladd {
         ($a: ident, $bc: ident, $d: ident) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
             impl VectorMladd<$bc> for $a {
                 type Result = $d;
                 #[inline]
                 #[target_feature(enable = "altivec")]
                 unsafe fn vec_mladd(self, b: $bc, c: $bc) -> Self::Result {
-                    let a: i16x8 = transmute(self);
-                    let b: i16x8 = transmute(b);
-                    let c: i16x8 = transmute(c);
+                    let a = transmute(self);
+                    let b = transmute(b);
+                    let c = transmute(c);
 
                     transmute(mladd(a, b, c))
                 }
@@ -1448,21 +2472,1228 @@ mod sealed {
     vector_mladd! { vector_unsigned_short, vector_signed_short, vector_signed_short }
     vector_mladd! { vector_signed_short, vector_unsigned_short, vector_signed_short }
     vector_mladd! { vector_signed_short, vector_signed_short, vector_signed_short }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorOr<Other> {
+        type Result;
+        unsafe fn vec_or(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorOr vec_or] ~(simd_or) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorXor<Other> {
+        type Result;
+        unsafe fn vec_xor(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorXor vec_xor] ~(simd_xor) }
+
+    macro_rules! vector_vnor {
+        ($fun:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vnor))]
+            #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxlnor))]
+            pub unsafe fn $fun(a: t_t_l!($ty), b: t_t_l!($ty)) -> t_t_l!($ty) {
+                let o = vec_splats(!0 as $ty);
+                vec_xor(vec_or(a, b), o)
+            }
+        };
+    }
+
+    vector_vnor! { vec_vnorsb i8 }
+    vector_vnor! { vec_vnorsh i16 }
+    vector_vnor! { vec_vnorsw i32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorNor<Other> {
+        type Result;
+        unsafe fn vec_nor(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorNor vec_nor]+ 2b (vec_vnorsb, vec_vnorsh, vec_vnorsw) }
+
+    macro_rules! vector_vnand {
+        ($fun:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vnand))]
+            #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxlnand))]
+            pub unsafe fn $fun(a: t_t_l!($ty), b: t_t_l!($ty)) -> t_t_l!($ty) {
+                let o = vec_splats(!0 as $ty);
+                vec_xor(vec_and(a, b), o)
+            }
+        };
+    }
+
+    vector_vnand! { vec_vnandsb i8 }
+    vector_vnand! { vec_vnandsh i16 }
+    vector_vnand! { vec_vnandsw i32 }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorNand<Other> {
+        type Result;
+        unsafe fn vec_nand(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorNand vec_nand]+ 2b (vec_vnandsb, vec_vnandsh, vec_vnandsw) }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, not(target_feature = "vsx")), assert_instr(vsel))]
+    #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxsel))]
+    pub unsafe fn vec_vsel(
+        a: vector_signed_char,
+        b: vector_signed_char,
+        c: vector_signed_char,
+    ) -> vector_signed_char {
+        let a: i8x16 = transmute(a);
+        let b: i8x16 = transmute(b);
+        let c: i8x16 = transmute(c);
+        let not_c = simd_xor(c, i8x16::splat(!0));
+
+        transmute(simd_or(simd_and(a, not_c), simd_and(b, c)))
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSel<Mask> {
+        unsafe fn vec_sel(self, b: Self, c: Mask) -> Self;
+    }
+
+    macro_rules! vector_sel {
+        ($ty: ty, $m: ty) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorSel<$m> for $ty {
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_sel(self, b: Self, c: $m) -> Self {
+                    let a = transmute(self);
+                    let b = transmute(b);
+                    let c = transmute(c);
+
+                    transmute(vec_vsel(a, b, c))
+                }
+            }
+        };
+        ($ty: ident) => {
+            vector_sel! { $ty, t_b!{ $ty } }
+            vector_sel! { $ty, t_u!{ $ty } }
+            vector_sel! { t_u!{ $ty }, t_b!{ $ty } }
+            vector_sel! { t_u!{ $ty }, t_u!{ $ty } }
+            vector_sel! { t_b!{ $ty }, t_b!{ $ty } }
+            vector_sel! { t_b!{ $ty }, t_u!{ $ty } }
+        };
+        (- $ty: ident) => {
+            vector_sel! { $ty, t_b!{ $ty } }
+            vector_sel! { $ty, t_u!{ $ty } }
+        };
+    }
+
+    vector_sel! { vector_signed_char }
+    vector_sel! { vector_signed_short }
+    vector_sel! { vector_signed_int }
+    vector_sel! {- vector_float }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcfsx, IMM5 = 1))]
+    unsafe fn vec_ctf_i32<const IMM5: i32>(a: vector_signed_int) -> vector_float {
+        static_assert_uimm_bits!(IMM5, 5);
+        vcfsx(a, IMM5)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vcfux, IMM5 = 1))]
+    unsafe fn vec_ctf_u32<const IMM5: i32>(a: vector_unsigned_int) -> vector_float {
+        static_assert_uimm_bits!(IMM5, 5);
+        vcfux(a, IMM5)
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorCtf {
+        unsafe fn vec_ctf<const IMM5: i32>(self) -> vector_float;
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorCtf for vector_signed_int {
+        unsafe fn vec_ctf<const IMM5: i32>(self) -> vector_float {
+            vec_ctf_i32::<IMM5>(self)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorCtf for vector_unsigned_int {
+        unsafe fn vec_ctf<const IMM5: i32>(self) -> vector_float {
+            vec_ctf_u32::<IMM5>(self)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, target_endian = "little"), assert_instr(vmrghb))]
+    #[cfg_attr(all(test, target_endian = "big"), assert_instr(vmrglb))]
+    unsafe fn vec_vmrglb(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char {
+        let mergel_perm = transmute(u8x16::new(
+            0x08, 0x18, 0x09, 0x19, 0x0A, 0x1A, 0x0B, 0x1B, 0x0C, 0x1C, 0x0D, 0x1D, 0x0E, 0x1E,
+            0x0F, 0x1F,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, target_endian = "little"), assert_instr(vmrghh))]
+    #[cfg_attr(all(test, target_endian = "big"), assert_instr(vmrglh))]
+    unsafe fn vec_vmrglh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_short {
+        let mergel_perm = transmute(u8x16::new(
+            0x08, 0x09, 0x18, 0x19, 0x0A, 0x0B, 0x1A, 0x1B, 0x0C, 0x0D, 0x1C, 0x1D, 0x0E, 0x0F,
+            0x1E, 0x1F,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(
+        all(test, target_endian = "little", not(target_feature = "vsx")),
+        assert_instr(vmrghw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "little", target_feature = "vsx"),
+        assert_instr(xxmrghw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "big", not(target_feature = "vsx")),
+        assert_instr(vmrglw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "big", target_feature = "vsx"),
+        assert_instr(xxmrglw)
+    )]
+    unsafe fn vec_vmrglw(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
+        let mergel_perm = transmute(u8x16::new(
+            0x08, 0x09, 0x0A, 0x0B, 0x18, 0x19, 0x1A, 0x1B, 0x0C, 0x0D, 0x0E, 0x0F, 0x1C, 0x1D,
+            0x1E, 0x1F,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, target_endian = "little"), assert_instr(vmrglb))]
+    #[cfg_attr(all(test, target_endian = "big"), assert_instr(vmrghb))]
+    unsafe fn vec_vmrghb(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char {
+        let mergel_perm = transmute(u8x16::new(
+            0x00, 0x10, 0x01, 0x11, 0x02, 0x12, 0x03, 0x13, 0x04, 0x14, 0x05, 0x15, 0x06, 0x16,
+            0x07, 0x17,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(all(test, target_endian = "little"), assert_instr(vmrglh))]
+    #[cfg_attr(all(test, target_endian = "big"), assert_instr(vmrghh))]
+    unsafe fn vec_vmrghh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_short {
+        let mergel_perm = transmute(u8x16::new(
+            0x00, 0x01, 0x10, 0x11, 0x02, 0x03, 0x12, 0x13, 0x04, 0x05, 0x14, 0x15, 0x06, 0x07,
+            0x16, 0x17,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(
+        all(test, target_endian = "little", not(target_feature = "vsx")),
+        assert_instr(vmrglw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "little", target_feature = "vsx"),
+        assert_instr(xxmrglw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "big", not(target_feature = "vsx")),
+        assert_instr(vmrghw)
+    )]
+    #[cfg_attr(
+        all(test, target_endian = "big", target_feature = "vsx"),
+        assert_instr(xxmrghw)
+    )]
+    unsafe fn vec_vmrghw(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
+        let mergel_perm = transmute(u8x16::new(
+            0x00, 0x01, 0x02, 0x03, 0x10, 0x11, 0x12, 0x13, 0x04, 0x05, 0x06, 0x07, 0x14, 0x15,
+            0x16, 0x17,
+        ));
+        vec_perm(a, b, mergel_perm)
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorMergeh<Other> {
+        type Result;
+        unsafe fn vec_mergeh(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorMergeh vec_mergeh]+ 2b (vec_vmrghb, vec_vmrghh, vec_vmrghw) }
+    impl_vec_trait! { [VectorMergeh vec_mergeh]+ vec_vmrghw (vector_float, vector_float) -> vector_float }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorMergel<Other> {
+        type Result;
+        unsafe fn vec_mergel(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorMergel vec_mergel]+ 2b (vec_vmrglb, vec_vmrglh, vec_vmrglw) }
+    impl_vec_trait! { [VectorMergel vec_mergel]+ vec_vmrglw (vector_float, vector_float) -> vector_float }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkuhum))]
+    unsafe fn vec_vpkuhum(a: vector_signed_short, b: vector_signed_short) -> vector_signed_char {
+        let pack_perm = if cfg!(target_endian = "little") {
+            transmute(u8x16::new(
+                0x00, 0x02, 0x04, 0x06, 0x08, 0x0A, 0x0C, 0x0E, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1A,
+                0x1C, 0x1E,
+            ))
+        } else {
+            transmute(u8x16::new(
+                0x01, 0x03, 0x05, 0x07, 0x09, 0x0B, 0x0D, 0x0F, 0x11, 0x13, 0x15, 0x17, 0x19, 0x1B,
+                0x1D, 0x1F,
+            ))
+        };
+
+        transmute(vec_perm(a, b, pack_perm))
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkuwum))]
+    unsafe fn vec_vpkuwum(a: vector_signed_int, b: vector_signed_int) -> vector_signed_short {
+        let pack_perm = if cfg!(target_endian = "little") {
+            transmute(u8x16::new(
+                0x00, 0x01, 0x04, 0x05, 0x08, 0x09, 0x0C, 0x0D, 0x10, 0x11, 0x14, 0x15, 0x18, 0x19,
+                0x1C, 0x1D,
+            ))
+        } else {
+            transmute(u8x16::new(
+                0x02, 0x03, 0x06, 0x07, 0x0A, 0x0B, 0x0E, 0x0F, 0x12, 0x13, 0x16, 0x17, 0x1A, 0x1B,
+                0x1E, 0x1F,
+            ))
+        };
+
+        transmute(vec_perm(a, b, pack_perm))
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorPack<Other> {
+        type Result;
+        unsafe fn vec_pack(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuhum (vector_signed_short, vector_signed_short) -> vector_signed_char }
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuhum (vector_unsigned_short, vector_unsigned_short) -> vector_unsigned_char }
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuhum (vector_bool_short, vector_bool_short) -> vector_bool_char }
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuwum (vector_signed_int, vector_signed_int) -> vector_signed_short }
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuwum (vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_short }
+    impl_vec_trait! { [VectorPack vec_pack]+ vec_vpkuwum (vector_bool_int, vector_bool_int) -> vector_bool_short }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkshss))]
+    unsafe fn vec_vpkshss(a: vector_signed_short, b: vector_signed_short) -> vector_signed_char {
+        if cfg!(target_endian = "little") {
+            vpkshss(b, a)
+        } else {
+            vpkshss(a, b)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkshus))]
+    unsafe fn vec_vpkshus(a: vector_signed_short, b: vector_signed_short) -> vector_unsigned_char {
+        if cfg!(target_endian = "little") {
+            vpkshus(b, a)
+        } else {
+            vpkshus(a, b)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkuhus))]
+    unsafe fn vec_vpkuhus(
+        a: vector_unsigned_short,
+        b: vector_unsigned_short,
+    ) -> vector_unsigned_char {
+        if cfg!(target_endian = "little") {
+            vpkuhus(b, a)
+        } else {
+            vpkuhus(a, b)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkswss))]
+    unsafe fn vec_vpkswss(a: vector_signed_int, b: vector_signed_int) -> vector_signed_short {
+        if cfg!(target_endian = "little") {
+            vpkswss(b, a)
+        } else {
+            vpkswss(a, b)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkswus))]
+    unsafe fn vec_vpkswus(a: vector_signed_int, b: vector_signed_int) -> vector_unsigned_short {
+        if cfg!(target_endian = "little") {
+            vpkswus(b, a)
+        } else {
+            vpkswus(a, b)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vpkuwus))]
+    unsafe fn vec_vpkuwus(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_short {
+        if cfg!(target_endian = "little") {
+            vpkuwus(b, a)
+        } else {
+            vpkuwus(a, b)
+        }
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorPacks<Other> {
+        type Result;
+        unsafe fn vec_packs(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorPacks vec_packs] vec_vpkshss (vector_signed_short, vector_signed_short) -> vector_signed_char }
+    impl_vec_trait! { [VectorPacks vec_packs] vec_vpkuhus (vector_unsigned_short, vector_unsigned_short) -> vector_unsigned_char }
+    impl_vec_trait! { [VectorPacks vec_packs] vec_vpkswss (vector_signed_int, vector_signed_int) -> vector_signed_short }
+    impl_vec_trait! { [VectorPacks vec_packs] vec_vpkuwus (vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_short }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorPacksu<Other> {
+        type Result;
+        unsafe fn vec_packsu(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorPacksu vec_packsu] vec_vpkshus (vector_signed_short, vector_signed_short) -> vector_unsigned_char }
+    impl_vec_trait! { [VectorPacksu vec_packsu] vec_vpkuhus (vector_unsigned_short, vector_unsigned_short) -> vector_unsigned_char }
+    impl_vec_trait! { [VectorPacksu vec_packsu] vec_vpkswus (vector_signed_int, vector_signed_int) -> vector_unsigned_short }
+    impl_vec_trait! { [VectorPacksu vec_packsu] vec_vpkuwus (vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_short }
+
+    macro_rules! impl_vec_unpack {
+        ($fun:ident ($a:ident) -> $r:ident [$little:ident, $big:ident]) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(all(test, target_endian = "little"), assert_instr($little))]
+            #[cfg_attr(all(test, target_endian = "big"), assert_instr($big))]
+            unsafe fn $fun(a: $a) -> $r {
+                if cfg!(target_endian = "little") {
+                    $little(a)
+                } else {
+                    $big(a)
+                }
+            }
+        };
+    }
+
+    impl_vec_unpack! { vec_vupkhsb (vector_signed_char) -> vector_signed_short [vupklsb, vupkhsb] }
+    impl_vec_unpack! { vec_vupklsb (vector_signed_char) -> vector_signed_short [vupkhsb, vupklsb] }
+    impl_vec_unpack! { vec_vupkhsh (vector_signed_short) -> vector_signed_int [vupklsh, vupkhsh] }
+    impl_vec_unpack! { vec_vupklsh (vector_signed_short) -> vector_signed_int [vupkhsh, vupklsh] }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorUnpackh {
+        type Result;
+        unsafe fn vec_unpackh(self) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorUnpackh vec_unpackh] vec_vupkhsb (vector_signed_char) -> vector_signed_short }
+    impl_vec_trait! { [VectorUnpackh vec_unpackh]+ vec_vupkhsb (vector_bool_char) -> vector_bool_short }
+    impl_vec_trait! { [VectorUnpackh vec_unpackh] vec_vupkhsh (vector_signed_short) -> vector_signed_int }
+    impl_vec_trait! { [VectorUnpackh vec_unpackh]+ vec_vupkhsh (vector_bool_short) -> vector_bool_int }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorUnpackl {
+        type Result;
+        unsafe fn vec_unpackl(self) -> Self::Result;
+    }
+
+    impl_vec_trait! { [VectorUnpackl vec_unpackl] vec_vupklsb (vector_signed_char) -> vector_signed_short }
+    impl_vec_trait! { [VectorUnpackl vec_unpackl]+ vec_vupklsb (vector_bool_char) -> vector_bool_short }
+    impl_vec_trait! { [VectorUnpackl vec_unpackl] vec_vupklsh (vector_signed_short) -> vector_signed_int }
+    impl_vec_trait! { [VectorUnpackl vec_unpackl]+ vec_vupklsh (vector_bool_short) -> vector_bool_int }
+
+    macro_rules! impl_vec_shift {
+        ([$Trait:ident $m:ident] ($b:ident, $h:ident, $w:ident)) => {
+            impl_vec_trait!{ [$Trait $m]+ $b (vector_unsigned_char, vector_unsigned_char) -> vector_unsigned_char }
+            impl_vec_trait!{ [$Trait $m]+ $b (vector_signed_char, vector_unsigned_char) -> vector_signed_char }
+            impl_vec_trait!{ [$Trait $m]+ $h (vector_unsigned_short, vector_unsigned_short) -> vector_unsigned_short }
+            impl_vec_trait!{ [$Trait $m]+ $h (vector_signed_short, vector_unsigned_short) -> vector_signed_short }
+            impl_vec_trait!{ [$Trait $m]+ $w (vector_unsigned_int, vector_unsigned_int) -> vector_unsigned_int }
+            impl_vec_trait!{ [$Trait $m]+ $w (vector_signed_int, vector_unsigned_int) -> vector_signed_int }
+        };
+    }
+
+    macro_rules! impl_shift {
+        ($fun:ident $intr:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr($fun))]
+            unsafe fn $fun(a: t_t_l!($ty), b: t_t_l!($ty)) -> t_t_l!($ty) {
+                let a = transmute(a);
+                let b = simd_rem(
+                    transmute(b),
+                    <t_t_s!($ty)>::splat(mem::size_of::<$ty>() as $ty * $ty::BITS as $ty),
+                );
+
+                transmute($intr(a, b))
+            }
+        };
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSl<Other> {
+        type Result;
+        unsafe fn vec_sl(self, b: Other) -> Self::Result;
+    }
+
+    impl_shift! { vslb simd_shl u8 }
+    impl_shift! { vslh simd_shl u16 }
+    impl_shift! { vslw simd_shl u32 }
+
+    impl_vec_shift! { [VectorSl vec_sl] (vslb, vslh, vslw) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSr<Other> {
+        type Result;
+        unsafe fn vec_sr(self, b: Other) -> Self::Result;
+    }
+
+    impl_shift! { vsrb simd_shr u8 }
+    impl_shift! { vsrh simd_shr u16 }
+    impl_shift! { vsrw simd_shr u32 }
+
+    impl_vec_shift! { [VectorSr vec_sr] (vsrb, vsrh, vsrw) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSra<Other> {
+        type Result;
+        unsafe fn vec_sra(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_shift! { [VectorSra vec_sra] (vsrab, vsrah, vsraw) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSld {
+        unsafe fn vec_sld<const UIMM4: i32>(self, b: Self) -> Self;
+        unsafe fn vec_sldw<const UIMM2: i32>(self, b: Self) -> Self;
+    }
+
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(vsldoi, UIMM4 = 1))]
+    unsafe fn vsldoi<const UIMM4: i32>(
+        a: vector_unsigned_char,
+        b: vector_unsigned_char,
+    ) -> vector_unsigned_char {
+        static_assert_uimm_bits!(UIMM4, 4);
+        let d = UIMM4 as u8;
+        if cfg!(target_endian = "little") {
+            let perm = u8x16::new(
+                16 - d,
+                17 - d,
+                18 - d,
+                19 - d,
+                20 - d,
+                21 - d,
+                22 - d,
+                23 - d,
+                24 - d,
+                25 - d,
+                26 - d,
+                27 - d,
+                28 - d,
+                29 - d,
+                30 - d,
+                31 - d,
+            );
+
+            vec_perm(b, a, transmute(perm))
+        } else {
+            let perm = u8x16::new(
+                d,
+                d + 1,
+                d + 2,
+                d + 3,
+                d + 4,
+                d + 5,
+                d + 6,
+                d + 7,
+                d + 8,
+                d + 9,
+                d + 10,
+                d + 11,
+                d + 12,
+                d + 13,
+                d + 14,
+                d + 15,
+            );
+            vec_perm(a, b, transmute(perm))
+        }
+    }
+
+    // TODO: collapse the two once generic_const_exprs are usable.
+    #[inline]
+    #[target_feature(enable = "altivec")]
+    #[cfg_attr(test, assert_instr(xxsldwi, UIMM2 = 1))]
+    unsafe fn xxsldwi<const UIMM2: i32>(
+        a: vector_unsigned_char,
+        b: vector_unsigned_char,
+    ) -> vector_unsigned_char {
+        static_assert_uimm_bits!(UIMM2, 2);
+        let d = (UIMM2 << 2) as u8;
+        if cfg!(target_endian = "little") {
+            let perm = u8x16::new(
+                16 - d,
+                17 - d,
+                18 - d,
+                19 - d,
+                20 - d,
+                21 - d,
+                22 - d,
+                23 - d,
+                24 - d,
+                25 - d,
+                26 - d,
+                27 - d,
+                28 - d,
+                29 - d,
+                30 - d,
+                31 - d,
+            );
+
+            vec_perm(b, a, transmute(perm))
+        } else {
+            let perm = u8x16::new(
+                d,
+                d + 1,
+                d + 2,
+                d + 3,
+                d + 4,
+                d + 5,
+                d + 6,
+                d + 7,
+                d + 8,
+                d + 9,
+                d + 10,
+                d + 11,
+                d + 12,
+                d + 13,
+                d + 14,
+                d + 15,
+            );
+            vec_perm(a, b, transmute(perm))
+        }
+    }
+
+    macro_rules! impl_vec_sld {
+        ($($ty:ident),+) => { $(
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorSld for $ty {
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_sld<const UIMM4: i32>(self, b: Self) -> Self {
+                    transmute(vsldoi::<UIMM4>(transmute(self), transmute(b)))
+                }
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_sldw<const UIMM2: i32>(self, b: Self) -> Self {
+                    transmute(xxsldwi::<UIMM2>(transmute(self), transmute(b)))
+                }
+           }
+        )+ };
+    }
+
+    impl_vec_sld! { vector_bool_char, vector_signed_char, vector_unsigned_char }
+    impl_vec_sld! { vector_bool_short, vector_signed_short, vector_unsigned_short }
+    impl_vec_sld! { vector_bool_int, vector_signed_int, vector_unsigned_int }
+    impl_vec_sld! { vector_float }
+
+    macro_rules! impl_vec_shift_long {
+        ([$Trait:ident $m:ident] ($f:ident)) => {
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_char, vector_unsigned_char) -> vector_unsigned_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_char, vector_unsigned_char) -> vector_signed_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_short, vector_unsigned_char) -> vector_unsigned_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_short, vector_unsigned_char) -> vector_signed_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_int, vector_unsigned_char) -> vector_unsigned_int }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_int, vector_unsigned_char) -> vector_signed_int }
+        };
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSll<Other> {
+        type Result;
+        unsafe fn vec_sll(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_shift_long! { [VectorSll vec_sll] (vsl) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSrl<Other> {
+        type Result;
+        unsafe fn vec_srl(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_shift_long! { [VectorSrl vec_srl] (vsr) }
+
+    macro_rules! impl_vec_shift_octect {
+        ([$Trait:ident $m:ident] ($f:ident)) => {
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_char, vector_signed_char) -> vector_unsigned_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_char, vector_signed_char) -> vector_signed_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_short, vector_signed_char) -> vector_unsigned_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_short, vector_signed_char) -> vector_signed_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_int, vector_signed_char) -> vector_unsigned_int }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_int, vector_signed_char) -> vector_signed_int }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_float, vector_signed_char) -> vector_float }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_char, vector_unsigned_char) -> vector_unsigned_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_char, vector_unsigned_char) -> vector_signed_char }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_short, vector_unsigned_char) -> vector_unsigned_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_short, vector_unsigned_char) -> vector_signed_short }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_unsigned_int, vector_unsigned_char) -> vector_unsigned_int }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_signed_int, vector_unsigned_char) -> vector_signed_int }
+            impl_vec_trait!{ [$Trait $m]+ $f (vector_float, vector_unsigned_char) -> vector_float }
+        };
+    }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSlo<Other> {
+        type Result;
+        unsafe fn vec_slo(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_shift_octect! { [VectorSlo vec_slo] (vslo) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorSro<Other> {
+        type Result;
+        unsafe fn vec_sro(self, b: Other) -> Self::Result;
+    }
+
+    impl_vec_shift_octect! { [VectorSro vec_sro] (vsro) }
+
+    test_impl! { vec_vcntlzb(a: vector_signed_char) -> vector_signed_char [vclzb, vclzb] }
+    test_impl! { vec_vcntlzh(a: vector_signed_short) -> vector_signed_short [vclzh, vclzh] }
+    test_impl! { vec_vcntlzw(a: vector_signed_int) -> vector_signed_int [vclzw, vclzw] }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorCntlz {
+        unsafe fn vec_cntlz(self) -> Self;
+    }
+
+    macro_rules! impl_vec_cntlz {
+        ($fun:ident ($a:ty)) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorCntlz for $a {
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_cntlz(self) -> Self {
+                    transmute($fun(transmute(self)))
+                }
+            }
+        };
+    }
+
+    impl_vec_cntlz! { vec_vcntlzb(vector_signed_char) }
+    impl_vec_cntlz! { vec_vcntlzb(vector_unsigned_char) }
+    impl_vec_cntlz! { vec_vcntlzh(vector_signed_short) }
+    impl_vec_cntlz! { vec_vcntlzh(vector_unsigned_short) }
+    impl_vec_cntlz! { vec_vcntlzw(vector_signed_int) }
+    impl_vec_cntlz! { vec_vcntlzw(vector_unsigned_int) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorRl {
+        type Shift;
+        unsafe fn vec_rl(self, b: Self::Shift) -> Self;
+    }
+
+    macro_rules! impl_vec_rl {
+        ($fun:ident ($a:ident)) => {
+            #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+            impl VectorRl for $a {
+                type Shift = t_u!($a);
+                #[inline]
+                #[target_feature(enable = "altivec")]
+                unsafe fn vec_rl(self, b: Self::Shift) -> Self {
+                    transmute($fun(transmute(self), b))
+                }
+            }
+        };
+    }
+
+    test_impl! { vec_vrlb(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char [vrlb, vrlb] }
+    test_impl! { vec_vrlh(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short [vrlh, vrlh] }
+    test_impl! { vec_vrlw(a: vector_signed_int, b: vector_unsigned_int) -> vector_signed_int [vrlw, vrlw] }
+
+    impl_vec_rl! { vec_vrlb(vector_signed_char) }
+    impl_vec_rl! { vec_vrlh(vector_signed_short) }
+    impl_vec_rl! { vec_vrlw(vector_signed_int) }
+    impl_vec_rl! { vec_vrlb(vector_unsigned_char) }
+    impl_vec_rl! { vec_vrlh(vector_unsigned_short) }
+    impl_vec_rl! { vec_vrlw(vector_unsigned_int) }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    pub trait VectorRound {
+        unsafe fn vec_round(self) -> Self;
+    }
+
+    test_impl! { vec_vrfin(a: vector_float) -> vector_float [vrfin, vrfin] }
+
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
+    impl VectorRound for vector_float {
+        #[inline]
+        #[target_feature(enable = "altivec")]
+        unsafe fn vec_round(self) -> Self {
+            vec_vrfin(self)
+        }
+    }
 }
 
-/// Vector ld.
+/// Vector Insert
+///
+/// ## Purpose
+/// Returns a copy of vector b with element c replaced by the value of a.
+///
+/// ## Result value
+/// r contains a copy of vector b with element c replaced by the value of a.
+/// This function uses modular arithmetic on c to determine the element number.
+/// For example, if c is out of range, the compiler uses c modulo the number of
+/// elements in the vector to determine the element position.
 #[inline]
 #[target_feature(enable = "altivec")]
-pub unsafe fn vec_ld<T>(off: i32, p: T) -> <T as sealed::VectorLd>::Result
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_insert<T, const IDX: u32>(a: T, b: <T as sealed::VectorInsert>::Scalar) -> T
+where
+    T: sealed::VectorInsert,
+{
+    a.vec_insert::<IDX>(b)
+}
+
+/// Vector Extract
+///
+/// ## Purpose
+/// Returns the value of the bth element of vector a.
+///
+/// ## Result value
+/// The value of each element of r is the element of a at position b modulo the number of
+/// elements of a.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_extract<T, const IDX: u32>(a: T) -> <T as sealed::VectorExtract>::Scalar
+where
+    T: sealed::VectorExtract,
+{
+    a.vec_extract::<IDX>()
+}
+
+/// Vector Merge Low
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_mergel<T, U>(a: T, b: U) -> <T as sealed::VectorMergel<U>>::Result
+where
+    T: sealed::VectorMergel<U>,
+{
+    a.vec_mergel(b)
+}
+
+/// Vector Merge High
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_mergeh<T, U>(a: T, b: U) -> <T as sealed::VectorMergeh<U>>::Result
+where
+    T: sealed::VectorMergeh<U>,
+{
+    a.vec_mergeh(b)
+}
+
+/// Vector Pack
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_pack<T, U>(a: T, b: U) -> <T as sealed::VectorPack<U>>::Result
+where
+    T: sealed::VectorPack<U>,
+{
+    a.vec_pack(b)
+}
+
+/// Vector Pack Saturated
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_packs<T, U>(a: T, b: U) -> <T as sealed::VectorPacks<U>>::Result
+where
+    T: sealed::VectorPacks<U>,
+{
+    a.vec_packs(b)
+}
+
+/// Vector Pack Saturated Unsigned
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_packsu<T, U>(a: T, b: U) -> <T as sealed::VectorPacksu<U>>::Result
+where
+    T: sealed::VectorPacksu<U>,
+{
+    a.vec_packsu(b)
+}
+
+/// Vector Unpack High
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_unpackh<T>(a: T) -> <T as sealed::VectorUnpackh>::Result
+where
+    T: sealed::VectorUnpackh,
+{
+    a.vec_unpackh()
+}
+
+/// Vector Unpack Low
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_unpackl<T>(a: T) -> <T as sealed::VectorUnpackl>::Result
+where
+    T: sealed::VectorUnpackl,
+{
+    a.vec_unpackl()
+}
+
+/// Vector Shift Left
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sl<T, U>(a: T, b: U) -> <T as sealed::VectorSl<U>>::Result
+where
+    T: sealed::VectorSl<U>,
+{
+    a.vec_sl(b)
+}
+
+/// Vector Shift Right
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sr<T, U>(a: T, b: U) -> <T as sealed::VectorSr<U>>::Result
+where
+    T: sealed::VectorSr<U>,
+{
+    a.vec_sr(b)
+}
+
+/// Vector Shift Right Algebraic
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sra<T, U>(a: T, b: U) -> <T as sealed::VectorSra<U>>::Result
+where
+    T: sealed::VectorSra<U>,
+{
+    a.vec_sra(b)
+}
+
+/// Vector Shift Left Double
+///
+/// ## Endian considerations
+///
+/// This intrinsic is not endian-neutral, so uses of vec_sld in
+/// big-endian code must be rewritten for little-endian targets.
+///
+/// Historically, vec_sld could be used to shift by amounts not a multiple of the element size
+/// for most types, in which case the purpose of the shift is difficult to determine and difficult
+/// to automatically rewrite efficiently for little endian.
+///
+/// So the concatenation of a and b is done in big-endian fashion (left to right), and the shift is
+/// always to the left. This will generally produce surprising results for little-endian targets.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sld<T, const UIMM4: i32>(a: T, b: T) -> T
+where
+    T: sealed::VectorSld,
+{
+    a.vec_sld::<UIMM4>(b)
+}
+
+/// Vector Shift Left Double by Words
+///
+/// ## Endian considerations
+///
+/// This intrinsic is not endian-neutral, so uses of vec_sldw in
+/// big-endian code must be rewritten for little-endian targets.
+///
+/// The concatenation of a and b is done in big-endian fashion (left to right), and the shift is
+/// always to the left. This will generally produce surprising results for little- endian targets.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sldw<T, const UIMM2: i32>(a: T, b: T) -> T
+where
+    T: sealed::VectorSld,
+{
+    a.vec_sldw::<UIMM2>(b)
+}
+
+/// Vector Shift Left Long
+///
+/// ## Endian considerations
+/// This intrinsic is not endian-neutral, so uses of vec_sll in big-endian
+/// code must be rewritten for little-endian targets.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sll<T, U>(a: T, b: U) -> <T as sealed::VectorSll<U>>::Result
+where
+    T: sealed::VectorSll<U>,
+{
+    a.vec_sll(b)
+}
+
+/// Vector Shift Right Long
+///
+/// ## Endian considerations
+/// This intrinsic is not endian-neutral, so uses of vec_srl in big-endian
+/// code must be rewritten for little-endian targets.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_srl<T, U>(a: T, b: U) -> <T as sealed::VectorSrl<U>>::Result
+where
+    T: sealed::VectorSrl<U>,
+{
+    a.vec_srl(b)
+}
+
+/// Vector Shift Left by Octets
+///
+/// ## Endian considerations
+/// This intrinsic is not endian-neutral, so uses of vec_slo in big-endian code must be rewritten
+/// for little-endian targets. The shift count is in element 15 of b for big-endian, but in element
+/// 0 of b for little-endian.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_slo<T, U>(a: T, b: U) -> <T as sealed::VectorSlo<U>>::Result
+where
+    T: sealed::VectorSlo<U>,
+{
+    a.vec_slo(b)
+}
+
+/// Vector Shift Right by Octets
+///
+/// ## Endian considerations
+/// This intrinsic is not endian-neutral, so uses of vec_sro in big-endian code must be rewritten
+/// for little-endian targets. The shift count is in element 15 of b for big-endian, but in element
+/// 0 of b for little-endian.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sro<T, U>(a: T, b: U) -> <T as sealed::VectorSro<U>>::Result
+where
+    T: sealed::VectorSro<U>,
+{
+    a.vec_sro(b)
+}
+
+/// Vector Shift Left Variable
+///
+/// ## Result value
+/// Let v be a 17-byte vector formed from a in bytes `[0:15]` and a zero byte in element 16.
+/// Then each byte element i of r is determined as follows. The start bit sb is
+/// obtained from bits 5:7 of byte element i of b. Then the contents of bits sb:sb+7 of the
+/// halfword in byte elements i:i+1 of v are placed into byte element i of r.
+///
+/// ## Endian considerations
+/// All bit and byte element numbers are specified in big-endian order. This intrinsic is not
+/// endian-neutral.
+#[inline]
+#[target_feature(enable = "power9-altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_slv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char {
+    vslv(a, b)
+}
+
+/// Vector Shift Right Variable
+///
+/// ## Result value
+/// Let v be a 17-byte vector formed from a zero byte in element 0 and the elements of
+/// a in bytes `[1:16]`. Then each byte element i of r is determined as follows. The start bit sb is
+/// obtained from bits 5:7 of byte element i of b. Then the contents of bits (8 – sb):(15 – sb) of
+/// the halfword in byte elements i:i+1 of v are placed into byte element i of r.
+///
+/// ## Endian considerations
+/// All bit and byte element numbers are specified in big-endian order. This intrinsic is not
+/// endian-neutral.
+#[inline]
+#[target_feature(enable = "power9-altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_srv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char {
+    vsrv(a, b)
+}
+
+/// Vector Load Indexed.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_ld<T>(off: isize, p: T) -> <T as sealed::VectorLd>::Result
 where
     T: sealed::VectorLd,
 {
     p.vec_ld(off)
 }
 
+/// Vector Load Indexed Least Recently Used.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_ldl<T>(off: isize, p: T) -> <T as sealed::VectorLd>::Result
+where
+    T: sealed::VectorLd,
+{
+    p.vec_ldl(off)
+}
+
+/// Vector Load Element Indexed.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_lde<T>(off: isize, p: T) -> <T as sealed::VectorLde>::Result
+where
+    T: sealed::VectorLde,
+{
+    p.vec_lde(off)
+}
+
+/// Vector Store Indexed
+///
+/// ## Purpose
+/// Stores a 16-byte vector into memory at the address specified by a displacement and a
+/// pointer, ignoring the four low-order bits of the calculated address.
+///
+/// ## Operation
+/// A memory address is obtained by adding b and c, and masking off the four low-order
+/// bits of the result. The 16-byte vector in a is stored to the resultant memory address.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_st<T>(a: T, off: isize, c: <T as sealed::VectorSt>::Target)
+where
+    T: sealed::VectorSt,
+{
+    a.vec_st(off, c)
+}
+
+/// Vector Store Indexed Least Recently Used
+///
+/// ## Purpose
+/// Stores a 16-byte vector into memory at the address specified by a displacement and
+/// a pointer, ignoring the four low-order bits of the calculated address, and marking the cache
+/// line containing the address as least frequently used.
+///
+/// ## Operation
+/// A memory address is obtained by adding b and c, and masking off the four
+/// low-order bits of the result. The 16-byte vector in a is stored to the resultant memory
+/// address, and the containing cache line is marked as least frequently used.
+///
+/// ## Notes
+/// This intrinsic can be used to indicate the last access to a portion of memory, as a hint to the
+/// data cache controller that the associated cache line can be replaced without performance loss.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_stl<T>(a: T, off: isize, c: <T as sealed::VectorSt>::Target)
+where
+    T: sealed::VectorSt,
+{
+    a.vec_stl(off, c)
+}
+
+/// Vector Store Element Indexed
+///
+/// ## Purpose
+/// Stores a single element from a 16-byte vector into memory at the address specified by
+/// a displacement and a pointer, aligned to the element size.
+///
+/// ## Operation
+/// The integer value b is added to the pointer value c. The resulting address is
+/// rounded down to the nearest address that is a multiple of es, where es is 1 for char pointers,
+/// 2 for short pointers, and 4 for float or int pointers. An element offset eo is calculated by
+/// taking the resultant address modulo 16. The vector element of a at offset eo is stored to the
+/// resultant address.
+///
+/// ## Notes
+/// Be careful to note that the address (b+c) is aligned to an element boundary. Do not attempt
+/// to store unaligned data with this intrinsic.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_ste<T>(a: T, off: isize, c: <T as sealed::VectorSte>::Target)
+where
+    T: sealed::VectorSte,
+{
+    a.vec_ste(off, c)
+}
+
+/// VSX Unaligned Load
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_xl<T>(off: isize, p: T) -> <T as sealed::VectorXl>::Result
+where
+    T: sealed::VectorXl,
+{
+    p.vec_xl(off)
+}
+
+/// VSX Unaligned Store
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_xst<T>(v: T, off: isize, p: <T as sealed::VectorXst>::Out)
+where
+    T: sealed::VectorXst,
+{
+    v.vec_xst(off, p)
+}
+
+/// Vector Base-2 Logarithm Estimate
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr(vlogefp))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_loge(a: vector_float) -> vector_float {
+    vlogefp(a)
+}
+
 /// Vector floor.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_floor(a: vector_float) -> vector_float {
     sealed::vec_floor(a)
 }
@@ -1470,6 +3701,7 @@ pub unsafe fn vec_floor(a: vector_float) -> vector_float {
 /// Vector expte.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_expte(a: vector_float) -> vector_float {
     sealed::vec_vexptefp(a)
 }
@@ -1477,6 +3709,7 @@ pub unsafe fn vec_expte(a: vector_float) -> vector_float {
 /// Vector cmplt.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_cmplt<T, U>(a: U, b: T) -> <T as sealed::VectorCmpGt<U>>::Result
 where
     T: sealed::VectorCmpGt<U>,
@@ -1487,6 +3720,7 @@ where
 /// Vector cmple.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_cmple(a: vector_float, b: vector_float) -> vector_bool_int {
     vec_cmpge(b, a)
 }
@@ -1494,6 +3728,7 @@ pub unsafe fn vec_cmple(a: vector_float, b: vector_float) -> vector_bool_int {
 /// Vector cmpgt.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_cmpgt<T, U>(a: T, b: U) -> <T as sealed::VectorCmpGt<U>>::Result
 where
     T: sealed::VectorCmpGt<U>,
@@ -1504,6 +3739,7 @@ where
 /// Vector cmpge.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_cmpge(a: vector_float, b: vector_float) -> vector_bool_int {
     sealed::vec_vcmpgefp(a, b)
 }
@@ -1511,6 +3747,7 @@ pub unsafe fn vec_cmpge(a: vector_float, b: vector_float) -> vector_bool_int {
 /// Vector cmpeq.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_cmpeq<T, U>(a: T, b: U) -> <T as sealed::VectorCmpEq<U>>::Result
 where
     T: sealed::VectorCmpEq<U>,
@@ -1518,16 +3755,33 @@ where
     a.vec_cmpeq(b)
 }
 
-/// Vector cmpb.
+/// Vector Compare Not Equal
+///
+/// ## Result value
+/// For each element of r, the value of each bit is 1 if the corresponding elements
+/// of a and b are not equal. Otherwise, the value of each bit is 0.
 #[inline]
 #[target_feature(enable = "altivec")]
-pub unsafe fn vec_cmpb(a: vector_float, b: vector_float) -> vector_signed_int {
-    sealed::vec_vcmpbfp(a, b)
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_cmpne<T, U>(a: T, b: U) -> <T as sealed::VectorCmpNe<U>>::Result
+where
+    T: sealed::VectorCmpNe<U>,
+{
+    a.vec_cmpne(b)
 }
 
 /// Vector cmpb.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_cmpb(a: vector_float, b: vector_float) -> vector_signed_int {
+    sealed::vec_vcmpbfp(a, b)
+}
+
+/// Vector ceil.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_ceil(a: vector_float) -> vector_float {
     sealed::vec_vceil(a)
 }
@@ -1535,6 +3789,7 @@ pub unsafe fn vec_ceil(a: vector_float) -> vector_float {
 /// Vector avg.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_avg<T, U>(a: T, b: U) -> <T as sealed::VectorAvg<U>>::Result
 where
     T: sealed::VectorAvg<U>,
@@ -1545,6 +3800,7 @@ where
 /// Vector andc.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_andc<T, U>(a: T, b: U) -> <T as sealed::VectorAndc<U>>::Result
 where
     T: sealed::VectorAndc<U>,
@@ -1552,9 +3808,27 @@ where
     a.vec_andc(b)
 }
 
+/// Vector OR with Complement
+///
+/// ## Purpose
+/// Performs a bitwise OR of the first vector with the bitwise-complemented second vector.
+///
+/// ## Result value
+/// r is the bitwise OR of a and the bitwise complement of b.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_orc<T, U>(a: T, b: U) -> <T as sealed::VectorOrc<U>>::Result
+where
+    T: sealed::VectorOrc<U>,
+{
+    a.vec_orc(b)
+}
+
 /// Vector and.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_and<T, U>(a: T, b: U) -> <T as sealed::VectorAnd<U>>::Result
 where
     T: sealed::VectorAnd<U>,
@@ -1562,9 +3836,60 @@ where
     a.vec_and(b)
 }
 
+/// Vector or.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_or<T, U>(a: T, b: U) -> <T as sealed::VectorOr<U>>::Result
+where
+    T: sealed::VectorOr<U>,
+{
+    a.vec_or(b)
+}
+
+/// Vector NAND
+///
+/// ## Purpose
+/// Performs a bitwise NAND of two vectors.
+///
+/// ## Result value
+/// r is the bitwise NAND of a and b.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_nand<T, U>(a: T, b: U) -> <T as sealed::VectorNand<U>>::Result
+where
+    T: sealed::VectorNand<U>,
+{
+    a.vec_nand(b)
+}
+
+/// Vector nor.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_nor<T, U>(a: T, b: U) -> <T as sealed::VectorNor<U>>::Result
+where
+    T: sealed::VectorNor<U>,
+{
+    a.vec_nor(b)
+}
+
+/// Vector xor.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_xor<T, U>(a: T, b: U) -> <T as sealed::VectorXor<U>>::Result
+where
+    T: sealed::VectorXor<U>,
+{
+    a.vec_xor(b)
+}
+
 /// Vector adds.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_adds<T, U>(a: T, b: U) -> <T as sealed::VectorAdds<U>>::Result
 where
     T: sealed::VectorAdds<U>,
@@ -1575,6 +3900,7 @@ where
 /// Vector addc.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_addc(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int {
     sealed::vec_vaddcuw(a, b)
 }
@@ -1582,6 +3908,7 @@ pub unsafe fn vec_addc(a: vector_unsigned_int, b: vector_unsigned_int) -> vector
 /// Vector abs.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_abs<T>(a: T) -> T
 where
     T: sealed::VectorAbs,
@@ -1592,6 +3919,7 @@ where
 /// Vector abss.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_abss<T>(a: T) -> T
 where
     T: sealed::VectorAbss,
@@ -1599,9 +3927,67 @@ where
     a.vec_abss()
 }
 
+/// Vector Rotate Left
+///
+/// ## Purpose
+/// Rotates each element of a vector left by a given number of bits.
+///
+/// ## Result value
+/// Each element of r is obtained by rotating the corresponding element of a left by
+/// the number of bits specified by the corresponding element of b.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_rl<T>(a: T, b: <T as sealed::VectorRl>::Shift) -> T
+where
+    T: sealed::VectorRl,
+{
+    a.vec_rl(b)
+}
+
+/// Vector Round
+///
+/// ## Purpose
+/// Returns a vector containing the rounded values of the corresponding elements of the
+/// source vector.
+///
+/// ## Result value
+/// Each element of r contains the value of the corresponding element of a, rounded
+/// to the nearest representable floating-point integer, using IEEE round-to-nearest
+/// rounding.
+/// The current floating-point rounding mode is ignored.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_round<T>(a: T) -> T
+where
+    T: sealed::VectorRound,
+{
+    a.vec_round()
+}
+
+/// Vector Splat
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_splat<T, const IMM: u32>(a: T) -> T
+where
+    T: sealed::VectorSplat,
+{
+    a.vec_splat::<IMM>()
+}
+
+splat! { vec_splat_u8, u8, u8x16 [vspltisb / xxspltib, "Vector Splat to Unsigned Byte"] }
+splat! { vec_splat_s8, i8, i8x16 [vspltisb / xxspltib, "Vector Splat to Signed Byte"] }
+splat! { vec_splat_u16, u16, u16x8 [vspltish, "Vector Splat to Unsigned Halfword"] }
+splat! { vec_splat_s16, i16, i16x8 [vspltish, "Vector Splat to Signed Halfword"] }
+splat! { vec_splat_u32, u32, u32x4 [vspltisw, "Vector Splat to Unsigned Word"] }
+splat! { vec_splat_s32, i32, i32x4 [vspltisw, "Vector Splat to Signed Word"] }
+
 /// Vector splats.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_splats<T>(a: T) -> <T as sealed::VectorSplats>::Result
 where
     T: sealed::VectorSplats,
@@ -1612,6 +3998,7 @@ where
 /// Vector sub.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_sub<T, U>(a: T, b: U) -> <T as sealed::VectorSub<U>>::Result
 where
     T: sealed::VectorSub<U>,
@@ -1619,9 +4006,30 @@ where
     a.vec_sub(b)
 }
 
+/// Vector Subtract Carryout
+///
+/// ## Purpose
+/// Returns a vector wherein each element contains the carry produced by subtracting the
+/// corresponding elements of the two source vectors.
+///
+/// ## Result value
+/// The value of each element of r is the complement of the carry produced by subtract- ing the
+/// value of the corresponding element of b from the value of the corresponding element of a. The
+/// value is 0 if a borrow occurred, or 1 if no borrow occurred.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_subc<T, U>(a: T, b: U) -> <T as sealed::VectorSubc<U>>::Result
+where
+    T: sealed::VectorSubc<U>,
+{
+    a.vec_subc(b)
+}
+
 /// Vector subs.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_subs<T, U>(a: T, b: U) -> <T as sealed::VectorSubs<U>>::Result
 where
     T: sealed::VectorSubs<U>,
@@ -1632,6 +4040,7 @@ where
 /// Vector min.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_min<T, U>(a: T, b: U) -> <T as sealed::VectorMin<U>>::Result
 where
     T: sealed::VectorMin<U>,
@@ -1642,6 +4051,7 @@ where
 /// Vector max.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_max<T, U>(a: T, b: U) -> <T as sealed::VectorMax<U>>::Result
 where
     T: sealed::VectorMax<U>,
@@ -1649,14 +4059,73 @@ where
     a.vec_max(b)
 }
 
+/// Move From Vector Status and Control Register.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr(mfvscr))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_mfvscr() -> vector_unsigned_short {
+    mfvscr()
+}
+
 /// Vector add.
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_add<T, U>(a: T, b: U) -> <T as sealed::VectorAdd<U>>::Result
 where
     T: sealed::VectorAdd<U>,
 {
     a.vec_add(b)
+}
+
+/// Vector Add Extended
+///
+/// ## Result value
+/// The value of each element of r is produced by adding the corresponding elements of
+/// a and b with a carry specified in the corresponding element of c (1 if there is a carry, 0
+/// otherwise).
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_adde<T>(a: T, b: T, c: T) -> T
+where
+    T: sealed::VectorAdde,
+{
+    a.vec_adde(b, c)
+}
+
+/// Vector Convert to Floating-Point
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_ctf<const IMM5: i32, T>(a: T) -> vector_float
+where
+    T: sealed::VectorCtf,
+{
+    a.vec_ctf::<IMM5>()
+}
+
+/// Vector Convert to Signed Integer
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr(vctsxs, IMM5 = 1))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_cts<const IMM5: i32>(a: vector_float) -> vector_signed_int {
+    static_assert_uimm_bits!(IMM5, 5);
+
+    vctsxs(a, IMM5)
+}
+
+/// Vector Convert to Unsigned Integer
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr(vctuxs, IMM5 = 1))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_ctu<const IMM5: i32>(a: vector_float) -> vector_unsigned_int {
+    static_assert_uimm_bits!(IMM5, 5);
+
+    vctuxs(a, IMM5)
 }
 
 /// Endian-biased intrinsics
@@ -1666,6 +4135,7 @@ mod endian {
     /// Vector permute.
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_perm<T>(a: T, b: T, c: vector_unsigned_char) -> T
     where
         T: sealed::VectorPerm,
@@ -1683,6 +4153,7 @@ mod endian {
 
     /// Vector Sum Across Partial (1/2) Saturated
     #[inline]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     #[target_feature(enable = "altivec")]
     pub unsafe fn vec_sum2s(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
         // vsum2sws has big-endian bias
@@ -1701,6 +4172,7 @@ mod endian {
     /// Vector Multiply Even
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_mule<T, U>(a: T, b: T) -> U
     where
         T: sealed::VectorMulo<U>,
@@ -1710,6 +4182,7 @@ mod endian {
     /// Vector Multiply Odd
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_mulo<T, U>(a: T, b: T) -> U
     where
         T: sealed::VectorMule<U>,
@@ -1718,10 +4191,28 @@ mod endian {
     }
 }
 
+/// Vector Multiply
+///
+/// ## Purpose
+/// Compute the products of corresponding elements of two vectors.
+///
+/// ## Result value
+/// Each element of r receives the product of the corresponding elements of a and b.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_mul<T>(a: T, b: T) -> T
+where
+    T: sealed::VectorMul,
+{
+    a.vec_mul(b)
+}
+
 /// Vector Multiply Add Saturated
 #[inline]
 #[target_feature(enable = "altivec")]
 #[cfg_attr(test, assert_instr(vmhaddshs))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_madds(
     a: vector_signed_short,
     b: vector_signed_short,
@@ -1733,6 +4224,7 @@ pub unsafe fn vec_madds(
 /// Vector Multiply Low and Add Unsigned Half Word
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_mladd<T, U>(a: T, b: U, c: U) -> <T as sealed::VectorMladd<U>>::Result
 where
     T: sealed::VectorMladd<U>,
@@ -1744,6 +4236,7 @@ where
 #[inline]
 #[target_feature(enable = "altivec")]
 #[cfg_attr(test, assert_instr(vmhraddshs))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_mradds(
     a: vector_signed_short,
     b: vector_signed_short,
@@ -1755,6 +4248,7 @@ pub unsafe fn vec_mradds(
 /// Vector Multiply Sum
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_msum<T, B, U>(a: T, b: B, c: U) -> U
 where
     T: sealed::VectorMsum<B, U>,
@@ -1765,6 +4259,7 @@ where
 /// Vector Multiply Sum Saturated
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_msums<T, U>(a: T, b: T, c: U) -> U
 where
     T: sealed::VectorMsums<U>,
@@ -1775,6 +4270,7 @@ where
 /// Vector Multiply Add
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_madd(a: vector_float, b: vector_float, c: vector_float) -> vector_float {
     vmaddfp(a, b, c)
 }
@@ -1782,18 +4278,316 @@ pub unsafe fn vec_madd(a: vector_float, b: vector_float, c: vector_float) -> vec
 /// Vector Negative Multiply Subtract
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_nmsub(a: vector_float, b: vector_float, c: vector_float) -> vector_float {
     vnmsubfp(a, b, c)
+}
+
+/// Vector Select
+///
+/// ## Purpose
+/// Returns a vector selecting bits from two source vectors depending on the corresponding
+/// bit values of a third source vector.
+///
+/// ## Result value
+/// Each bit of r has the value of the corresponding bit of a if the corresponding
+/// bit of c is 0. Otherwise, the bit of r has the value of the corresponding bit of b.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_sel<T, U>(a: T, b: T, c: U) -> T
+where
+    T: sealed::VectorSel<U>,
+{
+    a.vec_sel(b, c)
 }
 
 /// Vector Sum Across Partial (1/4) Saturated
 #[inline]
 #[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_sum4s<T, U>(a: T, b: U) -> U
 where
     T: sealed::VectorSum4s<U>,
 {
     a.vec_sum4s(b)
+}
+
+/// Vector All Elements Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_eq<T, U>(a: T, b: U) -> <T as sealed::VectorAllEq<U>>::Result
+where
+    T: sealed::VectorAllEq<U>,
+{
+    a.vec_all_eq(b)
+}
+
+/// Vector All Elements Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_eq<T, U>(a: T, b: U) -> <T as sealed::VectorAnyEq<U>>::Result
+where
+    T: sealed::VectorAnyEq<U>,
+{
+    a.vec_any_eq(b)
+}
+
+/// Vector All Elements Greater or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_ge<T, U>(a: T, b: U) -> <T as sealed::VectorAllGe<U>>::Result
+where
+    T: sealed::VectorAllGe<U>,
+{
+    a.vec_all_ge(b)
+}
+
+/// Vector Any Element Greater or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_ge<T, U>(a: T, b: U) -> <T as sealed::VectorAnyGe<U>>::Result
+where
+    T: sealed::VectorAnyGe<U>,
+{
+    a.vec_any_ge(b)
+}
+
+/// Vector All Elements Greater Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_gt<T, U>(a: T, b: U) -> <T as sealed::VectorAllGt<U>>::Result
+where
+    T: sealed::VectorAllGt<U>,
+{
+    a.vec_all_gt(b)
+}
+
+/// Vector Any Element Greater Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_gt<T, U>(a: T, b: U) -> <T as sealed::VectorAnyGt<U>>::Result
+where
+    T: sealed::VectorAnyGt<U>,
+{
+    a.vec_any_gt(b)
+}
+
+/// Vector All In
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpbfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_in(a: vector_float, b: vector_float) -> bool {
+    vcmpbfp_p(0, a, b) != 0
+}
+
+/// Vector All Elements Less Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_le<T, U>(a: U, b: T) -> <T as sealed::VectorAllGe<U>>::Result
+where
+    T: sealed::VectorAllGe<U>,
+{
+    b.vec_all_ge(a)
+}
+
+/// Vector Any Element Less Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_le<T, U>(a: U, b: T) -> <T as sealed::VectorAnyGe<U>>::Result
+where
+    T: sealed::VectorAnyGe<U>,
+{
+    b.vec_any_ge(a)
+}
+
+/// Vector All Elements Less Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_lt<T, U>(a: U, b: T) -> <T as sealed::VectorAllGt<U>>::Result
+where
+    T: sealed::VectorAllGt<U>,
+{
+    b.vec_all_gt(a)
+}
+
+/// Vector Any Element Less Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_lt<T, U>(a: U, b: T) -> <T as sealed::VectorAnyGt<U>>::Result
+where
+    T: sealed::VectorAnyGt<U>,
+{
+    b.vec_any_gt(a)
+}
+
+/// All Elements Not a Number
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpeqfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_nan(a: vector_float) -> bool {
+    vcmpeqfp_p(0, a, a) != 0
+}
+
+/// Any Elements Not a Number
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpeqfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_nan(a: vector_float) -> bool {
+    vcmpeqfp_p(3, a, a) != 0
+}
+
+/// Vector All Elements Not Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_ne<T, U>(a: T, b: U) -> <T as sealed::VectorAllNe<U>>::Result
+where
+    T: sealed::VectorAllNe<U>,
+{
+    a.vec_all_ne(b)
+}
+
+/// Vector Any Elements Not Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_ne<T, U>(a: T, b: U) -> <T as sealed::VectorAnyNe<U>>::Result
+where
+    T: sealed::VectorAnyNe<U>,
+{
+    a.vec_any_ne(b)
+}
+
+/// All Elements Not Greater Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_nge(a: vector_float, b: vector_float) -> bool {
+    vcmpgefp_p(0, a, b) != 0
+}
+
+/// All Elements Not Greater Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgtfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_ngt(a: vector_float, b: vector_float) -> bool {
+    vcmpgtfp_p(0, a, b) != 0
+}
+
+/// All Elements Not Less Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_nle(a: vector_float, b: vector_float) -> bool {
+    vcmpgefp_p(0, b, a) != 0
+}
+
+/// All Elements Not Less Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgtfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_nlt(a: vector_float, b: vector_float) -> bool {
+    vcmpgtfp_p(0, b, a) != 0
+}
+
+/// All Elements Numeric
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_all_numeric(a: vector_float) -> bool {
+    vcmpgefp_p(2, a, a) != 0
+}
+
+/// Any Elements Not Greater Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_nge(a: vector_float, b: vector_float) -> bool {
+    vcmpgefp_p(3, a, b) != 0
+}
+
+/// Any Elements Not Greater Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgtfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_ngt(a: vector_float, b: vector_float) -> bool {
+    vcmpgtfp_p(3, a, b) != 0
+}
+
+/// Any Elements Not Less Than or Equal
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_nle(a: vector_float, b: vector_float) -> bool {
+    vcmpgefp_p(3, b, a) != 0
+}
+
+/// Any Elements Not Less Than
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgtfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_nlt(a: vector_float, b: vector_float) -> bool {
+    vcmpgtfp_p(3, b, a) != 0
+}
+
+/// Any Elements Numeric
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpgefp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_numeric(a: vector_float) -> bool {
+    vcmpgefp_p(1, a, a) != 0
+}
+
+/// Vector Count Leading Zeros
+///
+/// ## Purpose
+/// Returns a vector containing the number of most-significant bits equal to zero of each
+/// corresponding element of the source vector.
+///
+/// ## Result value
+/// The value of each element of r is set to the number of leading zeros of the
+/// corresponding element of a.
+#[inline]
+#[target_feature(enable = "altivec")]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_cntlz<T>(a: T) -> T
+where
+    T: sealed::VectorCntlz,
+{
+    a.vec_cntlz()
+}
+
+/// Any Element Out of Bounds
+#[inline]
+#[target_feature(enable = "altivec")]
+#[cfg_attr(test, assert_instr("vcmpeqfp."))]
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
+pub unsafe fn vec_any_out(a: vector_float) -> bool {
+    vcmpeqfp_p(1, a, a) != 0
 }
 
 #[cfg(target_endian = "big")]
@@ -1802,6 +4596,7 @@ mod endian {
     /// Vector permute.
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_perm<T>(a: T, b: T, c: vector_unsigned_char) -> T
     where
         T: sealed::VectorPerm,
@@ -1812,6 +4607,7 @@ mod endian {
     /// Vector Sum Across Partial (1/2) Saturated
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_sum2s(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int {
         vsum2sws(a, b)
     }
@@ -1819,6 +4615,7 @@ mod endian {
     /// Vector Multiply Even
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_mule<T, U>(a: T, b: T) -> U
     where
         T: sealed::VectorMule<U>,
@@ -1828,6 +4625,7 @@ mod endian {
     /// Vector Multiply Odd
     #[inline]
     #[target_feature(enable = "altivec")]
+    #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub unsafe fn vec_mulo<T, U>(a: T, b: T) -> U
     where
         T: sealed::VectorMulo<U>,
@@ -1836,15 +4634,12 @@ mod endian {
     }
 }
 
+#[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub use self::endian::*;
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_arch = "powerpc")]
-    use crate::core_arch::arch::powerpc::*;
-
-    #[cfg(target_arch = "powerpc64")]
-    use crate::core_arch::arch::powerpc64::*;
+    use super::*;
 
     use std::mem::transmute;
 
@@ -1865,8 +4660,18 @@ mod tests {
                 let r : $ty_out = transmute($fn(a, b));
                 assert_eq!(d, r);
             }
+         };
+         { $name: ident, $fn:ident, $ty: ident -> $ty_out: ident, [$($a:expr),+], [$($b:expr),+], $d:expr } => {
+            #[simd_test(enable = "altivec")]
+            unsafe fn $name() {
+                let a: s_t_l!($ty) = transmute($ty::new($($a),+));
+                let b: s_t_l!($ty) = transmute($ty::new($($b),+));
+
+                let r : $ty_out = transmute($fn(a, b));
+                assert_eq!($d, r);
+            }
          }
-    }
+   }
 
     macro_rules! test_vec_1 {
         { $name: ident, $fn:ident, f32x4, [$($a:expr),+], ~[$($d:expr),+] } => {
@@ -1875,7 +4680,7 @@ mod tests {
                 let a: vector_float = transmute(f32x4::new($($a),+));
 
                 let d: vector_float = transmute(f32x4::new($($d),+));
-                let r = transmute(vec_cmple(vec_abs(vec_sub($fn(a), d)), vec_splats(std::f32::EPSILON)));
+                let r = transmute(vec_cmple(vec_abs(vec_sub($fn(a), d)), vec_splats(f32::EPSILON)));
                 let e = m32x4::new(true, true, true, true);
                 assert_eq!(e, r);
             }
@@ -1917,6 +4722,93 @@ mod tests {
                 v,
                 u8x16::new(16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31)
             );
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_xl() {
+        let pat = [
+            u8x16::new(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+            u8x16::new(
+                16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+            ),
+        ];
+
+        for off in 0..16 {
+            let val: u8x16 = transmute(vec_xl(0, (pat.as_ptr() as *const u8).offset(off)));
+            for i in 0..16 {
+                let v = val.extract(i);
+                assert_eq!(off as usize + i, v as usize);
+            }
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_xst() {
+        let v: vector_unsigned_char = transmute(u8x16::new(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        ));
+
+        for off in 0..16 {
+            let mut buf = [0u8; 32];
+            vec_xst(v, 0, (buf.as_mut_ptr() as *mut u8).offset(off));
+            for i in 0..16 {
+                assert_eq!(i as u8, buf[off as usize..][i]);
+            }
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_ldl() {
+        let pat = [
+            u8x16::new(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+            u8x16::new(
+                16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+            ),
+        ];
+
+        for off in 0..16 {
+            let v: u8x16 = transmute(vec_ldl(0, (pat.as_ptr() as *const u8).offset(off)));
+            assert_eq!(
+                v,
+                u8x16::new(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+            );
+        }
+        for off in 16..32 {
+            let v: u8x16 = transmute(vec_ldl(0, (pat.as_ptr() as *const u8).offset(off)));
+            assert_eq!(
+                v,
+                u8x16::new(16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31)
+            );
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_lde_u8() {
+        let pat = [u8x16::new(
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        )];
+        for off in 0..16 {
+            let v: u8x16 = transmute(vec_lde(off, pat.as_ptr() as *const u8));
+            assert_eq!(off as u8, v.extract(off as _));
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_lde_u16() {
+        let pat = [u16x8::new(0, 1, 2, 3, 4, 5, 6, 7)];
+        for off in 0..8 {
+            let v: u16x8 = transmute(vec_lde(off * 2, pat.as_ptr() as *const u8));
+            assert_eq!(off as u16, v.extract(off as _));
+        }
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_lde_u32() {
+        let pat = [u32x4::new(0, 1, 2, 3)];
+        for off in 0..4 {
+            let v: u32x4 = transmute(vec_lde(off * 4, pat.as_ptr() as *const u8));
+            assert_eq!(off as u32, v.extract(off as _));
         }
     }
 
@@ -2006,6 +4898,918 @@ mod tests {
         [1, 255, 0, 0],
         [0, 255,  0, 1],
         [false, true, true, false]
+    }
+
+    test_vec_2! { test_vec_cmpne_i8, vec_cmpne, i8x16 -> m8x16,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false]
+    }
+
+    test_vec_2! { test_vec_cmpne_u8, vec_cmpne, u8x16 -> m8x16,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false]
+    }
+
+    test_vec_2! { test_vec_cmpne_i16, vec_cmpne, i16x8 -> m16x8,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        [true, true, true, true, false, false, false, false]
+    }
+
+    test_vec_2! { test_vec_cmpne_u16, vec_cmpne, u16x8 -> m16x8,
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        [true, true, true, true, false, false, false, false]
+    }
+
+    test_vec_2! { test_vec_cmpne_i32, vec_cmpne, i32x4 -> m32x4,
+        [1, -1, 0, 0],
+        [0, -1, 0, 1],
+        [true, false, false, true]
+    }
+
+    test_vec_2! { test_vec_cmpne_u32, vec_cmpne, u32x4 -> m32x4,
+        [1, 255, 0, 0],
+        [0, 255,  0, 1],
+        [true, false, false, true]
+    }
+
+    test_vec_2! { test_vec_all_eq_i8_false, vec_all_eq, i8x16 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_u8_false, vec_all_eq, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_i16_false, vec_all_eq, i16x8 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_u16_false, vec_all_eq, u16x8 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_i32_false, vec_all_eq, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [0, -1, 0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_u32_false, vec_all_eq, u32x4 -> bool,
+        [1, 255, 0, 0],
+        [0, 255,  0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_eq_i8_true, vec_all_eq, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_eq_u8_true, vec_all_eq, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_eq_i16_true, vec_all_eq, i16x8 -> bool,
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_eq_u16_true, vec_all_eq, u16x8 -> bool,
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_eq_i32_true, vec_all_eq, i32x4 -> bool,
+        [1, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_eq_u32_true, vec_all_eq, u32x4 -> bool,
+        [1, 255, 0, 1],
+        [1, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_i8_false, vec_any_eq, i8x16 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_u8_false, vec_any_eq, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_i16_false, vec_any_eq, i16x8 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_u16_false, vec_any_eq, u16x8 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_i32_false, vec_any_eq, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [0, -2, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_u32_false, vec_any_eq, u32x4 -> bool,
+        [1, 2, 1, 0],
+        [0, 255,  0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_eq_i8_true, vec_any_eq, i8x16 -> bool,
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_u8_true, vec_any_eq, u8x16 -> bool,
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_i16_true, vec_any_eq, i16x8 -> bool,
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_u16_true, vec_any_eq, u16x8 -> bool,
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_i32_true, vec_any_eq, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_eq_u32_true, vec_any_eq, u32x4 -> bool,
+        [0, 255, 0, 1],
+        [1, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_i8_false, vec_all_ge, i8x16 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_u8_false, vec_all_ge, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_i16_false, vec_all_ge, i16x8 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_u16_false, vec_all_ge, u16x8 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_i32_false, vec_all_ge, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [0, -1, 0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_u32_false, vec_all_ge, u32x4 -> bool,
+        [1, 255, 0, 0],
+        [0, 255,  1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ge_i8_true, vec_all_ge, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_u8_true, vec_all_ge, u8x16 -> bool,
+        [1, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_i16_true, vec_all_ge, i16x8 -> bool,
+        [1, -1, 42, 0, 0, 0, 0, 0],
+        [1, -5, 2, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_u16_true, vec_all_ge, u16x8 -> bool,
+        [42, 255, 1, 0, 0, 0, 0, 0],
+        [2, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_i32_true, vec_all_ge, i32x4 -> bool,
+        [1, -1, 0, 1],
+        [0, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ge_u32_true, vec_all_ge, u32x4 -> bool,
+        [1, 255, 0, 1],
+        [1, 254, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_i8_false, vec_any_ge, i8x16 -> bool,
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_u8_false, vec_any_ge, u8x16 -> bool,
+        [1, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [42, 255, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_i16_false, vec_any_ge, i16x8 -> bool,
+        [1, -1, -2, 0, 0, 0, 0, 0],
+        [2, 0, -1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_u16_false, vec_any_ge, u16x8 -> bool,
+        [1, 2, 0, 0, 0, 0, 0, 0],
+        [2, 42, 255, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_i32_false, vec_any_ge, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [2, 0, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_u32_false, vec_any_ge, u32x4 -> bool,
+        [1, 2, 1, 0],
+        [4, 255,  4, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ge_i8_true, vec_any_ge, i8x16 -> bool,
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_u8_true, vec_any_ge, u8x16 -> bool,
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_i16_true, vec_any_ge, i16x8 -> bool,
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_u16_true, vec_any_ge, u16x8 -> bool,
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_i32_true, vec_any_ge, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ge_u32_true, vec_any_ge, u32x4 -> bool,
+        [0, 255, 0, 1],
+        [1, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_i8_false, vec_all_gt, i8x16 -> bool,
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_u8_false, vec_all_gt, u8x16 -> bool,
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_i16_false, vec_all_gt, i16x8 -> bool,
+        [1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_u16_false, vec_all_gt, u16x8 -> bool,
+        [1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_i32_false, vec_all_gt, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [0, -1, 0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_u32_false, vec_all_gt, u32x4 -> bool,
+        [1, 255, 0, 0],
+        [0, 255,  1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_gt_i8_true, vec_all_gt, i8x16 -> bool,
+        [2, 1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -2, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_u8_true, vec_all_gt, u8x16 -> bool,
+        [1, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_i16_true, vec_all_gt, i16x8 -> bool,
+        [1, -1, 42, 1, 1, 1, 1, 1],
+        [0, -5, 2, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_u16_true, vec_all_gt, u16x8 -> bool,
+        [42, 255, 1, 1, 1, 1, 1, 1],
+        [2, 254, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_i32_true, vec_all_gt, i32x4 -> bool,
+        [1, -1, 1, 1],
+        [0, -2, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_gt_u32_true, vec_all_gt, u32x4 -> bool,
+        [1, 255, 1, 1],
+        [0, 254, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_i8_false, vec_any_gt, i8x16 -> bool,
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_u8_false, vec_any_gt, u8x16 -> bool,
+        [1, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [42, 255, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_i16_false, vec_any_gt, i16x8 -> bool,
+        [1, -1, -2, 0, 0, 0, 0, 0],
+        [2, 0, -1, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_u16_false, vec_any_gt, u16x8 -> bool,
+        [1, 2, 0, 0, 0, 0, 0, 0],
+        [2, 42, 255, 1, 1, 1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_i32_false, vec_any_gt, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [2, 0, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_u32_false, vec_any_gt, u32x4 -> bool,
+        [1, 2, 1, 0],
+        [4, 255,  4, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_gt_i8_true, vec_any_gt, i8x16 -> bool,
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_u8_true, vec_any_gt, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_i16_true, vec_any_gt, i16x8 -> bool,
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_u16_true, vec_any_gt, u16x8 -> bool,
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_i32_true, vec_any_gt, i32x4 -> bool,
+        [1, -1, 0, 1],
+        [0, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_gt_u32_true, vec_any_gt, u32x4 -> bool,
+        [1, 255, 0, 1],
+        [0, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_in_true, vec_all_in, f32x4 -> bool,
+        [0.0, -0.1, 0.0, 0.0],
+        [0.1, 0.2, 0.0, 0.0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_in_false, vec_all_in, f32x4 -> bool,
+        [0.5, 0.4, -0.5, 0.8],
+        [0.1, 0.4, -0.5, 0.8],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_i8_false, vec_all_le, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_u8_false, vec_all_le, u8x16 -> bool,
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_i16_false, vec_all_le, i16x8 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_u16_false, vec_all_le, u16x8 -> bool,
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_i32_false, vec_all_le, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_u32_false, vec_all_le, u32x4 -> bool,
+        [0, 255,  1, 1],
+        [1, 255, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_le_i8_true, vec_all_le, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_le_u8_true, vec_all_le, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_le_i16_true, vec_all_le, i16x8 -> bool,
+        [1, -5, 2, 0, 0, 0, 0, 0],
+        [1, -1, 42, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_le_u16_true, vec_all_le, u16x8 -> bool,
+        [2, 255, 1, 0, 0, 0, 0, 0],
+        [42, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_le_i32_true, vec_all_le, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_le_u32_true, vec_all_le, u32x4 -> bool,
+        [1, 254, 0, 0],
+        [1, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_i8_false, vec_any_le, i8x16 -> bool,
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_u8_false, vec_any_le, u8x16 -> bool,
+        [42, 255, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_i16_false, vec_any_le, i16x8 -> bool,
+        [2, 0, -1, 1, 1, 1, 1, 1],
+        [1, -1, -2, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_u16_false, vec_any_le, u16x8 -> bool,
+        [2, 42, 255, 1, 1, 1, 1, 1],
+        [1, 2, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_i32_false, vec_any_le, i32x4 -> bool,
+        [2, 0, 1, 1],
+        [1, -1, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_u32_false, vec_any_le, u32x4 -> bool,
+        [4, 255,  4, 1],
+        [1, 2, 1, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_le_i8_true, vec_any_le, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_u8_true, vec_any_le, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_i16_true, vec_any_le, i16x8 -> bool,
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_u16_true, vec_any_le, u16x8 -> bool,
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_i32_true, vec_any_le, i32x4 -> bool,
+        [1, -1, 0, 1],
+        [0, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_le_u32_true, vec_any_le, u32x4 -> bool,
+        [1, 255, 0, 1],
+        [0, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_i8_false, vec_all_lt, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_u8_false, vec_all_lt, u8x16 -> bool,
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_i16_false, vec_all_lt, i16x8 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_u16_false, vec_all_lt, u16x8 -> bool,
+        [0, 0, 255, 1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_i32_false, vec_all_lt, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_u32_false, vec_all_lt, u32x4 -> bool,
+        [0, 255,  1, 1],
+        [1, 255, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_lt_i8_true, vec_all_lt, i8x16 -> bool,
+        [0, 0, -2, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+        [2, 1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_u8_true, vec_all_lt, u8x16 -> bool,
+        [0, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_i16_true, vec_all_lt, i16x8 -> bool,
+        [0, -5, 2, 0, 0, 0, 0, 0],
+        [1, -1, 42, 1, 1, 1, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_u16_true, vec_all_lt, u16x8 -> bool,
+        [2, 254, 0, 0, 0, 0, 0, 0],
+        [42, 255, 1, 1, 1, 1, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_i32_true, vec_all_lt, i32x4 -> bool,
+        [0, -2, 0, 0],
+        [1, -1, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_lt_u32_true, vec_all_lt, u32x4 -> bool,
+        [0, 254, 0, 0],
+        [1, 255, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_i8_false, vec_any_lt, i8x16 -> bool,
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_u8_false, vec_any_lt, u8x16 -> bool,
+        [42, 255, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_i16_false, vec_any_lt, i16x8 -> bool,
+        [2, 0, -1, 1, 1, 1, 1, 1],
+        [1, -1, -2, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_u16_false, vec_any_lt, u16x8 -> bool,
+        [2, 42, 255, 1, 1, 1, 1, 1],
+        [1, 2, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_i32_false, vec_any_lt, i32x4 -> bool,
+        [2, 0, 1, 1],
+        [1, -1, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_u32_false, vec_any_lt, u32x4 -> bool,
+        [4, 255,  4, 1],
+        [1, 2, 1, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_lt_i8_true, vec_any_lt, i8x16 -> bool,
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_u8_true, vec_any_lt, u8x16 -> bool,
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_i16_true, vec_any_lt, i16x8 -> bool,
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_u16_true, vec_any_lt, u16x8 -> bool,
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_i32_true, vec_any_lt, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_lt_u32_true, vec_any_lt, u32x4 -> bool,
+        [0, 255, 0, 1],
+        [1, 255, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_i8_false, vec_all_ne, i8x16 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_u8_false, vec_all_ne, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_i16_false, vec_all_ne, i16x8 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_u16_false, vec_all_ne, u16x8 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0],
+        [0, 255, 0, 1, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_i32_false, vec_all_ne, i32x4 -> bool,
+        [1, -1, 0, 0],
+        [0, -1, 0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_u32_false, vec_all_ne, u32x4 -> bool,
+        [1, 255, 0, 0],
+        [0, 255,  0, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_all_ne_i8_true, vec_all_ne, i8x16 -> bool,
+        [0, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_u8_true, vec_all_ne, u8x16 -> bool,
+        [0, 254, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_i16_true, vec_all_ne, i16x8 -> bool,
+        [2, -2, 0, 1, 1, 1, 1, 1],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_u16_true, vec_all_ne, u16x8 -> bool,
+        [0, 254, 1, 1, 0, 0, 1, 0],
+        [1, 255, 0, 0, 1, 1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_i32_true, vec_all_ne, i32x4 -> bool,
+        [0, -2, 0, 0],
+        [1, -1, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_all_ne_u32_true, vec_all_ne, u32x4 -> bool,
+        [1, 255, 0, 0],
+        [0, 254, 1, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_i8_false, vec_any_ne, i8x16 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_u8_false, vec_any_ne, u8x16 -> bool,
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_i16_false, vec_any_ne, i16x8 -> bool,
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        [1, -1, 0, 0, 0, 0, 0, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_u16_false, vec_any_ne, u16x8 -> bool,
+        [1, 255, 1, 1, 1, 1, 1, 0],
+        [1, 255, 1, 1, 1, 1, 1, 0],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_i32_false, vec_any_ne, i32x4 -> bool,
+        [0, -1, 1, 1],
+        [0, -1, 1, 1],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_u32_false, vec_any_ne, u32x4 -> bool,
+        [1, 2, 1, 255],
+        [1, 2, 1, 255],
+        false
+    }
+
+    test_vec_2! { test_vec_any_ne_i8_true, vec_any_ne, i8x16 -> bool,
+        [1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_u8_true, vec_any_ne, u8x16 -> bool,
+        [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_i16_true, vec_any_ne, i16x8 -> bool,
+        [0, -1, 1, 0, 0, 0, 0, 0],
+        [1, -1, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_u16_true, vec_any_ne, u16x8 -> bool,
+        [0, 255, 1, 0, 0, 0, 0, 0],
+        [1, 255, 1, 0, 0, 0, 0, 0],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_i32_true, vec_any_ne, i32x4 -> bool,
+        [0, -1, 0, 1],
+        [1, -1, 0, 1],
+        true
+    }
+
+    test_vec_2! { test_vec_any_ne_u32_true, vec_any_ne, u32x4 -> bool,
+        [0, 255, 0, 1],
+        [1, 255, 0, 1],
+        true
     }
 
     #[simd_test(enable = "altivec")]
@@ -2165,6 +5969,24 @@ mod tests {
     test_vec_splats! { test_vec_splats_i16, i16x8, 42i16 }
     test_vec_splats! { test_vec_splats_i32, i32x4, 42i32 }
     test_vec_splats! { test_vec_splats_f32, f32x4, 42f32 }
+
+    macro_rules! test_vec_splat {
+        { $name: ident, $fun: ident, $ty: ident, $a: expr, $b: expr} => {
+            #[simd_test(enable = "altivec")]
+            unsafe fn $name() {
+                let a = $fun::<$a>();
+                let d = $ty::splat($b);
+                assert_eq!(d, transmute(a));
+            }
+        }
+    }
+
+    test_vec_splat! { test_vec_splat_u8, vec_splat_u8, u8x16, -1, u8::MAX }
+    test_vec_splat! { test_vec_splat_u16, vec_splat_u16, u16x8, -1, u16::MAX }
+    test_vec_splat! { test_vec_splat_u32, vec_splat_u32, u32x4, -1, u32::MAX }
+    test_vec_splat! { test_vec_splat_s8, vec_splat_s8, i8x16, -1, -1 }
+    test_vec_splat! { test_vec_splat_s16, vec_splat_s16, i16x8, -1, -1 }
+    test_vec_splat! { test_vec_splat_s32, vec_splat_s32, i32x4, -1, -1 }
 
     macro_rules! test_vec_sub {
         { $name: ident, $ty: ident, [$($a:expr),+], [$($b:expr),+], [$($d:expr),+] } => {
@@ -2775,5 +6597,103 @@ mod tests {
         let y: vector_signed_int = transmute(y);
         let z = vec_add(x, y);
         assert_eq!(i32x4::splat(5), transmute(z));
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn vec_ctf_u32() {
+        let v: vector_unsigned_int = transmute(u32x4::new(u32::MIN, u32::MAX, u32::MAX, 42));
+        let v2 = vec_ctf::<1, _>(v);
+        let r2: vector_float = transmute(f32x4::new(0.0, 2147483600.0, 2147483600.0, 21.0));
+        let v4 = vec_ctf::<2, _>(v);
+        let r4: vector_float = transmute(f32x4::new(0.0, 1073741800.0, 1073741800.0, 10.5));
+        let v8 = vec_ctf::<3, _>(v);
+        let r8: vector_float = transmute(f32x4::new(0.0, 536870900.0, 536870900.0, 5.25));
+
+        let check = |a, b| {
+            let r = transmute(vec_cmple(vec_abs(vec_sub(a, b)), vec_splats(f32::EPSILON)));
+            let e = m32x4::new(true, true, true, true);
+            assert_eq!(e, r);
+        };
+
+        check(v2, r2);
+        check(v4, r4);
+        check(v8, r8);
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_ctu() {
+        let v = u32x4::new(u32::MIN, u32::MAX, u32::MAX, 42);
+        let v2: u32x4 = transmute(vec_ctu::<1>(transmute(f32x4::new(
+            0.0,
+            2147483600.0,
+            2147483600.0,
+            21.0,
+        ))));
+        let v4: u32x4 = transmute(vec_ctu::<2>(transmute(f32x4::new(
+            0.0,
+            1073741800.0,
+            1073741800.0,
+            10.5,
+        ))));
+        let v8: u32x4 = transmute(vec_ctu::<3>(transmute(f32x4::new(
+            0.0,
+            536870900.0,
+            536870900.0,
+            5.25,
+        ))));
+
+        assert_eq!(v2, v);
+        assert_eq!(v4, v);
+        assert_eq!(v8, v);
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn vec_ctf_i32() {
+        let v: vector_signed_int = transmute(i32x4::new(i32::MIN, i32::MAX, i32::MAX - 42, 42));
+        let v2 = vec_ctf::<1, _>(v);
+        let r2: vector_float =
+            transmute(f32x4::new(-1073741800.0, 1073741800.0, 1073741800.0, 21.0));
+        let v4 = vec_ctf::<2, _>(v);
+        let r4: vector_float = transmute(f32x4::new(-536870900.0, 536870900.0, 536870900.0, 10.5));
+        let v8 = vec_ctf::<3, _>(v);
+        let r8: vector_float = transmute(f32x4::new(-268435460.0, 268435460.0, 268435460.0, 5.25));
+
+        let check = |a, b| {
+            let r = transmute(vec_cmple(vec_abs(vec_sub(a, b)), vec_splats(f32::EPSILON)));
+            println!("{:?} {:?}", a, b);
+            let e = m32x4::new(true, true, true, true);
+            assert_eq!(e, r);
+        };
+
+        check(v2, r2);
+        check(v4, r4);
+        check(v8, r8);
+    }
+
+    #[simd_test(enable = "altivec")]
+    unsafe fn test_vec_cts() {
+        let v = i32x4::new(i32::MIN, i32::MAX, i32::MAX, 42);
+        let v2: i32x4 = transmute(vec_cts::<1>(transmute(f32x4::new(
+            -1073741800.0,
+            1073741800.0,
+            1073741800.0,
+            21.0,
+        ))));
+        let v4: i32x4 = transmute(vec_cts::<2>(transmute(f32x4::new(
+            -536870900.0,
+            536870900.0,
+            536870900.0,
+            10.5,
+        ))));
+        let v8: i32x4 = transmute(vec_cts::<3>(transmute(f32x4::new(
+            -268435460.0,
+            268435460.0,
+            268435460.0,
+            5.25,
+        ))));
+
+        assert_eq!(v2, v);
+        assert_eq!(v4, v);
+        assert_eq!(v8, v);
     }
 }

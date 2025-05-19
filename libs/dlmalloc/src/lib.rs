@@ -1,7 +1,7 @@
 //! A Rust port of the `dlmalloc` allocator.
 //!
 //! The `dlmalloc` allocator is described at
-//! http://g.oswego.edu/dl/html/malloc.html and this Rust crate is a straight
+//! <https://gee.cs.oswego.edu/dl/html/malloc.html> and this Rust crate is a straight
 //! port of the C code for the allocator into Rust. The implementation is
 //! wrapped up in a `Dlmalloc` type and has support for Linux, OSX, and Wasm
 //! currently.
@@ -73,17 +73,24 @@ pub unsafe trait Allocator: Send {
 /// lingering memory back to the OS. That may happen eventually though!
 pub struct Dlmalloc<A = System>(dlmalloc::Dlmalloc<A>);
 
-#[cfg(target_family = "wasm")]
-#[path = "wasm.rs"]
-mod sys;
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "unix.rs"]
-mod sys;
-
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_family = "wasm")))]
-#[path = "dummy.rs"]
-mod sys;
+cfg_if::cfg_if! {
+    if #[cfg(target_family = "wasm")] {
+        #[path = "wasm.rs"]
+        mod sys;
+    } else if #[cfg(target_os = "windows")] {
+        #[path = "windows.rs"]
+        mod sys;
+    } else if #[cfg(target_os = "xous")] {
+        #[path = "xous.rs"]
+        mod sys;
+    } else if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+        #[path = "unix.rs"]
+        mod sys;
+    } else {
+        #[path = "dummy.rs"]
+        mod sys;
+    }
+}
 
 impl Dlmalloc<System> {
     /// Creates a new instance of an allocator
@@ -134,7 +141,8 @@ impl<A: Allocator> Dlmalloc<A> {
     /// method contracts.
     #[inline]
     pub unsafe fn free(&mut self, ptr: *mut u8, size: usize, align: usize) {
-        drop((size, align));
+        let _ = align;
+        self.0.validate_size(ptr, size);
         self.0.free(ptr)
     }
 
@@ -155,6 +163,8 @@ impl<A: Allocator> Dlmalloc<A> {
         old_align: usize,
         new_size: usize,
     ) -> *mut u8 {
+        self.0.validate_size(ptr, old_size);
+
         if old_align <= self.0.malloc_alignment() {
             self.0.realloc(ptr, new_size)
         } else {
@@ -166,5 +176,34 @@ impl<A: Allocator> Dlmalloc<A> {
             }
             res
         }
+    }
+
+    /// If possible, gives memory back to the system if there is unused memory
+    /// at the high end of the malloc pool or in unused segments.
+    ///
+    /// You can call this after freeing large blocks of memory to potentially
+    /// reduce the system-level memory requirements of a program. However, it
+    /// cannot guarantee to reduce memory. Under some allocation patterns, some
+    /// large free blocks of memory will be locked between two used chunks, so
+    /// they cannot be given back to the system.
+    ///
+    /// The `pad` argument represents the amount of free trailing space to
+    /// leave untrimmed. If this argument is zero, only the minimum amount of
+    /// memory to maintain internal data structures will be left. Non-zero
+    /// arguments can be supplied to maintain enough trailing space to service
+    /// future expected allocations without having to re-obtain memory from the
+    /// system.
+    ///
+    /// Returns `true` if it actually released any memory, else `false`.
+    pub unsafe fn trim(&mut self, pad: usize) -> bool {
+        self.0.trim(pad)
+    }
+
+    /// Releases all allocations in this allocator back to the system,
+    /// consuming self and preventing further use.
+    ///
+    /// Returns the number of bytes released to the system.
+    pub unsafe fn destroy(self) -> usize {
+        self.0.destroy()
     }
 }

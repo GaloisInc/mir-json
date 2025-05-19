@@ -79,6 +79,7 @@ use crate::{convert, ops};
 /// [`Break`]: ControlFlow::Break
 /// [`Continue`]: ControlFlow::Continue
 #[stable(feature = "control_flow_enum_type", since = "1.55.0")]
+#[cfg_attr(not(test), rustc_diagnostic_item = "ControlFlow")]
 // ControlFlow should not implement PartialOrd or Ord, per RFC 3058:
 // https://rust-lang.github.io/rfcs/3058-try-trait-v2.html#traits-for-controlflow
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -97,8 +98,7 @@ pub enum ControlFlow<B, C = ()> {
 }
 
 #[unstable(feature = "try_trait_v2", issue = "84277")]
-#[rustc_const_unstable(feature = "const_convert", issue = "88674")]
-impl<B, C> const ops::Try for ControlFlow<B, C> {
+impl<B, C> ops::Try for ControlFlow<B, C> {
     type Output = C;
     type Residual = ControlFlow<B, convert::Infallible>;
 
@@ -117,8 +117,9 @@ impl<B, C> const ops::Try for ControlFlow<B, C> {
 }
 
 #[unstable(feature = "try_trait_v2", issue = "84277")]
-#[rustc_const_unstable(feature = "const_convert", issue = "88674")]
-impl<B, C> const ops::FromResidual for ControlFlow<B, C> {
+// Note: manually specifying the residual type instead of using the default to work around
+// https://github.com/rust-lang/rust/issues/99940
+impl<B, C> ops::FromResidual<ControlFlow<B, convert::Infallible>> for ControlFlow<B, C> {
     #[inline]
     fn from_residual(residual: ControlFlow<B, convert::Infallible>) -> Self {
         match residual {
@@ -128,8 +129,7 @@ impl<B, C> const ops::FromResidual for ControlFlow<B, C> {
 }
 
 #[unstable(feature = "try_trait_v2_residual", issue = "91285")]
-#[rustc_const_unstable(feature = "const_try", issue = "74935")]
-impl<B, C> const ops::Residual<C> for ControlFlow<B, convert::Infallible> {
+impl<B, C> ops::Residual<C> for ControlFlow<B, convert::Infallible> {
     type TryType = ControlFlow<B, C>;
 }
 
@@ -141,8 +141,8 @@ impl<B, C> ControlFlow<B, C> {
     /// ```
     /// use std::ops::ControlFlow;
     ///
-    /// assert!(ControlFlow::<i32, String>::Break(3).is_break());
-    /// assert!(!ControlFlow::<String, i32>::Continue(3).is_break());
+    /// assert!(ControlFlow::<&str, i32>::Break("Stop right there!").is_break());
+    /// assert!(!ControlFlow::<&str, i32>::Continue(3).is_break());
     /// ```
     #[inline]
     #[stable(feature = "control_flow_enum_is", since = "1.59.0")]
@@ -157,8 +157,8 @@ impl<B, C> ControlFlow<B, C> {
     /// ```
     /// use std::ops::ControlFlow;
     ///
-    /// assert!(!ControlFlow::<i32, String>::Break(3).is_continue());
-    /// assert!(ControlFlow::<String, i32>::Continue(3).is_continue());
+    /// assert!(!ControlFlow::<&str, i32>::Break("Stop right there!").is_continue());
+    /// assert!(ControlFlow::<&str, i32>::Continue(3).is_continue());
     /// ```
     #[inline]
     #[stable(feature = "control_flow_enum_is", since = "1.59.0")]
@@ -172,14 +172,13 @@ impl<B, C> ControlFlow<B, C> {
     /// # Examples
     ///
     /// ```
-    /// #![feature(control_flow_enum)]
     /// use std::ops::ControlFlow;
     ///
-    /// assert_eq!(ControlFlow::<i32, String>::Break(3).break_value(), Some(3));
-    /// assert_eq!(ControlFlow::<String, i32>::Continue(3).break_value(), None);
+    /// assert_eq!(ControlFlow::<&str, i32>::Break("Stop right there!").break_value(), Some("Stop right there!"));
+    /// assert_eq!(ControlFlow::<&str, i32>::Continue(3).break_value(), None);
     /// ```
     #[inline]
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
+    #[stable(feature = "control_flow_enum", since = "1.83.0")]
     pub fn break_value(self) -> Option<B> {
         match self {
             ControlFlow::Continue(..) => None,
@@ -190,11 +189,8 @@ impl<B, C> ControlFlow<B, C> {
     /// Maps `ControlFlow<B, C>` to `ControlFlow<T, C>` by applying a function
     /// to the break value in case it exists.
     #[inline]
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
-    pub fn map_break<T, F>(self, f: F) -> ControlFlow<T, C>
-    where
-        F: FnOnce(B) -> T,
-    {
+    #[stable(feature = "control_flow_enum", since = "1.83.0")]
+    pub fn map_break<T>(self, f: impl FnOnce(B) -> T) -> ControlFlow<T, C> {
         match self {
             ControlFlow::Continue(x) => ControlFlow::Continue(x),
             ControlFlow::Break(x) => ControlFlow::Break(f(x)),
@@ -207,14 +203,13 @@ impl<B, C> ControlFlow<B, C> {
     /// # Examples
     ///
     /// ```
-    /// #![feature(control_flow_enum)]
     /// use std::ops::ControlFlow;
     ///
-    /// assert_eq!(ControlFlow::<i32, String>::Break(3).continue_value(), None);
-    /// assert_eq!(ControlFlow::<String, i32>::Continue(3).continue_value(), Some(3));
+    /// assert_eq!(ControlFlow::<&str, i32>::Break("Stop right there!").continue_value(), None);
+    /// assert_eq!(ControlFlow::<&str, i32>::Continue(3).continue_value(), Some(3));
     /// ```
     #[inline]
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
+    #[stable(feature = "control_flow_enum", since = "1.83.0")]
     pub fn continue_value(self) -> Option<C> {
         match self {
             ControlFlow::Continue(x) => Some(x),
@@ -225,11 +220,8 @@ impl<B, C> ControlFlow<B, C> {
     /// Maps `ControlFlow<B, C>` to `ControlFlow<B, T>` by applying a function
     /// to the continue value in case it exists.
     #[inline]
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
-    pub fn map_continue<T, F>(self, f: F) -> ControlFlow<B, T>
-    where
-        F: FnOnce(C) -> T,
-    {
+    #[stable(feature = "control_flow_enum", since = "1.83.0")]
+    pub fn map_continue<T>(self, f: impl FnOnce(C) -> T) -> ControlFlow<B, T> {
         match self {
             ControlFlow::Continue(x) => ControlFlow::Continue(f(x)),
             ControlFlow::Break(x) => ControlFlow::Break(x),
@@ -241,7 +233,7 @@ impl<B, C> ControlFlow<B, C> {
 /// They have mediocre names and non-obvious semantics, so aren't
 /// currently on a path to potential stabilization.
 impl<R: ops::Try> ControlFlow<R, R::Output> {
-    /// Create a `ControlFlow` from any type implementing `Try`.
+    /// Creates a `ControlFlow` from any type implementing `Try`.
     #[inline]
     pub(crate) fn from_try(r: R) -> Self {
         match R::branch(r) {
@@ -250,7 +242,7 @@ impl<R: ops::Try> ControlFlow<R, R::Output> {
         }
     }
 
-    /// Convert a `ControlFlow` into any type implementing `Try`;
+    /// Converts a `ControlFlow` into any type implementing `Try`.
     #[inline]
     pub(crate) fn into_try(self) -> R {
         match self {
@@ -258,47 +250,4 @@ impl<R: ops::Try> ControlFlow<R, R::Output> {
             ControlFlow::Break(v) => v,
         }
     }
-}
-
-impl<B> ControlFlow<B, ()> {
-    /// It's frequently the case that there's no value needed with `Continue`,
-    /// so this provides a way to avoid typing `(())`, if you prefer it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(control_flow_enum)]
-    /// use std::ops::ControlFlow;
-    ///
-    /// let mut partial_sum = 0;
-    /// let last_used = (1..10).chain(20..25).try_for_each(|x| {
-    ///     partial_sum += x;
-    ///     if partial_sum > 100 { ControlFlow::Break(x) }
-    ///     else { ControlFlow::CONTINUE }
-    /// });
-    /// assert_eq!(last_used.break_value(), Some(22));
-    /// ```
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
-    pub const CONTINUE: Self = ControlFlow::Continue(());
-}
-
-impl<C> ControlFlow<(), C> {
-    /// APIs like `try_for_each` don't need values with `Break`,
-    /// so this provides a way to avoid typing `(())`, if you prefer it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(control_flow_enum)]
-    /// use std::ops::ControlFlow;
-    ///
-    /// let mut partial_sum = 0;
-    /// (1..10).chain(20..25).try_for_each(|x| {
-    ///     if partial_sum > 100 { ControlFlow::BREAK }
-    ///     else { partial_sum += x; ControlFlow::CONTINUE }
-    /// });
-    /// assert_eq!(partial_sum, 108);
-    /// ```
-    #[unstable(feature = "control_flow_enum", reason = "new API", issue = "75744")]
-    pub const BREAK: Self = ControlFlow::Break(());
 }

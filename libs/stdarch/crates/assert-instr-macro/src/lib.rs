@@ -35,6 +35,15 @@ pub fn assert_instr(
 
     let instr = &invoc.instr;
     let name = &func.sig.ident;
+    let maybe_allow_deprecated = if func
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("deprecated"))
+    {
+        quote! { #[allow(deprecated)] }
+    } else {
+        quote! {}
+    };
 
     // Disable assert_instr for x86 targets compiled with avx enabled, which
     // causes LLVM to generate different intrinsics that the ones we are
@@ -52,18 +61,16 @@ pub fn assert_instr(
     }
 
     let instr_str = instr
-        .replace('.', "_")
-        .replace('/', "_")
-        .replace(':', "_")
+        .replace(['.', '/', ':'], "_")
         .replace(char::is_whitespace, "");
-    let assert_name = syn::Ident::new(&format!("assert_{}_{}", name, instr_str), name.span());
+    let assert_name = syn::Ident::new(&format!("assert_{name}_{instr_str}"), name.span());
     // These name has to be unique enough for us to find it in the disassembly later on:
     let shim_name = syn::Ident::new(
-        &format!("stdarch_test_shim_{}_{}", name, instr_str),
+        &format!("stdarch_test_shim_{name}_{instr_str}"),
         name.span(),
     );
     let shim_name_ptr = syn::Ident::new(
-        &format!("stdarch_test_shim_{}_{}_ptr", name, instr_str).to_ascii_uppercase(),
+        &format!("stdarch_test_shim_{name}_{instr_str}_ptr").to_ascii_uppercase(),
         name.span(),
     );
     let mut inputs = Vec::new();
@@ -82,7 +89,7 @@ pub fn assert_instr(
             syn::Pat::Ident(ref i) => &i.ident,
             _ => panic!("must have bare arguments"),
         };
-        if let Some(&(_, ref tokens)) = invoc.args.iter().find(|a| *ident == a.0) {
+        if let Some((_, tokens)) = invoc.args.iter().find(|a| *ident == a.0) {
             input_vals.push(quote! { #tokens });
         } else {
             inputs.push(capture);
@@ -97,7 +104,7 @@ pub fn assert_instr(
                 v.clone().into_token_stream()
             ),
         };
-        if let Some(&(_, ref tokens)) = invoc.args.iter().find(|a| c.ident == a.0) {
+        if let Some((_, tokens)) = invoc.args.iter().find(|a| c.ident == a.0) {
             const_vals.push(quote! { #tokens });
         } else {
             panic!("const generics must have a value for tests");
@@ -108,7 +115,7 @@ pub fn assert_instr(
         .attrs
         .iter()
         .filter(|attr| {
-            attr.path
+            attr.path()
                 .segments
                 .first()
                 .expect("attr.path.segments.first() failed")
@@ -131,10 +138,11 @@ pub fn assert_instr(
     } else {
         syn::LitStr::new("C", proc_macro2::Span::call_site())
     };
-    let shim_name_str = format!("{}{}", shim_name, assert_name);
+    let shim_name_str = format!("{shim_name}{assert_name}");
     let to_test = if disable_dedup_guard {
         quote! {
             #attrs
+            #maybe_allow_deprecated
             #[no_mangle]
             #[inline(never)]
             pub unsafe extern #abi fn #shim_name(#(#inputs),*) #ret {
@@ -147,6 +155,7 @@ pub fn assert_instr(
             const #shim_name_ptr : *const u8 = #shim_name_str.as_ptr();
 
             #attrs
+            #maybe_allow_deprecated
             #[no_mangle]
             #[inline(never)]
             pub unsafe extern #abi fn #shim_name(#(#inputs),*) #ret {

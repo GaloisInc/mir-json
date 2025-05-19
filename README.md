@@ -17,7 +17,7 @@
 
 2. Next, install a version of the Rust toolchain that works with `mir-json`:
 
-       $ rustup toolchain install nightly-2023-01-23 --force --component rustc-dev,rust-src
+       $ rustup toolchain install nightly-2025-02-16 --force --component rustc-dev,rust-src
 
 3. You will need basic build tools like `cc` to compile `mir-json`. On Ubuntu this is sufficient:
 
@@ -25,7 +25,7 @@
 
 4. Install `mir-json`:
 
-       $ cargo +nightly-2023-01-23 install --path . --locked
+       $ cargo +nightly-2025-02-16 install --path . --locked
 
 5. Check that `mir-json` was installed correctly:
 

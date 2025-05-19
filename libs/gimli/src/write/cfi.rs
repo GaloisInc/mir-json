@@ -212,8 +212,7 @@ impl CommonInformationEntry {
 
         if encoding.version >= 4 {
             w.write_u8(encoding.address_size)?;
-            // TODO: segment_selector_size
-            w.write_u8(0)?;
+            w.write_u8(0)?; // segment_selector_size
         }
 
         w.write_uleb128(self.code_alignment_factor.into())?;
@@ -341,16 +340,18 @@ impl FrameDescriptionEntry {
         }
 
         if cie.has_augmentation() {
-            let mut augmentation_length = 0u64;
-            if self.lsda.is_some() {
-                augmentation_length += u64::from(encoding.address_size);
-            }
-            w.write_uleb128(augmentation_length)?;
+            let augmentation_length_offset = w.len();
+            w.write_u8(0)?;
+            let augmentation_length_base = w.len();
 
             debug_assert_eq!(self.lsda.is_some(), cie.lsda_encoding.is_some());
             if let (Some(lsda), Some(lsda_encoding)) = (self.lsda, cie.lsda_encoding) {
                 w.write_eh_pointer(lsda, lsda_encoding, encoding.address_size)?;
             }
+
+            let augmentation_length = (w.len() - augmentation_length_base) as u64;
+            debug_assert!(augmentation_length < 0x80);
+            w.write_udata_at(augmentation_length_offset, augmentation_length, 1)?;
         }
 
         let mut prev_offset = 0;
@@ -377,6 +378,7 @@ impl FrameDescriptionEntry {
 ///
 /// This may be a CFA definition, a register rule, or some other directive.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CallFrameInstruction {
     /// Define the CFA rule to use the provided register and offset.
     Cfa(Register, i32),
@@ -410,6 +412,9 @@ pub enum CallFrameInstruction {
     RestoreState,
     /// The size of the arguments that have been pushed onto the stack.
     ArgsSize(u32),
+
+    /// AAarch64 extension: negate the `RA_SIGN_STATE` pseudo-register.
+    NegateRaState,
 }
 
 impl CallFrameInstruction {
@@ -522,6 +527,9 @@ impl CallFrameInstruction {
             CallFrameInstruction::ArgsSize(size) => {
                 w.write_u8(constants::DW_CFA_GNU_args_size.0)?;
                 w.write_uleb128(size.into())?;
+            }
+            CallFrameInstruction::NegateRaState => {
+                w.write_u8(constants::DW_CFA_AARCH64_negate_ra_state.0)?;
             }
         }
         Ok(())
@@ -683,6 +691,7 @@ pub(crate) mod convert {
                 if let Some(instruction) = CallFrameInstruction::from(
                     from_instruction,
                     from_cie,
+                    frame,
                     convert_address,
                     &mut offset,
                 )? {
@@ -727,6 +736,7 @@ pub(crate) mod convert {
                 if let Some(instruction) = CallFrameInstruction::from(
                     from_instruction,
                     from_cie,
+                    frame,
                     convert_address,
                     &mut offset,
                 )? {
@@ -739,12 +749,17 @@ pub(crate) mod convert {
     }
 
     impl CallFrameInstruction {
-        fn from<R: Reader<Offset = usize>>(
-            from_instruction: read::CallFrameInstruction<R>,
+        fn from<R, Section>(
+            from_instruction: read::CallFrameInstruction<R::Offset>,
             from_cie: &read::CommonInformationEntry<R>,
+            frame: &Section,
             convert_address: &dyn Fn(u64) -> Option<Address>,
             offset: &mut u32,
-        ) -> ConvertResult<Option<CallFrameInstruction>> {
+        ) -> ConvertResult<Option<CallFrameInstruction>>
+        where
+            R: Reader<Offset = usize>,
+            Section: read::UnwindSection<R>,
+        {
             let convert_expression =
                 |x| Expression::from(x, from_cie.encoding(), None, None, None, convert_address);
             // TODO: validate integer type conversions
@@ -778,6 +793,7 @@ pub(crate) mod convert {
                     CallFrameInstruction::CfaOffset(offset as i32)
                 }
                 read::CallFrameInstruction::DefCfaExpression { expression } => {
+                    let expression = expression.get(frame)?;
                     CallFrameInstruction::CfaExpression(convert_expression(expression)?)
                 }
                 read::CallFrameInstruction::Undefined { register } => {
@@ -821,11 +837,17 @@ pub(crate) mod convert {
                 read::CallFrameInstruction::Expression {
                     register,
                     expression,
-                } => CallFrameInstruction::Expression(register, convert_expression(expression)?),
+                } => {
+                    let expression = expression.get(frame)?;
+                    CallFrameInstruction::Expression(register, convert_expression(expression)?)
+                }
                 read::CallFrameInstruction::ValExpression {
                     register,
                     expression,
-                } => CallFrameInstruction::ValExpression(register, convert_expression(expression)?),
+                } => {
+                    let expression = expression.get(frame)?;
+                    CallFrameInstruction::ValExpression(register, convert_expression(expression)?)
+                }
                 read::CallFrameInstruction::Restore { register } => {
                     CallFrameInstruction::Restore(register)
                 }
@@ -834,6 +856,7 @@ pub(crate) mod convert {
                 read::CallFrameInstruction::ArgsSize { size } => {
                     CallFrameInstruction::ArgsSize(size as u32)
                 }
+                read::CallFrameInstruction::NegateRaState => CallFrameInstruction::NegateRaState,
                 read::CallFrameInstruction::Nop => return Ok(None),
             }))
         }
@@ -847,7 +870,7 @@ mod tests {
     use crate::arch::X86_64;
     use crate::read;
     use crate::write::EndianVec;
-    use crate::LittleEndian;
+    use crate::{LittleEndian, Vendor};
 
     #[test]
     fn test_frame_table() {
@@ -889,9 +912,14 @@ mod tests {
                     frames.add_fde(cie2_id, fde4.clone());
 
                     let mut cie3 = CommonInformationEntry::new(encoding, 1, 8, X86_64::RA);
-                    cie3.fde_address_encoding = constants::DW_EH_PE_pcrel;
-                    cie3.lsda_encoding = Some(constants::DW_EH_PE_pcrel);
-                    cie3.personality = Some((constants::DW_EH_PE_pcrel, Address::Constant(0x1235)));
+                    cie3.fde_address_encoding =
+                        constants::DW_EH_PE_pcrel | constants::DW_EH_PE_sdata4;
+                    cie3.lsda_encoding =
+                        Some(constants::DW_EH_PE_pcrel | constants::DW_EH_PE_sdata4);
+                    cie3.personality = Some((
+                        constants::DW_EH_PE_pcrel | constants::DW_EH_PE_sdata4,
+                        Address::Constant(0x1235),
+                    ));
                     cie3.signal_trampoline = true;
                     let cie3_id = frames.add_cie(cie3.clone());
                     assert_ne!(cie2_id, cie3_id);
@@ -980,44 +1008,61 @@ mod tests {
             (28 + 0x20280, CallFrameInstruction::ArgsSize(23)),
         ];
 
+        let fde_instructions_aarch64 = [(0, CallFrameInstruction::NegateRaState)];
+
         for &version in &[1, 3, 4] {
             for &address_size in &[4, 8] {
-                for &format in &[Format::Dwarf32, Format::Dwarf64] {
-                    let encoding = Encoding {
-                        format,
-                        version,
-                        address_size,
-                    };
-                    let mut frames = FrameTable::default();
+                for &vendor in &[Vendor::Default, Vendor::AArch64] {
+                    for &format in &[Format::Dwarf32, Format::Dwarf64] {
+                        let encoding = Encoding {
+                            format,
+                            version,
+                            address_size,
+                        };
+                        let mut frames = FrameTable::default();
 
-                    let mut cie = CommonInformationEntry::new(encoding, 2, 8, X86_64::RA);
-                    for i in &cie_instructions {
-                        cie.add_instruction(i.clone());
+                        let mut cie = CommonInformationEntry::new(encoding, 2, 8, X86_64::RA);
+                        for i in &cie_instructions {
+                            cie.add_instruction(i.clone());
+                        }
+                        let cie_id = frames.add_cie(cie);
+
+                        let mut fde = FrameDescriptionEntry::new(Address::Constant(0x1000), 0x10);
+                        for (o, i) in &fde_instructions {
+                            fde.add_instruction(*o, i.clone());
+                        }
+                        frames.add_fde(cie_id, fde);
+
+                        if vendor == Vendor::AArch64 {
+                            let mut fde =
+                                FrameDescriptionEntry::new(Address::Constant(0x2000), 0x10);
+                            for (o, i) in &fde_instructions_aarch64 {
+                                fde.add_instruction(*o, i.clone());
+                            }
+                            frames.add_fde(cie_id, fde);
+                        }
+
+                        let mut debug_frame = DebugFrame::from(EndianVec::new(LittleEndian));
+                        frames.write_debug_frame(&mut debug_frame).unwrap();
+
+                        let mut read_debug_frame =
+                            read::DebugFrame::new(debug_frame.slice(), LittleEndian);
+                        read_debug_frame.set_address_size(address_size);
+                        read_debug_frame.set_vendor(vendor);
+                        let frames = FrameTable::from(&read_debug_frame, &|address| {
+                            Some(Address::Constant(address))
+                        })
+                        .unwrap();
+
+                        assert_eq!(
+                            &frames.cies.get_index(0).unwrap().instructions,
+                            &cie_instructions
+                        );
+                        assert_eq!(&frames.fdes[0].1.instructions, &fde_instructions);
+                        if vendor == Vendor::AArch64 {
+                            assert_eq!(&frames.fdes[1].1.instructions, &fde_instructions_aarch64);
+                        }
                     }
-                    let cie_id = frames.add_cie(cie);
-
-                    let mut fde = FrameDescriptionEntry::new(Address::Constant(0x1000), 0x10);
-                    for (o, i) in &fde_instructions {
-                        fde.add_instruction(*o, i.clone());
-                    }
-                    frames.add_fde(cie_id, fde);
-
-                    let mut debug_frame = DebugFrame::from(EndianVec::new(LittleEndian));
-                    frames.write_debug_frame(&mut debug_frame).unwrap();
-
-                    let mut read_debug_frame =
-                        read::DebugFrame::new(debug_frame.slice(), LittleEndian);
-                    read_debug_frame.set_address_size(address_size);
-                    let frames = FrameTable::from(&read_debug_frame, &|address| {
-                        Some(Address::Constant(address))
-                    })
-                    .unwrap();
-
-                    assert_eq!(
-                        &frames.cies.get_index(0).unwrap().instructions,
-                        &cie_instructions
-                    );
-                    assert_eq!(&frames.fdes[0].1.instructions, &fde_instructions);
                 }
             }
         }

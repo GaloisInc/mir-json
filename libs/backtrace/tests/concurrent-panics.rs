@@ -9,17 +9,11 @@ const PANICS: usize = 100;
 const THREADS: usize = 8;
 const VAR: &str = "__THE_TEST_YOU_ARE_LUKE";
 
+mod common;
+
 fn main() {
-    // These run in docker containers on CI where they can't re-exec the test,
-    // so just skip these for CI. No other reason this can't run on those
-    // platforms though.
-    // Miri does not have support for re-execing a file
-    if cfg!(unix)
-        && (cfg!(target_arch = "arm")
-            || cfg!(target_arch = "aarch64")
-            || cfg!(target_arch = "s390x"))
-        || cfg!(miri)
-    {
+    // If we cannot re-exec this test, there's no point in trying to do it.
+    if common::cannot_reexec_the_test() {
         println!("test result: ok");
         return;
     }
@@ -51,9 +45,9 @@ fn parent() {
 fn child() {
     let done = Arc::new(AtomicBool::new(false));
     let done2 = done.clone();
-    let a = thread::spawn(move || {
-        while !done2.load(SeqCst) {
-            format!("{:?}", backtrace::Backtrace::new());
+    let a = thread::spawn(move || loop {
+        if done2.load(SeqCst) {
+            break format!("{:?}", backtrace::Backtrace::new());
         }
     });
 

@@ -1,8 +1,8 @@
 //! Operations related to UTF-8 validation.
 
-use crate::mem;
-
 use super::Utf8Error;
+use crate::intrinsics::const_eval_select;
+use crate::mem;
 
 /// Returns the initial codepoint accumulator for the first byte.
 /// The first byte is special, only want bottom 5 bits for width 2, 4 bits
@@ -123,15 +123,25 @@ const fn contains_nonascii(x: usize) -> bool {
 /// Walks through `v` checking that it's a valid UTF-8 sequence,
 /// returning `Ok(())` in that case, or, if it is invalid, `Err(err)`.
 #[inline(always)]
-#[rustc_const_unstable(feature = "str_internals", issue = "none")]
+#[rustc_allow_const_fn_unstable(const_eval_select)] // fallback impl has same behavior
 pub(super) const fn run_utf8_validation(v: &[u8]) -> Result<(), Utf8Error> {
     let mut index = 0;
     let len = v.len();
 
-    let usize_bytes = mem::size_of::<usize>();
-    let ascii_block_size = 2 * usize_bytes;
+    const USIZE_BYTES: usize = mem::size_of::<usize>();
+
+    let ascii_block_size = 2 * USIZE_BYTES;
     let blocks_end = if len >= ascii_block_size { len - ascii_block_size + 1 } else { 0 };
-    let align = v.as_ptr().align_offset(usize_bytes);
+    // Below, we safely fall back to a slower codepath if the offset is `usize::MAX`,
+    // so the end-to-end behavior is the same at compiletime and runtime.
+    let align = const_eval_select!(
+        @capture { v: &[u8] } -> usize:
+        if const {
+            usize::MAX
+        } else {
+            v.as_ptr().align_offset(USIZE_BYTES)
+        }
+    );
 
     while index < len {
         let old_offset = index;
@@ -161,7 +171,7 @@ pub(super) const fn run_utf8_validation(v: &[u8]) -> Result<(), Utf8Error> {
             //        first  E0 A0 80     last EF BF BF
             //   excluding surrogates codepoints  \u{d800} to  \u{dfff}
             //               ED A0 80 to       ED BF BF
-            // 4-byte encoding is for codepoints \u{1000}0 to \u{10ff}ff
+            // 4-byte encoding is for codepoints \u{10000} to \u{10ffff}
             //        first  F0 90 80 80  last F4 8F BF BF
             //
             // Use the UTF-8 syntax from the RFC
@@ -210,11 +220,11 @@ pub(super) const fn run_utf8_validation(v: &[u8]) -> Result<(), Utf8Error> {
             // Ascii case, try to skip forward quickly.
             // When the pointer is aligned, read 2 words of data per iteration
             // until we find a word containing a non-ascii byte.
-            if align != usize::MAX && align.wrapping_sub(index) % usize_bytes == 0 {
+            if align != usize::MAX && align.wrapping_sub(index) % USIZE_BYTES == 0 {
                 let ptr = v.as_ptr();
                 while index < blocks_end {
                     // SAFETY: since `align - index` and `ascii_block_size` are
-                    // multiples of `usize_bytes`, `block = ptr.add(index)` is
+                    // multiples of `USIZE_BYTES`, `block = ptr.add(index)` is
                     // always aligned with a `usize` so it's safe to dereference
                     // both `block` and `block.add(1)`.
                     unsafe {
