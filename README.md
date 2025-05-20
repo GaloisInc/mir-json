@@ -56,7 +56,7 @@
 To pull the Docker image, run:
 
 ```
-$ docker pull ghcr.io/galoisinc/mir-json
+$ docker pull ghcr.io/galoisinc/mir-json:nightly
 ```
 
 This provides an installation of the `mir-json` tools and translated copies of
@@ -65,8 +65,19 @@ be accessed by overriding the Docker entrypoint. For example, in order to run
 `crux-rustc`, invoke the following:
 
 ```
-$ docker run --entrypoint /home/mir-json/.cargo/bin/crux-rustc ghcr.io/galoisinc/mir-json <ARGUMENTS>
+$ docker run --entrypoint /home/mir-json/.cargo/bin/crux-rustc ghcr.io/galoisinc/mir-json:nightly <ARGUMENTS>
 ```
+
+The Docker image uses the following conventions for its tags:
+
+* The `nightly` tag uses the latest `mir-json` changes from the `master` branch.
+  This tag is always the most up-to-date, but it does not come with any
+  guarantees of stability.
+
+* There are also Docker tags corresponding to each
+  [MIR JSON schema version](#json-schema) (e.g., `1` or `2`). These tags are
+  more stable than nightly, as the MIR JSON files that these Docker images
+  produce will always adhere to a fixed version of the JSON schema.
 
 ## Usage
 
