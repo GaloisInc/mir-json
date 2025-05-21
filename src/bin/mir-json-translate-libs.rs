@@ -16,7 +16,6 @@ use std::{
     env, fmt, fs,
     io::BufReader,
     os::unix,
-    path::Path,
     process::{Command, Stdio},
 };
 
@@ -434,7 +433,7 @@ fn main() {
                 .long("keep-temp-build")
                 .help(
                     "Persist the temporary cargo package created to run \
-                    `cargo test -Z build-std`",
+                    `cargo test -Z build-std` to out-dir",
                 ),
             clap::Arg::new("copy-sources")
                 .long("copy-sources")
@@ -490,16 +489,24 @@ fn main() {
 
     // Set up a new cargo project for running `cargo test -Z build-std`.
     eprintln!("Creating empty cargo package...");
-    let temp_dir =
-        TempDir::with_prefix_in(EMPTY_PROJECT_NAME.to_owned() + "-", &cwd)
-            .expect("temporary directory should be able to be created");
-    let empty_project_dir = if keep_temp_build {
-        let path = temp_dir.into_path();
-        eprintln!("Empty cargo package path: {}", path.display());
-        path
-    } else {
-        temp_dir.path().to_path_buf()
+    let empty_project_dir = {
+        let mut builder = tempfile::Builder::new();
+        let prefix = EMPTY_PROJECT_NAME.to_owned() + "-";
+        builder.prefix(&prefix);
+        if keep_temp_build {
+            builder.keep(true);
+            fs::create_dir_all(out_dir)
+                .expect("creating out_dir should succeed");
+            builder.tempdir_in(out_dir)
+        } else {
+            builder.tempdir()
+        }
+        .expect("temporary directory should be able to be created")
     };
+    eprintln!(
+        "Empty cargo package path: {}",
+        empty_project_dir.path().display()
+    );
     let cargo_init_status = Command::new("cargo")
         .current_dir(&empty_project_dir)
         .arg("init")
@@ -893,7 +900,7 @@ fn main() {
 }
 
 /// Build a `cargo test -Z build-std` command.
-fn cargo_test_cmd(project_dir: &Path, target_triple: &str) -> Command {
+fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(project_dir)
         .arg("test")
