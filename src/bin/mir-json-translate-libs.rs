@@ -605,8 +605,17 @@ fn main() {
         fs::create_dir_all(&new_sources_dir)
             .expect("creating copy-sources directory should succeed");
         fn copy(orig_dir: &Utf8Path, custom_dir: &Utf8Path) {
-            eprintln!("Copying {} to {}", orig_dir, custom_dir);
-            copy_dir(orig_dir, custom_dir);
+            if fs::exists(custom_dir)
+                .expect("copy-sources directory should be accessible")
+            {
+                eprintln!(
+                    "Skipping {}, {} already exists",
+                    orig_dir, custom_dir
+                );
+            } else {
+                eprintln!("Copying {} to {}", orig_dir, custom_dir);
+                copy_dir(orig_dir, custom_dir);
+            }
         }
         for unit in &unit_graph.units {
             if let CustomTarget::TargetLib(path_info) =
