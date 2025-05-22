@@ -198,10 +198,19 @@ ARGS:
     <libs>    Directory containing custom Rust standard libraries [default: ./libs]
 
 OPTIONS:
-        --generate             Print a shell script instead of actually running the build
-    -h, --help                 Print help information
-    -o, --out-dir <OUT_DIR>    Directory to place rlibs and rlibs_real in [default: next to libs]
-        --target <TARGET>      Rust target triple to configure the libraries for [default: host triple]
+        --copy-sources <NEW_LIBS>    Instead of translating the existing custom standard libraries,
+                                     copy all upstream standard library sources to NEW_LIBS (if they
+                                     don't already exist there) and exit (used for upgrading Rust
+                                     toolchain)
+        --debug                      Emit debug output on stderr
+        --generate                   Print a shell script instead of actually running the build
+    -h, --help                       Print help information
+        --keep-temp-build            Persist the temporary cargo package created to run `cargo test
+                                     -Z build-std` to out-dir
+    -o, --out-dir <OUT_DIR>          Directory to place rlibs and rlibs_real in [default: next to
+                                     libs]
+        --target <TARGET>            Rust target triple to configure the libraries for [default:
+                                     host triple]
 ```
 
 ## `--target`
