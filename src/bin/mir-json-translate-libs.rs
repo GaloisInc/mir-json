@@ -525,7 +525,17 @@ fn main() {
     eprintln!("Running cargo test...");
     let mut cargo_test_child = {
         let mut cmd = cargo_test_cmd(&empty_project_dir, target_triple);
-        cmd.arg("--message-format").arg("json").arg("--no-run");
+        cmd.arg("--message-format").arg("json")
+            .arg("--no-run")
+            // Hack: When cross-compiling, cargo test will fail without an
+            // appropriate linker installed. But we only care about compiling
+            // the std libraries to rlibs, which rustc can do on its own. So we
+            // pass a dummy linker to get cargo test to succeed at the end
+            // without actually doing any linking. This has the side benefit of
+            // making non-cross builds faster as well by skipping the linking
+            // step. Note that "true" here is the program /usr/bin/true (or
+            // similar), not just enabling the flag.
+            .env("RUSTFLAGS", "-C linker=true");
         if debug_enabled {
             cmd.arg("--verbose");
         }
