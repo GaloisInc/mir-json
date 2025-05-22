@@ -441,8 +441,8 @@ fn main() {
                 .help(
                     "Instead of translating the existing custom standard \
                     libraries, copy all upstream standard library sources to \
-                    the given directory and exit (used for upgrading Rust \
-                    toolchain)",
+                    NEW_LIBS (if they don't already exist there) and exit \
+                    (used for upgrading Rust toolchain)",
                 ),
         ])
         .get_matches();
