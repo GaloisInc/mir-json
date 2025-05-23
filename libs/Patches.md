@@ -160,3 +160,9 @@ identify all of the code that was changed in each patch.
   Crux's version is not suitable for doing actual timing (it hard-codes the
   time to a fixed date), but it does simulate much more easily than the actual
   implementation.
+
+* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: May 23, 2025)
+
+  Crucible does not currently support pointer casts from single elements to
+  arrays, so we implement this function by explicitly creating a
+  `MaybeUninit<[T; N]>` and copying into it.
