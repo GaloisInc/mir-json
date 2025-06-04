@@ -4063,7 +4063,10 @@ impl<T, A: Allocator, const N: usize> TryFrom<Vec<T, A>> for [T; N] {
         // We checked earlier that we have sufficient items.
         // The items will not double-drop as the `set_len`
         // tells the `Vec` not to also drop them.
-        let array = unsafe { ptr::read(vec.as_ptr() as *const [T; N]) };
-        Ok(array)
+        let mut array: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+        unsafe {
+            ptr::copy_nonoverlapping(vec.as_ptr(), array.as_mut_ptr() as *mut T, N);
+            Ok(array.assume_init())
+        }
     }
 }
