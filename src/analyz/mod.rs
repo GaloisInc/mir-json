@@ -95,37 +95,83 @@ fn vtable_descriptor_for_cast<'tcx>(
         return None;
     }
 
-    // Relevant code: rustc_codegen_ssa::base::unsized_info, and other functions in that file.
-    let old_pointee = match *old_ty.kind() {
-        ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ty, _) => ty,
-        _ => return None,
-    };
-    let new_pointee = match *new_ty.kind() {
-        ty::TyKind::Ref(_, ty, _) => ty,
-        ty::TyKind::RawPtr(ty, _) => ty,
-        _ => return None,
-    };
-
-    if !tcx.is_sized_raw(ty::TypingEnv::fully_monomorphized().as_query_input(old_pointee)) {
-        // We produce a vtable only for sized -> TyDynamic casts.
-        return None;
+    fn instantiate_field_ty<'tcx>(
+        tcx: TyCtxt<'tcx>,
+        field_def: &ty::FieldDef,
+        args: ty::GenericArgsRef<'tcx>
+    ) -> ty::Ty<'tcx> {
+        let field_unsubst_ty = tcx.type_of(field_def.did);
+        tcx.instantiate_and_normalize_erasing_regions(
+            args, ty::TypingEnv::fully_monomorphized(), field_unsubst_ty
+        )
     }
 
-    // Relevant code: rustc_codegen_ssa::meth::get_vtable
-    let trait_ref = match *new_pointee.kind() {
-        ty::TyKind::Dynamic(ref preds, _, _) =>
-            preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
-        _ => return None,
-    };
-    let trait_ref: ty::PolyTraitRef = match trait_ref {
-        Some(x) => x,
-        // If there's no trait ref, it means the `Dynamic` predicates contain only auto traits.
-        // The vtable for this trait object is empty.
-        // TODO: handle this better (currently the output omits the "vtable" field)
-        None => return None,
-    };
-    Some(trait_ref)
+    match (*old_ty.kind(), *new_ty.kind()) {
+        // The two base cases: we are casting between two references or two raw
+        // pointers.
+        (ty::TyKind::Ref(_, old_pointee, _), ty::TyKind::Ref(_, new_pointee, _)) |
+        (ty::TyKind::RawPtr(old_pointee, _), ty::TyKind::RawPtr(new_pointee, _)) => {
+            if !tcx.is_sized_raw(ty::TypingEnv::fully_monomorphized().as_query_input(old_pointee)) {
+                // We produce a vtable only for sized -> TyDynamic casts.
+                return None;
+            }
+
+            // Relevant code: rustc_codegen_ssa::meth::get_vtable
+            let trait_ref = match *new_pointee.kind() {
+                ty::TyKind::Dynamic(ref preds, _, _) =>
+                    preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
+                _ => return None,
+            };
+            let trait_ref: ty::PolyTraitRef = match trait_ref {
+                Some(x) => x,
+                // If there's no trait ref, it means the `Dynamic` predicates contain only auto traits.
+                // The vtable for this trait object is empty.
+                // TODO: handle this better (currently the output omits the "vtable" field)
+                None => return None,
+            };
+            Some(trait_ref)
+        },
+
+        // It is also possible to cast between two arbitrary struct values that
+        // implement the std::ops::CoerceUnsized marker trait, provided that
+        // each struct type differs in exactly one field (or a field within
+        // another struct field) that supports a vtable descriptor cast. (e.g.,
+        // casting from Arc<Foo> to Arc<dyn Bar>).
+        (ty::TyKind::Adt(old_adt_def, old_args), ty::TyKind::Adt(new_adt_def, new_args))
+          if old_adt_def.is_struct() && new_adt_def.is_struct() => {
+            // Compute the fields from each struct value, and ensure that there
+            // are an equal number of fields as a sanity check.
+            let old_fields = &old_adt_def.non_enum_variant().fields;
+            let new_fields = &new_adt_def.non_enum_variant().fields;
+            if old_fields.len() != new_fields.len() {
+                return None;
+            }
+
+            // Recursively walk over the fields of each struct value, and for
+            // each pair of unequal fields, recursively compute their vtable
+            // descriptor cast.
+            let mut vtable: Option<ty::PolyTraitRef<'tcx>> = None;
+            let mut unequal_fields_count: usize = 0;
+            for (old_field_def, new_field_def) in old_fields.iter().zip(new_fields.iter()) {
+                let old_field_ty = instantiate_field_ty(tcx, old_field_def, old_args);
+                let new_field_ty = instantiate_field_ty(tcx, new_field_def, new_args);
+                if old_field_ty != new_field_ty {
+                    unequal_fields_count += 1;
+                    vtable = vtable_descriptor_for_cast(mir, kind, old_field_ty, new_field_ty);
+                }
+            }
+
+            // If we have found exactly one pair of unequal fields, then use the
+            // resulting vtable descriptor cast. In all practical cases, we
+            // should only expect to find exactly one pair of unequal fields,
+            // but because there exist degenerate cases where there are multiple
+            // unequal fields (e.g., as in
+            // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2024&gist=a7accacdd6e5f58c834528ddfeceeafa),
+            // we must explicitly check.
+            if unequal_fields_count == 1 { vtable } else { None }
+        },
+        _ => None,
+    }
 }
 
 /// Compute the callee method for a closure-to-fnptr cast, if applicable.
