@@ -206,6 +206,44 @@ impl Fold for Folder {
     }
 }
 
+/// `#[crux_spec_for(f)]` attribute.  This can be used in place of `#[crux::test]` to generate a
+/// function specification for compositional verification.
+///
+/// For example, given this input:
+///
+/// ```
+/// fn f(x: u32) -> u32 { ... }
+///
+/// // Reference implementation
+/// fn f_ref(x: u32) -> u32 { ... }
+///
+/// /// Check that `f` is equivalent to `f_ref`.
+/// #[crux_spec_for(f)]
+/// fn f_equiv() {
+///     let x = u32::symbolic("x");
+///     crucible_assume!(x < 10);
+///     let y_real = f(x);
+///     let y_ref = f_ref(x);
+///     crucible_assert!(y_real == y_ref);
+/// }
+/// ```
+///
+/// The proc macro works like `#[crux::test]` (crux-mir-comp will run `f_equiv` as a symbolic
+/// test), but it also emits a function `fn f_equiv_spec() -> MethodSpec { ... }` that constructs a
+/// `MethodSpec` override that can be used in other tests:
+///
+/// ```
+/// fn g() { ... f(x) ... }
+///
+/// #[crux::test]
+/// fn g_equiv() {
+///     // Enable the override
+///     f_equiv_spec().enable();
+///     // For the rest of this test, all calls to `f(x)` are replaced with
+///     // `f_ref(x)` by the override.
+///     ... g() ...
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as Path);
