@@ -245,7 +245,7 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         });
         test_func.block = Box::new(block);
 
-        let test_attr: Attribute = parse_quote!(#[crux_test]);
+        let test_attr: Attribute = parse_quote!(#[crux::test]);
         test_func.attrs.push(test_attr);
     }
 
