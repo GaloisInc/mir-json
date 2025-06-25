@@ -28,6 +28,7 @@ use shell_escape::escape;
 use tempfile::TempDir;
 
 const EXTRA_LIB_CRUCIBLE: &str = "crucible";
+const EXTRA_LIB_CRUCIBLE_PROC_MACROS: &str = "crucible_proc_macros";
 const EXTRA_LIB_INT512: &str = "int512";
 const EXTRA_LIB_BYTES: &str = "bytes";
 const EXTRA_LIB_BYTEORDER: &str = "byteorder";
@@ -35,6 +36,11 @@ const EXTRA_LIB_BYTEORDER: &str = "byteorder";
 /// Name of the new empty cargo project to be created to run `cargo test -Z
 /// build-std` in.
 const EMPTY_PROJECT_NAME: &str = "mir-json-translate-libs-empty-project";
+
+#[cfg(target_os = "macos")]
+const PROC_MACRO_EXTENSION: &str = "dylib";
+#[cfg(not(target_os = "macos"))]
+const PROC_MACRO_EXTENSION: &str = "so";
 
 /// Deserialized form of cargo --unit-graph JSON output.
 /// See https://doc.rust-lang.org/cargo/reference/unstable.html#unit-graph
@@ -898,7 +904,34 @@ fn main() {
                     args
                 },
                 env: lib.target.env,
-            });
+            })
+            // Special case: crucible_proc_macros is a proc-macro crate that we build with cargo
+            // and copy into place.  This saves us from having to handle its syn/quote dependencies
+            // ourselves.
+            .chain([
+                CmdInvocation {
+                    program: "cargo".into(),
+                    args: vec![
+                        "build".into(),
+                        "--release".into(),
+                        "--manifest-path".into(),
+                        custom_sources_dir.join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                            .join("Cargo.toml").into(),
+                    ],
+                    env: vec![],
+                },
+                CmdInvocation {
+                    program: "cp".into(),
+                    args: vec![
+                        custom_sources_dir.join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                            .join("target").join("release")
+                            .join(format!("lib{}", EXTRA_LIB_CRUCIBLE_PROC_MACROS))
+                            .with_extension(PROC_MACRO_EXTENSION).into(),
+                        rlibs_dir.to_string(),
+                    ],
+                    env: vec![],
+                },
+            ]);
 
     // Run mir-json.
     if generate_only {
