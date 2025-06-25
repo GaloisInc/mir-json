@@ -1,4 +1,4 @@
-use crucible_spec_macro::crux_spec_for;
+use crucible_proc_macros::crux_spec_for;
 
 fn f(x: u8) -> u8 {
     x + 1
