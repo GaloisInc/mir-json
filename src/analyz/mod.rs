@@ -156,18 +156,33 @@ fn vtable_descriptor_for_cast<'tcx>(
                 let old_field_ty = instantiate_field_ty(tcx, old_field_def, old_args);
                 let new_field_ty = instantiate_field_ty(tcx, new_field_def, new_args);
                 if old_field_ty != new_field_ty {
+                    // Rust specifically allows for excess `PhantomData` fields
+                    // in `CoerceUnsized` sources/targets - see
+                    // https://github.com/rust-lang/rfcs/pull/1234 and
+                    // https://github.com/rust-lang/rust/pull/28381 (the latter
+                    // of which implemented the check we use here,
+                    // `Ty::is_phantom_data`, for precisely this case). This
+                    // permits definitions like `Arc`'s, which is roughly:
+                    // ```
+                    // struct Arc<T: ?Sized> {
+                    //     ptr: NonNull<ArcInner<T>>,
+                    //     phantom: PhantomData<ArcInner<T>>,
+                    // }
+                    // ```
+                    // For details on why this is useful, see
+                    // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data.
+                    if old_field_ty.is_phantom_data() && new_field_ty.is_phantom_data() {
+                        continue;
+                    }
+
                     unequal_fields_count += 1;
                     vtable = vtable_descriptor_for_cast(mir, kind, old_field_ty, new_field_ty);
                 }
             }
 
-            // If we have found exactly one pair of unequal fields, then use the
-            // resulting vtable descriptor cast. In all practical cases, we
-            // should only expect to find exactly one pair of unequal fields,
-            // but because there exist degenerate cases where there are multiple
-            // unequal fields (e.g., as in
-            // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2024&gist=a7accacdd6e5f58c834528ddfeceeafa),
-            // we must explicitly check.
+            // If we have found exactly one pair of unequal fields (modulo
+            // `PhantomData` fields, as described above), then use the resulting
+            // vtable descriptor cast.
             if unequal_fields_count == 1 { vtable } else { None }
         },
         _ => None,
