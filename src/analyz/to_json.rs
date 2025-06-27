@@ -135,7 +135,15 @@ impl<'tcx> TraitInst<'tcx> {
             let super_preds = tcx.explicit_super_predicates_of(def_id);
             for &(ref pred, _) in super_preds.skip_binder() {
                 let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
+                    // Corresponds to `where Foo: Bar`. Get the `Bar` trait.
                     ty::ClauseKind::Trait(x) => x,
+                    // Corresponds to `where <Foo as Bar>::Assoc == T`. This
+                    // should also be accompanied by a `ClauseKind::Trait`
+                    // representing `Foo: Bar`, which is handled above. As such,
+                    // it is safe to skip this case.
+                    ty::ClauseKind::Projection(..) => continue,
+                    // Corresponds to `where Foo: 'r`. There is no supertrait
+                    // involved here, so just skip this case.
                     ty::ClauseKind::TypeOutlives(..) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
