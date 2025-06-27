@@ -134,14 +134,22 @@ impl<'tcx> TraitInst<'tcx> {
         while let Some(def_id) = pending.pop() {
             let super_preds = tcx.explicit_super_predicates_of(def_id);
             for &(ref pred, _) in super_preds.skip_binder() {
-                let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
-                    ty::ClauseKind::Trait(x) => x,
+                let pred_def_id = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
+                    // Corresponds to `where Foo: Bar`. Get the DefId for `Bar`.
+                    ty::ClauseKind::Trait(tpred) => {
+                        assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
+                        tpred.trait_ref.def_id
+                    },
+                    // Corresponds to `where Foo: Bar<Item = Type>`. Get the
+                    // DefId for `Bar` by looking up `Item`'s parent.
+                    ty::ClauseKind::Projection(ppred) => tcx.parent(ppred.projection_term.def_id),
+                    // Corresponds to `where Foo: 'r`. There is no supertrait
+                    // involved here, so just skip this case.
                     ty::ClauseKind::TypeOutlives(..) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
-                assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
-                if all_super_traits.insert(tpred.trait_ref.def_id) {
-                    pending.push(tpred.trait_ref.def_id);
+                if all_super_traits.insert(pred_def_id) {
+                    pending.push(pred_def_id);
                 }
             }
         }
