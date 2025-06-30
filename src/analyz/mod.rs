@@ -106,8 +106,10 @@ fn vtable_descriptor_for_cast<'tcx>(
         )
     }
 
-    /// Find the last field of a given ADT. If an ADT's last field holds another
-    /// ADT, recursively find its last field.
+    /// Find the last field of a given struct. If a struct's last field holds
+    /// another struct, recursively find its last field.
+    ///
+    /// This will panic if called on a non-struct ADT.
     fn last_field<'tcx>(
         tcx: TyCtxt<'tcx>,
         adt_def: &ty::AdtDef<'tcx>,
@@ -117,7 +119,7 @@ fn vtable_descriptor_for_cast<'tcx>(
         let last_field_ty = fields.raw.last()?;
         let last_field_instantiated = instantiate_field_ty(tcx, last_field_ty, adt_args);
         match *last_field_instantiated.kind() {
-            ty::TyKind::Adt(ref field_adt_def, field_adt_args) => {
+            ty::TyKind::Adt(ref field_adt_def, field_adt_args) if field_adt_def.is_struct() => {
                 last_field(tcx, field_adt_def, field_adt_args)
             }
             _ => Some(last_field_instantiated)
