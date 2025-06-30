@@ -106,6 +106,26 @@ fn vtable_descriptor_for_cast<'tcx>(
         )
     }
 
+    /// Find the last field of a given struct. If a struct's last field holds
+    /// another struct, recursively find its last field.
+    ///
+    /// This will panic if called on a non-struct ADT.
+    fn last_field<'tcx>(
+        tcx: TyCtxt<'tcx>,
+        adt_def: &ty::AdtDef<'tcx>,
+        adt_args: ty::GenericArgsRef<'tcx>
+    ) -> Option<ty::Ty<'tcx>> {
+        let fields = &adt_def.non_enum_variant().fields;
+        let last_field_ty = fields.raw.last()?;
+        let last_field_instantiated = instantiate_field_ty(tcx, last_field_ty, adt_args);
+        match *last_field_instantiated.kind() {
+            ty::TyKind::Adt(ref field_adt_def, field_adt_args) if field_adt_def.is_struct() => {
+                last_field(tcx, field_adt_def, field_adt_args)
+            }
+            _ => Some(last_field_instantiated)
+        }
+    }
+
     match (*old_ty.kind(), *new_ty.kind()) {
         // The two base cases: we are casting between two references or two raw
         // pointers.
@@ -117,9 +137,28 @@ fn vtable_descriptor_for_cast<'tcx>(
             }
 
             // Relevant code: rustc_codegen_ssa::meth::get_vtable
-            let trait_ref = match *new_pointee.kind() {
-                ty::TyKind::Dynamic(ref preds, _, _) =>
+            let trait_ref = match (*old_pointee.kind(), *new_pointee.kind()) {
+                // &Concrete -> &dyn Trait
+                (
+                    _,
+                    ty::TyKind::Dynamic(ref preds, _, _),
+                ) =>
                     preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
+
+                // &S<Concrete> -> &S<dyn Trait>
+                (
+                    ty::TyKind::Adt(ref old_adt_def, old_adt_args),
+                    ty::TyKind::Adt(ref new_adt_def, new_adt_args),
+                ) if old_adt_def.is_struct() && new_adt_def.is_struct() => {
+                    let concrete_type = last_field(tcx, old_adt_def, old_adt_args)?;
+                    let dynamic_type = last_field(tcx, new_adt_def, new_adt_args)?;
+                    match dynamic_type.kind() {
+                        ty::TyKind::Dynamic(ref preds, _, _) => preds
+                            .principal()
+                            .map(|pred| pred.with_self_ty(tcx, concrete_type)),
+                        _ => None,
+                    }
+                },
                 _ => return None,
             };
             let trait_ref: ty::PolyTraitRef = match trait_ref {
