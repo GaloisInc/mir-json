@@ -1,3 +1,4 @@
+use core::array;
 use core::num::Wrapping;
 
 
@@ -86,30 +87,12 @@ impl Symbolic for bool {
 }
 
 
-macro_rules! array_impls {
-    ($($size:expr)*) => {
-        $(
-            impl<T: Symbolic + Copy> Symbolic for [T; $size] {
-                fn symbolic(desc: &'static str) -> [T; $size] {
-                    let mut arr = [T::symbolic(desc); $size];
-                    for i in 1 .. $size {
-                        arr[i] = T::symbolic(desc);
-                    }
-                    arr
-                }
-            }
-        )*
-    };
+impl<T: Symbolic, const N: usize> Symbolic for [T; N] {
+    fn symbolic(desc: &'static str) -> [T; N] {
+        array::from_fn(|_i| T::symbolic(desc))
+    }
 }
 
-array_impls! {
-    0 1 2 3 4 5 6 7 8 9
-    10 11 12 13 14 15 16 17 18 19
-    20 21 22 23 24 25 26 27 28 29
-    30 31 32
-    // Some common larger sizes
-    40 48 64 80 96 128 160 256
-}
 
 macro_rules! tuple_impls {
     ($($($name:ident)*;)*) => {
