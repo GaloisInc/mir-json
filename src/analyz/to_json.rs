@@ -342,7 +342,14 @@ impl<'tcx> AllocIntern<'tcx> {
         // NB: The use of :: here is important, as mir-json's dead
         // code elimination relies on it.
         // See https://github.com/GaloisInc/mir-json/issues/36.
-        let id = format!("{}/{}::{{{{alloc}}}}[{}]", crate_name, disambig, self.map.len());
+        let id = format!(
+                    "{}/{}::{{{{alloc}}}}[{}]",
+                    crate_name,
+                    // Keep this in sync with how disambiguators are formatted in
+                    // analyz::ty_json::orig_def_id_str.
+                    &disambig.to_string()[..8],
+                    self.map.len(),
+                 );
         static_def["name"] = id.clone().into();
         self.new_vals.push(static_def);
         let old = self.map.insert((alloc, ty), id.clone());
