@@ -106,23 +106,45 @@ fn vtable_descriptor_for_cast<'tcx>(
         )
     }
 
-    /// Find the last field of a given struct. If a struct's last field holds
-    /// another struct, recursively find its last field.
-    ///
-    /// This will panic if called on a non-struct ADT.
-    fn last_field<'tcx>(
+    /// Attempt to compute the vtable descriptor for a DST-style cast between
+    /// _references to_ the two provided types, if applicable. The logic for a
+    /// DST-style cast differs from the overall `vtable_descriptor_for_cast`
+    /// logic:
+    /// - The target type is allowed to be a naked `TyKind::Dynamic`, because of
+    ///   this function's assumption that it's computing a cast to a reference
+    ///   to the provided target type.
+    /// - The source and target types may be ADTs, but we will only attempt to
+    ///   recursively perform a DST-style cast on their _last_ fields, as
+    ///   compared to `vtable_descriptor_for_cast`'s willingness to perform a
+    ///   cast on _any_ single field.
+    fn vtable_descriptor_for_dst_cast<'tcx>(
         tcx: TyCtxt<'tcx>,
-        adt_def: &ty::AdtDef<'tcx>,
-        adt_args: ty::GenericArgsRef<'tcx>
-    ) -> Option<ty::Ty<'tcx>> {
-        let fields = &adt_def.non_enum_variant().fields;
-        let last_field_ty = fields.raw.last()?;
-        let last_field_instantiated = instantiate_field_ty(tcx, last_field_ty, adt_args);
-        match *last_field_instantiated.kind() {
-            ty::TyKind::Adt(ref field_adt_def, field_adt_args) if field_adt_def.is_struct() => {
-                last_field(tcx, field_adt_def, field_adt_args)
-            }
-            _ => Some(last_field_instantiated)
+        old_pointee: ty::Ty<'tcx>,
+        new_pointee: ty::Ty<'tcx>,
+    ) -> Option<ty::PolyTraitRef<'tcx>> {
+        match (*old_pointee.kind(), *new_pointee.kind()) {
+            // Casting to a `&dyn Trait` always yields a vtable.
+            (
+                _,
+                ty::TyKind::Dynamic(ref preds, _, _),
+            ) =>
+                preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
+
+            // Casting between references to ADTs can produce a vtable if
+            // casting between references to the last fields can produce a
+            // vtable. This is the case because ADTs may contain trait objects
+            // in their last field, and only in their last field.
+            (
+                ty::TyKind::Adt(ref old_adt_def, old_adt_args),
+                ty::TyKind::Adt(ref new_adt_def, new_adt_args),
+            ) if old_adt_def.is_struct() && new_adt_def.is_struct() => {
+                let old_last_field = &old_adt_def.non_enum_variant().fields.raw.last()?;
+                let new_last_field = &new_adt_def.non_enum_variant().fields.raw.last()?;
+                let old_last_field_ty = instantiate_field_ty(tcx, old_last_field, old_adt_args);
+                let new_last_field_ty = instantiate_field_ty(tcx, new_last_field, new_adt_args);
+                vtable_descriptor_for_dst_cast(tcx, old_last_field_ty, new_last_field_ty)
+            },
+            _ => None,
         }
     }
 
@@ -136,32 +158,7 @@ fn vtable_descriptor_for_cast<'tcx>(
                 return None;
             }
 
-            // Relevant code: rustc_codegen_ssa::meth::get_vtable
-            let trait_ref = match (*old_pointee.kind(), *new_pointee.kind()) {
-                // &Concrete -> &dyn Trait
-                (
-                    _,
-                    ty::TyKind::Dynamic(ref preds, _, _),
-                ) =>
-                    preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
-
-                // &S<Concrete> -> &S<dyn Trait>
-                (
-                    ty::TyKind::Adt(ref old_adt_def, old_adt_args),
-                    ty::TyKind::Adt(ref new_adt_def, new_adt_args),
-                ) if old_adt_def.is_struct() && new_adt_def.is_struct() => {
-                    let concrete_type = last_field(tcx, old_adt_def, old_adt_args)?;
-                    let dynamic_type = last_field(tcx, new_adt_def, new_adt_args)?;
-                    match dynamic_type.kind() {
-                        ty::TyKind::Dynamic(ref preds, _, _) => preds
-                            .principal()
-                            .map(|pred| pred.with_self_ty(tcx, concrete_type)),
-                        _ => None,
-                    }
-                },
-                _ => return None,
-            };
-            let trait_ref: ty::PolyTraitRef = match trait_ref {
+            let trait_ref: ty::PolyTraitRef = match vtable_descriptor_for_dst_cast(tcx, old_pointee, new_pointee) {
                 Some(x) => x,
                 // If there's no trait ref, it means the `Dynamic` predicates contain only auto traits.
                 // The vtable for this trait object is empty.
