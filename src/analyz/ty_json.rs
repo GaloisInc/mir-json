@@ -101,6 +101,8 @@ pub fn orig_def_id_str(
     format!(
         "{}/{}{}",
         crate_name,
+        // Keep this in sync with how disambiguators are formatted in
+        // AllocIntern::insert in src/analyz/to_json.rs.
         &disambig.to_string()[..8],
         defpath.to_string_no_crate_verbose(),
     )
