@@ -128,7 +128,10 @@ where
     R: Try,
     R::Residual: Residual<[R::Output; N]>,
 {
-    let mut array = [const { MaybeUninit::uninit() }; N];
+    let array: MaybeUninit<[MaybeUninit<_>; N]> = MaybeUninit::uninit();
+    // `MaybeUninit::uninit().assume_init()` is normally undefined behavior, but in this case the
+    // value we're getting out doesn't contain any initialized data, only `N` `MaybeUninit`s.
+    let mut array: [MaybeUninit<_>; N] = unsafe { array.assume_init() };
     match try_from_fn_erased(&mut array, cb) {
         ControlFlow::Break(r) => FromResidual::from_residual(r),
         ControlFlow::Continue(()) => {
