@@ -166,3 +166,10 @@ identify all of the code that was changed in each patch.
   Crucible does not currently support pointer casts from single elements to
   arrays, so we implement this function by explicitly creating a
   `MaybeUninit<[T; N]>` and copying into it.
+
+* Avoid use of `const { MaybeUninit::uninit() }` in `array::from_fn` (last applied: July 3, 2025)
+
+  Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
+  general, producing rendered constants for unions (like `MaybeUninit`) is
+  difficult because we don't have a good way to detect which union variant is
+  active.
