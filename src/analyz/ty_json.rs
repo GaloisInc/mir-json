@@ -388,6 +388,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(_closure_did, args) =>
                         args.as_closure().upvar_tys()[..].to_owned(),
+                    ty::TyKind::FnPtr(..) => vec![],
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]
