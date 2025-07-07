@@ -777,15 +777,63 @@ fn emit_trait<'tcx>(
     ti: TraitInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.tcx;
-    let methods = if let Some(tref) = ti.concrete_trait_ref(tcx) {
+    let trait_ref = ti.concrete_trait_ref(tcx);
+
+    let methods = if let Some(tref) = trait_ref {
         tcx.vtable_entries(tref)
     } else {
         &[]
     };
-    let mut items = Vec::with_capacity(methods.len());
+
+    // Reserve space for all methods plus the additional drop function.  Usually
+    // `methods` will contain a few non-`VtblEntry::Method` entries, giving us
+    // extra slots to work with, but we don't rely on that.
+    let mut items = Vec::with_capacity(methods.len() + 1);
+
+    // To get around an issue in which rustc seems not to generate proper drop
+    // glue for trait objects, we always include a drop method in emitted traits
+    // (and vtables - see `build_vtable_items` below), and we always put it at
+    // the beginning of the method list so that `crucible-mir` can find and call
+    // it manually. We adjust `InstanceKind::Virtual` indices to account for
+    // this extra method in `ty_json::adjust_method_index`.
+    if let Some(tref) = trait_ref {
+        let dyn_ty = tref.self_ty();
+        let drop_inst = ty::Instance::resolve_drop_in_place(tcx, dyn_ty);
+        let drop_def_id = drop_inst.def.def_id();
+        let drop_args = drop_inst.args;
+        let drop_sig = tcx.instantiate_and_normalize_erasing_regions(
+            drop_args,
+            ty::TypingEnv::fully_monomorphized(),
+            tcx.fn_sig(drop_def_id),
+        );
+        let drop_sig = tcx.instantiate_bound_regions_with_erased(drop_sig);
+        items.push(json!({
+            "kind": "Method",
+            "item_id": drop_def_id.to_json(ms),
+            "signature": drop_sig.to_json(ms),
+        }));
+    } else {
+        // I believe the only way this can happen is if this trait instance was
+        // derived from predicates (`TraitInst::from_dynamic_predicates`) with
+        // no principal trait, only marker traits. For example, `dyn Debug +
+        // Send + Sync`'s principal trait would be `Debug`, but `dyn Send +
+        // Sync` would have no principal trait, because `Send` and `Sync` are
+        // marker traits. For now, we've decided not to generally support this
+        // case, because it doesn't seem common or useful.
+        eprintln!("warning: no trait ref for {:?}?", ti);
+        // This assert prevents a potential correctness issue.  On drop,
+        // `crucible-mir` will call the first method in the vtable, expecting it
+        // to be `fn drop_in_place(ptr: *mut dyn Trait)`.  Since we don't emit a
+        // drop function here, a different method could end up in that slot, and
+        // `crucible-mir` would call it if it had a matching Crucible type
+        // signature. We prevent this by asserting that there are no other
+        // methods.
+        assert_eq!(methods.len(), 0);
+    }
+
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceKind::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly, in `ty_json::adjust_method_index`.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
@@ -1088,10 +1136,29 @@ fn build_vtable_items<'tcx>(
     let trait_ref = tcx.instantiate_bound_regions_with_erased(trait_ref);
     let methods = tcx.vtable_entries(trait_ref);
 
-    let mut parts = Vec::with_capacity(methods.len());
+    // Reserve space for all methods plus the additional drop function.  Usually
+    // `methods` will contain a few non-`VtblEntry::Method` entries, giving us
+    // extra slots to work with, but we don't rely on that.
+    let mut parts = Vec::with_capacity(methods.len() + 1);
+
+    // To get around an issue in which rustc seems not to generate proper drop
+    // glue for trait objects, we always include a drop method in emitted
+    // vtables (and traits - see `emit_trait` above), and we always put it at
+    // the beginning of the method list so that `crucible-mir` can find and call
+    // it manually. We adjust `InstanceKind::Virtual` indices to account for
+    // this extra method in `ty_json::adjust_method_index`.
+    let concrete_ty = trait_ref.self_ty();
+    let drop_inst = ty::Instance::resolve_drop_in_place(tcx, concrete_ty);
+    let drop_def_id = drop_inst.def.def_id();
+    let drop_args = drop_inst.args;
+    parts.push(json!({
+        "item_id": drop_def_id.to_json(mir),
+        // `def_id` is the name of the concrete function.
+        "def_id": get_fn_def_name(mir, drop_def_id, drop_args),
+    }));
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceKind::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly, in `ty_json::adjust_method_index`.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
