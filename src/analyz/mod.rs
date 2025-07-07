@@ -818,8 +818,17 @@ fn emit_trait<'tcx>(
         // no principal trait, only marker traits. For example, `dyn Debug +
         // Send + Sync`'s principal trait would be `Debug`, but `dyn Send +
         // Sync` would have no principal trait, because `Send` and `Sync` are
-        // marker traits.
-        panic!("No trait ref for {:?}?", ti);
+        // marker traits. For now, we've decided not to generally support this
+        // case, because it doesn't seem common or useful.
+        eprintln!("warning: no trait ref for {:?}?", ti);
+        // This assert prevents a potential correctness issue.  On drop,
+        // `crucible-mir` will call the first method in the vtable, expecting it
+        // to be `fn drop_in_place(ptr: *mut dyn Trait)`.  Since we don't emit a
+        // drop function here, a different method could end up in that slot, and
+        // `crucible-mir` would call it if it had a matching Crucible type
+        // signature. We prevent this by asserting that there are no other
+        // methods.
+        assert_eq!(methods.len(), 0);
     }
 
     for &m in methods {
