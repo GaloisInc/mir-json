@@ -286,6 +286,9 @@ impl ToJson<'_> for hir::def_id::DefId {
 /// rustc's vtables have null entries for non-object-safe methods (those with `Where Self: Sized`).
 /// We omit such methods from our vtables.  This function adjusts vtable indices from rustc's way
 /// of counting to ours.
+///
+/// This function also accounts for the extra `drop_in_place` method that we
+/// include in traits/vtables in `analyz::{emit_trait,build_vtable_items}`.
 fn adjust_method_index<'tcx>(
     tcx: TyCtxt<'tcx>,
     tref: ty::Binder<'tcx, ty::TraitRef<'tcx>>,
@@ -295,6 +298,8 @@ fn adjust_method_index<'tcx>(
     methods.iter().take(raw_idx)
         .filter(|m| matches!(m, ty::vtable::VtblEntry::Method(_)))
         .count()
+        // For the extra drop method
+        + 1
 }
 
 impl<'tcx> ToJson<'tcx> for FnInst<'tcx> {

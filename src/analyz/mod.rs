@@ -794,7 +794,8 @@ fn emit_trait<'tcx>(
     // glue for trait objects, we always include a drop method in emitted traits
     // (and vtables - see `build_vtable_items` below), and we always put it at
     // the beginning of the method list so that `crucible-mir` can find and call
-    // it manually.
+    // it manually. We adjust `InstanceKind::Virtual` indices to account for
+    // this extra method in `ty_json::adjust_method_index`.
     if let Some(tref) = trait_ref {
         let dyn_ty = tref.self_ty();
         let drop_inst = ty::Instance::resolve_drop_in_place(tcx, dyn_ty);
@@ -1135,7 +1136,8 @@ fn build_vtable_items<'tcx>(
     // glue for trait objects, we always include a drop method in emitted
     // vtables (and traits - see `emit_trait` above), and we always put it at
     // the beginning of the method list so that `crucible-mir` can find and call
-    // it manually.
+    // it manually. We adjust `InstanceKind::Virtual` indices to account for
+    // this extra method in `ty_json::adjust_method_index`.
     let concrete_ty = trait_ref.self_ty();
     let drop_inst = ty::Instance::resolve_drop_in_place(tcx, concrete_ty);
     let drop_def_id = drop_inst.def.def_id();
