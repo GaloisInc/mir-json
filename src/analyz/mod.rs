@@ -824,7 +824,7 @@ fn emit_trait<'tcx>(
 
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceKind::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly, in `ty_json::adjust_method_index`.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
@@ -1149,7 +1149,7 @@ fn build_vtable_items<'tcx>(
     }));
     for &m in methods {
         // `m` is `None` for methods with `where Self: Sized`.  We omit these from the vtable, and
-        // adjust `InstanceKind::Virtual` indices accordingly.
+        // adjust `InstanceKind::Virtual` indices accordingly, in `ty_json::adjust_method_index`.
         let (def_id, args) = match m {
             ty::vtable::VtblEntry::Method(inst) => (inst.def.def_id(), inst.args),
             _ => continue,
