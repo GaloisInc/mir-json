@@ -1,15 +1,17 @@
 #![macro_use]
 
 use rustc_ast::{ast, token, tokenstream, ptr, Crate};
+use rustc_const_eval::interpret::InterpCx;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
+use rustc_middle::mir::interpret::GlobalId;
 use rustc_middle::mir::mono::MonoItem;
 use rustc_session;
 use rustc_session::config::{OutputType, OutFileName};
-use rustc_span::Span;
+use rustc_span::{DUMMY_SP, Span};
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
 use std::fmt::Write as FmtWrite;
@@ -23,6 +25,7 @@ use serde_cbor;
 #[macro_use]
 mod to_json;
 mod ty_json;
+use analyz::machine::RenderConstMachine;
 use analyz::to_json::*;
 use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
@@ -880,13 +883,21 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
     let tcx = ms.tcx;
     let name = def_id_str(tcx, def_id);
 
-    // let mir = tcx.optimized_mir(def_id);
-    let mir = tcx.mir_for_ctfe(def_id);
-    emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
+    let span = tcx.def_span(def_id);
+    let ty = tcx.type_of(def_id).skip_binder();
+    emit_static_decl(
+        ms,
+        out,
+        &name,
+        def_id,
+        None,
+        span,
+        ty,
+        tcx.is_mutable_static(def_id)
+    )?;
 
     for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-        emit_promoted(ms, out, &name, idx, mir)?;
+        emit_promoted(ms, out, &name, def_id, idx, mir)?;
     }
 
     Ok(())
@@ -897,14 +908,33 @@ fn emit_static_decl<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
     name: &str,
+    parent_def: DefId,
+    promoted: Option<mir::Promoted>,
+    span: Span,
     ty: ty::Ty<'tcx>,
     mutable: bool,
 ) -> io::Result<()> {
+    let tcx = ms.tcx;
+    let args = ty::GenericArgs::identity_for_item(tcx, parent_def);
+    let instance = ty::Instance::new(parent_def, args);
+    let cid = GlobalId { instance, promoted };
+    let typing_env = ty::TypingEnv::fully_monomorphized();
+    let const_val = tcx.const_eval_global_id(typing_env, cid, span).unwrap();
+    // TODO RGS: This is copy-pasted directly from the ToJson impl for
+    // (ConstValue, Ty). Should we factor this part out?
+    let mut icx = InterpCx::new(
+        tcx,
+        DUMMY_SP,
+        typing_env,
+        RenderConstMachine::new(),
+    );
+    let op_ty = as_opty(tcx, &mut icx, const_val, ty);
     let j = json!({
         "name": name,
         "ty": ty.to_json(ms),
         "mutable": mutable,
-        "kind": "body",
+        "kind": "constant",
+        "rendered": render_opty(ms, &mut icx, &op_ty),
     });
     out.emit(EntryKind::Static, j)?;
     emit_new_defs(ms, out)
@@ -1085,7 +1115,7 @@ fn emit_instance<'tcx>(
                 ty::EarlyBinder::bind(mir.clone()),
             );
             let mir = tcx.arena.alloc(mir);
-            emit_promoted(ms, out, &name, idx, mir)?;
+            emit_promoted(ms, out, &name, def_id, idx, mir)?;
         }
     }
 
@@ -1096,12 +1126,22 @@ fn emit_promoted<'tcx>(
     ms: &mut MirState<'_, 'tcx>,
     out: &mut impl JsonOutput,
     parent: &str,
+    parent_def: DefId,
     idx: mir::Promoted,
     mir: &'tcx Body<'tcx>,
 ) -> io::Result<()> {
     let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false)?;
+    emit_static_decl(
+        ms,
+        out,
+        &name,
+        parent_def,
+        Some(idx),
+        mir.span,
+        mir.return_ty(),
+        false
+    )?;
     Ok(())
 }
 

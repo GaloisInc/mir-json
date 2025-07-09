@@ -777,7 +777,7 @@ impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
 }
 
 use self::machine::RenderConstMachine;
-mod machine {
+pub mod machine {
     use std::borrow::Cow;
     use super::*;
     use rustc_const_eval::interpret::*;
