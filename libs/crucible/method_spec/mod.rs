@@ -23,6 +23,10 @@ impl MethodSpec {
     pub fn enable(&self) {
         raw::spec_enable(self.raw);
     }
+
+    pub fn pretty_print(&self) -> &'static str {
+        raw::spec_pretty_print(self.raw)
+    }
 }
 
 impl fmt::Debug for MethodSpec {
