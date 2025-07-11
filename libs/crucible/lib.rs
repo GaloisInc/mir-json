@@ -132,9 +132,26 @@ pub fn override_<F, G>(f: F, g: G) {
     unimplemented!("crucible::override_");
 }
 
+/// Print a string during symbolic execution.  The string must be concrete.
+///
+/// Due to the way crux-mir explores paths through the program, these prints may execute in an
+/// unusual order.  For example, `if cond { print_str("foo") } else { print_str("bar") }` may print
+/// both `foo` and `bar` in some cases.
+pub fn print_str(s: &str) {
+    unimplemented!("print_str");
+}
+
 /// Print a what4 expression to stderr.  `T` must have a primitive/base type for its Crucible
 /// representation.
 pub fn dump_what4<T>(desc: &str, x: T) {
+    unimplemented!("dump_what4");
+}
+
+/// Print a Crucible `RegValue` to stderr.  Most `TypeRepr`s used by crucible-mir are supported,
+/// but not all; if `T` uses an unsupported `TypeRepr`, this may print `[unsupported]` or throw an
+/// error.
+pub fn dump_rv<T>(desc: &str, x: T) {
+    unimplemented!("dump_rv");
 }
 
 // Some older test cases still use these functions.
