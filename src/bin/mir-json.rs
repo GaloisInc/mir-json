@@ -12,6 +12,8 @@ extern crate rustc_ast;
 extern crate rustc_middle;
 
 extern crate mir_json;
+extern crate log;
+extern crate env_logger;
 
 use mir_json::analyz;
 use rustc_ast::Crate;
@@ -54,6 +56,8 @@ fn go() {
     } else {
         analyz::ExportStyle::ExportCruxTests
     };
+
+    env_logger::init();
 
     rustc_driver::run_compiler(&args, &mut MirJsonCallbacks { export_style });
 }
