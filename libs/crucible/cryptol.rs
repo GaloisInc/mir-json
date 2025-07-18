@@ -18,6 +18,11 @@ pub fn override_<F>(f: F, module_path: &str, name: &str) {
     unimplemented!("cryptol::override")
 }
 
+/// Mark the given Cryptol name to be treated as uninterpreted for the duration
+/// of the current test.
+pub fn uninterp(name: &str) {
+    unimplemented!("cryptol::uninterp")
+}
 
 #[doc(hidden)]
 #[macro_export]
