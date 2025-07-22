@@ -173,3 +173,7 @@ identify all of the code that was changed in each patch.
   general, producing rendered constants for unions (like `MaybeUninit`) is
   difficult because we don't have a good way to detect which union variant is
   active.
+
+* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: July 22, 2025)
+
+  The actual implementation uses a pointer cast that Crucible can't handle.
