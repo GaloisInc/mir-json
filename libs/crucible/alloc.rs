@@ -49,7 +49,10 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         unsafe {
             let len = size_to_len::<T>(layout.size());
             let ptr = NonNull::new_unchecked(allocate::<T>(len));
-            Ok(NonNull::slice_from_raw_parts(ptr.cast::<u8>(), len))
+            Ok(NonNull::slice_from_raw_parts(
+                core::mem::transmute::<NonNull<T>, NonNull<u8>>(ptr),
+                len,
+            ))
         }
     }
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
@@ -64,7 +67,10 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         unsafe {
             let len = size_to_len::<T>(layout.size());
             let ptr = NonNull::new_unchecked(allocate_zeroed::<T>(len));
-            Ok(NonNull::slice_from_raw_parts(ptr.cast::<u8>(), len))
+            Ok(NonNull::slice_from_raw_parts(
+                core::mem::transmute::<NonNull<T>, NonNull<u8>>(ptr),
+                len,
+            ))
         }
     }
     unsafe fn grow(
