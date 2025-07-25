@@ -206,7 +206,10 @@ pub const fn from_ref<T>(s: &T) -> &[T] {
 #[rustc_const_stable(feature = "const_slice_from_ref", since = "1.83.0")]
 #[must_use]
 pub const fn from_mut<T>(s: &mut T) -> &mut [T] {
-    array::from_mut(s)
+    const fn crucible_slice_from_mut_hook<T>(r: &mut T) -> &mut [T] {
+        array::from_mut(r)
+    }
+    crucible_slice_from_mut_hook(s)
 }
 
 /// Forms a slice from a pointer range.
