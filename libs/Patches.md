@@ -186,3 +186,7 @@ identify all of the code that was changed in each patch.
 * Use `crucible_slice_from_mut_hook` in `core::slice::from_mut` (last applied: July 25, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
+
+* Use `crucible_slice_from_ref_hook` in `core::slice::from_ref` (last applied: July 28, 2025)
+
+  The actual implementation uses a pointer cast that Crucible can't handle.
