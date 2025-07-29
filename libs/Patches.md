@@ -190,3 +190,8 @@ identify all of the code that was changed in each patch.
 * Use `crucible_slice_from_ref_hook` in `core::slice::from_ref` (last applied: July 28, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
+
+* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: July 28, 2025)
+
+  Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
+  with Crucible's representation of arrays.
