@@ -33,30 +33,68 @@ macro_rules! cryptol_function_name {
 
 #[macro_export]
 macro_rules! cryptol {
+
+    // This pattern does not support const-generics, so its expression is
+    // not processed by format!. Therefore its use of curly braces will not
+    // need to be escaped.
     (
         path $path:expr;
 
-        $(
-            $pub_:vis fn $name:ident
+        $(#[$attr:meta])*
+        $pub_:vis fn $name:ident
                 ( $($arg_name:ident : $arg_ty:ty),* )
                 $( -> $ret_ty:ty )?
-                $(= $cryptol_name:expr)?
-                ; )*
+                $(= $cryptol_name:expr)? ;
+        $($rest:tt)*
     ) => {
-        $(
-            #[allow(unconditional_recursion)]
-            $pub_ fn $name($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
-                // The first call to `$name` loads the Cryptol definition and installs it as an
-                // override for `$name` itself.  The recursive call below, and all future calls to
-                // `$name`, will dispatch directly to the Cryptol override.
-                $crate::cryptol::override_(
-                    $name,
-                    $path,
-                    $crate::cryptol_function_name!($($cryptol_name,)? $name),
-                );
-                $name($($arg_name),*)
-            }
-        )*
+        $(#[$attr])*
+        #[allow(unconditional_recursion)]
+        $pub_ fn $name($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
+            // The first call to `$name` loads the Cryptol definition and installs it as an
+            // override for `$name` itself.  The recursive call below, and all future calls to
+            // `$name`, will dispatch directly to the Cryptol override.
+            $crate::cryptol::override_(
+                $name,
+                $path,
+                $crate::cryptol_function_name!($($cryptol_name,)? $name),
+            );
+            $name($($arg_name),*)
+        }
+        $crate::cryptol! { path $path; $($rest)* }
+    };
+
+    // This pattern supports definitions with const generics. The cryptol
+    // expression will be processed by format! which will allow the generic
+    // parameters to be accessed by name, e.g. `{N}`. Any regular use of
+    // curly braces in the expression will need to be escaped,
+    // e.g. `{{` or `}}`.
+    (
+        path $path:expr;
+
+        $(#[$attr:meta])*
+        $pub_:vis fn $name:ident
+                < $(const $N:ident: usize),* >
+                ( $($arg_name:ident : $arg_ty:ty),* )
+                $( -> $ret_ty:ty )?
+                = $cryptol_name:expr ;
+        $($rest:tt)*
+    ) => {
+        $(#[$attr])*
+        #[allow(unconditional_recursion)]
+        $pub_ fn $name< $(const $N: usize),* >($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
+            $crate::cryptol::override_(
+                $name::< $($N),* >,
+                $path,
+                &format!($cryptol_name),
+            );
+            $name::< $($N),* >($($arg_name),*)
+        }
+        $crate::cryptol! { path $path; $($rest)* }
+    };
+
+    (
+        path $path:expr;
+    ) => {
     };
 }
 
