@@ -40,12 +40,14 @@ macro_rules! cryptol {
     (
         path $path:expr;
 
+        $(#[$attr:meta])*
         $pub_:vis fn $name:ident
                 ( $($arg_name:ident : $arg_ty:ty),* )
                 $( -> $ret_ty:ty )?
                 $(= $cryptol_name:expr)? ;
         $($rest:tt)*
     ) => {
+        $(#[$attr])*
         #[allow(unconditional_recursion)]
         $pub_ fn $name($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
             // The first call to `$name` loads the Cryptol definition and installs it as an
@@ -69,6 +71,7 @@ macro_rules! cryptol {
     (
         path $path:expr;
 
+        $(#[$attr:meta])*
         $pub_:vis fn $name:ident
                 < $(const $N:ident: usize),* >
                 ( $($arg_name:ident : $arg_ty:ty),* )
@@ -76,6 +79,7 @@ macro_rules! cryptol {
                 = $cryptol_name:expr ;
         $($rest:tt)*
     ) => {
+        $(#[$attr])*
         #[allow(unconditional_recursion)]
         $pub_ fn $name< $(const $N: usize),* >($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
             $crate::cryptol::override_(
