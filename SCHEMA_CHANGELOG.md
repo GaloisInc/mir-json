@@ -3,6 +3,10 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 3
+
+Emit layout information (size and alignment) for sized types.
+
 ## 2
 
 Upgrade the supported Rust toolchain to `nightly-2025-02-16` (`1.86`).
