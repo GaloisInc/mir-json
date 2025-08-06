@@ -452,8 +452,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             return json!(id);
         }
 
-        // Otherwise, convert the type to JSON and add the new entry to the interning table.
-        let j = match self.kind() {
+        // Otherwise, convert the type to JSON.
+        let ty_j = match self.kind() {
             &ty::TyKind::Bool => {
                 json!({"kind": "Bool"})
             }
@@ -598,7 +598,25 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             },
         };
 
-        let id = mir.tys.insert(*self, j);
+        // Get layout information.
+        let layout = tcx
+            .layout_of(
+                ty::TypingEnv::fully_monomorphized().as_query_input(*self)
+            )
+            .unwrap_or_else(|e| {
+                panic!("failed to get layout of {:?}: {}", self, e)
+            });
+        let layout_j = if layout.is_sized() {
+            Some(json!({
+                "align": layout.align.abi.bytes(),
+                "size": layout.size.bytes()
+            }))
+        } else {
+            None
+        };
+
+        // Add the new entry to the interning table.
+        let id = mir.tys.insert(*self, ty_j, layout_j);
         json!(id)
     }
 }

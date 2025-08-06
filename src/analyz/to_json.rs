@@ -288,11 +288,18 @@ impl<'tcx> TyIntern<'tcx> {
         self.map.get(&ty).map(|x| x as &str)
     }
 
-    pub fn insert(&mut self, ty: ty::Ty<'tcx>, j: serde_json::Value) -> String {
-        let id = ty_unique_id(ty, &j);
+    /// `layout_j` should be [None] if the type is unsized.
+    pub fn insert(
+        &mut self,
+        ty: ty::Ty<'tcx>,
+        ty_j: serde_json::Value,
+        layout_j: Option<serde_json::Value>,
+    ) -> String {
+        let id = ty_unique_id(ty, &ty_j);
         self.new_vals.push(json!({
             "name": &id,
-            "ty": j,
+            "ty": ty_j,
+            "layout": layout_j,
         }));
         let old = self.map.insert(ty, id.clone());
         assert!(old.is_none(), "duplicate insert for type {:?}", ty);
