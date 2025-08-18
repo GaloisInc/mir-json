@@ -145,6 +145,7 @@ where
 #[stable(feature = "array_from_ref", since = "1.53.0")]
 #[rustc_const_stable(feature = "const_array_from_ref_shared", since = "1.63.0")]
 pub const fn from_ref<T>(s: &T) -> &[T; 1] {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_array_from_ref_hook<T>(r: &T) -> &[T; 1] {
         // SAFETY: Converting `&T` to `&[T; 1]` is sound.
         unsafe { &*(r as *const T).cast::<[T; 1]>() }

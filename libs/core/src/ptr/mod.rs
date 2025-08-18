@@ -550,6 +550,7 @@ pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null"]
 pub const fn null<T: ?Sized + Thin>() -> *const T {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *const T {
         from_raw_parts(without_provenance::<()>(0), ())
     }
@@ -578,6 +579,7 @@ pub const fn null<T: ?Sized + Thin>() -> *const T {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null_mut"]
 pub const fn null_mut<T: ?Sized + Thin>() -> *mut T {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *mut T {
         from_raw_parts_mut(without_provenance_mut::<()>(0), ())
     }
@@ -888,6 +890,7 @@ pub const fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
 #[rustc_const_stable(feature = "const_slice_from_raw_parts", since = "1.64.0")]
 #[rustc_diagnostic_item = "ptr_slice_from_raw_parts"]
 pub const fn slice_from_raw_parts<T>(data: *const T, len: usize) -> *const [T] {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_slice_from_raw_parts_hook<T>(data: *const T, len: usize) -> *const [T] {
         from_raw_parts(data, len)
     }
@@ -937,6 +940,7 @@ pub const fn slice_from_raw_parts<T>(data: *const T, len: usize) -> *const [T] {
 #[rustc_const_stable(feature = "const_slice_from_raw_parts_mut", since = "1.83.0")]
 #[rustc_diagnostic_item = "ptr_slice_from_raw_parts_mut"]
 pub const fn slice_from_raw_parts_mut<T>(data: *mut T, len: usize) -> *mut [T] {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_slice_from_raw_parts_hook<T>(data: *mut T, len: usize) -> *mut [T] {
         from_raw_parts_mut(data, len)
     }
