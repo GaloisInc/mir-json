@@ -370,6 +370,7 @@ where
     #[must_use]
     #[inline]
     pub const fn new(n: T) -> Option<Self> {
+        #[inline(never)] // Keep the hook around even with optimizations applied
         const fn crucible_non_zero_new_hook<T: ZeroablePrimitive>(n: T) -> Option<NonZero<T>> {
             // SAFETY: Memory layout optimization guarantees that `Option<NonZero<T>>` has
             //         the same layout and size as `T`, with `0` representing `None`.
