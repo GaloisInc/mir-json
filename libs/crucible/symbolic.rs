@@ -5,11 +5,11 @@ use core::num::Wrapping;
 pub trait Symbolic: Sized {
     /// Create a new symbolic value of this type.  `desc` is used to refer to this symbolic value
     /// when printing counterexamples.
-    fn symbolic(desc: &'static str) -> Self;
+    fn symbolic(desc: &str) -> Self;
 
     /// Create a new symbolic value, subject to constraints.  The result is a symbolic value of
     /// this type on which `f` returns `true`.
-    fn symbolic_where<F: FnOnce(&Self) -> bool>(desc: &'static str, f: F) -> Self {
+    fn symbolic_where<F: FnOnce(&Self) -> bool>(desc: &str, f: F) -> Self {
         let x = Self::symbolic(desc);
         super::crucible_assume!(f(&x));
         x
@@ -22,10 +22,10 @@ macro_rules! uint_impls {
         $(
             /// Hook for a crucible override that creates a symbolic instance of $ty.
             #[allow(unused)]
-            fn $func(desc: &'static str) -> $ty { unimplemented!(stringify!($func)); }
+            fn $func(desc: &str) -> $ty { unimplemented!(stringify!($func)); }
 
             impl Symbolic for $ty {
-                fn symbolic(desc: &'static str) -> $ty { $func(desc) }
+                fn symbolic(desc: &str) -> $ty { $func(desc) }
             }
         )*
     };
@@ -45,7 +45,7 @@ macro_rules! usize_impls {
         $(
             #[cfg(target_pointer_width = $width)]
             impl Symbolic for usize {
-                fn symbolic(desc: &'static str) -> usize { <$ty>::symbolic(desc) as usize }
+                fn symbolic(desc: &str) -> usize { <$ty>::symbolic(desc) as usize }
             }
         )*
     };
@@ -64,7 +64,7 @@ macro_rules! int_impls {
     ($($ty:ty, $uty:ty;)*) => {
         $(
             impl Symbolic for $ty {
-                fn symbolic(desc: &'static str) -> $ty { <$uty>::symbolic(desc) as $ty }
+                fn symbolic(desc: &str) -> $ty { <$uty>::symbolic(desc) as $ty }
             }
         )*
     };
@@ -80,7 +80,7 @@ int_impls! {
 }
 
 impl Symbolic for bool {
-    fn symbolic(desc: &'static str) -> bool {
+    fn symbolic(desc: &str) -> bool {
         let val = u8::symbolic_where(desc, |&x| x < 2);
         val == 1
     }
@@ -88,7 +88,7 @@ impl Symbolic for bool {
 
 
 impl<T: Symbolic, const N: usize> Symbolic for [T; N] {
-    fn symbolic(desc: &'static str) -> [T; N] {
+    fn symbolic(desc: &str) -> [T; N] {
         array::from_fn(|_i| T::symbolic(desc))
     }
 }
@@ -99,7 +99,7 @@ macro_rules! tuple_impls {
         $(
             #[allow(unused)] #[allow(bad_style)]
             impl<$($name: Symbolic,)*> Symbolic for ($($name,)*) {
-                fn symbolic(desc: &'static str) -> ($($name,)*) {
+                fn symbolic(desc: &str) -> ($($name,)*) {
                     (
                         $($name::symbolic(desc),)*
                     )
@@ -127,7 +127,7 @@ tuple_impls! {
 
 
 impl<T: Symbolic> Symbolic for Wrapping<T> {
-    fn symbolic(desc: &'static str) -> Wrapping<T> {
+    fn symbolic(desc: &str) -> Wrapping<T> {
         Wrapping(T::symbolic(desc))
     }
 }

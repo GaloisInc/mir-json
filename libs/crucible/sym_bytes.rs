@@ -23,7 +23,7 @@ impl SymBytes {
     /// Create a new byte array, filling slots `0 .. len` with symbolic values.
     ///
     /// This is like the trait method `Symbolic::symbolic`, but takes an additional `len` argument.
-    pub fn symbolic(desc: &'static str, len: usize) -> SymBytes {
+    pub fn symbolic(desc: &str, len: usize) -> SymBytes {
         SymBytes {
             arr: Array::symbolic(desc),
             len,
@@ -34,7 +34,7 @@ impl SymBytes {
     /// the result with `f`.
     ///
     /// This is like the trait method `Symbolic::symbolic`, but takes an additional `len` argument.
-    pub fn symbolic_where<F>(desc: &'static str, len: usize, f: F) -> SymBytes
+    pub fn symbolic_where<F>(desc: &str, len: usize, f: F) -> SymBytes
     where F: FnOnce(&Self) -> bool {
         let s = Self::symbolic(desc, len);
         crucible_assume!(f(&s));

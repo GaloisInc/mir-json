@@ -50,12 +50,12 @@ impl<T: Copy> Array<T> {
     }
 }
 
-fn symbolic<T>(desc: &'static str) -> Array<T> {
+fn symbolic<T>(desc: &str) -> Array<T> {
     unimplemented!("Array::symbolic")
 }
 
 impl<T> Symbolic for Array<T> {
-    fn symbolic(desc: &'static str) -> Array<T> {
+    fn symbolic(desc: &str) -> Array<T> {
         symbolic(desc)
     }
 }
