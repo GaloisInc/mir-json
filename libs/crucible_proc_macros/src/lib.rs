@@ -52,7 +52,7 @@ impl Folder {
     fn handle_call(&mut self, call: ExprCall) -> Expr {
         // Check whether this is a call to the subject function.
         match *call.func {
-            Expr::Path(ref x) if x.path == self.subject_function_path => {}
+            Expr::Path(ref x) if x.path == self.subject_function_path => {},
             _ => return fold::fold_expr_call(self, call).into(),
         }
 
@@ -60,34 +60,25 @@ impl Folder {
         // errors occur.  If `first_call_span` is unset, then any errors produced will be replaced
         // with the "couldn't find a call" error.
         if self.first_call_span.is_some() {
-            return report_error(
-                call.span(),
-                format_args!(
-                    "found multiple calls to {}",
-                    self.subject_function_path.to_token_stream(),
-                ),
-            );
+            return report_error(call.span(), format_args!(
+                "found multiple calls to {}", self.subject_function_path.to_token_stream(),
+            ));
         } else {
             self.first_call_span = Some(call.span());
         }
 
         if let Some(kind) = self.enclosing_conditional_kind {
-            return report_error(
-                call.span(),
-                format_args!(
-                    "call to {} may not occur inside {}",
-                    self.subject_function_path.to_token_stream(),
-                    kind,
-                ),
-            );
+            return report_error(call.span(), format_args!(
+                "call to {} may not occur inside {}",
+                self.subject_function_path.to_token_stream(),
+                kind,
+            ));
         }
 
         let path = &self.subject_function_path;
-        let add_args = call
-            .args
-            .iter()
-            .map(|arg| quote!(__crux_msb.add_arg(&(#arg));))
-            .collect::<Vec<_>>();
+        let add_args = call.args.iter().map(|arg| {
+            quote!(__crux_msb.add_arg(&(#arg));)
+        }).collect::<Vec<_>>();
         let plain_args = call.args.iter().cloned().collect::<Vec<_>>();
         let tokens = if self.spec_mode {
             let func_name_str = format!("{}_result", path.segments.last().unwrap().ident);
@@ -277,17 +268,13 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         let block = Box::new(folder.fold_block(*test_func.block));
 
         if folder.first_call_span.is_none() {
-            let expr = report_error(
-                func_span,
-                format_args!(
-                    "couldn't find a call to {}",
-                    folder.subject_function_path.to_token_stream(),
-                ),
-            );
+            let expr = report_error(func_span, format_args!(
+                "couldn't find a call to {}",
+                folder.subject_function_path.to_token_stream(),
+            ));
             return quote_spanned! { func_span=>
                 #expr ;
-            }
-            .into();
+            }.into();
         }
 
         let block = parse_quote!({
