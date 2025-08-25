@@ -7,7 +7,7 @@ use std::mem;
 use syn::fold::{self, Fold};
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote};
-use syn::{Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, Ident, Item, ItemFn, Path};
+use syn::{Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, Generics, GenericParam, Ident, Item, ItemFn, Path};
 
 #[derive(Clone)]
 struct Folder {
@@ -322,12 +322,25 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
     tokens.into()
 }
 
+fn add_symbolic_trait_bounds(mut generics: Generics) -> Generics {
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(crucible::Symbolic));
+        }
+    }
+    generics
+}
+
 /// Adds support for `#[cfg_attr(crux, derive(Symbolic))]`
 /// 
 /// This generates an implementation of the Symbolic trait that
 /// is completely symbolic. All fields will be generated using
 /// their symbolic instances. In the case of enumerations, all
 /// variants can be returned. Unions are not supported.
+/// 
+/// When used on a type with generics the generated implementation
+/// will automatically add Symbolic constraints on all generic
+/// type parameters.
 #[proc_macro_derive(Symbolic)]
 pub fn symbolic_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -394,9 +407,13 @@ pub fn symbolic_derive(input: TokenStream) -> TokenStream {
             panic!("Unions are not supported by derive(Symbolic)"),
     };
 
+
+    let generics = add_symbolic_trait_bounds(input.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     let tokens = quote! {
         #[cfg(crux)]
-        impl crucible::Symbolic for #name {
+        impl #impl_generics crucible::Symbolic for #name #ty_generics #where_clause {
             fn symbolic(desc: &str) -> Self {
                 #body
             }
