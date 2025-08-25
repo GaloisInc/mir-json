@@ -1,13 +1,13 @@
-use std::fmt::Display;
-use std::mem;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{quote, quote_spanned};
 use quote::ToTokens;
-use syn::{parse_macro_input, parse_quote};
-use syn::{Attribute, Expr, ExprBlock, ExprCall, ExprMacro, Ident, Item, ItemFn, Path};
+use quote::{quote, quote_spanned};
+use std::fmt::Display;
+use std::mem;
 use syn::fold::{self, Fold};
 use syn::spanned::Spanned;
+use syn::{parse_macro_input, parse_quote};
+use syn::{Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, Ident, Item, ItemFn, Path};
 
 #[derive(Clone)]
 struct Folder {
@@ -52,7 +52,7 @@ impl Folder {
     fn handle_call(&mut self, call: ExprCall) -> Expr {
         // Check whether this is a call to the subject function.
         match *call.func {
-            Expr::Path(ref x) if x.path == self.subject_function_path => {},
+            Expr::Path(ref x) if x.path == self.subject_function_path => {}
             _ => return fold::fold_expr_call(self, call).into(),
         }
 
@@ -60,25 +60,34 @@ impl Folder {
         // errors occur.  If `first_call_span` is unset, then any errors produced will be replaced
         // with the "couldn't find a call" error.
         if self.first_call_span.is_some() {
-            return report_error(call.span(), format_args!(
-                "found multiple calls to {}", self.subject_function_path.to_token_stream(),
-            ));
+            return report_error(
+                call.span(),
+                format_args!(
+                    "found multiple calls to {}",
+                    self.subject_function_path.to_token_stream(),
+                ),
+            );
         } else {
             self.first_call_span = Some(call.span());
         }
 
         if let Some(kind) = self.enclosing_conditional_kind {
-            return report_error(call.span(), format_args!(
-                "call to {} may not occur inside {}",
-                self.subject_function_path.to_token_stream(),
-                kind,
-            ));
+            return report_error(
+                call.span(),
+                format_args!(
+                    "call to {} may not occur inside {}",
+                    self.subject_function_path.to_token_stream(),
+                    kind,
+                ),
+            );
         }
 
         let path = &self.subject_function_path;
-        let add_args = call.args.iter().map(|arg| {
-            quote!(__crux_msb.add_arg(&(#arg));)
-        }).collect::<Vec<_>>();
+        let add_args = call
+            .args
+            .iter()
+            .map(|arg| quote!(__crux_msb.add_arg(&(#arg));))
+            .collect::<Vec<_>>();
         let plain_args = call.args.iter().cloned().collect::<Vec<_>>();
         let tokens = if self.spec_mode {
             let func_name_str = format!("{}_result", path.segments.last().unwrap().ident);
@@ -268,13 +277,17 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         let block = Box::new(folder.fold_block(*test_func.block));
 
         if folder.first_call_span.is_none() {
-            let expr = report_error(func_span, format_args!(
-                "couldn't find a call to {}",
-                folder.subject_function_path.to_token_stream(),
-            ));
+            let expr = report_error(
+                func_span,
+                format_args!(
+                    "couldn't find a call to {}",
+                    folder.subject_function_path.to_token_stream(),
+                ),
+            );
             return quote_spanned! { func_span=>
                 #expr ;
-            }.into();
+            }
+            .into();
         }
 
         let block = parse_quote!({
@@ -318,6 +331,93 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         #test_func
         #spec_func
     };
+    eprintln!("output = {}", tokens);
+    tokens.into()
+}
+
+/// Adds support for `#[cfg_attr(crux, derive(Symbolic))]`
+/// 
+/// This generates an implementation of the Symbolic trait that
+/// is completely symbolic. All fields will be generated using
+/// their symbolic instances. In the case of enumerations, all
+/// variants can be returned. Unions are not supported.
+#[proc_macro_derive(Symbolic)]
+pub fn symbolic_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let body = match input.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let field_inits = fields_named.named.iter().map(|f| {
+                        let fname = &f.ident;
+                        quote! { #fname: crucible::Symbolic::symbolic(desc) }
+                    });
+                    quote! { Self { #( #field_inits, )* } }
+                }
+                Fields::Unnamed(fields_unnamed) => {
+                    let field_inits = fields_unnamed.unnamed.iter().map(|_| {
+                        quote! { crucible::Symbolic::symbolic(desc) }
+                    });
+                    quote! { Self( #( #field_inits, )* ) }
+                }
+                Fields::Unit => {
+                    quote! { Self }
+                }
+            }
+        }
+
+        Data::Enum(data_enum) => {
+            let variants: Vec<_> = data_enum.variants.iter().collect();
+            let arms = variants.iter().enumerate().map(|(i, v)| {
+                let vname = &v.ident;
+                match &v.fields {
+                    Fields::Named(fields_named) => {
+                        let field_inits = fields_named.named.iter().map(|f| {
+                            let fname = &f.ident;
+                            quote! { #fname: crucible::Symbolic::symbolic(desc) }
+                        });
+                        quote! { #i => Self::#vname { #( #field_inits, )* } }
+                    }
+                    Fields::Unnamed(fields_unnamed) => {
+                        let field_inits = fields_unnamed.unnamed.iter().map(|_| {
+                            quote! { crucible::Symbolic::symbolic(desc) }
+                        });
+                        quote! { #i => Self::#vname( #( #field_inits, )* ) }
+                    }
+                    Fields::Unit => {
+                        quote! { #i => Self::#vname }
+                    }
+                }
+            });
+
+            quote! {
+                {
+                    match <usize as crucible::Symbolic>::symbolic("variant") {
+                        #( #arms, )*
+                        _ => {
+                            crucible::crucible_assume!(false);
+                            unreachable!()
+                        },
+                    }
+                }
+            }
+        }
+
+        Data::Union(_) =>
+            panic!("Unions are not supported by derive(Symbolic)"),
+    };
+
+    let tokens = quote! {
+        #[cfg(crux)]
+        impl crucible::Symbolic for #name {
+            fn symbolic(desc: &str) -> Self {
+                #body
+            }
+        }
+    };
+    
     eprintln!("output = {}", tokens);
     tokens.into()
 }
