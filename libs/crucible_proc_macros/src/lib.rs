@@ -392,14 +392,13 @@ pub fn symbolic_derive(input: TokenStream) -> TokenStream {
                 }
             });
 
+            let n = variants.len();
             quote! {
                 {
-                    match <usize as crucible::Symbolic>::symbolic("variant") {
+                    let variant: usize = crucible::Symbolic::symbolic_where("variant", |&i| i < #n);
+                    match variant {
                         #( #arms, )*
-                        _ => {
-                            crucible::crucible_assume!(false);
-                            unreachable!()
-                        },
+                        _ => crucible::crucible_assume_unreachable!(),
                     }
                 }
             }
