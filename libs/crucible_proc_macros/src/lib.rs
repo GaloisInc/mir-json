@@ -1,13 +1,13 @@
-use std::fmt::Display;
-use std::mem;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{quote, quote_spanned};
 use quote::ToTokens;
-use syn::{parse_macro_input, parse_quote};
-use syn::{Attribute, Expr, ExprBlock, ExprCall, ExprMacro, Ident, Item, ItemFn, Path};
+use quote::{quote, quote_spanned};
+use std::fmt::Display;
+use std::mem;
 use syn::fold::{self, Fold};
 use syn::spanned::Spanned;
+use syn::{parse_macro_input, parse_quote};
+use syn::{Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, Generics, GenericParam, Ident, Item, ItemFn, Path};
 
 #[derive(Clone)]
 struct Folder {
@@ -318,6 +318,108 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         #test_func
         #spec_func
     };
+    eprintln!("output = {}", tokens);
+    tokens.into()
+}
+
+fn add_symbolic_trait_bounds(mut generics: Generics) -> Generics {
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(crucible::Symbolic));
+        }
+    }
+    generics
+}
+
+/// Adds support for `#[cfg_attr(crux, derive(Symbolic))]`
+/// 
+/// This generates an implementation of the Symbolic trait that
+/// is completely symbolic. All fields will be generated using
+/// their symbolic instances. In the case of enumerations, all
+/// variants can be returned. Unions are not supported.
+/// 
+/// When used on a type with generics the generated implementation
+/// will automatically add Symbolic constraints on all generic
+/// type parameters.
+#[proc_macro_derive(Symbolic)]
+pub fn symbolic_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let body = match input.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let field_inits = fields_named.named.iter().map(|f| {
+                        let fname = &f.ident;
+                        quote! { #fname: crucible::Symbolic::symbolic(desc) }
+                    });
+                    quote! { Self { #( #field_inits, )* } }
+                }
+                Fields::Unnamed(fields_unnamed) => {
+                    let field_inits = fields_unnamed.unnamed.iter().map(|_| {
+                        quote! { crucible::Symbolic::symbolic(desc) }
+                    });
+                    quote! { Self( #( #field_inits, )* ) }
+                }
+                Fields::Unit => {
+                    quote! { Self }
+                }
+            }
+        }
+
+        Data::Enum(data_enum) => {
+            let variants: Vec<_> = data_enum.variants.iter().collect();
+            let arms = variants.iter().enumerate().map(|(i, v)| {
+                let vname = &v.ident;
+                match &v.fields {
+                    Fields::Named(fields_named) => {
+                        let field_inits = fields_named.named.iter().map(|f| {
+                            let fname = &f.ident;
+                            quote! { #fname: crucible::Symbolic::symbolic(desc) }
+                        });
+                        quote! { #i => Self::#vname { #( #field_inits, )* } }
+                    }
+                    Fields::Unnamed(fields_unnamed) => {
+                        let field_inits = fields_unnamed.unnamed.iter().map(|_| {
+                            quote! { crucible::Symbolic::symbolic(desc) }
+                        });
+                        quote! { #i => Self::#vname( #( #field_inits, )* ) }
+                    }
+                    Fields::Unit => {
+                        quote! { #i => Self::#vname }
+                    }
+                }
+            });
+
+            quote! {
+                {
+                    let variant: usize = crucible::Symbolic::symbolic("variant");
+                    match variant {
+                        #( #arms, )*
+                        _ => crucible::crucible_assume_unreachable!(),
+                    }
+                }
+            }
+        }
+
+        Data::Union(_) =>
+            panic!("Unions are not supported by derive(Symbolic)"),
+    };
+
+
+    let generics = add_symbolic_trait_bounds(input.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let tokens = quote! {
+        #[cfg(crux)]
+        impl #impl_generics crucible::Symbolic for #name #ty_generics #where_clause {
+            fn symbolic(desc: &str) -> Self {
+                #body
+            }
+        }
+    };
+    
     eprintln!("output = {}", tokens);
     tokens.into()
 }
