@@ -39,13 +39,21 @@ jobs:
           tags: local-test-image
           load: true
 
+      - name: List files in container working dir (Debug)
+          run: |
+            docker run --rm \
+              -v "$PWD":"$PWD" \
+              -w "$PWD" \
+              local-test-image \
+              ls -R
+
       - name: Run regression tests
         run: |
           docker run --rm \
             -v "$PWD":"$PWD" \
             -w "$PWD" \
             local-test-image \
-            ./mir-json/tests/run-all.sh
+            ./tests/run-all.sh
 
       - name: Log in to ghcr.io
         if: github.ref == 'refs/heads/master' &&
