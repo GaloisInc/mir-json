@@ -40,12 +40,12 @@ jobs:
           load: true
 
       - name: List files in container working dir (Debug)
-          run: |
-            docker run --rm \
-              -v "$PWD":"$PWD" \
-              -w "$PWD" \
-              local-test-image \
-              ls -R
+        run: |
+          docker run --rm \
+            -v "$PWD":"$PWD" \
+            -w "$PWD" \
+            local-test-image \
+            ls -R
 
       - name: Run regression tests
         run: |
