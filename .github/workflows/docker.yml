@@ -3,14 +3,14 @@ name: docker
 on:
   push:
     branches:
-    - '**'
+    - master
   pull_request:
 
 env:
   DOCKER_IMAGE: ghcr.io/galoisinc/mir-json
 
 jobs:
-  build-image:
+  build-test-push:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,33 +32,57 @@ jobs:
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
 
+      - name: Build local test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: local-test-image
+          load: true
+
+      - name: Run regression tests
+        run: |
+          docker run --rm \
+            -v "$PWD":"$PWD" \
+            -w "$PWD" \
+            local-test-image \
+            ./mir-json/tests/run-all.sh
+
       - name: Log in to ghcr.io
+        if: github.ref == 'refs/heads/master' &&
+            github.event.pull_request.head.repo.fork == false &&
+            github.repository_owner == 'GaloisInc'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build both local (for testing) and push digest (for final manifest)
       - name: Build and push by digest
+        if: github.ref == 'refs/heads/master' &&
+            github.event.pull_request.head.repo.fork == false &&
+            github.repository_owner == 'GaloisInc'
         uses: docker/build-push-action@v6
         id: build
         with:
           context: .
-          tags: ${{ env.DOCKER_IMAGE }}:test-${{ runner.arch }}
+          tags: ${{ env.DOCKER_IMAGE }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: |
-            type=image,push-by-digest=true,name-canonical=true
-            type=docker,name=${{ env.DOCKER_IMAGE }}:test-${{ runner.arch }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
+        if: github.ref == 'refs/heads/master' &&
+            github.event.pull_request.head.repo.fork == false &&
+            github.repository_owner == 'GaloisInc'
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
+        if: github.ref == 'refs/heads/master' &&
+            github.event.pull_request.head.repo.fork == false &&
+            github.repository_owner == 'GaloisInc'
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ runner.arch }}
@@ -66,31 +90,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  run-regression-tests:
-    runs-on: ${{ matrix.runner }}
-    needs: [build-image]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run regression tests in Docker
-        run: |
-          docker run --rm \
-            -v "$PWD":"$PWD" \
-            -w "$PWD" \
-            ${{ env.DOCKER_IMAGE }}:test-${{ matrix.arch }} \
-            ./mir-json/tests/run-all.sh
-
   push-image:
     runs-on: ubuntu-22.04
-    needs: [run-regression-tests]
+    needs: [build-test-push]
     if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
@@ -139,12 +141,6 @@ jobs:
           eval "docker buildx imagetools create ${ANNOTATIONS} \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
-
-      - name: Clean up test images
-        run: |
-          # Clean up the temporary test tags
-          docker buildx imagetools delete ${{ env.DOCKER_IMAGE }}:test-x86_64 || true
-          docker buildx imagetools delete ${{ env.DOCKER_IMAGE }}:test-arm64 || true
 
       - name: Inspect image
         run: |
