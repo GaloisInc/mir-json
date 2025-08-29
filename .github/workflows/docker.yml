@@ -45,7 +45,7 @@ jobs:
             -v "$PWD":"$PWD" \
             -w "$PWD" \
             local-test-image -c \
-            'ls -R'
+            'ls -lR ./tests ./mir-json/rlibs; whoami; id; stat /mir-json/rlibs; ls -l /mir-json/rlibs'
 
       - name: Run regression tests
         run: |
