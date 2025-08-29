@@ -195,3 +195,13 @@ identify all of the code that was changed in each patch.
 
   Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
   with Crucible's representation of arrays.
+
+* Simplify optimized implementation of `fmt_u128` (last applied: August 28, 2025)
+
+  The `Display` impls for `u128` and `i128` are defined in terms of a heavily
+  optimized `fmt_u128` function that is difficult for `crucible-mir` to
+  translate. (Among other things, it performs `f64`-to-`u64` conversions and
+  calls the `write_bytes` intrinsic, neither of which are currently supported.)
+  We replace this function with a slower (but easier-to-translate),
+  macro-generated version.
+// test.rs
