@@ -50,6 +50,9 @@ fn assign_global_ids(
     (it, defs, translate)
 }
 
+/// Returns `(roots,tests)`, where the `roots` are all top
+/// level definitions used in the translation, and `tests` is
+/// the subset of `roots` that's marked as a `crux-test`.
 fn collect_roots(
     indexes: &[CrateIndex],
     translate: &HashMap<(usize, StringId), StringId>,
