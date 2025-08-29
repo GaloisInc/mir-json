@@ -50,17 +50,24 @@ fn assign_global_ids(
     (it, defs, translate)
 }
 
+/// Returns `(roots,tests)`, where the `roots` are all top
+/// level definitions used in the translation, and `tests` is
+/// the subset of `roots` that's marked as a `crux-test`.
 fn collect_roots(
     indexes: &[CrateIndex],
     translate: &HashMap<(usize, StringId), StringId>,
-) -> Vec<StringId> {
+) -> (Vec<StringId>, Vec<StringId>) {
     let mut roots = Vec::new();
+    let mut tests = Vec::new();
     for (crate_num, index) in indexes.iter().enumerate() {
         for &local_id in &index.roots {
             roots.push(translate[&(crate_num, local_id)]);
         }
+        for &local_id in &index.tests {
+            tests.push(translate[&(crate_num, local_id)]);
+        }
     }
-    roots
+    (roots, tests)
 }
 
 /// Ensure that all `CrateIndex`es have the same MIR JSON schema version as the
@@ -86,7 +93,7 @@ pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<
 where R: Read + Seek, W: Write {
     let (indexes, json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
-    let roots = collect_roots(&indexes, &translate);
+    let (roots, tests) = collect_roots(&indexes, &translate);
     check_matching_versions(&indexes)?;
 
 
@@ -165,6 +172,17 @@ where R: Read + Seek, W: Write {
             .map_err(|e| -> io::Error { e.into() })?;
     }
     write!(output, "]")?;
+    write!(output, ",")?;
+    write!(output, "\"tests\":[")?;
+    for (i, &id) in tests.iter().enumerate() {
+        if i > 0 {
+            write!(output, ",")?;
+        }
+        let name = it.name(id);
+        serde_json::to_writer(&mut output, name)
+            .map_err(|e| -> io::Error { e.into() })?;
+    }
+    write!(output, "]")?;
     write!(output, "}}")?;
 
     Ok(())
@@ -175,7 +193,7 @@ pub fn gather_calls<R: Read + Seek>(
 ) -> serde_cbor::Result<(InternTable, Vec<(StringId, StringId)>)> {
     let (indexes, _json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
-    let roots = collect_roots(&indexes, &translate);
+    let (roots,_) = collect_roots(&indexes, &translate);
 
     let mut calls: Vec<(StringId, StringId)> = Vec::new();
 

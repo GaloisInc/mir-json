@@ -3,6 +3,11 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 4
+
+Add a field `tests`, subset of `roots`, which rememebers which of the
+roots were marked as tests.
+
 ## 3
 
 Emit layout information (size and alignment) for sized types.

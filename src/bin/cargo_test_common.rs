@@ -168,6 +168,10 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
         args.push("--target".into());
         args.push(host_tuple().into());
     }
+    let mut export_all = false;
+    if orig_args.iter().any(|a| a == "--branch-coverage") {
+        export_all = true;
+    }
     for extra_arg in extra_args {
         args.push(extra_arg.into());
     }
@@ -186,6 +190,7 @@ pub fn cargo_test_common(subcmd_name: &'static str, subcmd_descr: &'static str,
     cmd.args(&args)
        .env("RUSTC_WRAPPER", wrapper_path)
        .env("CRUX_USE_OVERRIDE_CRATES", override_crates);
+    if export_all { cmd.env("EXPORT_ALL","true"); }
     for (extra_env_var_name, extra_env_var_val) in extra_env_vars {
         cmd.env(extra_env_var_name, extra_env_var_val);
     }
