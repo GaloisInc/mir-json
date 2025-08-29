@@ -44,15 +44,15 @@ jobs:
           docker run --rm \
             -v "$PWD":"$PWD" \
             -w "$PWD" \
-            local-test-image \
-            ls -R
+            local-test-image -c \
+            'ls -R'
 
       - name: Run regression tests
         run: |
           docker run --rm \
             -v "$PWD":"$PWD" \
             -w "$PWD" \
-            local-test-image \
+            local-test-image -c \
             ./tests/run-all.sh
 
       - name: Log in to ghcr.io
