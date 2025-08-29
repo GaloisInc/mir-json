@@ -125,3 +125,35 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}
+
+  run-regression-tests:
+    runs-on: ${{ matrix.runner }}
+    needs: [build-image]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download digest
+        uses: actions/download-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: digests
+
+      - name: Extract digest
+        id: digest
+        run: echo "digest=sha256:$(ls digests | head -n1)" >> $GITHUB_OUTPUT
+
+      - name: Run regression tests in Docker
+        run: |
+          docker run --rm \
+            -v "$PWD":"$PWD" \
+            -w "$PWD" \
+            ghcr.io/galoisinc/mir-json@${{ steps.digest.outputs.digest }} \
+            ./mir-json/tests/run-all.sh
