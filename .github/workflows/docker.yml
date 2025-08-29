@@ -49,7 +49,7 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: |
-            type=image,push-by-digest=true,name-canonical=true,push=true
+            type=image,push-by-digest=true,name-canonical=true
             type=docker,name=${{ env.DOCKER_IMAGE }}:test-${{ runner.arch }}
 
       - name: Export digest
