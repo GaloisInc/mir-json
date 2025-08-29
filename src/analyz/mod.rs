@@ -965,7 +965,8 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
     let tcx = ms.tcx;
     for &local_def_id in tcx.mir_keys(()) {
         let def_id = local_def_id.to_def_id();
-        if ms.export_style == ExportStyle::ExportCruxTests && !has_test_attr(tcx, def_id) {
+        let is_test = has_test_attr(tcx, def_id);
+        if ms.export_style == ExportStyle::ExportCruxTests && !is_test {
             continue;
         }
 
@@ -1010,7 +1011,7 @@ fn init_instances_from_tests(ms: &mut MirState, out: &mut impl JsonOutput) -> io
             });
 
         ms.used.instances.insert(inst.into());
-        out.add_root(inst_id_str(tcx, inst))?;
+        out.add_root(inst_id_str(tcx, inst), is_test)?;
     }
     Ok(())
 }
