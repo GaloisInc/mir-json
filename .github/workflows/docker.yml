@@ -12,13 +12,9 @@ env:
 jobs:
   build-image:
     runs-on: ${{ matrix.os }}
-    if: github.ref == 'refs/heads/master' &&
-        github.event.pull_request.head.repo.fork == false &&
-        github.repository_owner == 'GaloisInc'
     strategy:
       fail-fast: false
       matrix:
-        # Cover both x86-64 and ARM64.
         os: [ubuntu-22.04, ubuntu-22.04-arm]
     steps:
       - uses: actions/checkout@v4
@@ -43,15 +39,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build both local (for testing) and push digest (for final manifest)
       - name: Build and push by digest
         uses: docker/build-push-action@v6
         id: build
         with:
           context: .
-          tags: ${{ env.DOCKER_IMAGE }}
+          tags: ${{ env.DOCKER_IMAGE }}:test-${{ runner.arch }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: |
+            type=image,push-by-digest=true,name-canonical=true,push=true
+            type=docker,name=${{ env.DOCKER_IMAGE }}:test-${{ runner.arch }}
 
       - name: Export digest
         run: |
@@ -67,14 +66,34 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  run-regression-tests:
+    runs-on: ${{ matrix.runner }}
+    needs: [build-image]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run regression tests in Docker
+        run: |
+          docker run --rm \
+            -v "$PWD":"$PWD" \
+            -w "$PWD" \
+            ${{ env.DOCKER_IMAGE }}:test-${{ matrix.arch }} \
+            ./mir-json/tests/run-all.sh
+
   push-image:
     runs-on: ubuntu-22.04
-    needs: [build-image]
+    needs: [run-regression-tests]
     if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
-    strategy:
-      fail-fast: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,52 +127,25 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
-            type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
-            type=raw,value=${{ env.SCHEMA_VER }},enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
+            type=raw,value=nightly
+            type=raw,value=${{ env.SCHEMA_VER }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
-        # Build and run a complex command line with eval to avoid wrong word splitting on spaces in the annotations.
         run: |
+          export ANNOTATIONS=$(jq -cr '.annotations | map("--annotation \"" + . + "\"") | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
           eval "docker buildx imagetools create ${ANNOTATIONS} \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(jq -cr '.annotations | map("--annotation \"" + . + "\"") | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
+
+      - name: Clean up test images
+        run: |
+          # Clean up the temporary test tags
+          docker buildx imagetools delete ${{ env.DOCKER_IMAGE }}:test-x86_64 || true
+          docker buildx imagetools delete ${{ env.DOCKER_IMAGE }}:test-arm64 || true
 
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}
-
-  run-regression-tests:
-    runs-on: ${{ matrix.runner }}
-    needs: [build-image]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download digest
-        uses: actions/download-artifact@v4
-        with:
-          name: digests-${{ matrix.arch }}
-          path: digests
-
-      - name: Extract digest
-        id: digest
-        run: echo "digest=sha256:$(ls digests | head -n1)" >> $GITHUB_OUTPUT
-
-      - name: Run regression tests in Docker
-        run: |
-          docker run --rm \
-            -v "$PWD":"$PWD" \
-            -w "$PWD" \
-            ghcr.io/galoisinc/mir-json@${{ steps.digest.outputs.digest }} \
-            ./mir-json/tests/run-all.sh
