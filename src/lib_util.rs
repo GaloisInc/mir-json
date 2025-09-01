@@ -340,13 +340,13 @@ impl<W: Write> Emitter<W> {
         let j_roots = j["roots"].as_array()
             .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
         
-        let mut j_tests = HashSet::new();
-        if let Some(tests) = j["tests"].as_array() {
-          for i in tests.into_iter() { j_tests.insert(i); }
-        };
+        let j_tests = j["tests"].as_array()
+            .unwrap_or_else(|| panic!("expected \"tests\" table to be an array"));
 
+        let tests = j_tests.iter().collect::<HashSet<_>>();
+        
         for x in j_roots {
-            let is_test = j_tests.contains(x);
+            let is_test = tests.contains(x);
             self.add_root(x.as_str().unwrap().into(), is_test);
         }
 
