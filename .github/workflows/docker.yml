@@ -2,8 +2,7 @@ name: docker
 
 on:
   push:
-    branches:
-    - master
+    branches: [ '**' ]
   pull_request:
 
 env:
@@ -12,14 +11,13 @@ env:
 jobs:
   build-image:
     runs-on: ${{ matrix.os }}
-    if: github.ref == 'refs/heads/master' &&
-        github.event.pull_request.head.repo.fork == false &&
-        github.repository_owner == 'GaloisInc'
     strategy:
       fail-fast: false
       matrix:
         # Cover both x86-64 and ARM64.
         os: [ubuntu-22.04, ubuntu-22.04-arm]
+    outputs:
+      x86-digest: ${{ steps.set-x86-digest.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,6 +57,12 @@ jobs:
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
+      - name: Set x86 digest output
+        id: set-x86-digest
+        if: runner.arch == 'X64'
+        run: |
+          echo "digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
@@ -67,9 +71,60 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  push-image:
+  tag-x86-image:
     runs-on: ubuntu-22.04
     needs: [build-image]
+    outputs:
+      test-tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate test tag
+        id: set-tag
+        run: |
+          tag="test-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Tag x86 image for testing
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.DOCKER_IMAGE }}:${{ steps.set-tag.outputs.tag }} \
+            ${{ env.DOCKER_IMAGE }}@${{ needs.build-image.outputs.x86-digest }}
+
+  regression-tests:
+    runs-on: ubuntu-22.04
+    needs: [build-image, tag-x86-image]
+    container:
+      image: ghcr.io/galoisinc/mir-json:${{ needs.tag-x86-image.outputs.test-tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List directory contents for debugging
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Tests directory contents:"
+          ls -la tests/ || echo "tests/ directory not found"
+
+      - name: Run regression tests
+        run: tests/run-all.sh
+
+  push-image:
+    runs-on: ubuntu-22.04
+    needs: [build-image, tag-x86-image, regression-tests]
     if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
@@ -125,3 +180,10 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Clean up test tag
+        if: always()
+        run: |
+          # Note: This will fail if the tag doesn't exist, but that's okay
+          docker buildx imagetools create --tag ${{ env.DOCKER_IMAGE }}:delete-me \
+            ${{ env.DOCKER_IMAGE }}:${{ needs.tag-x86-image.outputs.test-tag }} || true
