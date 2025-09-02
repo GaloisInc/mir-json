@@ -111,8 +111,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: List directory contents for debugging
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Tests directory contents:"
+          ls -la tests/ || echo "tests/ directory not found"
+
       - name: Run regression tests
-        run: test/run-all.sh
+        run: tests/run-all.sh
 
   push-image:
     runs-on: ubuntu-22.04
