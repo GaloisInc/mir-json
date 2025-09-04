@@ -39,7 +39,11 @@ pub struct CrateIndex {
 
     pub items: HashMap<StringId, ItemData>,
 
+    /// Translation roots
     pub roots: Vec<StringId>,
+
+    /// Subsets of roots marked with crux-test
+    pub tests: Vec<StringId>,
 
     /// The schema version in use. (See also `SCHEMA_VER`.)
     pub version: u64,
@@ -176,6 +180,7 @@ struct EmitterState {
     dep_map: HashMap<StringId, HashSet<StringId>>,
     entry_loc: HashMap<(StringId, EntryKind), (u64, u64)>,
     roots: HashSet<StringId>,
+    tests: HashSet<StringId>,
     intern: InternTable,
 }
 
@@ -227,9 +232,10 @@ impl EmitterState {
         Ok(())
     }
 
-    fn add_root(&mut self, s: Cow<str>) {
+    fn add_root(&mut self, s: Cow<str>, is_test: bool) {
         let name_id = self.intern.intern(s);
         self.roots.insert(name_id);
+        if is_test { self.tests.insert(name_id); }
     }
 
     pub fn finish(self) -> CrateIndex {
@@ -252,9 +258,12 @@ impl EmitterState {
         let mut roots = self.roots.into_iter().collect::<Vec<_>>();
         roots.sort();
 
+        let mut tests = self.tests.into_iter().collect::<Vec<_>>();
+        tests.sort();
+
         let version = SCHEMA_VER;
 
-        CrateIndex { names, items, roots, version }
+        CrateIndex { names, items, roots, tests, version }
     }
 }
 
@@ -281,8 +290,8 @@ impl<W: Write> Emitter<W> {
         })
     }
 
-    fn add_root(&mut self, name: Cow<str>) {
-        self.state.add_root(name);
+    fn add_root(&mut self, name: Cow<str>, is_test: bool) {
+        self.state.add_root(name, is_test);
     }
 
     fn emit_table(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
@@ -322,13 +331,23 @@ impl<W: Write> Emitter<W> {
         write!(self.writer, ",")?;
         write!(self.writer, "\"roots\":")?;
         serde_json::to_writer(&mut self.writer, &j["roots"])?;
+        write!(self.writer, ",")?;
+        write!(self.writer, "\"tests\":")?;
+        serde_json::to_writer(&mut self.writer, &j["tests"])?;
         write!(self.writer, "}}")?;
         self.writer.flush()?;
 
         let j_roots = j["roots"].as_array()
             .unwrap_or_else(|| panic!("expected \"roots\" table to be an array"));
+        
+        let j_tests = j["tests"].as_array()
+            .unwrap_or_else(|| panic!("expected \"tests\" table to be an array"));
+
+        let tests = j_tests.iter().collect::<HashSet<_>>();
+        
         for x in j_roots {
-            self.add_root(x.as_str().unwrap().into());
+            let is_test = tests.contains(x);
+            self.add_root(x.as_str().unwrap().into(), is_test);
         }
 
         Ok(())
@@ -402,7 +421,7 @@ pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(Cra
 
 pub trait JsonOutput {
     fn emit(&mut self, kind: EntryKind, j: serde_json::Value) -> io::Result<()>;
-    fn add_root(&mut self, name: String) -> io::Result<()>;
+    fn add_root(&mut self, name: String, is_test: bool) -> io::Result<()>;
 }
 
 #[derive(Default)]
@@ -438,8 +457,14 @@ pub struct Output {
     /// providing the original identifier, which SAW can then map back to the
     /// lang item identifier used throughout the rest of the MIR code.
     pub lang_items: Vec<serde_json::Value>,
-    /// Entry points for this crate.
+    /// Entry points for this crate.  We generate definition for all of these
+    /// and their dependencies.
     pub roots: Vec<String>,
+    /// Subsets of `roots` that corresponds to tests we want to execute.
+    /// This might differ from `roots` when we want to translate more than
+    /// we need for execution, so that we can report coverage statistics,
+    /// for example.
+    pub tests: Vec<String>,
 }
 
 impl JsonOutput for Output {
@@ -457,7 +482,8 @@ impl JsonOutput for Output {
         Ok(())
     }
 
-    fn add_root(&mut self, name: String) -> io::Result<()> {
+    fn add_root(&mut self, name: String, is_test: bool) -> io::Result<()> {
+        if is_test { self.tests.push(name.clone()) }
         self.roots.push(name);
         Ok(())
     }
@@ -509,8 +535,8 @@ impl<W: Write> JsonOutput for StreamingEmitter<W> {
         Ok(())
     }
 
-    fn add_root(&mut self, name: String) -> io::Result<()> {
-        self.inner.add_root(name.into());
+    fn add_root(&mut self, name: String, is_test: bool) -> io::Result<()> {
+        self.inner.add_root(name.into(), is_test);
         Ok(())
     }
 }
@@ -527,8 +553,8 @@ impl JsonOutput for MirStream {
         self.emitter.emit(kind, j)
     }
 
-    fn add_root(&mut self, name: String) -> io::Result<()> {
-        self.emitter.add_root(name)
+    fn add_root(&mut self, name: String, is_test: bool) -> io::Result<()> {
+        self.emitter.add_root(name, is_test)
     }
 }
 
