@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 export TEST_ROOT=$(dirname "$0")
 export MIR_JSON_RLIBS=/mir-json/rlibs
 source "$TEST_ROOT/common.sh"
