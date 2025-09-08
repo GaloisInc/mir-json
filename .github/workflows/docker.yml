@@ -10,24 +10,7 @@ env:
   DOCKER_IMAGE: ghcr.io/galoisinc/mir-json
 
 jobs:
-  build-test:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04, ubuntu-22.04-arm]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Preflight build/test (native)
-        run: |
-          docker buildx build .
-
   build-image:
-    needs: build-test
     runs-on: ${{ matrix.os }}
     if: github.ref == 'refs/heads/master' &&
         github.event.pull_request.head.repo.fork == false &&
