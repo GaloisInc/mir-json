@@ -25,3 +25,11 @@ expect_no_panic() {
 
   echo "No panic"
 }
+
+# Usage: expect_json_contains <jq-expression> <json-file>
+expect_json_contains() {
+  if ! jq -e "$1" "$2" > /dev/null; then
+    echo "ERROR: jq check failed: $1 on $2"
+    exit 1
+  fi
+}

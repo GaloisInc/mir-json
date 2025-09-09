@@ -5,8 +5,12 @@ export MIR_JSON_RLIBS=/mir-json/rlibs
 source "$TEST_ROOT/common.sh"
 
 discover_tests() {
-  local base="$TEST_ROOT/issues"
-  find "$base" -maxdepth 1 -type d -name 'test*' | sort
+  local dirs=("$TEST_ROOT/issues" "$TEST_ROOT/regression")
+  for base in "${dirs[@]}"; do
+    if [[ -d "$base" ]]; then
+      find "$base" -maxdepth 1 -type d -name 'test*'
+    fi
+  done | sort
 }
 
 load_disabled_tests() {

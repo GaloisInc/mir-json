@@ -58,6 +58,10 @@ jobs:
     - name: Translate modified Rust standard libraries
       run: mir-json-translate-libs
 
+    - name: Install jq on Ubuntu
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y jq
+
     - name: Run regression tests
       env:
         CRUX_RUST_LIBRARY_PATH: ${{ github.workspace }}/rlibs
