@@ -601,13 +601,9 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         // Get layout information.
         let layout_j =
           match self.kind() {
-            // CoroutineWitness are not yet supported, and calling `layout_of`
-            // on them panics the compiler, so for the time being we do not
-            // emit layout information for them.
-            // The following modules in the Rust compiler might be relevant
-            // for fixing this properly:
-            //   rustc_abi/src/layout.rs
-            //   rustc_abi/src/layout/coroutine.rs
+            // `CoroutineWitness` should not appear in actual code, so we
+            // can't compute their layout---and we don't need it---so we just
+            // skip it.
             &ty::TyKind::CoroutineWitness(_,_) => None,
             _ => {
               let layout = tcx
