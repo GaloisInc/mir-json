@@ -604,7 +604,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             // CoroutineWitness are not yet supported, and calling `layout_of`
             // on them panics the compiler, so for the time being we do not
             // emit layout information for them.
-            // To following modules in the Rust compiler might be relevant
+            // The following modules in the Rust compiler might be relevant
             // for fixing this properly:
             //   rustc_abi/src/layout.rs
             //   rustc_abi/src/layout/coroutine.rs
