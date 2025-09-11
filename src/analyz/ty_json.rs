@@ -599,20 +599,29 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         };
 
         // Get layout information.
-        let layout = tcx
-            .layout_of(
-                ty::TypingEnv::fully_monomorphized().as_query_input(*self)
-            )
-            .unwrap_or_else(|e| {
-                panic!("failed to get layout of {:?}: {}", self, e)
-            });
-        let layout_j = if layout.is_sized() {
-            Some(json!({
-                "align": layout.align.abi.bytes(),
-                "size": layout.size.bytes()
-            }))
-        } else {
-            None
+        let layout_j =
+          match self.kind() {
+            // `CoroutineWitness` should not appear in actual code, so we
+            // can't compute their layout---and we don't need it---so we just
+            // skip it.
+            &ty::TyKind::CoroutineWitness(_,_) => None,
+            _ => {
+              let layout = tcx
+                .layout_of(
+                    ty::TypingEnv::fully_monomorphized().as_query_input(*self)
+                )
+                .unwrap_or_else(|e| {
+                    panic!("failed to get layout of {:?}: {}", self, e)
+                });
+                if layout.is_sized() {
+                    Some(json!({
+                        "align": layout.align.abi.bytes(),
+                        "size": layout.size.bytes()
+                }))
+                } else {
+                    None
+                }
+            }
         };
 
         // Add the new entry to the interning table.
