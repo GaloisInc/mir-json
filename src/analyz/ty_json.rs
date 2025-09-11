@@ -599,20 +599,33 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         };
 
         // Get layout information.
-        let layout = tcx
-            .layout_of(
-                ty::TypingEnv::fully_monomorphized().as_query_input(*self)
-            )
-            .unwrap_or_else(|e| {
-                panic!("failed to get layout of {:?}: {}", self, e)
-            });
-        let layout_j = if layout.is_sized() {
-            Some(json!({
-                "align": layout.align.abi.bytes(),
-                "size": layout.size.bytes()
-            }))
-        } else {
-            None
+        let layout_j =
+          match self.kind() {
+            // CoroutineWitness are not yet supported, and calling `layout_of`
+            // on them panics the compiler, so for the time being we do not
+            // emit layout information for them.
+            // To following modules in the Rust compiler might be relevant
+            // for fixing this properly:
+            //   rustc_abi/src/layout.rs
+            //   rustc_abi/src/layout/coroutine.rs
+            &ty::TyKind::CoroutineWitness(_,_) => None,
+            _ => {
+              let layout = tcx
+                .layout_of(
+                    ty::TypingEnv::fully_monomorphized().as_query_input(*self)
+                )
+                .unwrap_or_else(|e| {
+                    panic!("failed to get layout of {:?}: {}", self, e)
+                });
+                if layout.is_sized() {
+                    Some(json!({
+                        "align": layout.align.abi.bytes(),
+                        "size": layout.size.bytes()
+                }))
+                } else {
+                    None
+                }
+            }
         };
 
         // Add the new entry to the interning table.
