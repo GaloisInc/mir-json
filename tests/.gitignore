@@ -1,0 +1,5 @@
+# Compilation artifacts from building tests
+libtest.mir
+libtest.rlib
+test
+test.linked-mir.json

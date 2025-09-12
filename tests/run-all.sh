@@ -98,6 +98,9 @@ main() {
   if [[ $failures -gt 0 ]]; then
     exit 1
   fi
+  if [[ ${#passed_disabled_tests[@]} -gt 0 ]]; then
+    exit 2
+  fi
 }
 
 main "$@"
