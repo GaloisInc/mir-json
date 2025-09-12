@@ -1,7 +1,7 @@
 FROM ubuntu:22.04 AS build
 
 RUN apt-get update && \
-    apt-get install -y build-essential curl && \
+    apt-get install -y build-essential curl jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -25,7 +25,7 @@ RUN ./tests/run-all.sh
 FROM ubuntu:22.04
 
 RUN apt-get update && \
-    apt-get install -y build-essential ca-certificates jq && \
+    apt-get install -y build-essential ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
