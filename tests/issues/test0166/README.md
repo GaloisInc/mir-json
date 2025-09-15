@@ -12,4 +12,8 @@ internals of Rust's `async` machinery, as commonly used in libraries like
 Do note that `CoroutineWitness` has been removed entirely in recent Rust
 nightlies, and Rust's coroutine syntax itself is unstable. As such, this test
 case may need to be updated in a future upgrade to ensure that we have _some_
-amount of test coverage for `async`-related code.
+amount of test coverage for `async`-related code. Just in case the
+`#[coroutine]` syntax is removed entirely, I have also added another function
+that uses an `async fn` instead of using `#[coroutine]`. The assumption is that
+the former is likely to compile to the latter, but the former's syntax is
+stable than the latter's.
