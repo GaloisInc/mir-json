@@ -3,6 +3,25 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 5
+
+Instantiations of const generic parameters are now represented with a
+`"kind": "Const"` object, where the object's `"constant"` key maps to the
+corresponding constant's rendered value. For instance, if a function
+`fn foo<const N: usize>()` were instantiated with `foo::<42>()`, then the
+instantiating type would be represented as:
+
+```json
+{
+    "kind": "Const",
+    "constant": {
+        "kind": "usize",
+        "size": 8,
+        "val": 42
+    }
+}
+```
+
 ## 4
 
 Add a field `tests`, subset of `roots`, which rememebers which of the

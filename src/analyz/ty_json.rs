@@ -794,11 +794,27 @@ impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::GenericArgKind::Type(ref ty) => ty.to_json(mir),
-            // In crucible-mir, all args entries are considered "types", and there are dummy
-            // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
-            // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
+            // Lifetimes and Consts aren't "types" in the sense that you cannot
+            // have variables with these types, but they do nevertheless appear
+            // in lists of type substitutions, so we need to handle them
+            // somehow.
+            //
+            // For Consts, we emit an entry that contains the constant's
+            // rendered value. This has no effect on the semantics of
+            // crucible-mir. The only real purpose it serves is to allow SAW to
+            // distinguish between different instantiations of polymorphic
+            // functions or ADTs that use const generics.
+            ty::GenericArgKind::Const(c) => json!({
+                "kind": "Const",
+                "constant": c.to_json(mir),
+            }),
+            // Lifetimes are less interesting from a SAW perspective, as users
+            // typically do not care about the exact region used to instantiate
+            // lifetime-generic functions or ADTs. crucible-mir has a dummy
+            // TyLifetime variant to represent lifetime instantiations. We emit
+            // looks vaguely like an interned type's ID here, and handle it
+            // specially in MIR.JSON.
             ty::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
-            ty::GenericArgKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
