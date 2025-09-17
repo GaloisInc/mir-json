@@ -1058,17 +1058,11 @@ impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
         if let ty::ConstKind::Value(cv) = self.kind() {
-            if let ty::ValTreeKind::Leaf(val) = *cv.valtree {
-                map.insert("ty".to_owned(), cv.ty.to_json(mir));
-                let sz = val.size();
-                let rendered = json!({
-                    "kind": "usize",
-                    "size": sz.bytes(),
-                    "val": get_const_usize(mir.tcx, *self).to_string(),
-                });
-                map.insert("rendered".to_owned(), rendered);
-                return map.into()
-            }
+            map.insert("ty".to_owned(), cv.ty.to_json(mir));
+            let const_val = mir.tcx.valtree_to_const_val(cv);
+            let rendered = (const_val, cv.ty).to_json(mir);
+            map.insert("rendered".to_owned(), rendered);
+            return map.into()
         }
         panic!("don't know how to translate ConstKind::{:?}", self.kind())
     }
