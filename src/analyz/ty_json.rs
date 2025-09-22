@@ -1049,6 +1049,11 @@ mod machine {
     }
 }
 
+// This assumes the use of Const::Value. This assumption appears to hold for
+// all Consts that we serialize to JSON at the moment (i.e., array sizes and
+// instantiations of const generic parameters). It is conceivable that we might
+// encounter a different variant (e.g., Const::Unevaluated) some day, however.
+// If we do, we will need to rethink this approach.
 impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let mut map = serde_json::Map::new();
