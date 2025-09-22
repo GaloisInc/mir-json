@@ -227,7 +227,11 @@ impl<'tcx> AdtInst<'tcx> {
 
 #[derive(Default, Debug)]
 pub struct TyIntern<'tcx> {
+    /// Interning table for types.
     ty_map: HashMap<ty::Ty<'tcx>, String>,
+    /// Interning table for type-level constants (namely, the sizes of array
+    /// types and instantiatiations of const generic parameters).
+    const_map: HashMap<ty::Const<'tcx>, String>,
     /// Types that are newly referenced since the last `take_new_types()`.
     new_vals: Vec<serde_json::Value>,
 }
@@ -283,9 +287,25 @@ fn ty_unique_id(ty: ty::Ty, j: &serde_json::Value) -> String {
     }
 }
 
+fn const_unique_id(j: &serde_json::Value) -> String {
+    // We always include a hash of the constant's JSON (which includes its
+    // type) when forming the constant's unique ID. For instance, consider the
+    // `42` in `f::<42>()`. At a glance, it is not simple to tell whether the
+    // const generic parameter refers to, say, `42: usize` or `42: u8`, so
+    // including the type is essential for disambiguation purposes.
+    let mut h = hash_map::DefaultHasher::new();
+    serde_json::to_string(&j).unwrap().hash(&mut h);
+    let hash_val = h.finish();
+    format!("ty::Const::{:016x}", hash_val)
+}
+
 impl<'tcx> TyIntern<'tcx> {
     pub fn ty_get(&self, ty: ty::Ty<'tcx>) -> Option<&str> {
         self.ty_map.get(&ty).map(|x| x as &str)
+    }
+
+    pub fn const_get(&self, c: ty::Const<'tcx>) -> Option<&str> {
+        self.const_map.get(&c).map(|x| x as &str)
     }
 
     /// `layout_j` should be [None] if the type is unsized.
@@ -305,6 +325,23 @@ impl<'tcx> TyIntern<'tcx> {
         }));
         let old = self.ty_map.insert(ty, id.clone());
         assert!(old.is_none(), "duplicate insert for type {:?}", ty);
+        id
+    }
+
+    pub fn const_insert(
+        &mut self,
+        c: ty::Const<'tcx>,
+        c_j: serde_json::Value,
+    ) -> String {
+        let id = const_unique_id(&c_j);
+        self.new_vals.push(json!({
+            "name": &id,
+            "ty": c_j,
+            "layout": None::<serde_json::Value>,
+            "needs_drop": false,
+        }));
+        let old = self.const_map.insert(c, id.clone());
+        assert!(old.is_none(), "duplicate insert for constant {:?}", c);
         id
     }
 
