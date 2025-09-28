@@ -448,7 +448,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         let tcx = mir.tcx;
 
         // If this type has already been interned, just return its ID.
-        if let Some(id) = mir.tys.get(*self) {
+        if let Some(id) = mir.tys.ty_get(*self) {
             return json!(id);
         }
 
@@ -627,7 +627,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         let needs_drop = self.needs_drop(tcx, ty::TypingEnv::fully_monomorphized());
 
         // Add the new entry to the interning table.
-        let id = mir.tys.insert(*self, ty_j, layout_j, needs_drop);
+        let id = mir.tys.ty_insert(*self, ty_j, layout_j, needs_drop);
         json!(id)
     }
 }

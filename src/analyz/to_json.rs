@@ -227,7 +227,7 @@ impl<'tcx> AdtInst<'tcx> {
 
 #[derive(Default, Debug)]
 pub struct TyIntern<'tcx> {
-    map: HashMap<ty::Ty<'tcx>, String>,
+    ty_map: HashMap<ty::Ty<'tcx>, String>,
     /// Types that are newly referenced since the last `take_new_types()`.
     new_vals: Vec<serde_json::Value>,
 }
@@ -284,12 +284,12 @@ fn ty_unique_id(ty: ty::Ty, j: &serde_json::Value) -> String {
 }
 
 impl<'tcx> TyIntern<'tcx> {
-    pub fn get(&self, ty: ty::Ty<'tcx>) -> Option<&str> {
-        self.map.get(&ty).map(|x| x as &str)
+    pub fn ty_get(&self, ty: ty::Ty<'tcx>) -> Option<&str> {
+        self.ty_map.get(&ty).map(|x| x as &str)
     }
 
     /// `layout_j` should be [None] if the type is unsized.
-    pub fn insert(
+    pub fn ty_insert(
         &mut self,
         ty: ty::Ty<'tcx>,
         ty_j: serde_json::Value,
@@ -303,7 +303,7 @@ impl<'tcx> TyIntern<'tcx> {
             "layout": layout_j,
             "needs_drop": needs_drop,
         }));
-        let old = self.map.insert(ty, id.clone());
+        let old = self.ty_map.insert(ty, id.clone());
         assert!(old.is_none(), "duplicate insert for type {:?}", ty);
         id
     }
