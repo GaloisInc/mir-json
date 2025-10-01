@@ -236,3 +236,30 @@ stderr.
 Even with `--generate`, `mir-json-translate-libs` **will still run various
 `cargo` commands, including builds**, and temporarily create files, in order to
 determine which `mir-json` commands it should generate.
+
+# Debug print
+
+By default `mir-json` does not print *Emitting XYZ...* messages.
+The messages can be re-enabled with `RUST_LOG` flag, for example:
+
+```
+RUST_LOG=debug mir-json ...
+```
+
+Or when used with `crux-mir` as:
+
+```
+RUST_LOG=debug cargo crux-test --lib -- ...
+```
+
+The output uses the default `env_logger` formatting, so the messages will
+contain the date and time info, as well as the originating module:
+
+```
+[2025-10-01T17:31:16Z DEBUG  mir_json::analyz] Emitting MIR for example_1/85128bcf::test_ffs_correct
+[2025-10-01T17:31:16Z DEBUG  mir_json::analyz] Emitting MIR for example_1/85128bcf::ffs_fast
+[2025-10-01T17:31:16Z DEBUG  mir_json::analyz] Emitting MIR for example_1/85128bcf::ffs_ref
+[2025-10-01T17:31:16Z DEBUG  mir_json::analyz] Emitting MIR for core/99b54c02::num::{impl#8}::wrapping_add
+```
+
+See documentation for the [`env_logger`](https://docs.rs/env_logger/latest/env_logger/) crate for more details about the logger.
