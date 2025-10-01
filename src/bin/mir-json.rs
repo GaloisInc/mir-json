@@ -20,6 +20,9 @@ use rustc_interface::interface::Compiler;
 use rustc_middle::ty::TyCtxt;
 use std::env;
 
+extern crate log;
+extern crate env_logger;
+
 struct MirJsonCallbacks {
     export_style: analyz::ExportStyle,
 }
@@ -59,5 +62,6 @@ fn go() {
 }
 
 fn main() {
+    env_logger::init();
     go();
 }

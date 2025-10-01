@@ -28,6 +28,10 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
+extern crate log;
+extern crate env_logger;
+use self::log::debug;
+
 impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         self.as_usize().into()
@@ -849,7 +853,7 @@ fn emit_trait<'tcx>(
         }));
     }
 
-    ms.tcx.sess.dcx().note(format!("Emitting trait def for {:?}", ti.dyn_ty(tcx)));
+    debug!("Emitting trait def for {:?}", ti.dyn_ty(tcx));
 
     out.emit(EntryKind::Trait, json!({
         // `name` corresponds to `trait_id` in vtables, Virtual, and Dynamic types.
@@ -1184,7 +1188,7 @@ fn emit_adt<'tcx>(
     // Render the string for the ADT instance (i.e., the ADT applied to its type
     // arguments). This will go into the `adts` section of the output.
     let adt_inst_name = adt_inst_id_str(tcx, ai);
-    tcx.sess.dcx().note(format!("Emitting ADT definition for {}", adt_inst_name));
+    debug!("Emitting ADT definition for {}", adt_inst_name);
     out.emit(EntryKind::Adt, ai.to_json(ms))?;
 
     // Render the string for the original ADT definition (i.e., the ADT *before*
@@ -1208,7 +1212,7 @@ fn emit_fn<'tcx>(
     inst: Option<ty::Instance<'tcx>>,
     mir: &'tcx Body<'tcx>,
 ) -> io::Result<()> {
-    ms.tcx.sess.dcx().note(format!("Emitting MIR for {}", name));
+    debug!("Emitting MIR for {}", name);
 
     let mut ms = MirState {
         mir: Some(mir),

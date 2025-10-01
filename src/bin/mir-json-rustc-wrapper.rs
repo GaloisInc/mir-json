@@ -16,6 +16,8 @@ extern crate rustc_session;
 extern crate rustc_span;
 
 extern crate mir_json;
+extern crate log;
+extern crate env_logger;
 
 use mir_json::analyz;
 use mir_json::link;
@@ -303,5 +305,6 @@ fn go() -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    env_logger::init();
     go()
 }
