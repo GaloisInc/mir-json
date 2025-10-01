@@ -22,6 +22,9 @@ extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_target;
 
+extern crate log;
+extern crate env_logger;
+
 pub mod analyz;
 pub mod lib_util;
 pub mod link;

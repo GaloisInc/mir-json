@@ -28,9 +28,7 @@ use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
 use schema_ver::SCHEMA_VER;
 
-extern crate log;
-extern crate env_logger;
-use self::log::debug;
+use log::debug;
 
 impl<'tcx> ToJson<'tcx> for rustc_abi::VariantIdx {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
