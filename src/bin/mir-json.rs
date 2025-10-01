@@ -59,5 +59,6 @@ fn go() {
 }
 
 fn main() {
+    env_logger::init();
     go();
 }

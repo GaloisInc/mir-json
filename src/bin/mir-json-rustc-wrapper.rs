@@ -303,5 +303,6 @@ fn go() -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    env_logger::init();
     go()
 }
