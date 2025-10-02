@@ -632,7 +632,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         };
 
         // Add the new entry to the interning table.
-        let id = mir.tys.ty_insert(*self, ty_j, layout_j);
+        let id = mir.tys.ty_insert(tcx, *self, ty_j, layout_j);
         json!(id)
     }
 }
@@ -1088,7 +1088,7 @@ fn const_to_json_interned<'tcx>(
     });
 
     // Add the new entry to the interning table.
-    let id = mir.tys.const_insert(*c, c_j);
+    let id = mir.tys.const_insert(mir.tcx, *c, c_j);
     json!(id)
 }
 
