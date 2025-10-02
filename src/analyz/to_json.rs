@@ -1,4 +1,5 @@
 use rustc_abi::ExternAbi;
+use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
@@ -11,9 +12,9 @@ use rustc_span::source_map::Spanned;
 use rustc_span::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
-use std::collections::{HashMap, HashSet, hash_map};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::ops::Deref;
 use std::mem;
 
@@ -275,28 +276,35 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
     (kind_str.to_owned(), true)
 }
 
-fn ty_unique_id(ty: ty::Ty, j: &serde_json::Value) -> String {
+fn ty_unique_id<'tcx>(tcx: TyCtxt<'tcx>, ty: ty::Ty) -> String {
     let (kind_str, needs_hash) = ty_desc(ty);
     if needs_hash {
-        let mut h = hash_map::DefaultHasher::new();
-        serde_json::to_string(&j).unwrap().hash(&mut h);
-        let hash_val = h.finish();
-        format!("ty::{}::{:016x}", kind_str, hash_val)
+        // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
+        let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
+            let mut hasher = StableHasher::new();
+            ty.hash_stable(&mut hcx, &mut hasher);
+            hasher.finish()
+        });
+        format!("ty::{}::{:016x}", kind_str, hash)
     } else {
         format!("ty::{}", kind_str)
     }
 }
 
-fn const_unique_id(j: &serde_json::Value) -> String {
-    // We always include a hash of the constant's JSON (which includes its
-    // type) when forming the constant's unique ID. For instance, consider the
-    // `42` in `f::<42>()`. At a glance, it is not simple to tell whether the
-    // const generic parameter refers to, say, `42: usize` or `42: u8`, so
-    // including the type is essential for disambiguation purposes.
-    let mut h = hash_map::DefaultHasher::new();
-    serde_json::to_string(&j).unwrap().hash(&mut h);
-    let hash_val = h.finish();
-    format!("ty::Const::{:016x}", hash_val)
+fn const_unique_id<'tcx>(tcx: TyCtxt<'tcx>, c: ty::Const<'tcx>) -> String {
+    // We always include a hash of the Const (which includes its type) when
+    // forming the constant's unique ID. For instance, consider the `42` in
+    // `f::<42>()`. At a glance, it is not simple to tell whether the const
+    // generic parameter refers to, say, `42: usize` or `42: u8`, so including
+    // the type in the hash is essential for disambiguation purposes.
+
+    // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
+    let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
+        let mut hasher = StableHasher::new();
+        c.hash_stable(&mut hcx, &mut hasher);
+        hasher.finish()
+    });
+    format!("ty::Const::{:016x}", hash)
 }
 
 impl<'tcx> TyIntern<'tcx> {
@@ -311,12 +319,13 @@ impl<'tcx> TyIntern<'tcx> {
     /// `layout_j` should be [None] if the type is unsized.
     pub fn ty_insert(
         &mut self,
+        tcx: TyCtxt<'tcx>,
         ty: ty::Ty<'tcx>,
         ty_j: serde_json::Value,
         layout_j: Option<serde_json::Value>,
         needs_drop: bool,
     ) -> String {
-        let id = ty_unique_id(ty, &ty_j);
+        let id = ty_unique_id(tcx, ty);
         self.new_vals.push(json!({
             "name": &id,
             "ty": ty_j,
@@ -330,10 +339,11 @@ impl<'tcx> TyIntern<'tcx> {
 
     pub fn const_insert(
         &mut self,
+        tcx: TyCtxt<'tcx>,
         c: ty::Const<'tcx>,
         c_j: serde_json::Value,
     ) -> String {
-        let id = const_unique_id(&c_j);
+        let id = const_unique_id(tcx, c);
         self.new_vals.push(json!({
             "name": &id,
             "ty": c_j,
