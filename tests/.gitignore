@@ -3,3 +3,4 @@ libtest.mir
 libtest.rlib
 test
 test.linked-mir.json
+target
