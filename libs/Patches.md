@@ -167,7 +167,7 @@ identify all of the code that was changed in each patch.
   arrays, so we implement this function by explicitly creating a
   `MaybeUninit<[T; N]>` and copying into it.
 
-* Avoid use of `const { MaybeUninit::uninit() }` in `array::from_fn` (last applied: July 3, 2025)
+* Avoid use of `const { MaybeUninit::uninit() }` (last applied: October 10, 2025)
 
   Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
   general, producing rendered constants for unions (like `MaybeUninit`) is
@@ -204,4 +204,3 @@ identify all of the code that was changed in each patch.
   calls the `write_bytes` intrinsic, neither of which are currently supported.)
   We replace this function with a slower (but easier-to-translate),
   macro-generated version.
-// test.rs
