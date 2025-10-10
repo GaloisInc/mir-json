@@ -204,4 +204,3 @@ identify all of the code that was changed in each patch.
   calls the `write_bytes` intrinsic, neither of which are currently supported.)
   We replace this function with a slower (but easier-to-translate),
   macro-generated version.
-// test.rs
