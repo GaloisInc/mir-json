@@ -869,7 +869,14 @@ fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> 
     for cgu in parts.codegen_units {
         for mono_item in cgu.items().keys() {
             match *mono_item {
-                MonoItem::Static(def_id) => emit_static(ms, out, def_id)?,
+                MonoItem::Static(def_id) => {
+                    // See Note [Nested statics]
+                    if matches!(ms.tcx.def_kind(def_id), DefKind::Static { nested: true, .. }) {
+                        debug!("Skipping nested static item {}", def_id_str(ms.tcx, def_id));
+                        continue;
+                    }
+                    emit_static(ms, out, def_id)?
+                },
                 MonoItem::Fn(_) |
                 MonoItem::GlobalAsm(_) => {},
             }
@@ -877,6 +884,46 @@ fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> 
     }
     Ok(())
 }
+
+/*
+Note [Nested statics]
+~~~~~~~~~~~~~~~~~~~~~
+rustc has a notion of /nested/ static items, which can arise when compiling
+static items whose definitions contain constant values that are promoted to
+anonymous statics. For instance, consider the following example:
+
+const X: &[u64] = &[42];
+static Y: &[&[u64]] = &[&X];
+
+When compiling this code, a nested static is created for the `&X` portion of
+`Y`'s body.
+
+Nested statics are treated very specially in the compiler, and they are not
+given types like other static items have. This doesn't cause issues for the
+flat "bytes and pointers" memory representation that rustc uses for the
+contents of allocations, but it is incompatible with the current crucible-mir
+memory model. The crucible-mir memory model requires a structured, typed
+representation of values, which we can extract from a flat allocation only if
+we know the correct type to extract into. Because nested statics don't
+explicitly store their types anywhere, our only hope of supporting them would
+be to stumble upon a reference to the same allocation in some other context
+where we do know the expected type.
+
+Thankfully, we can get away without needing to emit any entries for nested
+static items. This is because nested statics don't actually exist in the body
+of a static item itself. Rather, they are created as a side effect of
+evaluating the body down to a ConstAllocation, and the final ConstAllocation
+may reference those nested statics. (See
+https://github.com/GaloisInc/mir-json/issues/129#issuecomment-3387602092 for a
+more thorough exploration of how nested static items arise during compilation.)
+mir-json, on the other hand, emits the MIR *body*, and to the best of our
+understanding, the MIR body exists prior to the creation of any nested statics.
+As a result, the emitted JSON for the MIR body won't reference nested statics
+at all.
+
+Implementation-wise, this means that we simply skip over any `MonoItem` that
+corresponds to a `Static` item with `nested: true`.
+*/
 
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
     let tcx = ms.tcx;
