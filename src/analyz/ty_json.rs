@@ -1193,19 +1193,31 @@ pub fn try_render_opty<'tcx>(
                 })
             },
             ty::AdtKind::Enum => {
-                let variant_idx = icx.read_discriminant(op_ty).unwrap();
-                let val = icx.project_downcast(op_ty, variant_idx).unwrap();
-                let mut field_vals = Vec::with_capacity(val.layout.fields.count());
-                for idx in 0 .. val.layout.fields.count() {
-                    let field_opty = icx.project_field(&val, idx).unwrap();
-                    field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
-                }
+                // Uninhabited enums cannot be constructed in source Rust, but
+                // zero-sized constants that have uninhabited enum types can
+                // appear in Rust code as an optimization. As such, we must
+                // reckon with them here. We represent them with "zst", which
+                // is the same treatment that we give to FnDef and Never types.
+                if op_ty.layout.is_uninhabited() {
+                    json!({"kind": "zst"})
+                } else {
+                    // We uphold `read_discriminant`'s precondition that the
+                    // enum must be inhabited via the `is_uninhabited` check
+                    // above.
+                    let variant_idx = icx.read_discriminant(op_ty).unwrap();
+                    let val = icx.project_downcast(op_ty, variant_idx).unwrap();
+                    let mut field_vals = Vec::with_capacity(val.layout.fields.count());
+                    for idx in 0 .. val.layout.fields.count() {
+                        let field_opty = icx.project_field(&val, idx).unwrap();
+                        field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
+                    }
 
-                json!({
-                    "kind": "enum",
-                    "variant": variant_idx.as_u32(),
-                    "fields": field_vals,
-                })
+                    json!({
+                        "kind": "enum",
+                        "variant": variant_idx.as_u32(),
+                        "fields": field_vals,
+                    })
+                }
             },
             ty::AdtKind::Union => {
                 json!({"kind": "union"})
