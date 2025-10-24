@@ -1,0 +1,382 @@
+{
+    "$defs": {
+        "Constant": {
+            "type": "object",
+            "required": [
+                "ty"
+            ],
+            "properties": {
+                "ty": {
+                    "$ref": "common.json#/$defs/Ty"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "rendered"
+                    ],
+                    "properties": {
+                        "rendered": {
+                            "$ref": "#/$defs/ConstVal"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "initializer"
+                    ],
+                    "properties": {
+                        "initializer": {
+                            "$ref": "#/$defs/RustConstInitializer"
+                        }
+                    }
+                }
+            ]
+        },
+        "RustConstInitializer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "def_id"
+            ],
+            "properties": {
+                "def_id": {
+                    "$ref": "common.json#/$defs/DefId"
+                }
+            }
+        },
+        "ConstVal": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "required": [
+                "kind"
+            ],
+            "oneOf": [
+                {
+                    "required": [
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "isize"
+                        },
+                        "size": {
+                            "type": "number"
+                        },
+                        "val": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val",
+                        "size"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "int"
+                        },
+                        "size": {
+                            "enum": [
+                                1,
+                                2,
+                                4,
+                                8,
+                                16
+                            ]
+                        },
+                        "val": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "usize"
+                        },
+                        "size": {
+                            "type": "number"
+                        },
+                        "val": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "size",
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "uint"
+                        },
+                        "size": {
+                            "enum": [
+                                1,
+                                2,
+                                4,
+                                8,
+                                16
+                            ]
+                        },
+                        "val": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "bool"
+                        },
+                        "size": {
+                            "type": "number"
+                        },
+                        "val": {
+                            "enum": [
+                                "0",
+                                "1"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "char"
+                        },
+                        "size": {
+                            "type": "number"
+                        },
+                        "val": {
+                            "type": "string",
+                            "description": "The text is a number corresponding to the caracter code"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val",
+                        "size"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "float"
+                        },
+                        "size": {
+                            "enum": [
+                                4,
+                                8
+                            ]
+                        },
+                        "val": {
+                            "type": "text"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "slice"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "len": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "def_id",
+                        "len"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "strbody"
+                        },
+                        "len": {
+                            "type": "number"
+                        },
+                        "elements": {
+                            "type": "array",
+                            "items": {
+                                "type": "number",
+                                "description": "A byte"
+                            }
+                        }
+                    },
+                    "required": [
+                        "elements"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "struct"
+                        },
+                        "fields": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/ConstVal"
+                            }
+                        }
+                    },
+                    "required": [
+                        "fields"
+                    ]
+                },
+                {
+                    "required": [
+                        "variant",
+                        "fields"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "enum"
+                        },
+                        "variant": {
+                            "type": "number"
+                        },
+                        "fields": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/ConstVal"
+                            }
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "union"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "required": [
+                            "def_id"
+                        ],
+                        "kind": {
+                            "const": "fndef"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "required": [
+                            "def_id"
+                        ],
+                        "kind": {
+                            "const": "static_ref"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "zst"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "val"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "raw_ptr"
+                        },
+                        "val": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "elements"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "array"
+                        },
+                        "element_ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        },
+                        "elements": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/ConstVal"
+                            }
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "elements"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "tuple"
+                        },
+                        "elements": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/ConstVal"
+                            }
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "upvars"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "closure"
+                        },
+                        "upvars": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/ConstVal"
+                            }
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "def_id"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "fn_ptr"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

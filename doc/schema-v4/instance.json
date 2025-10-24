@@ -1,0 +1,178 @@
+{
+    "$defs": {
+        "Instance": {
+            "type": "object",
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "enum": [
+                                "Item",
+                                "Intrinsic",
+                                "VtableShim",
+                                "ReifyShim"
+                            ]
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/Ty"
+                            }
+                        }
+                    },
+                    "required": [
+                        "def_id",
+                        "args"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "FnPtrShim"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/Ty"
+                            }
+                        }
+                    },
+                    "required": [
+                        "ty",
+                        "def_id",
+                        "args"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Virtual"
+                        },
+                        "trait_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "index": {
+                            "type": "number"
+                        },
+                        "item_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    },
+                    "required": [
+                        "trait_id",
+                        "index",
+                        "item_id"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ClosureOnceShim"
+                        },
+                        "call_once": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/Ty"
+                            }
+                        }
+                    },
+                    "required": [
+                        "call_once",
+                        "args"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "DropGlue"
+                        },
+                        "ty": {
+                            "oneOf": [
+                                {
+                                    "type": "null"
+                                },
+                                {
+                                    "$ref": "common.json#/$defs/Ty"
+                                }
+                            ]
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/Ty"
+                            }
+                        }
+                    },
+                    "required": [
+                        "ty",
+                        "def_id",
+                        "args"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "CloneShim"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        },
+                        "callees": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/DefId"
+                            }
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "common.json#/$defs/Ty"
+                            }
+                        }
+                    },
+                    "required": [
+                        "ty",
+                        "callees",
+                        "def_id",
+                        "args"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ClosureFnPointerShim"
+                        },
+                        "call_mut": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    },
+                    "required": [
+                        "call_mut"
+                    ]
+                }
+            ],
+            "required": [
+                "kind"
+            ],
+            "unevaluatedProperties": false
+        }
+    }
+}

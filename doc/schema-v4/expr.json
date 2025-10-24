@@ -1,0 +1,543 @@
+{
+    "$defs": {
+         "Lvalue": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "var",
+                "data"
+            ],
+            "properties": {
+                "var": {
+                    "$ref": "common.json#/$defs/Var"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/PlaceElem"
+                    }
+                }
+            }
+        },
+        "PlaceElem": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "required": [
+                "kind"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Deref"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Field"
+                        },
+                        "field": {
+                            "type": "number"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "field",
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Index"
+                        },
+                        "op": {
+                            "$ref": "common.json#/$defs/Var"
+                        }
+                    },
+                    "required": [
+                        "op"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ConstantIndex"
+                        },
+                        "offset": {
+                            "type": "number"
+                        },
+                        "min_length": {
+                            "type": "number"
+                        },
+                        "from_end": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": [
+                        "offset",
+                        "min_length",
+                        "from_end"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Subslice"
+                        },
+                        "from": {
+                            "type": "number"
+                        },
+                        "to": {
+                            "type": "number"
+                        },
+                        "from_end": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": [
+                        "from",
+                        "to",
+                        "from_end"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Downcast"
+                        },
+                        "variant": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "variant"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Subtype"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "ty"
+                    ]
+                }
+            ]
+        },
+
+        "Rvalue": {
+            "type": "object",
+            "required": [
+                "kind"
+            ],
+            "unevaluatedProperties": false,
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Use"
+                        },
+                        "usevar": {
+                            "$ref": "#/$defs/Operand"
+                        }
+                    },
+                    "required": [
+                        "usevar"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Repeat"
+                        },
+                        "op": {
+                            "$ref": "#/$defs/Operand"
+                        },
+                        "len": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "len"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Ref"
+                        },
+                        "borrowkind": {
+                            "$ref": "#/$defs/BorrowKind"
+                        },
+                        "refvar": {
+                            "$ref": "#/$defs/Lvalue"
+                        },
+                        "region": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "borrowkind",
+                        "refvar",
+                        "region"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "AddressOf"
+                        },
+                        "mutbl": {
+                            "$ref": "common.json#/$defs/Mutability"
+                        },
+                        "place": {
+                            "$ref": "#/$defs/Lvalue"
+                        }
+                    },
+                    "required": [
+                        "mutbl",
+                        "place"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Len"
+                        },
+                        "lv": {
+                            "$ref": "#/$defs/Lvalue"
+                        }
+                    },
+                    "required": [
+                        "lv"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Cast"
+                        },
+                        "type": {
+                            "$ref": "function.json#/$defs/CastKind"
+                        },
+                        "op": {
+                            "$ref": "#/$defs/Operand"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "type",
+                        "op",
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "BinaryOp"
+                        },
+                        "op": {
+                            "$ref": "operator.json#/$defs/BinOp"
+                        },
+                        "L": {
+                            "$ref": "#/$defs/Operand"
+                        },
+                        "R": {
+                            "$ref": "#/$defs/Operand"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "L",
+                        "R"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "NullaryOp"
+                        },
+                        "op": {
+                            "$ref": "operator.json#/$defs/NullOp"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "UnaryOp"
+                        },
+                        "uop": {
+                            "$ref": "operator.json#/$defs/UnOp"
+                        },
+                        "op": {
+                            "$ref": "#/$defs/Operand"
+                        }
+                    },
+                    "required": [
+                        "uop",
+                        "op"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Discriminant"
+                        },
+                        "val": {
+                            "$ref": "#/$defs/Lvalue"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "val",
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Aggregate"
+                        },
+                        "akind": {
+                            "$ref": "#/$defs/AggregateKind"
+                        },
+                        "ops": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/Operand"
+                            }
+                        }
+                    },
+                    "required": [
+                        "akind",
+                        "ops"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "AdtAg"
+                        },
+                        "ag": {
+                            "$ref": "#/$defs/AdtAg"
+                        }
+                    },
+                    "required": [
+                        "ag"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ShallowInitBox"
+                        },
+                        "ptr": {
+                            "$ref": "#/$defs/Operand"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "ptr",
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "CopyForDeref"
+                        },
+                        "place": {
+                            "$ref": "#/$defs/Lvalue"
+                        }
+                    },
+                    "required": [
+                        "place"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ThreadLocalRef"
+                        },
+                        "def_id": {
+                            "$ref": "common.json#/$defs/DefId"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "def_id",
+                        "ty"
+                    ]
+                }
+            ]
+        },
+
+         "AdtAg": {
+            "type": "object",
+            "properties": {
+                "adt": {
+                    "$ref": "adt.json#/$defs/Adt"
+                },
+                "variant": {
+                    "type": "number"
+                },
+                "ops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/Operand"
+                    }
+                },
+                "ty": {
+                    "$ref": "common.json#/$defs/Ty"
+                },
+                "field": {
+                    "type": [
+                        "null",
+                        "number"
+                    ]
+                }
+            },
+            "required": [
+                "adt",
+                "variant",
+                "ops",
+                "ty",
+                "field"
+            ],
+            "additionalProperties": false
+        },
+
+        "Operand": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "required": [
+                "kind",
+                "data"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Move"
+                        },
+                        "data": {
+                            "$ref": "#/$defs/Lvalue"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Copy"
+                        },
+                        "data": {
+                            "$ref": "#/$defs/Lvalue"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Constant"
+                        },
+                        "data": {
+                            "$ref": "constant.json#/$defs/Constant"
+                        }
+                    }
+                }
+            ]
+        },
+
+
+        "AggregateKind": {
+            "type": "object",
+            "required": [
+                "kind"
+            ],
+            "unevaluatedProperties": false,
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Array"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        }
+                    },
+                    "required": [
+                        "ty"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Tuple"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Closure"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Coroutine"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "RawPtr"
+                        },
+                        "ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        },
+                        "mutbl": {
+                            "$ref": "common.json#/$defs/Mutability"
+                        }
+                    }
+                }
+            ]
+        },
+
+        "BorrowKind": {
+            "enum": [
+                "Shared",
+                "Unique",
+                "Mut"
+            ]
+        }
+    }
+}
