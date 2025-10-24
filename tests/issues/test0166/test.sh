@@ -4,4 +4,4 @@ source "$(dirname "$0")/../../common.sh"
 
 expect_no_panic \
   saw-rustc --edition=2018 test.rs \
-    --target "$(rustc -vV | awk '/host:/ {print $2}')"
+    --target "$(rustc --print host-tuple)"
