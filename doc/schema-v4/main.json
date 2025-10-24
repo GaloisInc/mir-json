@@ -1,0 +1,196 @@
+{
+    "title": "MIR JSON",
+    "description": "JSON format for MIR used by Crux and SAW",
+    "type": "object",
+    "required": [
+        "version",
+        "fns"
+    ],
+    "properties": {
+        "version": {
+            "description": "The version of the format",
+            "const": 4
+        },
+        "fns": {
+            "description": "Information about all Rust functions",
+            "type": "array",
+            "items": {
+                "$ref": "function.json#/$defs/Fn"
+            }
+        },
+        "adts": {
+            "type": "array",
+            "description": "Information about algebraic datatypes",
+            "items": {
+                "$ref": "adt.json#/$defs/Adt"
+            }
+        },
+        "statics": {
+            "description": "Information about static definitions",
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/Static"
+            }
+        },
+        "vtables": {
+            "description": "Information about virutal method tables",
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/Vtable"
+            }
+        },
+        "traits": {
+            "description": "Trait declarations",
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/Trait"
+            }
+        },
+        "intrinsics": {
+            "type": "array",
+            "description": "Type instantiations for things",
+            "items": {
+                "$ref": "#/$defs/Intrinsic"
+            }
+        },
+        "tys": {
+            "description": "Definitions for all types",
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/NamedTy"
+            }
+        },
+        "lang_items": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/LangItem"
+            }
+        },
+        "roots": {
+            "description": "Names of all definitions in a crate",
+            "type": "array",
+            "items": {
+                "$ref": "common.json#/$defs/DefId"
+            }
+        },
+        "tests": {
+            "description": "Subset of `roots` that refers to tests",
+            "type": "array",
+            "items": {
+                "$ref": "common.json#/$defs/DefId"
+            }
+        }
+    },
+    "$defs": {
+        "Static": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "enum": [
+                        "constant",
+                        "body"
+                    ]
+                },
+                "name": {
+                    "$ref": "common.json#/$defs/DefId"
+                },
+                "ty": {
+                    "$ref": "common.json#/$defs/Ty"
+                },
+                "mutable": {
+                    "type": "boolean"
+                },
+                "rendered": {
+                    "$ref": "constant.json#/$defs/ConstVal"
+                }
+            },
+            "required": [
+                "name",
+                "ty",
+                "mutable"
+            ],
+            "additionalProperties": false
+        },
+        "NamedTy": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "ty": {
+                    "$ref": "type_table.json#/$defs/InlineType"
+                },
+                "layout": {
+                    "oneOf": [
+                        {
+                            "type": "null"
+                        },
+                        {
+                            "$ref": "type_table.json#/$defs/Layout"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "ty"
+            ],
+            "unevaluatedProperties": false
+        },
+        "Trait": {
+            "type": "object",
+            "properties": {
+                "name": { "$ref": "common.json#/$defs/DefId" },
+                "items": { "type": "array", "items": { "$ref": "#/$defs/TraitItem" } }
+            },
+            "required": [ "name", "items" ],
+            "additionalProperies": false
+        },
+        "TraitItem": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "Method" },
+                "item_id": { "$ref": "common.json#/$defs/DefId" },
+                "signature": { "$ref": "type_table.json#/$defs/FnSig" }
+            },
+            "required": [ "kind", "item_id", "signature" ],
+            "additionalProperies": false
+        },
+        "Vtable": {
+            "type": "object",
+            "properties": {
+                "name": { "$ref": "common.json#/$defs/DefId" },
+                "items": { "type": "array", "items": { "$ref": "#/$defs/VtableItem" } }
+            },
+            "required": [ "name", "items" ],
+            "additionalProperies": false
+        },
+        "VtableItem": {
+            "type": "object",
+            "properties": {
+                "def_id": { "$ref": "common.json#/$defs/DefId" },
+                "item_id": { "$ref": "common.json#/$defs/DefId" }
+            },
+            "required": [ "def_id", "item_id" ],
+            "additionalProperies": false
+        },
+        "Intrinsic": {
+            "type": "object",
+            "properties": {
+                "name": { "$ref": "common.json#/$defs/DefId" },
+                "inst": { "$ref": "instance.json#/$defs/Instance" }
+            },
+            "required": [ "name", "inst" ],
+            "additionalProperies": false
+        },
+        "LangItem": {
+            "type": "object",
+            "properties": {
+                "orig_def_id": { "$ref": "common.json#/$defs/DefId" },
+                "name": { "$ref": "common.json#/$defs/DefId" }
+            },
+            "required": [ "orig_def_id", "name" ],
+            "additionalProperies": false
+        }
+    }
+}

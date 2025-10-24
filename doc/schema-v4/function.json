@@ -1,0 +1,483 @@
+{
+    "$defs": {
+        "Fn": {
+            "type": "object",
+            "required": [
+                "abi",
+                "name",
+                "args",
+                "body",
+                "return_ty"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "abi": {
+                    "$ref": "common.json#/$defs/Abi"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "args": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "common.json#/$defs/Var"
+                    }
+                },
+                "body": {
+                    "$ref": "#/$defs/MirBody"
+                },
+                "spread_arg": {
+                    "type": [
+                        "null",
+                        "number"
+                    ]
+                },
+                "return_ty": {
+                    "$ref": "common.json#/$defs/Ty"
+                }
+            }
+        },
+        
+        "MirBody": {
+            "description": "Implementation of a Rust function",
+            "type": "object",
+            "required": [
+                "vars",
+                "blocks"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "vars": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "common.json#/$defs/Var"
+                    }
+                },
+                "blocks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/BasicBlock"
+                    }
+                }
+            }
+        },
+        "BasicBlockInfo": {
+            "type": "string"
+        },
+        "BasicBlock": {
+            "type": "object",
+            "required": [
+                "blockid",
+                "block"
+            ],
+            "additionalProperties": "false",
+            "properties": {
+                "blockid": {
+                    "type": "string"
+                },
+                "block": {
+                    "$ref": "#/$defs/BasicBlockData"
+                }
+            }
+        },
+        "BasicBlockData": {
+            "type": "object",
+            "required": [
+                "data",
+                "terminator"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/Statement"
+                    }
+                },
+                "terminator": {
+                    "$ref": "#/$defs/Terminator"
+                }
+            }
+        },
+        "Statement": {
+            "description": "A statement",
+            "type": "object",
+            "required": [
+                "kind",
+                "pos"
+            ],
+            "oneOf": [
+                {
+                    "required": [
+                        "lhs",
+                        "rhs"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "Assign"
+                        },
+                        "lhs": {
+                            "$ref": "expr.json#/$defs/Lvalue"
+                        },
+                        "rhs": {
+                            "$ref": "expr.json#/$defs/Rvalue"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "lvalue",
+                        "variant_index"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "SetDiscriminant"
+                        },
+                        "lvalue": {
+                            "$ref": "expr.json#/$defs/Lvalue"
+                        },
+                        "variant_index": {
+                            "type": "number"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "slvar"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "StorageLive"
+                        },
+                        "slvar": {
+                            "$ref": "common.json#/$defs/Var"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "sdvar"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "StorageDead"
+                        },
+                        "sdvar": {
+                            "$ref": "common.json#/$defs/Var"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Nop"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Deinit"
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ConstEvalCounter"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "intrinsic_kind",
+                        "operand"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "Intrinsic"
+                        },
+                        "intrinsic_kind": {
+                            "const": "Assume"
+                        },
+                        "operand": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        }
+                    }
+                },
+                {
+                    "required": [
+                        "intrinsic_kind",
+                        "src",
+                        "dst",
+                        "count"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "Intrinsic"
+                        },
+                        "intrinsic_kind": {
+                            "const": "CopyNonOverlapping"
+                        },
+                        "src": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        },
+                        "dst": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        },
+                        "count": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        }
+                    }
+                }
+            ],
+            "properties": {
+                "pos": {
+                    "type": "string"
+                }
+            },
+            "unevaluatedProperties": false
+        },
+        "Terminator": {
+            "type": "object",
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Goto"
+                        },
+                        "target": {
+                            "$ref": "#/$defs/BasicBlockInfo"
+                        }
+                    },
+                    "required": [
+                        "target"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "SwitchInt"
+                        },
+                        "discr": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        },
+                        "switch_ty": {
+                            "$ref": "common.json#/$defs/Ty"
+                        },
+                        "values": {
+                            "type": "array",
+                            "items": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "targets": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/BasicBlockInfo"
+                            }
+                        }
+                    },
+                    "required": [
+                        "discr",
+                        "switch_ty",
+                        "values",
+                        "targets"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "enum": [
+                                "Resume",
+                                "Abort",
+                                "Return",
+                                "Unreachable",
+                                "InlineAsm"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Drop"
+                        },
+                        "location": {
+                            "$ref": "expr.json#/$defs/Lvalue"
+                        },
+                        "target": {
+                            "$ref": "#/$defs/BasicBlockInfo"
+                        },
+                        "drop_fn": {
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "location",
+                        "target",
+                        "drop_fn"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Call"
+                        },
+                        "func": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "expr.json#/$defs/Operand"
+                            }
+                        },
+                        "destination": {
+                            "type": [
+                                "null",
+                                "array"
+                            ],
+                            "items": [
+                                {
+                                    "$ref": "expr.json#/$defs/Lvalue"
+                                },
+                                {
+                                    "$ref": "#/$defs/BasicBlockInfo"
+                                }
+                            ],
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    },
+                    "required": [
+                        "func",
+                        "args",
+                        "destination"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "Assert"
+                        },
+                        "cond": {
+                            "$ref": "expr.json#/$defs/Operand"
+                        },
+                        "expected": {
+                            "type": "boolean"
+                        },
+                        "msg": {
+                            "type": "string"
+                        },
+                        "target": {
+                            "$ref": "#/$defs/BasicBlockInfo"
+                        }
+                    },
+                    "required": [
+                        "cond",
+                        "expected",
+                        "msg",
+                        "target"
+                    ]
+                }
+            ],
+            "properties": {
+                "pos": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "kind",
+                "pos"
+            ],
+            "unevaluatedProperties": false
+        },
+        "CastKind": {
+            "type": "object",
+            "required": [
+                "kind"
+            ],
+            "unevaluatedProperties": false,
+            "oneOf": [
+                {
+                    "properties": {
+                        "kind": {
+                            "enum": [
+                                "PointerExposeProvenance",
+                                "PointerWithExposedProvenance",
+                                "DynStar",
+                                "IntToInt",
+                                "FloatToInt",
+                                "FloatToFloat",
+                                "IntToFloat",
+                                "PtrToPtr",
+                                "FnPtrToPtr",
+                                "Transmute"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "PointerCoercion"
+                        },
+                        "origin": {
+                            "$comment": "unused"
+                        },
+                        "cast": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {
+                                    "enum": [
+                                        "ReifyFnPointer",
+                                        "UnsafeFnPointer",
+                                        "MutToConstPointer",
+                                        "ArrayToPointer",
+                                        "Unsize"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "required": [
+                        "cast"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "UnsizeVtable"
+                        },
+                        "vtable": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    },
+                    "required": [
+                        "vtable"
+                    ]
+                },
+                {
+                    "properties": {
+                        "kind": {
+                            "const": "ClosureFnPointer"
+                        },
+                        "shim": {
+                            "$ref": "common.json#/$defs/DefId"
+                        }
+                    },
+                    "required": [
+                        "shim"
+                    ]
+                }
+            ]
+        }
+    }
+}
