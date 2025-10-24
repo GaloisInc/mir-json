@@ -862,10 +862,7 @@ impl<T> [T] {
     #[must_use]
     pub const fn as_array<const N: usize>(&self) -> Option<&[T; N]> {
         #[inline(never)] // Keep the hook around even with optimizations applied
-        const fn crucible_array_from_slice_hook<T, const N: usize>(
-            slice: &[T],
-            len: usize,
-        ) -> Option<&[T; N]> {
+        const fn crucible_array_from_slice_hook<T, const N: usize>(slice: &[T]) -> Option<&[T; N]> {
             if slice.len() == N {
                 let ptr = slice.as_ptr() as *const [T; N];
 
@@ -876,7 +873,7 @@ impl<T> [T] {
                 None
             }
         }
-        crucible_array_from_slice_hook(self, N)
+        crucible_array_from_slice_hook(self)
     }
 
     /// Gets a mutable reference to the slice's underlying array.
