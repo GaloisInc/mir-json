@@ -11,7 +11,7 @@ type Fn = {
 }
 
 
-// Implementation of a Rust function
+/// Implementation of a Rust function
 type MirBody = {
   vars: Var[],
   blocks: BasicBlock[]
