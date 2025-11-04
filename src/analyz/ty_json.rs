@@ -624,8 +624,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             }
         };
 
+        let needs_drop = self.needs_drop(tcx, ty::TypingEnv::fully_monomorphized());
+
         // Add the new entry to the interning table.
-        let id = mir.tys.insert(*self, ty_j, layout_j);
+        let id = mir.tys.insert(*self, ty_j, layout_j, needs_drop);
         json!(id)
     }
 }
