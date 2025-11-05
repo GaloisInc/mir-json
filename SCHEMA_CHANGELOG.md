@@ -3,6 +3,11 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 5
+
+Add a `needs_drop` field to interned types, tracking whether or not the type in
+question requires drop glue.
+
 ## 4
 
 Add a field `tests`, subset of `roots`, which rememebers which of the

@@ -294,12 +294,14 @@ impl<'tcx> TyIntern<'tcx> {
         ty: ty::Ty<'tcx>,
         ty_j: serde_json::Value,
         layout_j: Option<serde_json::Value>,
+        needs_drop: bool,
     ) -> String {
         let id = ty_unique_id(ty, &ty_j);
         self.new_vals.push(json!({
             "name": &id,
             "ty": ty_j,
             "layout": layout_j,
+            "needs_drop": needs_drop,
         }));
         let old = self.map.insert(ty, id.clone());
         assert!(old.is_none(), "duplicate insert for type {:?}", ty);
