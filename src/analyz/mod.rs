@@ -478,7 +478,11 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for mir::ConstOperand<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        (eval_mir_constant(mir.tcx, self), self.ty()).to_json(mir)
+        let ty = self.ty();
+        json!({
+            "ty": ty.to_json(mir),
+            "rendered": (eval_mir_constant(mir.tcx, self), ty).to_json(mir),
+        })
     }
 }
 
