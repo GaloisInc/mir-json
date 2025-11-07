@@ -448,7 +448,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         let tcx = mir.tcx;
 
         // If this type has already been interned, just return its ID.
-        if let Some(id) = mir.tys.get(*self) {
+        if let Some(id) = mir.tys.ty_get(*self) {
             return json!(id);
         }
 
@@ -479,7 +479,14 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({"kind": "Float", "size": sz.to_json(mir)})
             }
             &ty::TyKind::Array(ref t, ref size) => {
-                json!({"kind": "Array", "ty": t.to_json(mir), "size": size.to_json(mir)})
+                json!({
+                    "kind": "Array",
+                    "ty": t.to_json(mir),
+                    "size": {
+                        "ty": tcx.types.usize.to_json(mir),
+                        "rendered": const_to_json_uninterned(mir, size),
+                    },
+                })
             }
             &ty::TyKind::Ref(ref _region, ref ty, ref mtbl) => {
                 json!({
@@ -624,8 +631,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             }
         };
 
+        let needs_drop = self.needs_drop(tcx, ty::TypingEnv::fully_monomorphized());
+
         // Add the new entry to the interning table.
-        let id = mir.tys.insert(*self, ty_j, layout_j);
+        let id = mir.tys.ty_insert(tcx, *self, ty_j, layout_j, needs_drop);
         json!(id)
     }
 }
@@ -794,11 +803,24 @@ impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self.unpack() {
             ty::GenericArgKind::Type(ref ty) => ty.to_json(mir),
-            // In crucible-mir, all args entries are considered "types", and there are dummy
-            // TyLifetime and TyConst variants to handle non-type entries.  We emit something that
-            // looks vaguely like an interned type's ID here, and handle it specially in MIR.JSON.
+            // Lifetimes and Consts aren't "types" in the sense that you cannot
+            // have variables with these types, but they do nevertheless appear
+            // in lists of type substitutions, so we need to handle them
+            // somehow.
+            //
+            // For Consts, we emit an entry that contains the constant's
+            // rendered value. This has no effect on the semantics of
+            // crucible-mir. The only real purpose it serves is to allow SAW to
+            // distinguish between different instantiations of polymorphic
+            // functions or ADTs that use const generics.
+            ty::GenericArgKind::Const(c) => const_to_json_interned(mir, &c),
+            // Lifetimes are less interesting from a SAW perspective, as users
+            // typically do not care about the exact region used to instantiate
+            // lifetime-generic functions or ADTs. crucible-mir has a dummy
+            // TyLifetime variant to represent lifetime instantiations. We emit
+            // looks vaguely like an interned type's ID here, and handle it
+            // specially in MIR.JSON.
             ty::GenericArgKind::Lifetime(_) => json!("nonty::Lifetime"),
-            ty::GenericArgKind::Const(_) => json!("nonty::Const"),
         }
     }
 }
@@ -1049,26 +1071,55 @@ mod machine {
     }
 }
 
-impl<'tcx> ToJson<'tcx> for ty::Const<'tcx> {
-    fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let mut map = serde_json::Map::new();
-        if let ty::ConstKind::Value(cv) = self.kind() {
-            if let ty::ValTreeKind::Leaf(val) = *cv.valtree {
-                map.insert("ty".to_owned(), cv.ty.to_json(mir));
-                let sz = val.size();
-                let rendered = json!({
-                    "kind": "usize",
-                    "size": sz.bytes(),
-                    "val": get_const_usize(mir.tcx, *self).to_string(),
-                });
-                map.insert("rendered".to_owned(), rendered);
-                return map.into()
-            }
-        }
-        panic!("don't know how to translate ConstKind::{:?}", self.kind())
+/// Serialize a `ty::Const` to JSON, representing it as an interned type. This
+/// is used to serialize instantiations of const generic parameters. (See
+/// `const_to_json_uninterned` for a variant of this function that does not
+/// perform interning.)
+fn const_to_json_interned<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    c: &ty::Const<'tcx>,
+) -> serde_json::Value {
+    // If this constant has already been interned, just return its ID.
+    if let Some(id) = mir.tys.const_get(*c) {
+        return json!(id);
     }
+
+    let c_j = json!({
+        "kind": "Const",
+        "constant": const_to_json_uninterned(mir, c),
+    });
+
+    // Add the new entry to the interning table.
+    let id = mir.tys.const_insert(mir.tcx, *c, c_j);
+    json!(id)
 }
 
+/// Serialize a `ty::Const` to JSON without interning it. This is used to
+/// serialize the sizes of array types, as well as value-level constants. It is
+/// also one step of the process used to serialize instantiations of const
+/// generic parameters. (See `const_to_json_interned` for the function that
+/// adds interning on top of this.)
+fn const_to_json_uninterned<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    c: &ty::Const<'tcx>,
+) -> serde_json::Value {
+    // This assumes the use of ConstKind::Value. This assumption appears to
+    // hold for all ty::Consts that we serialize to JSON at the moment. It is
+    // conceivable that we might encounter a different variant (e.g.,
+    // ConstKind::Unevaluated) some day, however. If we do, we will need to
+    // rethink this approach.
+    if let ty::ConstKind::Value(cv) = c.kind() {
+        let const_val = mir.tcx.valtree_to_const_val(cv);
+        return (const_val, cv.ty).to_json(mir)
+    }
+    panic!("don't know how to translate ConstKind::{:?}", c.kind())
+}
+
+// This impl handles both type-level constants (namely, the sizes of array
+// types and instantiations of const generic parameters) as well as value-level
+// constants (e.g., the payload of a ConstOperand). At present, we only intern
+// type-level constants. See the implementation of the ToJson impl for
+// ty::Const for how interning is implemented.
 impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
@@ -1080,10 +1131,7 @@ impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
         );
         let op_ty = as_opty(mir.tcx, &mut icx, val, ty);
 
-        json!({
-            "ty": ty.to_json(mir),
-            "rendered": render_opty(mir, &mut icx, &op_ty),
-        })
+        render_opty(mir, &mut icx, &op_ty)
     }
 }
 
