@@ -16,6 +16,15 @@ zip_dist() {
   tar -czf "$name".tar.gz "$name"
 }
 
+validate_json_schema() {
+  URL=https://github.com/GaloisInc/simple-json-schema/releases/download/$VER/simple-json-schema-$VER-$OS_TAG-$ARCH_TAG
+  curl -L "$URL" -o simple-json-schema
+  chmod +x simple-json-schema
+  for i in $(find . -name '*.linked-mir.json'); do
+    ./simple-json-schema doc/mir-json-schema.ts --validate=$i
+  done
+}
+
 COMMAND="$1"
 shift
 
