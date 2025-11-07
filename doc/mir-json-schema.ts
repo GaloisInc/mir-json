@@ -1,6 +1,6 @@
 /// The MIR JSON format
 type MIR = {
-  version: 4,
+  version: 5,
   fns: Fn[],
   adts: Adt[],
   statics: Static[],
@@ -132,11 +132,12 @@ type Ty = string
 type NamedTy = {
   name:   string,
   ty:     InlineType,
-  layout: Layout?
+  layout: Layout?,
+  needs_drop: boolean
 }
 
 type InlineType =
-    { kind: "Bool" | "Char" | "Str" | "Never" | "Foreign" }
+    { kind: "Bool" | "Char" | "Str" | "Never" | "Foreign" | "Coroutine" | "CoroutineWitness" }
   | { kind: "Int", intkind: BaseSize }
   | { kind: "Uint", uintkind: BaseSize }
   | { kind: "Tuple", tys: Ty[] }
@@ -150,6 +151,7 @@ type InlineType =
   | { kind: "RawPtr", ty: Ty, mutability: Mutability }
   | { kind: "Float", size: FloatKind }
   | { kind: "Slice", ty: Ty }
+  | { kind: "Const", constant: ConstVal }
 
 type BaseSize = {
   kind: "Usize" | "U8" | "U16" | "U32" | "U64" | "U128" |
@@ -272,6 +274,7 @@ type ConstVal =
   | { kind: "zst" }
   | { kind: "raw_ptr", val: string }
   | { kind: "array", element_ty: Ty, elements: ConstVal[] }
+  | { kind: "array", len: number, elements: ConstVal[] }
   | { kind: "tuple", elements: ConstVal[] }
   | { kind: "closure", upvars: ConstVal[] }
   | { kind: "fn_ptr", "def_id": DefId }
