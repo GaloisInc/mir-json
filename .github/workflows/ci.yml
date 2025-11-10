@@ -67,6 +67,13 @@ jobs:
         CRUX_RUST_LIBRARY_PATH: ${{ github.workspace }}/rlibs
       run: ./tests/run-all.sh
 
+    - name: Validate schema
+      env:
+        VER: 1.0.2
+        OS_TAG: ${{ matrix.os }}
+        ARCH_TAG: ${{ runner.arch }}
+      run: .github/ci.sh validate_json_schema
+
     # NB: These binary distributions will not work unless you have the
     # appropriate Rust toolchain installed beforehand.
     - name: Extract executables to binary distribution
