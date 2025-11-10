@@ -1,8 +1,6 @@
-/*
-This schema specifies the format of the JSON produced by `mir-json`.
-The format is---more or less--just TypeScript types.  The full details
-of the format are available at: https://github.com/GaloisInc/simple-json-schema
-*/
+// This schema specifies the format of the JSON produced by `mir-json`.
+// The format is---more or less--just TypeScript types.  The full details
+// of the format are available at: https://github.com/GaloisInc/simple-json-schema
 
 
 /// The MIR JSON format
