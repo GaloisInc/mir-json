@@ -971,6 +971,22 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
 
     let crux = Symbol::intern("crux");
     let test = Symbol::intern("test");
+
+    // As a special case, return false early if the DefId is a synthetic (i.e.,
+    // compiler-generated) definition, as these will never have the crux::test
+    // attribute. More importantly, async closure bodies (a particular form of
+    // synthetic definition) cause the currently supported Rust nightly to
+    // panic when calling get_attrs_unchecked() below, as seen in #187. This
+    // special case avoids the panic.
+    //
+    // TODO: The description of this panic bears a striking resemblance to the
+    // one reported in https://github.com/rust-lang/rust/issues/134335, which
+    // has been fixed upstream. It is possible that this special case may no
+    // longer be needed after updating to a more recent Rust toolchain.
+    if tcx.is_synthetic_mir(def_id) {
+        return false;
+    }
+
     for attr in tcx.get_attrs_unchecked(def_id) {
         match &attr.kind {
             rustc_hir::AttrKind::Normal(ref na) => {
