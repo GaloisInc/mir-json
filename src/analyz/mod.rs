@@ -1,6 +1,6 @@
 #![macro_use]
 
-use rustc_ast::{ast, token, tokenstream, ptr, Crate};
+use rustc_ast::{ast, token, tokenstream, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
@@ -1504,7 +1504,7 @@ pub use analyz::to_json::ExportStyle;
 fn make_attr(key: &str, value: &str) -> ast::Attribute {
     ast::Attribute {
         kind: ast::AttrKind::Normal(
-            ptr::P(ast::NormalAttr {
+            Box::new(ast::NormalAttr {
                 item: ast::AttrItem {
                     unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),
