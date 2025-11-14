@@ -643,6 +643,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref target,
                 unwind: _,
                 replace: _,
+                // it seems like drop and async_fut are only used by the
+                // experimental async_drop feature, so we ignore them for now
+                drop: _,
+                async_fut: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.tcx).ty;
                 json!({
