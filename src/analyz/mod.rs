@@ -991,7 +991,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
         return false;
     }
 
-    for attr in tcx.get_attrs_unchecked(def_id) {
+    for attr in tcx.get_all_attrs(def_id) {
         match &attr.kind {
             rustc_hir::AttrKind::Normal(ref na) => {
                 let segs = &na.path.segments;
