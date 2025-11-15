@@ -169,7 +169,7 @@ pub fn adt_inst_id_str<'tcx>(
     }
 
     // Erase all early-bound regions.
-    let args = tcx.erase_regions(ai.args);
+    let args = tcx.erase_and_anonymize_regions(ai.args);
     ext_def_id_str(tcx, ai.def_id(), "_adt", args)
 }
 
