@@ -10,6 +10,8 @@ extern crate serde;
 extern crate shell_escape;
 extern crate tempfile;
 
+extern crate mir_json;
+
 use std::{
     collections::HashMap,
     convert::TryInto,
@@ -26,6 +28,7 @@ use cargo_metadata::{
 use serde::Deserialize;
 use shell_escape::escape;
 use tempfile::TempDir;
+use mir_json::version;
 
 const EXTRA_LIB_CRUCIBLE: &str = "crucible";
 const EXTRA_LIB_CRUCIBLE_PROC_MACROS: &str = "crucible_proc_macros";
@@ -404,6 +407,7 @@ impl fmt::Display for CmdInvocation {
 }
 
 fn main() {
+
     let cwd: Utf8PathBuf = env::current_dir()
         .expect("cwd should be accessible")
         .try_into()
@@ -411,6 +415,7 @@ fn main() {
     let arg_matches = clap::Command::new("mir-json-translate-libs")
         .bin_name("mir-json-translate-libs")
         .about("Build the custom Rust standard libraries for mir-json")
+        .version(&*version::string())
         .args([
             clap::Arg::new("libs").help(
                 "Directory containing custom Rust standard libraries \
@@ -452,6 +457,7 @@ fn main() {
                 ),
         ])
         .get_matches();
+
     let custom_sources_dir = match arg_matches.value_of("libs") {
         Some(path) => fs::canonicalize(path)
             .expect("libs should be a valid path")

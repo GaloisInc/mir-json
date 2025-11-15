@@ -26,7 +26,7 @@ mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
 use lib_util::{self, JsonOutput, EntryKind};
-use schema_ver::SCHEMA_VER;
+use version::SCHEMA_VER;
 
 use log::debug;
 

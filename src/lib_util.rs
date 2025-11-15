@@ -28,7 +28,7 @@ use serde_cbor;
 use serde_json;
 use tar;
 
-use crate::schema_ver::SCHEMA_VER;
+use crate::version::SCHEMA_VER;
 use crate::tar_stream::{TarStream, TarEntryStream};
 
 #[derive(Debug, Default, Serialize, Deserialize)]

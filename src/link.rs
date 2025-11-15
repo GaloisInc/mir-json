@@ -5,7 +5,7 @@ use serde_cbor;
 use serde_json;
 
 use crate::lib_util::{self, CrateIndex, InternTable, EntryKind, StringId};
-use crate::schema_ver::SCHEMA_VER;
+use crate::version::SCHEMA_VER;
 
 
 fn read_crates<R: Read + Seek>(

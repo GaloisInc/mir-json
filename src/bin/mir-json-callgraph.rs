@@ -17,8 +17,15 @@ use std::io;
 use serde_json::Value as JsonValue;
 use mir_json::lib_util::{StringId, InternTable};
 use mir_json::link;
+use mir_json::version;
 
 fn main() {
+
+    if version::has_flag(&mut std::env::args()) {
+        println!("{}", version::string());
+        return;
+    }
+
     let root_name = env::args().nth(1).unwrap();
     let mut inputs = env::args().skip(2).map(|arg| File::open(&arg))
         .collect::<io::Result<Vec<_>>>().unwrap();
