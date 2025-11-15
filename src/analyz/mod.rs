@@ -1356,7 +1356,6 @@ fn inst_abi<'tcx>(
                 _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceKind::Intrinsic(_) => ExternAbi::RustIntrinsic,
         ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
         ty::InstanceKind::FnPtrShim(..) => ExternAbi::RustCall,
         _ => ExternAbi::Rust,

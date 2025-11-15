@@ -653,7 +653,6 @@ impl ToJson<'_> for ExternAbi {
                     "unwind": unwind,
                 })
             },
-            ExternAbi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
             ExternAbi::RustCall => json!({ "kind": "RustCall" }),
             ExternAbi::Unadjusted => json!({ "kind": "Unadjusted" }),
             ExternAbi::RustCold => json!({ "kind": "RustCold" }),
