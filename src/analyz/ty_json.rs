@@ -546,10 +546,6 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                             }).collect::<Vec<_>>(),
                         })
                     },
-                    DynKind::DynStar =>
-                        json!({
-                            "kind": "DynamicStar",
-                        }),
                 }
             }
             &ty::TyKind::Alias(ty::AliasTyKind::Projection, _) => unreachable!(

@@ -194,7 +194,6 @@ impl<'tcx> TraitInst<'tcx> {
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
         let preds = tcx.mk_poly_existential_predicates(&preds);
-        // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
         Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased, DynKind::Dyn))
     }
 
@@ -719,7 +718,6 @@ impl ToJson<'_> for PointerCoercion {
             PointerCoercion::MutToConstPointer => json!({ "kind": "MutToConstPointer" }),
             PointerCoercion::ArrayToPointer => json!({ "kind": "ArrayToPointer" }),
             PointerCoercion::Unsize => json!({ "kind": "Unsize" }),
-            PointerCoercion::DynStar => json!({ "kind": "DynStar" }),
         }
     }
 }
