@@ -689,7 +689,7 @@ impl<'tcx> ToJson<'tcx> for ty::Clause<'tcx> {
                     "trait_pred": tp.trait_ref.to_json(ms)
                 })
             }
-            ty::ClauseKind::Projection(pp) => match pp.term.unpack() {
+            ty::ClauseKind::Projection(pp) => match pp.term.kind() {
                 ty::TermKind::Ty(ty) => json!({
                     "projection_term": pp.projection_term.to_json(ms),
                     "ty": ty.to_json(ms),
@@ -715,7 +715,7 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
                     "args": trait_ref.args.to_json(ms),
                 })
             },
-            &ty::ExistentialPredicate::Projection(ref proj) => match proj.term.unpack() {
+            &ty::ExistentialPredicate::Projection(ref proj) => match proj.term.kind() {
                 ty::TermKind::Ty(ty) => json!({
                     "kind": "Projection",
                     "proj": proj.def_id.to_json(ms),
@@ -798,7 +798,7 @@ pub trait ToJsonAg {
 
 impl<'tcx> ToJson<'tcx> for ty::GenericArg<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        match self.unpack() {
+        match self.kind() {
             ty::GenericArgKind::Type(ref ty) => ty.to_json(mir),
             // Lifetimes and Consts aren't "types" in the sense that you cannot
             // have variables with these types, but they do nevertheless appear
