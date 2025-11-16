@@ -1573,13 +1573,10 @@ pub fn as_opty<'tcx>(
         }
         ConstValue::Scalar(x) => ImmediateOrIndirect::Immediate(x.into()),
         ConstValue::ZeroSized => ImmediateOrIndirect::Immediate(Immediate::Uninit),
-        ConstValue::Slice { data, meta } => {
+        ConstValue::Slice { alloc_id, meta } => {
             // We rely on mutability being set correctly in `data` to prevent writes
             // where none should happen.
-            let ptr = Pointer::new(
-                CtfeProvenance::from(tcx.reserve_and_set_memory_alloc(data)),
-                Size::ZERO,
-            );
+            let ptr = Pointer::new(CtfeProvenance::from(alloc_id), Size::ZERO);
             ImmediateOrIndirect::Immediate(Immediate::new_slice(ptr.into(), meta, &tcx))
         }
     };
