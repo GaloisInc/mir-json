@@ -878,7 +878,7 @@ mod machine {
             _instance: ty::Instance<'tcx>,
             _abi: &FnAbi<'tcx, Ty<'tcx>>,
             _args: &[FnArg<'tcx, Self::Provenance>],
-            _destination: &MPlaceTy<'tcx, Self::Provenance>,
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx, Option<(&'tcx mir::Body<'tcx>, ty::Instance<'tcx>)>> {
@@ -894,7 +894,7 @@ mod machine {
             _fn_val: Self::ExtraFnVal,
             _abi: &FnAbi<'tcx, Ty<'tcx>>,
             _args: &[FnArg<'tcx, Self::Provenance>],
-            _destination: &MPlaceTy<'tcx, Self::Provenance>,
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx> {
@@ -909,7 +909,7 @@ mod machine {
             _ecx: &mut InterpCx<'tcx, Self>,
             _instance: ty::Instance<'tcx>,
             _args: &[OpTy<'tcx, Self::Provenance>],
-            _destination: &MPlaceTy<'tcx, Self::Provenance>,
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
             _target: Option<mir::BasicBlock>,
             _unwind: mir::UnwindAction,
         ) -> InterpResult<'tcx, Option<Instance<'tcx>>> {
