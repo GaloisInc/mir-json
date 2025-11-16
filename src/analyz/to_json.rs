@@ -658,8 +658,8 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::EfiApi => json!({ "kind": "EfiApi" }),
             ExternAbi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
             ExternAbi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
-            ExternAbi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
-            ExternAbi::CCmseNonSecureEntry => json!({ "kind": "CCmseNonSecureEntry" }),
+            ExternAbi::CmseNonSecureCall => json!({ "kind": "CmseNonSecureCall" }),
+            ExternAbi::CmseNonSecureEntry => json!({ "kind": "CmseNonSecureEntry" }),
             ExternAbi::System { unwind } => {
                 json!({
                     "kind": "System",
