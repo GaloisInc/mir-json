@@ -61,7 +61,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         analyz::inject_attrs(krate);
 
         let sess = &compiler.sess;
-        self.crate_name = Some(rustc_session::output::find_crate_name(sess, &krate.attrs));
+        self.crate_name = Some(rustc_interface::passes::get_crate_name(sess, &krate.attrs));
         self.outputs = Some(rustc_interface::util::build_output_filenames(&krate.attrs, sess));
 
         Compilation::Continue
