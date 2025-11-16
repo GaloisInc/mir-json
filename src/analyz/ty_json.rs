@@ -1065,6 +1065,9 @@ mod machine {
         ) -> usize {
             mir::interpret::CTFE_ALLOC_SALT
         }
+
+        fn get_default_alloc_params(&self) -> <Self::Bytes as AllocBytes>::AllocParams {
+        }
     }
 }
 
