@@ -1005,7 +1005,7 @@ mod machine {
             ptr: Pointer<Self::Provenance>,
             _size: i64
         ) -> Option<(AllocId, Size, Self::ProvenanceExtra)> {
-            let (prov, offset) = ptr.into_parts();
+            let (prov, offset) = ptr.prov_and_relative_offset();
             Some((prov.alloc_id(), offset, ()))
         }
 
@@ -1301,8 +1301,7 @@ pub fn try_render_opty<'tcx>(
 
         ty::TyKind::FnPtr(_sig_tys, _hdr) => {
             let ptr = icx.read_pointer(op_ty).unwrap();
-            let (prov, _offset) = ptr.into_parts();
-            let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
+            let alloc = tcx.try_get_global_alloc(ptr.provenance?.alloc_id())?;
             match alloc {
                 interpret::GlobalAlloc::Function { instance } => {
                     let expected_abi = ty.fn_sig(tcx).abi();
@@ -1485,7 +1484,7 @@ fn try_render_ref_opty<'tcx>(
     // Special case for nullptr
     let val = icx.read_immediate(op_ty).unwrap();
     let mplace = icx.ref_to_mplace(&val).unwrap();
-    let (prov, offset) = mplace.ptr().into_parts();
+    let (prov, offset) = mplace.ptr().into_raw_parts();
     if prov.is_none() {
         assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
 
@@ -1498,7 +1497,7 @@ fn try_render_ref_opty<'tcx>(
     let d = icx.deref_pointer(op_ty).unwrap();
     let is_mut = mutability == hir::Mutability::Mut;
 
-    let (prov, d_offset) = d.ptr().into_parts();
+    let (prov, d_offset) = d.ptr().into_raw_parts();
     assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
     let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
 
