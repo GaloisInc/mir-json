@@ -161,21 +161,19 @@ impl<'tcx> TraitInst<'tcx> {
         let mut projs = Vec::new();
         for super_trait_def_id in all_super_traits {
             for ai in tcx.associated_items(super_trait_def_id).in_definition_order() {
-                match ai.kind {
-                    ty::AssocKind::Type => {},
-                    _ => continue,
+                if let ty::AssocKind::Type {..} = ai.kind {
+                    let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
+                    let actual_ty = tcx.normalize_erasing_regions(
+                        ty::TypingEnv::fully_monomorphized(),
+                        proj_ty,
+                    );
+                    projs.push(ty::ExistentialProjection::new(
+                        tcx,
+                        ai.def_id,
+                        ex_trait_ref.args,
+                        actual_ty.into(),
+                    ));
                 }
-                let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
-                let actual_ty = tcx.normalize_erasing_regions(
-                    ty::TypingEnv::fully_monomorphized(),
-                    proj_ty,
-                );
-                projs.push(ty::ExistentialProjection::new(
-                    tcx,
-                    ai.def_id,
-                    ex_trait_ref.args,
-                    actual_ty.into(),
-                ));
             }
         }
         projs.sort_by_key(|p| tcx.def_path_hash(p.def_id));
