@@ -213,10 +213,14 @@ pub fn inst_id_str<'tcx>(
                 } => ext_def_id_str(tcx, coroutine_closure_def_id, "_corocallonce", args),
                 ty::InstanceKind::ThreadLocalShim(def_id) =>
                     ext_def_id_str(tcx, def_id, "_threadlocal", args),
+                ty::InstanceKind::FutureDropPollShim(def_id, _proxy_cor_ty, _impl_cor_ty) =>
+                    ext_def_id_str(tcx, def_id, "_futuredroppoll", args),
                 ty::InstanceKind::FnPtrAddrShim(def_id, _ty) =>
                     ext_def_id_str(tcx, def_id, "_fnptraddr", args),
                 ty::InstanceKind::AsyncDropGlueCtorShim(def_id, _ty) =>
-                    ext_def_id_str(tcx, def_id, "_asyncdrop", args),
+                    ext_def_id_str(tcx, def_id, "_asyncdropgluector", args),
+                ty::InstanceKind::AsyncDropGlue(def_id, _ty) =>
+                    ext_def_id_str(tcx, def_id, "_asyncdropglue", args),
             }
         },
         FnInst::ClosureFnPointer(base_inst) => {
@@ -433,10 +437,16 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             ty::InstanceKind::ThreadLocalShim(_def_id) => json!({
                 "kind": "Unsupported",
             }),
+            ty::InstanceKind::FutureDropPollShim(_def_id, _proxy_cor_ty, _impl_cor_ty) => json!({
+                "kind": "Unsupported",
+            }),
             ty::InstanceKind::FnPtrAddrShim(_def_id, _ty) => json!({
                 "kind": "Unsupported",
             }),
             ty::InstanceKind::AsyncDropGlueCtorShim(_def_id, _ty) => json!({
+                "kind": "Unsupported",
+            }),
+            ty::InstanceKind::AsyncDropGlue(_def_id, _ty) => json!({
                 "kind": "Unsupported",
             }),
         }
