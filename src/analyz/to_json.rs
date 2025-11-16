@@ -670,6 +670,7 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::Unadjusted => json!({ "kind": "Unadjusted" }),
             ExternAbi::RustCold => json!({ "kind": "RustCold" }),
             ExternAbi::RustInvalid => json!({ "kind": "RustInvalid" }),
+            ExternAbi::Custom => json!({ "kind": "Custom" }),
             ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
             ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
         }
