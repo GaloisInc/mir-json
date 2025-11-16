@@ -1017,7 +1017,7 @@ mod machine {
             interp_ok(Cow::Borrowed(alloc))
         }
 
-        fn init_alloc_extra(
+        fn init_local_allocation(
             _ecx: &InterpCx<'tcx, Self>,
             _id: AllocId,
             _kind: MemoryKind<Self::MemoryKind>,
