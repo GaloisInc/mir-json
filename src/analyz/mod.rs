@@ -991,18 +991,8 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
         return false;
     }
 
-    for attr in tcx.get_all_attrs(def_id) {
-        match &attr.kind {
-            rustc_hir::AttrKind::Normal(ref na) => {
-                let segs = &na.path.segments;
-                if segs.len() == 2 && segs[0].name == crux && segs[1].name == test {
-                    return true;
-                }
-            }
-            _ => { }
-        }
-    }
-    return false;
+    tcx.get_all_attrs(def_id).iter()
+        .any(|attr| attr.path_matches(&[crux, test]))
 }
 
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
