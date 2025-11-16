@@ -485,7 +485,7 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         // Based on the implementation of fmt_assert_args (see
-        // https://github.com/rust-lang/rust/blob/553600e0f5f5a7d492de6d95ccb2f057005f5651/compiler/rustc_middle/src/mir/terminator.rs#L224-L301 ).
+        // https://github.com/rust-lang/rust/blob/02c7b1a7ac1d739663878030510508372e46f254/compiler/rustc_middle/src/mir/terminator.rs#L235-L328 ).
         // Sadly, we cannot call that function directly here, as it formats the
         // AssertMessage just differently enough to where it would look out of
         // place in error messages.
@@ -538,6 +538,9 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
                     )
                 }
                 AssertKind::NullPointerDereference => write!(s, "null pointer dereference occurred"),
+                AssertKind::InvalidEnumConstruction(source) => {
+                    write!(s, "trying to construct an enum from an invalid value {source:?}")
+                }
                 AssertKind::ResumedAfterReturn(CoroutineKind::Coroutine(_)) => {
                     write!(s, "coroutine resumed after completion")
                 }
@@ -561,6 +564,18 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
                 }
                 AssertKind::ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
                     write!(s, "`gen fn` should just keep returning `None` after panicking")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Coroutine(_)) => {
+                    write!(s, "coroutine resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::Async, _)) => {
+                    write!(s, "`async fn` resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
+                    write!(s, "`async gen fn` resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
+                    write!(s, "`gen fn` resumed after drop")
                 }
             };
         write_res.unwrap();
