@@ -1120,7 +1120,7 @@ fn const_to_json_uninterned<'tcx>(
 // constants (e.g., the payload of a ConstOperand). At present, we only intern
 // type-level constants. See the implementation of the ToJson impl for
 // ty::Const for how interning is implemented.
-impl<'tcx> ToJson<'tcx> for (mir::ConstValue<'tcx>, ty::Ty<'tcx>) {
+impl<'tcx> ToJson<'tcx> for (mir::ConstValue, ty::Ty<'tcx>) {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let (val, ty) = *self;
         let mut icx = interpret::InterpCx::new(
@@ -1555,7 +1555,7 @@ fn try_render_ref_opty<'tcx>(
 pub fn as_opty<'tcx>(
     tcx: TyCtxt<'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
-    cv: mir::ConstValue<'tcx>,
+    cv: mir::ConstValue,
     ty: ty::Ty<'tcx>,
 ) -> interpret::OpTy<'tcx, interpret::CtfeProvenance> {
     use rustc_middle::mir::ConstValue;
@@ -1774,7 +1774,7 @@ pub fn handle_adt_ag<'tcx>(
 pub fn eval_mir_constant<'tcx>(
     tcx: TyCtxt<'tcx>,
     constant: &mir::ConstOperand<'tcx>,
-) -> mir::ConstValue<'tcx> {
+) -> mir::ConstValue {
     constant.const_
         .eval(tcx, ty::TypingEnv::fully_monomorphized(), constant.span)
         .unwrap()
