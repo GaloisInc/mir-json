@@ -1228,7 +1228,7 @@ pub fn try_render_opty<'tcx>(
             ty::AdtKind::Struct => {
                 let variant = adt_def.non_enum_variant();
                 let mut field_vals = Vec::new();
-                for field_idx in 0..variant.fields.len() {
+                for field_idx in variant.fields.indices() {
                     let field = icx.project_field(op_ty, field_idx).unwrap();
                     field_vals.push(try_render_opty(mir, icx, &field)?)
                 }
@@ -1256,7 +1256,8 @@ pub fn try_render_opty<'tcx>(
                     let val = icx.project_downcast(op_ty, variant_idx).unwrap();
                     let mut field_vals = Vec::with_capacity(val.layout.fields.count());
                     for idx in 0 .. val.layout.fields.count() {
-                        let field_opty = icx.project_field(&val, idx).unwrap();
+                        let field_opty =
+                            icx.project_field(&val, FieldIdx::from_usize(idx)).unwrap();
                         field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
                     }
 
@@ -1337,7 +1338,8 @@ pub fn try_render_opty<'tcx>(
             let upvars_count = args.as_closure().upvar_tys().len();
             let mut upvar_vals = Vec::with_capacity(upvars_count);
             for idx in 0 .. upvars_count {
-                let upvar_opty = icx.project_field(op_ty, idx).unwrap();
+                let upvar_opty =
+                    icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
                 upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
             }
 
@@ -1352,7 +1354,8 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Tuple(elts) => {
             let mut vals = Vec::with_capacity(elts.len());
             for i in 0..elts.len() {
-                let fld: interpret::OpTy<'tcx> = icx.project_field(op_ty, i).unwrap();
+                let fld: interpret::OpTy<'tcx> =
+                    icx.project_field(op_ty, FieldIdx::from_usize(i)).unwrap();
                 vals.push(render_opty(mir, icx, &fld));
             }
             json!({
