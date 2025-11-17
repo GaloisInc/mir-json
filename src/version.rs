@@ -3,8 +3,7 @@ use crate::schema_ver::SCHEMA_VER;
 use std::env::{self, Args};
 
 /// Check if the arguments contain version flags ("--version" or "-V").
-pub fn has_flag(args: &mut Args) -> bool
-{
+pub fn has_flag(args: &mut Args) -> bool {
     args.any(|arg| {
         arg == "--version" ||
         // Combined short flags like -vV

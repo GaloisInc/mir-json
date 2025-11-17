@@ -407,7 +407,6 @@ impl fmt::Display for CmdInvocation {
 }
 
 fn main() {
-
     let cwd: Utf8PathBuf = env::current_dir()
         .expect("cwd should be accessible")
         .try_into()
@@ -457,7 +456,6 @@ fn main() {
                 ),
         ])
         .get_matches();
-
     let custom_sources_dir = match arg_matches.value_of("libs") {
         Some(path) => fs::canonicalize(path)
             .expect("libs should be a valid path")
