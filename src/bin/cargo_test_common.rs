@@ -99,7 +99,7 @@ fn get_override_crates(subcmd_name: &'static str, subcmd_descr: &'static str) ->
         .unwrap_or_else(|e| panic!("error building workspace: {}", e));
     let opts = args.compile_options(
         &gctx,
-        CompileMode::Test,
+        UserIntent::Test,
         Some(&ws),
         ProfileChecking::Custom,
     ).unwrap_or_else(|e| panic!("error reading compile options: {}", e));
