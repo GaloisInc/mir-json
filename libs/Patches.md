@@ -58,6 +58,16 @@ into the main commit for that patch, and then the *Update* line can be removed.
   See also the "Limitations of zero-length arrays and
   `slice::as_chunks_unchecked(_mut)`" note below.
 
+* Avoid `transmute` in `Layout` and `Alignment` (last applied: June 9, 2026)
+
+  `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
+  value, assuming that the integer is a valid discriminant for the enum.
+  `Layout::from_size_align` performs the same `transmute` operation directly,
+  bypassing `Alignment::new_unchecked`.  This patch reimplements
+  `Alignment::new_unchecked` without `transmute` and modifies `Layout` to call
+  it.  Finally, this patch removes a `transmute` in the opposite direction from
+  `Alignment::as_usize`.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written

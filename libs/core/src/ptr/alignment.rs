@@ -160,9 +160,121 @@ impl Alignment {
             (align: usize = align) => align.is_power_of_two()
         );
 
-        // SAFETY: By precondition, this must be a power of two, and
-        // our variants encompass all possible powers of two.
-        unsafe { mem::transmute::<usize, Alignment>(align) }
+        match align {
+            0x0001 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl0 },
+            0x0002 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl1 },
+            0x0004 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl2 },
+            0x0008 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl3 },
+            0x0010 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl4 },
+            0x0020 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl5 },
+            0x0040 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl6 },
+            0x0080 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl7 },
+            0x0100 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl8 },
+            0x0200 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl9 },
+            0x0400 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl10 },
+            0x0800 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl11 },
+            0x1000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl12 },
+            0x2000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl13 },
+            0x4000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl14 },
+            0x8000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl15 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00010000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl16 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00020000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl17 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00040000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl18 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00080000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl19 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00100000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl20 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00200000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl21 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00400000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl22 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x00800000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl23 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x01000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl24 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x02000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl25 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x04000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl26 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x08000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl27 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x10000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl28 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x20000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl29 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x40000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl30 },
+            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+            0x80000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl31 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000000100000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl32 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000000200000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl33 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000000400000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl34 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000000800000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl35 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000001000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl36 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000002000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl37 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000004000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl38 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000008000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl39 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000010000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl40 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000020000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl41 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000040000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl42 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000080000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl43 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000100000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl44 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000200000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl45 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000400000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl46 },
+            #[cfg(target_pointer_width = "64")]
+            0x0000800000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl47 },
+            #[cfg(target_pointer_width = "64")]
+            0x0001000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl48 },
+            #[cfg(target_pointer_width = "64")]
+            0x0002000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl49 },
+            #[cfg(target_pointer_width = "64")]
+            0x0004000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl50 },
+            #[cfg(target_pointer_width = "64")]
+            0x0008000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl51 },
+            #[cfg(target_pointer_width = "64")]
+            0x0010000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl52 },
+            #[cfg(target_pointer_width = "64")]
+            0x0020000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl53 },
+            #[cfg(target_pointer_width = "64")]
+            0x0040000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl54 },
+            #[cfg(target_pointer_width = "64")]
+            0x0080000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl55 },
+            #[cfg(target_pointer_width = "64")]
+            0x0100000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl56 },
+            #[cfg(target_pointer_width = "64")]
+            0x0200000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl57 },
+            #[cfg(target_pointer_width = "64")]
+            0x0400000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl58 },
+            #[cfg(target_pointer_width = "64")]
+            0x0800000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl59 },
+            #[cfg(target_pointer_width = "64")]
+            0x1000000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl60 },
+            #[cfg(target_pointer_width = "64")]
+            0x2000000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl61 },
+            #[cfg(target_pointer_width = "64")]
+            0x4000000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl62 },
+            #[cfg(target_pointer_width = "64")]
+            0x8000000000000000 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl63 },
+            _ => panic!("invalid alignment (not a power of two)"),
+        }
     }
 
     /// Returns the alignment as a [`usize`].
@@ -179,13 +291,15 @@ impl Alignment {
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const fn as_nonzero(self) -> NonZero<usize> {
-        // This transmutes directly to avoid the UbCheck in `NonZero::new_unchecked`
-        // since there's no way for the user to trip that check anyway -- the
-        // validity invariant of the type would have to have been broken earlier --
-        // and emitting it in an otherwise simple method is bad for compile time.
+        #[cfg(target_pointer_width = "16")]
+        let x = self._inner_repr_trick as u16;
+        #[cfg(target_pointer_width = "32")]
+        let x = self._inner_repr_trick as u32;
+        #[cfg(target_pointer_width = "64")]
+        let x = self._inner_repr_trick as u64;
 
         // SAFETY: All the discriminants are non-zero.
-        unsafe { mem::transmute::<Alignment, NonZero<usize>>(self) }
+        unsafe { NonZero::new_unchecked(x as usize) }
     }
 
     /// Returns the base-2 logarithm of the alignment.
