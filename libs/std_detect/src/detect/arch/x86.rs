@@ -89,6 +89,11 @@ features! {
     /// * `"amx-bf16"`
     /// * `"amx-fp16"`
     /// * `"amx-complex"`
+    /// * `"amx-avx512"`
+    /// * `"amx-fp8"`
+    /// * `"amx-movrs"`
+    /// * `"amx-tf32"`
+    /// * `"amx-transpose"`
     /// * `"f16c"`
     /// * `"fma"`
     /// * `"bmi1"`
@@ -103,10 +108,14 @@ features! {
     /// * `"xsaves"`
     /// * `"xsavec"`
     /// * `"cmpxchg16b"`
+    /// * `"kl"`
+    /// * `"widekl"`
     /// * `"adx"`
     /// * `"rtm"`
     /// * `"movbe"`
     /// * `"ermsb"`
+    /// * `"movrs"`
+    /// * `"xop"`
     ///
     /// [docs]: https://software.intel.com/sites/landingpage/IntrinsicsGuide
     #[stable(feature = "simd_x86", since = "1.27.0")]
@@ -148,11 +157,11 @@ features! {
     /// AVX (Advanced Vector Extensions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx2: "avx2";
     /// AVX2 (Advanced Vector Extensions 2)
-    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sha512: "sha512";
+    @FEATURE: #[stable(feature = "sha512_sm_x86", since = "1.89.0")] sha512: "sha512";
     /// SHA512
-    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sm3: "sm3";
+    @FEATURE: #[stable(feature = "sha512_sm_x86", since = "1.89.0")] sm3: "sm3";
     /// SM3
-    @FEATURE: #[unstable(feature = "sha512_sm_x86", issue = "126624")] sm4: "sm4";
+    @FEATURE: #[stable(feature = "sha512_sm_x86", since = "1.89.0")] sm4: "sm4";
     /// SM4
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512f: "avx512f" ;
     /// AVX-512 F (Foundation)
@@ -175,8 +184,7 @@ features! {
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vbmi: "avx512vbmi";
     /// AVX-512 VBMI (Vector Byte Manipulation Instructions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vpopcntdq: "avx512vpopcntdq";
-    /// AVX-512 VPOPCNTDQ (Vector Population Count Doubleword and
-    /// Quadword)
+    /// AVX-512 VPOPCNTDQ (Vector Population Count Doubleword and Quadword)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512vbmi2: "avx512vbmi2";
     /// AVX-512 VBMI2 (Additional byte, word, dword and qword capabilities)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] gfni: "gfni";
@@ -195,15 +203,15 @@ features! {
     /// AVX-512 P2INTERSECT
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] avx512fp16: "avx512fp16";
     /// AVX-512 FP16 (FLOAT16 instructions)
-    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxifma: "avxifma";
+    @FEATURE: #[stable(feature = "avx512_target_feature", since = "1.89.0")] avxifma: "avxifma";
     /// AVX-IFMA (Integer Fused Multiply Add)
-    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxneconvert: "avxneconvert";
+    @FEATURE: #[stable(feature = "avx512_target_feature", since = "1.89.0")] avxneconvert: "avxneconvert";
     /// AVX-NE-CONVERT (Exceptionless Convert)
-    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnni: "avxvnni";
+    @FEATURE: #[stable(feature = "avx512_target_feature", since = "1.89.0")] avxvnni: "avxvnni";
     /// AVX-VNNI (Vector Neural Network Instructions)
-    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnniint16: "avxvnniint16";
+    @FEATURE: #[stable(feature = "avx512_target_feature", since = "1.89.0")] avxvnniint16: "avxvnniint16";
     /// AVX-VNNI_INT8 (VNNI with 16-bit Integers)
-    @FEATURE: #[unstable(feature = "avx512_target_feature", issue = "44839")] avxvnniint8: "avxvnniint8";
+    @FEATURE: #[stable(feature = "avx512_target_feature", since = "1.89.0")] avxvnniint8: "avxvnniint8";
     /// AVX-VNNI_INT16 (VNNI with 8-bit integers)
     @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_tile: "amx-tile";
     /// AMX (Advanced Matrix Extensions) - Tile load/store
@@ -215,6 +223,22 @@ features! {
     /// AMX-FP16 (Float16 Operations)
     @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_complex: "amx-complex";
     /// AMX-COMPLEX (Complex number Operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_avx512: "amx-avx512";
+    /// AMX-AVX512 (AVX512 operations extended to matrices)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_fp8: "amx-fp8";
+    /// AMX-FP8 (Float8 Operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_movrs: "amx-movrs";
+    /// AMX-MOVRS (Matrix MOVERS operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_tf32: "amx-tf32";
+    /// AMX-TF32 (TensorFloat32 Operations)
+    @FEATURE: #[unstable(feature = "x86_amx_intrinsics", issue = "126622")] amx_transpose: "amx-transpose";
+    /// AMX-TRANSPOSE (Matrix Transpose Operations)
+    @FEATURE: #[unstable(feature = "apx_target_feature", issue = "139284")] apxf: "apxf";
+    /// APX-F (Advanced Performance Extensions - Foundation)
+    @FEATURE: #[unstable(feature = "avx10_target_feature", issue = "138843")] avx10_1: "avx10.1";
+    /// AVX10.1
+    @FEATURE: #[unstable(feature = "avx10_target_feature", issue = "138843")] avx10_2: "avx10.2";
+    /// AVX10.2
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] f16c: "f16c";
     /// F16C (Conversions between IEEE-754 `binary16` and `binary32` formats)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] fma: "fma";
@@ -241,12 +265,18 @@ features! {
     /// XSAVEC (Save Processor Extended States Compacted)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] cmpxchg16b: "cmpxchg16b";
     /// CMPXCH16B (16-byte compare-and-swap instruction)
+    @FEATURE: #[stable(feature = "keylocker_x86", since = "1.89.0")] kl: "kl";
+    /// Intel Key Locker
+    @FEATURE: #[stable(feature = "keylocker_x86", since = "1.89.0")] widekl: "widekl";
+    /// Intel Key Locker Wide
     @FEATURE: #[stable(feature = "simd_x86_adx", since = "1.33.0")] adx: "adx";
     /// ADX, Intel ADX (Multi-Precision Add-Carry Instruction Extensions)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] rtm: "rtm";
     /// RTM, Intel (Restricted Transactional Memory)
     @FEATURE: #[stable(feature = "movbe_target_feature", since = "1.67.0")] movbe: "movbe";
     /// MOVBE (Move Data After Swapping Bytes)
+    @FEATURE: #[unstable(feature = "movrs_target_feature", issue = "137976")] movrs: "movrs";
+    /// MOVRS (Move data with the read-shared hint)
     @FEATURE: #[stable(feature = "simd_x86", since = "1.27.0")] ermsb: "ermsb";
     /// ERMSB, Enhanced REP MOVSB and STOSB
     @FEATURE: #[unstable(feature = "xop_target_feature", issue = "127208")] xop: "xop";

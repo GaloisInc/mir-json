@@ -6,7 +6,7 @@
 use stdarch_test::assert_instr;
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.xsave64"]
     fn xsave64(p: *mut u8, hi: u32, lo: u32);
     #[link_name = "llvm.x86.xrstor64"]
@@ -149,11 +149,6 @@ mod tests {
         }
     }
 
-    // We cannot test `_xsave64`, `_xrstor64`, `_xsaveopt64`, `_xsaves64` and `_xrstors64` directly
-    // as they are privileged instructions and will need access to the kernel to run and test them.
-    // See https://github.com/rust-lang/stdarch/issues/209
-
-    #[cfg_attr(stdarch_intel_sde, ignore)]
     #[simd_test(enable = "xsave")]
     #[cfg_attr(miri, ignore)] // Register saving/restoring is not supported in Miri
     unsafe fn test_xsave64() {
@@ -166,7 +161,6 @@ mod tests {
         xsave::_xsave64(b.ptr(), m);
     }
 
-    #[cfg_attr(stdarch_intel_sde, ignore)]
     #[simd_test(enable = "xsave,xsaveopt")]
     #[cfg_attr(miri, ignore)] // Register saving/restoring is not supported in Miri
     unsafe fn test_xsaveopt64() {

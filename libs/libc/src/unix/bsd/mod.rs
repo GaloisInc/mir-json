@@ -180,16 +180,6 @@ cfg_if! {
 
         impl Eq for sockaddr_un {}
 
-        impl fmt::Debug for sockaddr_un {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sockaddr_un")
-                    .field("sun_len", &self.sun_len)
-                    .field("sun_family", &self.sun_family)
-                    // FIXME: .field("sun_path", &self.sun_path)
-                    .finish()
-            }
-        }
-
         impl hash::Hash for sockaddr_un {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.sun_len.hash(state);
@@ -228,18 +218,6 @@ cfg_if! {
         }
 
         impl Eq for utsname {}
-
-        impl fmt::Debug for utsname {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("utsname")
-                    // FIXME: .field("sysname", &self.sysname)
-                    // FIXME: .field("nodename", &self.nodename)
-                    // FIXME: .field("release", &self.release)
-                    // FIXME: .field("version", &self.version)
-                    // FIXME: .field("machine", &self.machine)
-                    .finish()
-            }
-        }
 
         impl hash::Hash for utsname {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -595,35 +573,35 @@ pub const RTAX_BRD: c_int = 7;
 
 f! {
     pub fn CMSG_FIRSTHDR(mhdr: *const crate::msghdr) -> *mut cmsghdr {
-        if (*mhdr).msg_controllen as usize >= mem::size_of::<cmsghdr>() {
-            (*mhdr).msg_control as *mut cmsghdr
+        if (*mhdr).msg_controllen as usize >= size_of::<cmsghdr>() {
+            (*mhdr).msg_control.cast::<cmsghdr>()
         } else {
             core::ptr::null_mut()
         }
     }
 
     pub fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
-        let bits = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         (*set).fds_bits[fd / bits] &= !(1 << (fd % bits));
         return;
     }
 
     pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
-        let bits = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         return ((*set).fds_bits[fd / bits] & (1 << (fd % bits))) != 0;
     }
 
     pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
-        let bits = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         (*set).fds_bits[fd / bits] |= 1 << (fd % bits);
         return;
     }
 
     pub fn FD_ZERO(set: *mut fd_set) -> () {
-        for slot in (*set).fds_bits.iter_mut() {
+        for slot in &mut (*set).fds_bits {
             *slot = 0;
         }
     }
@@ -639,7 +617,7 @@ safe_f! {
     }
 
     pub {const} fn WEXITSTATUS(status: c_int) -> c_int {
-        status >> 8
+        (status >> 8) & 0x00ff
     }
 
     pub {const} fn WCOREDUMP(status: c_int) -> bool {
@@ -965,6 +943,8 @@ extern "C" {
         timeptr: *const crate::tm,
         locale: crate::locale_t,
     ) -> size_t;
+
+    pub fn devname(dev: crate::dev_t, mode_t: crate::mode_t) -> *mut c_char;
 }
 
 cfg_if! {

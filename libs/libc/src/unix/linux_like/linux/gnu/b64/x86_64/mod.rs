@@ -3,7 +3,6 @@
 use crate::prelude::*;
 use crate::{off64_t, off_t};
 
-pub type c_char = i8;
 pub type wchar_t = i32;
 pub type nlink_t = u64;
 pub type blksize_t = i64;
@@ -13,6 +12,8 @@ pub type __u64 = c_ulonglong;
 pub type __s64 = c_longlong;
 
 s! {
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_mask: crate::sigset_t,
@@ -309,14 +310,13 @@ s_no_extra_traits! {
         pub uc_mcontext: mcontext_t,
         pub uc_sigmask: crate::sigset_t,
         __private: [u8; 512],
-        // FIXME: the shadow stack field requires glibc >= 2.28.
+        // FIXME(glibc): the shadow stack field requires glibc >= 2.28.
         // Re-add once we drop compatibility with glibc versions older than
         // 2.28.
         //
         // __ssp: [c_ulonglong; 4],
     }
 
-    #[allow(missing_debug_implementations)]
     #[repr(align(16))]
     pub struct max_align_t {
         priv_: [f64; 4],
@@ -347,23 +347,6 @@ cfg_if! {
 
         impl Eq for user_fpregs_struct {}
 
-        impl fmt::Debug for user_fpregs_struct {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("user_fpregs_struct")
-                    .field("cwd", &self.cwd)
-                    .field("ftw", &self.ftw)
-                    .field("fop", &self.fop)
-                    .field("rip", &self.rip)
-                    .field("rdp", &self.rdp)
-                    .field("mxcsr", &self.mxcsr)
-                    .field("mxcr_mask", &self.mxcr_mask)
-                    .field("st_space", &self.st_space)
-                    // FIXME: .field("xmm_space", &self.xmm_space)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
-
         impl hash::Hash for user_fpregs_struct {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.cwd.hash(state);
@@ -391,19 +374,6 @@ cfg_if! {
         }
 
         impl Eq for ucontext_t {}
-
-        impl fmt::Debug for ucontext_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("ucontext_t")
-                    .field("uc_flags", &self.uc_flags)
-                    .field("uc_link", &self.uc_link)
-                    .field("uc_stack", &self.uc_stack)
-                    .field("uc_mcontext", &self.uc_mcontext)
-                    .field("uc_sigmask", &self.uc_sigmask)
-                    // Ignore __private field
-                    .finish()
-            }
-        }
 
         impl hash::Hash for ucontext_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -664,7 +634,7 @@ pub const PR_SPEC_FORCE_DISABLE: c_uint = 1 << 3;
 pub const PR_SPEC_DISABLE_NOEXEC: c_uint = 1 << 4;
 pub const PR_SPEC_STORE_BYPASS: c_int = 0;
 pub const PR_SPEC_INDIRECT_BRANCH: c_int = 1;
-// FIXME: perharps for later
+// FIXME(linux): perharps for later
 //pub const PR_SPEC_L1D_FLUSH: c_int = 2;
 
 pub const MCL_CURRENT: c_int = 0x0001;

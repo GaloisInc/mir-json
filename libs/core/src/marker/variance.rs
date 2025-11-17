@@ -18,7 +18,7 @@ macro_rules! phantom_type {
         pub struct $name:ident <$t:ident> ($($inner:tt)*);
     )*) => {$(
         $(#[$attr])*
-        pub struct $name<$t>($($inner)*) where T: ?Sized;
+        pub struct $name<$t>($($inner)*) where $t: ?Sized;
 
         impl<T> $name<T>
             where T: ?Sized
@@ -131,11 +131,15 @@ phantom_lifetime! {
     ///
     /// [1]: https://doc.rust-lang.org/stable/reference/subtyping.html#variance
     ///
+    /// Note: If `'a` is otherwise contravariant or invariant, the resulting type is invariant.
+    ///
     /// ## Layout
     ///
     /// For all `'a`, the following are guaranteed:
     /// * `size_of::<PhantomCovariantLifetime<'a>>() == 0`
     /// * `align_of::<PhantomCovariantLifetime<'a>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomCovariantLifetime<'a>(PhantomCovariant<&'a ()>);
     /// Zero-sized type used to mark a lifetime as contravariant.
     ///
@@ -144,11 +148,15 @@ phantom_lifetime! {
     ///
     /// [1]: https://doc.rust-lang.org/stable/reference/subtyping.html#variance
     ///
+    /// Note: If `'a` is otherwise covariant or invariant, the resulting type is invariant.
+    ///
     /// ## Layout
     ///
     /// For all `'a`, the following are guaranteed:
     /// * `size_of::<PhantomContravariantLifetime<'a>>() == 0`
     /// * `align_of::<PhantomContravariantLifetime<'a>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomContravariantLifetime<'a>(PhantomContravariant<&'a ()>);
     /// Zero-sized type used to mark a lifetime as invariant.
     ///
@@ -162,6 +170,8 @@ phantom_lifetime! {
     /// For all `'a`, the following are guaranteed:
     /// * `size_of::<PhantomInvariantLifetime<'a>>() == 0`
     /// * `align_of::<PhantomInvariantLifetime<'a>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomInvariantLifetime<'a>(PhantomInvariant<&'a ()>);
 }
 
@@ -174,11 +184,15 @@ phantom_type! {
     ///
     /// [1]: https://doc.rust-lang.org/stable/reference/subtyping.html#variance
     ///
+    /// Note: If `T` is otherwise contravariant or invariant, the resulting type is invariant.
+    ///
     /// ## Layout
     ///
     /// For all `T`, the following are guaranteed:
     /// * `size_of::<PhantomCovariant<T>>() == 0`
     /// * `align_of::<PhantomCovariant<T>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomCovariant<T>(PhantomData<fn() -> T>);
     /// Zero-sized type used to mark a type parameter as contravariant.
     ///
@@ -188,11 +202,15 @@ phantom_type! {
     ///
     /// [1]: https://doc.rust-lang.org/stable/reference/subtyping.html#variance
     ///
+    /// Note: If `T` is otherwise covariant or invariant, the resulting type is invariant.
+    ///
     /// ## Layout
     ///
     /// For all `T`, the following are guaranteed:
     /// * `size_of::<PhantomContravariant<T>>() == 0`
     /// * `align_of::<PhantomContravariant<T>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomContravariant<T>(PhantomData<fn(T)>);
     /// Zero-sized type used to mark a type parameter as invariant.
     ///
@@ -206,6 +224,8 @@ phantom_type! {
     /// For all `T`, the following are guaranteed:
     /// * `size_of::<PhantomInvariant<T>>() == 0`
     /// * `align_of::<PhantomInvariant<T>>() == 1`
+    #[rustc_pub_transparent]
+    #[repr(transparent)]
     pub struct PhantomInvariant<T>(PhantomData<fn(T) -> T>);
 }
 

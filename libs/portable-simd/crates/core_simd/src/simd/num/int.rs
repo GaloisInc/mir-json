@@ -1,7 +1,7 @@
 use super::sealed::Sealed;
 use crate::simd::{
-    cmp::SimdOrd, cmp::SimdPartialOrd, num::SimdUint, LaneCount, Mask, Simd, SimdCast, SimdElement,
-    SupportedLaneCount,
+    LaneCount, Mask, Simd, SimdCast, SimdElement, SupportedLaneCount, cmp::SimdOrd,
+    cmp::SimdPartialOrd, num::SimdUint,
 };
 
 /// Operations on SIMD vectors of signed integers.
@@ -58,6 +58,7 @@ pub trait SimdInt: Copy + Sealed {
     /// let sat = x.saturating_sub(max);
     /// assert_eq!(unsat, Simd::from_array([1, MAX, MIN, 0]));
     /// assert_eq!(sat, Simd::from_array([MIN, MIN, MIN, 0]));
+    /// ```
     fn saturating_sub(self, second: Self) -> Self;
 
     /// Lanewise absolute value, implemented in Rust.

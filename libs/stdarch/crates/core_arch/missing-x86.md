@@ -137,27 +137,6 @@
 </p></details>
 
 
-<details><summary>["KEYLOCKER"]</summary><p>
-
-  * [ ] [`_mm_aesdec128kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdec128kl_u8)
-  * [ ] [`_mm_aesdec256kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdec256kl_u8)
-  * [ ] [`_mm_aesenc128kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesenc128kl_u8)
-  * [ ] [`_mm_aesenc256kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesenc256kl_u8)
-  * [ ] [`_mm_encodekey128_u32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_encodekey128_u32)
-  * [ ] [`_mm_encodekey256_u32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_encodekey256_u32)
-  * [ ] [`_mm_loadiwkey`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_loadiwkey)
-</p></details>
-
-
-<details><summary>["KEYLOCKER_WIDE"]</summary><p>
-
-  * [ ] [`_mm_aesdecwide128kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdecwide128kl_u8)
-  * [ ] [`_mm_aesdecwide256kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesdecwide256kl_u8)
-  * [ ] [`_mm_aesencwide128kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesencwide128kl_u8)
-  * [ ] [`_mm_aesencwide256kl_u8`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_aesencwide256kl_u8)
-</p></details>
-
-
 <details><summary>["MONITOR"]</summary><p>
 
   * [ ] [`_mm_monitor`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_monitor)
@@ -231,31 +210,6 @@
 <details><summary>["SERIALIZE"]</summary><p>
 
   * [ ] [`_serialize`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_serialize)
-</p></details>
-
-
-<details><summary>["SHA512", "AVX"]</summary><p>
-
-  * [ ] [`_mm256_sha512msg1_epi64`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sha512msg1_epi64)
-  * [ ] [`_mm256_sha512msg2_epi64`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sha512msg2_epi64)
-  * [ ] [`_mm256_sha512rnds2_epi64`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sha512rnds2_epi64)
-</p></details>
-
-
-<details><summary>["SM3", "AVX"]</summary><p>
-
-  * [ ] [`_mm_sm3msg1_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sm3msg1_epi32)
-  * [ ] [`_mm_sm3msg2_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sm3msg2_epi32)
-  * [ ] [`_mm_sm3rnds2_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sm3rnds2_epi32)
-</p></details>
-
-
-<details><summary>["SM4", "AVX"]</summary><p>
-
-  * [ ] [`_mm256_sm4key4_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sm4key4_epi32)
-  * [ ] [`_mm256_sm4rnds4_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm256_sm4rnds4_epi32)
-  * [ ] [`_mm_sm4key4_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sm4key4_epi32)
-  * [ ] [`_mm_sm4rnds4_epi32`](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_sm4rnds4_epi32)
 </p></details>
 
 

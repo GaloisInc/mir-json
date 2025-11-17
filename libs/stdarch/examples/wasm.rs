@@ -8,13 +8,15 @@ use core_arch::arch::wasm32::*;
 
 static mut HEAD: *mut *mut u8 = 0 as _;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn page_alloc() -> *mut u8 {
-    if !HEAD.is_null() {
-        let next = *HEAD;
-        let ret = HEAD;
-        HEAD = next as *mut _;
-        return ret as *mut u8;
+    unsafe {
+        if !HEAD.is_null() {
+            let next = *HEAD;
+            let ret = HEAD;
+            HEAD = next as *mut _;
+            return ret as *mut u8;
+        }
     }
 
     let ret = memory_grow(0, 1);
@@ -27,14 +29,16 @@ pub unsafe extern "C" fn page_alloc() -> *mut u8 {
     ((ret as u32) * page_size()) as *mut u8
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn page_free(page: *mut u8) {
     let page = page as *mut *mut u8;
-    *page = HEAD as *mut u8;
-    HEAD = page;
+    unsafe {
+        *page = HEAD as *mut u8;
+        HEAD = page;
+    }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn memory_used() -> usize {
     (page_size() * (memory_size(0) as u32)) as usize
 }

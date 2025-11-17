@@ -1,18 +1,21 @@
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use core::sync::atomic::{Atomic, AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use super::*;
 use crate::fmt;
 use crate::io::{self, BorrowedCursor, IoSlice, IoSliceMut};
-use crate::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6};
+use crate::net::{
+    IpAddr, Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs,
+};
 use crate::os::xous::services;
 use crate::sync::Arc;
+use crate::sys::net::connection::each_addr;
 use crate::time::Duration;
 
 macro_rules! unimpl {
     () => {
         return Err(io::const_error!(
             io::ErrorKind::Unsupported,
-            &"This function is not yet implemented",
+            "this function is not yet implemented",
         ));
     };
 }
@@ -29,11 +32,11 @@ pub struct TcpStream {
     remote_port: u16,
     peer_addr: SocketAddr,
     // milliseconds
-    read_timeout: Arc<AtomicU32>,
+    read_timeout: Arc<Atomic<u32>>,
     // milliseconds
-    write_timeout: Arc<AtomicU32>,
-    handle_count: Arc<AtomicUsize>,
-    nonblocking: Arc<AtomicBool>,
+    write_timeout: Arc<Atomic<u32>>,
+    handle_count: Arc<Atomic<usize>>,
+    nonblocking: Arc<Atomic<bool>>,
 }
 
 fn sockaddr_to_buf(duration: Duration, addr: &SocketAddr, buf: &mut [u8]) {
@@ -79,8 +82,8 @@ impl TcpStream {
         }
     }
 
-    pub fn connect(socketaddr: io::Result<&SocketAddr>) -> io::Result<TcpStream> {
-        Self::connect_timeout(socketaddr?, Duration::ZERO)
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<TcpStream> {
+        each_addr(addr, |addr| Self::connect_timeout(addr, Duration::ZERO))
     }
 
     pub fn connect_timeout(addr: &SocketAddr, duration: Duration) -> io::Result<TcpStream> {
@@ -96,7 +99,7 @@ impl TcpStream {
             0,
             4096,
         ) else {
-            return Err(io::const_error!(io::ErrorKind::InvalidInput, &"Invalid response"));
+            return Err(io::const_error!(io::ErrorKind::InvalidInput, "invalid response"));
         };
 
         // The first four bytes should be zero upon success, and will be nonzero
@@ -106,13 +109,13 @@ impl TcpStream {
             // errcode is a u8 but stuck in a u16 where the upper byte is invalid. Mask & decode accordingly.
             let errcode = response[0];
             if errcode == NetError::SocketInUse as u8 {
-                return Err(io::const_error!(io::ErrorKind::ResourceBusy, &"Socket in use",));
+                return Err(io::const_error!(io::ErrorKind::ResourceBusy, "socket in use"));
             } else if errcode == NetError::Unaddressable as u8 {
-                return Err(io::const_error!(io::ErrorKind::AddrNotAvailable, &"Invalid address",));
+                return Err(io::const_error!(io::ErrorKind::AddrNotAvailable, "invalid address"));
             } else {
                 return Err(io::const_error!(
                     io::ErrorKind::InvalidInput,
-                    &"Unable to connect or internal error",
+                    "unable to connect or internal error",
                 ));
             }
         }
@@ -198,7 +201,7 @@ impl TcpStream {
         ) else {
             return Err(io::const_error!(
                 io::ErrorKind::InvalidInput,
-                &"Library failure: wrong message type or messaging error"
+                "library failure: wrong message type or messaging error",
             ));
         };
 
@@ -212,14 +215,14 @@ impl TcpStream {
             if result[0] != 0 {
                 if result[1] == 8 {
                     // timed out
-                    return Err(io::const_error!(io::ErrorKind::TimedOut, &"Timeout",));
+                    return Err(io::const_error!(io::ErrorKind::TimedOut, "timeout"));
                 }
                 if result[1] == 9 {
                     // would block
-                    return Err(io::const_error!(io::ErrorKind::WouldBlock, &"Would block",));
+                    return Err(io::const_error!(io::ErrorKind::WouldBlock, "would block"));
                 }
             }
-            Err(io::const_error!(io::ErrorKind::Other, &"recv_slice failure"))
+            Err(io::const_error!(io::ErrorKind::Other, "recv_slice failure"))
         }
     }
 
@@ -258,20 +261,20 @@ impl TcpStream {
             self.write_timeout.load(Ordering::Relaxed) as usize,
             buf_len,
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Internal error")))?;
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "internal error")))?;
 
         if send_request.raw[0] != 0 {
             if send_request.raw[4] == 8 {
                 // timed out
                 return Err(io::const_error!(
                     io::ErrorKind::BrokenPipe,
-                    &"Timeout or connection closed",
+                    "timeout or connection closed",
                 ));
             } else if send_request.raw[4] == 9 {
                 // would block
-                return Err(io::const_error!(io::ErrorKind::WouldBlock, &"Would block",));
+                return Err(io::const_error!(io::ErrorKind::WouldBlock, "would block"));
             } else {
-                return Err(io::const_error!(io::ErrorKind::InvalidInput, &"Error when sending",));
+                return Err(io::const_error!(io::ErrorKind::InvalidInput, "error when sending"));
             }
         }
         Ok(u32::from_le_bytes([
@@ -304,7 +307,7 @@ impl TcpStream {
             0,
             0,
         ) else {
-            return Err(io::const_error!(io::ErrorKind::InvalidInput, &"Internal error"));
+            return Err(io::const_error!(io::ErrorKind::InvalidInput, "internal error"));
         };
         let mut i = get_addr.raw.iter();
         match *i.next().unwrap() {
@@ -324,7 +327,7 @@ impl TcpStream {
                 }
                 Ok(SocketAddr::V6(SocketAddrV6::new(new_addr.into(), self.local_port, 0, 0)))
             }
-            _ => Err(io::const_error!(io::ErrorKind::InvalidInput, &"Internal error")),
+            _ => Err(io::const_error!(io::ErrorKind::InvalidInput, "internal error")),
         }
     }
 
@@ -333,7 +336,7 @@ impl TcpStream {
             services::net_server(),
             services::NetBlockingScalar::StdTcpStreamShutdown(self.fd, how).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|_| ())
     }
 
@@ -355,7 +358,7 @@ impl TcpStream {
             services::net_server(),
             services::NetBlockingScalar::StdSetNodelay(self.fd, enabled).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|_| ())
     }
 
@@ -364,19 +367,19 @@ impl TcpStream {
             services::net_server(),
             services::NetBlockingScalar::StdGetNodelay(self.fd).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|res| res[0] != 0)?)
     }
 
     pub fn set_ttl(&self, ttl: u32) -> io::Result<()> {
         if ttl > 255 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "TTL must be less than 256"));
+            return Err(io::const_error!(io::ErrorKind::InvalidInput, "TTL must be less than 256"));
         }
         crate::os::xous::ffi::blocking_scalar(
             services::net_server(),
             services::NetBlockingScalar::StdSetTtlTcp(self.fd, ttl).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|_| ())
     }
 
@@ -385,7 +388,7 @@ impl TcpStream {
             services::net_server(),
             services::NetBlockingScalar::StdGetTtlTcp(self.fd).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|res| res[0] as _)?)
     }
 

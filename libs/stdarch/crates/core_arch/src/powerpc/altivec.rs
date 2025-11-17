@@ -48,7 +48,7 @@ types! {
 }
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.ppc.altivec.lvx"]
     fn lvx(p: *const i8) -> vector_unsigned_int;
 
@@ -129,8 +129,6 @@ extern "C" {
         b: vector_signed_short,
         c: vector_signed_int,
     ) -> vector_signed_int;
-    #[link_name = "llvm.ppc.altivec.vmaddfp"]
-    fn vmaddfp(a: vector_float, b: vector_float, c: vector_float) -> vector_float;
     #[link_name = "llvm.ppc.altivec.vnmsubfp"]
     fn vnmsubfp(a: vector_float, b: vector_float, c: vector_float) -> vector_float;
     #[link_name = "llvm.ppc.altivec.vsum2sws"]
@@ -158,32 +156,32 @@ extern "C" {
     #[link_name = "llvm.ppc.altivec.vmulosh"]
     fn vmulosh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.vmaxsb"]
+    #[link_name = "llvm.smax.v16i8"]
     fn vmaxsb(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char;
-    #[link_name = "llvm.ppc.altivec.vmaxsh"]
+    #[link_name = "llvm.smax.v8i16"]
     fn vmaxsh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_short;
-    #[link_name = "llvm.ppc.altivec.vmaxsw"]
+    #[link_name = "llvm.smax.v4i32"]
     fn vmaxsw(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.vmaxub"]
+    #[link_name = "llvm.umax.v16i8"]
     fn vmaxub(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
-    #[link_name = "llvm.ppc.altivec.vmaxuh"]
+    #[link_name = "llvm.umax.v8i16"]
     fn vmaxuh(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short;
-    #[link_name = "llvm.ppc.altivec.vmaxuw"]
+    #[link_name = "llvm.umax.v4i32"]
     fn vmaxuw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
 
-    #[link_name = "llvm.ppc.altivec.vminsb"]
+    #[link_name = "llvm.smin.v16i8"]
     fn vminsb(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char;
-    #[link_name = "llvm.ppc.altivec.vminsh"]
+    #[link_name = "llvm.smin.v8i16"]
     fn vminsh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_short;
-    #[link_name = "llvm.ppc.altivec.vminsw"]
+    #[link_name = "llvm.smin.v4i32"]
     fn vminsw(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.vminub"]
+    #[link_name = "llvm.umin.v16i8"]
     fn vminub(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
-    #[link_name = "llvm.ppc.altivec.vminuh"]
+    #[link_name = "llvm.umin.v8i16"]
     fn vminuh(a: vector_unsigned_short, b: vector_unsigned_short) -> vector_unsigned_short;
-    #[link_name = "llvm.ppc.altivec.vminuw"]
+    #[link_name = "llvm.umin.v4i32"]
     fn vminuw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
 
     #[link_name = "llvm.ppc.altivec.vsubsbs"]
@@ -234,9 +232,6 @@ extern "C" {
     #[link_name = "llvm.ppc.altivec.vavguw"]
     fn vavguw(a: vector_unsigned_int, b: vector_unsigned_int) -> vector_unsigned_int;
 
-    #[link_name = "llvm.ceil.v4f32"]
-    fn vceil(a: vector_float) -> vector_float;
-
     #[link_name = "llvm.ppc.altivec.vcmpbfp"]
     fn vcmpbfp(a: vector_float, b: vector_float) -> vector_signed_int;
 
@@ -273,9 +268,6 @@ extern "C" {
 
     #[link_name = "llvm.ppc.altivec.vexptefp"]
     fn vexptefp(a: vector_float) -> vector_float;
-
-    #[link_name = "llvm.floor.v4f32"]
-    fn vfloor(a: vector_float) -> vector_float;
 
     #[link_name = "llvm.ppc.altivec.vcmpequb.p"]
     fn vcmpequb_p(cr: i32, a: vector_unsigned_char, b: vector_unsigned_char) -> i32;
@@ -346,43 +338,29 @@ extern "C" {
     #[link_name = "llvm.ppc.altivec.vlogefp"]
     fn vlogefp(a: vector_float) -> vector_float;
 
-    #[link_name = "llvm.ppc.altivec.sll"]
+    #[link_name = "llvm.ppc.altivec.vsl"]
     fn vsl(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
-    #[link_name = "llvm.ppc.altivec.slo"]
+    #[link_name = "llvm.ppc.altivec.vslo"]
     fn vslo(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.srab"]
+    #[link_name = "llvm.ppc.altivec.vsrab"]
     fn vsrab(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char;
-    #[link_name = "llvm.ppc.altivec.srah"]
+    #[link_name = "llvm.ppc.altivec.vsrah"]
     fn vsrah(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short;
-    #[link_name = "llvm.ppc.altivec.sraw"]
+    #[link_name = "llvm.ppc.altivec.vsraw"]
     fn vsraw(a: vector_signed_int, b: vector_unsigned_int) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.srl"]
+    #[link_name = "llvm.ppc.altivec.vsr"]
     fn vsr(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
-    #[link_name = "llvm.ppc.altivec.sro"]
+    #[link_name = "llvm.ppc.altivec.vsro"]
     fn vsro(a: vector_signed_int, b: vector_signed_int) -> vector_signed_int;
 
-    #[link_name = "llvm.ppc.altivec.slv"]
+    #[link_name = "llvm.ppc.altivec.vslv"]
     fn vslv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
-    #[link_name = "llvm.ppc.altivec.srv"]
+    #[link_name = "llvm.ppc.altivec.vsrv"]
     fn vsrv(a: vector_unsigned_char, b: vector_unsigned_char) -> vector_unsigned_char;
 
-    #[link_name = "llvm.ctlz.v16i8"]
-    fn vclzb(a: vector_signed_char) -> vector_signed_char;
-    #[link_name = "llvm.ctlz.v8i16"]
-    fn vclzh(a: vector_signed_short) -> vector_signed_short;
-    #[link_name = "llvm.ctlz.v4i32"]
-    fn vclzw(a: vector_signed_int) -> vector_signed_int;
-
-    #[link_name = "llvm.ppc.altivec.vrlb"]
-    fn vrlb(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char;
-    #[link_name = "llvm.ppc.altivec.vrlh"]
-    fn vrlh(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short;
-    #[link_name = "llvm.ppc.altivec.vrlw"]
-    fn vrlw(a: vector_signed_int, c: vector_unsigned_int) -> vector_signed_int;
-
-    #[link_name = "llvm.ppc.altivec.vrfin"]
+    #[link_name = "llvm.nearbyint.v4f32"]
     fn vrfin(a: vector_float) -> vector_float;
 }
 
@@ -550,7 +528,7 @@ mod sealed {
             #[target_feature(enable = "altivec")]
             #[cfg_attr(test, assert_instr($instr))]
             pub unsafe fn $fun(a: isize, b: *const $ty) -> t_t_l!($ty) {
-                let addr = (b as *const i8).offset(a);
+                let addr = b.byte_offset(a).cast::<i8>();
                 transmute($instr(addr))
             }
 
@@ -687,15 +665,9 @@ mod sealed {
             pub unsafe fn $fun(a: isize, b: *const $ty) -> t_t_l!($ty) {
                 let addr = (b as *const u8).offset(a);
 
-                // Workaround ptr::copy_nonoverlapping not being inlined
-                extern "rust-intrinsic" {
-                    #[rustc_nounwind]
-                    pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
-                }
-
                 let mut r = mem::MaybeUninit::uninit();
 
-                copy_nonoverlapping(
+                crate::ptr::copy_nonoverlapping(
                     addr,
                     r.as_mut_ptr() as *mut u8,
                     mem::size_of::<t_t_l!($ty)>(),
@@ -742,13 +714,7 @@ mod sealed {
             pub unsafe fn $fun(s: t_t_l!($ty), a: isize, b: *mut $ty) {
                 let addr = (b as *mut u8).offset(a);
 
-                // Workaround ptr::copy_nonoverlapping not being inlined
-                extern "rust-intrinsic" {
-                    #[rustc_nounwind]
-                    pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
-                }
-
-                copy_nonoverlapping(
+                crate::ptr::copy_nonoverlapping(
                     &s as *const _ as *const u8,
                     addr,
                     mem::size_of::<t_t_l!($ty)>(),
@@ -775,7 +741,7 @@ mod sealed {
     impl_vec_xst! { vec_xst_u32 stxvd2x / stxv u32 }
     impl_vec_xst! { vec_xst_f32 stxvd2x / stxv f32 }
 
-    test_impl! { vec_floor(a: vector_float) -> vector_float [ vfloor, vrfim / xvrspim ] }
+    test_impl! { vec_floor(a: vector_float) -> vector_float [ simd_floor, vrfim / xvrspim ] }
 
     test_impl! { vec_vexptefp(a: vector_float) -> vector_float [ vexptefp, vexptefp ] }
 
@@ -1309,7 +1275,7 @@ mod sealed {
         }
     }
 
-    test_impl! { vec_vceil(a: vector_float) -> vector_float [vceil, vrfip / xvrspip ] }
+    test_impl! { vec_vceil(a: vector_float) -> vector_float [simd_ceil, vrfip / xvrspip ] }
 
     test_impl! { vec_vavgsb(a: vector_signed_char, b: vector_signed_char) -> vector_signed_char [ vavgsb, vavgsb ] }
     test_impl! { vec_vavgsh(a: vector_signed_short, b: vector_signed_short) -> vector_signed_short [ vavgsh, vavgsh ] }
@@ -1462,8 +1428,7 @@ mod sealed {
     #[cfg_attr(test, assert_instr(vspltb, IMM4 = 15))]
     unsafe fn vspltb<const IMM4: u32>(a: vector_signed_char) -> vector_signed_char {
         static_assert_uimm_bits!(IMM4, 4);
-        let b = u8x16::splat(IMM4 as u8);
-        vec_perm(a, a, transmute(b))
+        simd_shuffle(a, a, const { u32x16::from_array([IMM4; 16]) })
     }
 
     #[inline]
@@ -1471,12 +1436,7 @@ mod sealed {
     #[cfg_attr(test, assert_instr(vsplth, IMM3 = 7))]
     unsafe fn vsplth<const IMM3: u32>(a: vector_signed_short) -> vector_signed_short {
         static_assert_uimm_bits!(IMM3, 3);
-        let b0 = IMM3 as u8 * 2;
-        let b1 = b0 + 1;
-        let b = u8x16::new(
-            b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1, b0, b1,
-        );
-        vec_perm(a, a, transmute(b))
+        simd_shuffle(a, a, const { u32x8::from_array([IMM3; 8]) })
     }
 
     #[inline]
@@ -1485,14 +1445,7 @@ mod sealed {
     #[cfg_attr(all(test, target_feature = "vsx"), assert_instr(xxspltw, IMM2 = 3))]
     unsafe fn vspltw<const IMM2: u32>(a: vector_signed_int) -> vector_signed_int {
         static_assert_uimm_bits!(IMM2, 2);
-        let b0 = IMM2 as u8 * 4;
-        let b1 = b0 + 1;
-        let b2 = b0 + 2;
-        let b3 = b0 + 3;
-        let b = u8x16::new(
-            b0, b1, b2, b3, b0, b1, b2, b3, b0, b1, b2, b3, b0, b1, b2, b3,
-        );
-        vec_perm(a, a, transmute(b))
+        simd_shuffle(a, a, const { u32x4::from_array([IMM2; 4]) })
     }
 
     #[unstable(feature = "stdarch_powerpc", issue = "111145")]
@@ -1906,9 +1859,9 @@ mod sealed {
 
     #[inline]
     #[target_feature(enable = "altivec")]
-    #[cfg_attr(test, assert_instr(vmaddfp))]
-    unsafe fn vec_vmaddfp(a: vector_float, b: vector_float, c: vector_float) -> vector_float {
-        vmaddfp(a, b, c)
+    #[cfg_attr(test, assert_instr(xvmaddasp))]
+    pub unsafe fn vec_vmaddfp(a: vector_float, b: vector_float, c: vector_float) -> vector_float {
+        simd_fma(a, b, c)
     }
 
     #[inline]
@@ -3191,9 +3144,9 @@ mod sealed {
 
     impl_vec_shift_octect! { [VectorSro vec_sro] (vsro) }
 
-    test_impl! { vec_vcntlzb(a: vector_signed_char) -> vector_signed_char [vclzb, vclzb] }
-    test_impl! { vec_vcntlzh(a: vector_signed_short) -> vector_signed_short [vclzh, vclzh] }
-    test_impl! { vec_vcntlzw(a: vector_signed_int) -> vector_signed_int [vclzw, vclzw] }
+    test_impl! { vec_vcntlzb(a: vector_signed_char) -> vector_signed_char [simd_ctlz, vclzb] }
+    test_impl! { vec_vcntlzh(a: vector_signed_short) -> vector_signed_short [simd_ctlz, vclzh] }
+    test_impl! { vec_vcntlzw(a: vector_signed_int) -> vector_signed_int [simd_ctlz, vclzw] }
 
     #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorCntlz {
@@ -3220,6 +3173,21 @@ mod sealed {
     impl_vec_cntlz! { vec_vcntlzw(vector_signed_int) }
     impl_vec_cntlz! { vec_vcntlzw(vector_unsigned_int) }
 
+    macro_rules! impl_vrl {
+        ($fun:ident $ty:ident) => {
+            #[inline]
+            #[target_feature(enable = "altivec")]
+            #[cfg_attr(test, assert_instr($fun))]
+            unsafe fn $fun(a: t_t_l!($ty), b: t_t_l!($ty)) -> t_t_l!($ty) {
+                simd_funnel_shl(a, a, b)
+            }
+        };
+    }
+
+    impl_vrl! { vrlb u8 }
+    impl_vrl! { vrlh u16 }
+    impl_vrl! { vrlw u32 }
+
     #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorRl {
         type Shift;
@@ -3240,23 +3208,19 @@ mod sealed {
         };
     }
 
-    test_impl! { vec_vrlb(a: vector_signed_char, b: vector_unsigned_char) -> vector_signed_char [vrlb, vrlb] }
-    test_impl! { vec_vrlh(a: vector_signed_short, b: vector_unsigned_short) -> vector_signed_short [vrlh, vrlh] }
-    test_impl! { vec_vrlw(a: vector_signed_int, b: vector_unsigned_int) -> vector_signed_int [vrlw, vrlw] }
-
-    impl_vec_rl! { vec_vrlb(vector_signed_char) }
-    impl_vec_rl! { vec_vrlh(vector_signed_short) }
-    impl_vec_rl! { vec_vrlw(vector_signed_int) }
-    impl_vec_rl! { vec_vrlb(vector_unsigned_char) }
-    impl_vec_rl! { vec_vrlh(vector_unsigned_short) }
-    impl_vec_rl! { vec_vrlw(vector_unsigned_int) }
+    impl_vec_rl! { vrlb(vector_signed_char) }
+    impl_vec_rl! { vrlh(vector_signed_short) }
+    impl_vec_rl! { vrlw(vector_signed_int) }
+    impl_vec_rl! { vrlb(vector_unsigned_char) }
+    impl_vec_rl! { vrlh(vector_unsigned_short) }
+    impl_vec_rl! { vrlw(vector_unsigned_int) }
 
     #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     pub trait VectorRound {
         unsafe fn vec_round(self) -> Self;
     }
 
-    test_impl! { vec_vrfin(a: vector_float) -> vector_float [vrfin, vrfin] }
+    test_impl! { vec_vrfin(a: vector_float) -> vector_float [vrfin, xvrspic] }
 
     #[unstable(feature = "stdarch_powerpc", issue = "111145")]
     impl VectorRound for vector_float {
@@ -4272,7 +4236,7 @@ where
 #[target_feature(enable = "altivec")]
 #[unstable(feature = "stdarch_powerpc", issue = "111145")]
 pub unsafe fn vec_madd(a: vector_float, b: vector_float, c: vector_float) -> vector_float {
-    vmaddfp(a, b, c)
+    sealed::vec_vmaddfp(a, b, c)
 }
 
 /// Vector Negative Multiply Subtract
@@ -4720,7 +4684,9 @@ mod tests {
             let v: u8x16 = transmute(vec_ld(0, (pat.as_ptr() as *const u8).offset(off)));
             assert_eq!(
                 v,
-                u8x16::new(16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31)
+                u8x16::new(
+                    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+                )
             );
         }
     }
@@ -4778,7 +4744,9 @@ mod tests {
             let v: u8x16 = transmute(vec_ldl(0, (pat.as_ptr() as *const u8).offset(off)));
             assert_eq!(
                 v,
-                u8x16::new(16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31)
+                u8x16::new(
+                    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+                )
             );
         }
     }
@@ -4798,7 +4766,7 @@ mod tests {
     unsafe fn test_vec_lde_u16() {
         let pat = [u16x8::new(0, 1, 2, 3, 4, 5, 6, 7)];
         for off in 0..8 {
-            let v: u16x8 = transmute(vec_lde(off * 2, pat.as_ptr() as *const u8));
+            let v: u16x8 = transmute(vec_lde(off * 2, pat.as_ptr() as *const u16));
             assert_eq!(off as u16, v.extract(off as _));
         }
     }
@@ -4807,7 +4775,7 @@ mod tests {
     unsafe fn test_vec_lde_u32() {
         let pat = [u32x4::new(0, 1, 2, 3)];
         for off in 0..4 {
-            let v: u32x4 = transmute(vec_lde(off * 4, pat.as_ptr() as *const u8));
+            let v: u32x4 = transmute(vec_lde(off * 4, pat.as_ptr() as *const u32));
             assert_eq!(off as u32, v.extract(off as _));
         }
     }
@@ -6695,5 +6663,11 @@ mod tests {
         assert_eq!(v2, v);
         assert_eq!(v4, v);
         assert_eq!(v8, v);
+    }
+
+    test_vec_2! { test_vec_rl, vec_rl, u32x4,
+        [0x12345678, 0x9ABCDEF0, 0x0F0F0F0F, 0x12345678],
+        [4, 8, 12, 68],
+        [0x23456781, 0xBCDEF09A, 0xF0F0F0F0, 0x23456781]
     }
 }

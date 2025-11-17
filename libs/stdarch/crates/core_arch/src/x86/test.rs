@@ -37,7 +37,7 @@ pub unsafe fn get_m128(a: __m128, idx: usize) -> f32 {
 }
 
 #[track_caller]
-#[target_feature(enable = "avx512fp16")]
+#[target_feature(enable = "avx512fp16,avx512vl")]
 pub unsafe fn assert_eq_m128h(a: __m128h, b: __m128h) {
     let r = _mm_cmp_ph_mask::<_CMP_EQ_OQ>(a, b);
     if r != 0b1111_1111 {
@@ -87,7 +87,7 @@ pub unsafe fn get_m256(a: __m256, idx: usize) -> f32 {
 }
 
 #[track_caller]
-#[target_feature(enable = "avx512fp16")]
+#[target_feature(enable = "avx512fp16,avx512vl")]
 pub unsafe fn assert_eq_m256h(a: __m256h, b: __m256h) {
     let r = _mm256_cmp_ph_mask::<_CMP_EQ_OQ>(a, b);
     if r != 0b11111111_11111111 {
@@ -133,7 +133,7 @@ mod x86_polyfill {
 
 #[cfg(target_arch = "x86_64")]
 mod x86_polyfill {
-    pub use crate::core_arch::x86_64::{_mm256_insert_epi64, _mm_insert_epi64};
+    pub use crate::core_arch::x86_64::{_mm_insert_epi64, _mm256_insert_epi64};
 }
 pub use self::x86_polyfill::*;
 

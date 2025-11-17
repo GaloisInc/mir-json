@@ -1,7 +1,6 @@
 use crate::off_t;
 use crate::prelude::*;
 
-pub type c_char = i8;
 pub type wchar_t = i32;
 pub type nlink_t = u64;
 pub type blksize_t = c_long;
@@ -95,18 +94,6 @@ cfg_if! {
             }
         }
         impl Eq for ucontext_t {}
-        impl fmt::Debug for ucontext_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("ucontext_t")
-                    .field("uc_flags", &self.uc_flags)
-                    .field("uc_link", &self.uc_link)
-                    .field("uc_stack", &self.uc_stack)
-                    .field("uc_mcontext", &self.uc_mcontext)
-                    .field("uc_sigmask", &self.uc_sigmask)
-                    // FIXME: .field("__private", &self.__private)
-                    .finish()
-            }
-        }
         impl hash::Hash for ucontext_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.uc_flags.hash(state);

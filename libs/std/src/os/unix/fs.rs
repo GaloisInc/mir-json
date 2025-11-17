@@ -11,6 +11,7 @@ use super::platform::fs::MetadataExt as _;
 // Used for `File::read` on intra-doc links
 use crate::ffi::OsStr;
 use crate::fs::{self, OpenOptions, Permissions};
+use crate::io::BorrowedCursor;
 use crate::os::unix::io::{AsFd, AsRawFd};
 use crate::path::Path;
 use crate::sealed::Sealed;
@@ -128,6 +129,91 @@ pub trait FileExt {
             }
         }
         if !buf.is_empty() { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
+    }
+
+    /// Reads some bytes starting from a given offset into the buffer.
+    ///
+    /// This equivalent to the [`read_at`](FileExt::read_at) method, except that it is passed a
+    /// [`BorrowedCursor`] rather than `&mut [u8]` to allow use with uninitialized buffers. The new
+    /// data will be appended to any existing contents of `buf`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// #![feature(core_io_borrowed_buf)]
+    /// #![feature(read_buf_at)]
+    ///
+    /// use std::io;
+    /// use std::io::BorrowedBuf;
+    /// use std::fs::File;
+    /// use std::mem::MaybeUninit;
+    /// use std::os::unix::prelude::*;
+    ///
+    /// fn main() -> io::Result<()> {
+    ///     let mut file = File::open("pi.txt")?;
+    ///
+    ///     // Read some bytes starting from offset 2
+    ///     let mut buf: [MaybeUninit<u8>; 10] = [MaybeUninit::uninit(); 10];
+    ///     let mut buf = BorrowedBuf::from(buf.as_mut_slice());
+    ///     file.read_buf_at(buf.unfilled(), 2)?;
+    ///
+    ///     assert!(buf.filled().starts_with(b"1"));
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    #[unstable(feature = "read_buf_at", issue = "140771")]
+    fn read_buf_at(&self, buf: BorrowedCursor<'_>, offset: u64) -> io::Result<()> {
+        io::default_read_buf(|b| self.read_at(b, offset), buf)
+    }
+
+    /// Reads the exact number of bytes required to fill the buffer from a given offset.
+    ///
+    /// This is equivalent to the [`read_exact_at`](FileExt::read_exact_at) method, except that it
+    /// is passed a [`BorrowedCursor`] rather than `&mut [u8]` to allow use with uninitialized
+    /// buffers. The new data will be appended to any existing contents of `buf`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// #![feature(core_io_borrowed_buf)]
+    /// #![feature(read_buf_at)]
+    ///
+    /// use std::io;
+    /// use std::io::BorrowedBuf;
+    /// use std::fs::File;
+    /// use std::mem::MaybeUninit;
+    /// use std::os::unix::prelude::*;
+    ///
+    /// fn main() -> io::Result<()> {
+    ///     let mut file = File::open("pi.txt")?;
+    ///
+    ///     // Read exactly 10 bytes starting from offset 2
+    ///     let mut buf: [MaybeUninit<u8>; 10] = [MaybeUninit::uninit(); 10];
+    ///     let mut buf = BorrowedBuf::from(buf.as_mut_slice());
+    ///     file.read_buf_exact_at(buf.unfilled(), 2)?;
+    ///
+    ///     assert_eq!(buf.filled(), b"1415926535");
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    #[unstable(feature = "read_buf_at", issue = "140771")]
+    fn read_buf_exact_at(&self, mut buf: BorrowedCursor<'_>, mut offset: u64) -> io::Result<()> {
+        while buf.capacity() > 0 {
+            let prev_written = buf.written();
+            match self.read_buf_at(buf.reborrow(), offset) {
+                Ok(()) => {}
+                Err(e) if e.is_interrupted() => {}
+                Err(e) => return Err(e),
+            }
+            let n = buf.written() - prev_written;
+            offset += n as u64;
+            if n == 0 {
+                return Err(io::Error::READ_EXACT_EOF);
+            }
+        }
+        Ok(())
     }
 
     /// Writes a number of bytes starting from a given offset.
@@ -264,6 +350,9 @@ impl FileExt for fs::File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         self.as_inner().read_at(buf, offset)
     }
+    fn read_buf_at(&self, buf: BorrowedCursor<'_>, offset: u64) -> io::Result<()> {
+        self.as_inner().read_buf_at(buf, offset)
+    }
     fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
         self.as_inner().read_vectored_at(bufs, offset)
     }
@@ -276,63 +365,89 @@ impl FileExt for fs::File {
 }
 
 /// Unix-specific extensions to [`fs::Permissions`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::fs::{File, Permissions};
+/// use std::io::{ErrorKind, Result as IoResult};
+/// use std::os::unix::fs::PermissionsExt;
+///
+/// fn main() -> IoResult<()> {
+///     let name = "test_file_for_permissions";
+///
+///     // make sure file does not exist
+///     let _ = std::fs::remove_file(name);
+///     assert_eq!(
+///         File::open(name).unwrap_err().kind(),
+///         ErrorKind::NotFound,
+///         "file already exists"
+///     );
+///
+///     // full read/write/execute mode bits for owner of file
+///     // that we want to add to existing mode bits
+///     let my_mode = 0o700;
+///
+///     // create new file with specified permissions
+///     {
+///         let file = File::create(name)?;
+///         let mut permissions = file.metadata()?.permissions();
+///         eprintln!("Current permissions: {:o}", permissions.mode());
+///
+///         // make sure new permissions are not already set
+///         assert!(
+///             permissions.mode() & my_mode != my_mode,
+///             "permissions already set"
+///         );
+///
+///         // either use `set_mode` to change an existing Permissions struct
+///         permissions.set_mode(permissions.mode() | my_mode);
+///
+///         // or use `from_mode` to construct a new Permissions struct
+///         permissions = Permissions::from_mode(permissions.mode() | my_mode);
+///
+///         // write new permissions to file
+///         file.set_permissions(permissions)?;
+///     }
+///
+///     let permissions = File::open(name)?.metadata()?.permissions();
+///     eprintln!("New permissions: {:o}", permissions.mode());
+///
+///     // assert new permissions were set
+///     assert_eq!(
+///         permissions.mode() & my_mode,
+///         my_mode,
+///         "new permissions not set"
+///     );
+///     Ok(())
+/// }
+/// ```
+///
+/// ```no_run
+/// use std::fs::Permissions;
+/// use std::os::unix::fs::PermissionsExt;
+///
+/// // read/write for owner and read for others
+/// let my_mode = 0o644;
+/// let mut permissions = Permissions::from_mode(my_mode);
+/// assert_eq!(permissions.mode(), my_mode);
+///
+/// // read/write/execute for owner
+/// let other_mode = 0o700;
+/// permissions.set_mode(other_mode);
+/// assert_eq!(permissions.mode(), other_mode);
+/// ```
 #[stable(feature = "fs_ext", since = "1.1.0")]
 pub trait PermissionsExt {
-    /// Returns the underlying raw `st_mode` bits that contain the standard
-    /// Unix permissions for this file.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use std::fs::File;
-    /// use std::os::unix::fs::PermissionsExt;
-    ///
-    /// fn main() -> std::io::Result<()> {
-    ///     let f = File::create("foo.txt")?;
-    ///     let metadata = f.metadata()?;
-    ///     let permissions = metadata.permissions();
-    ///
-    ///     println!("permissions: {:o}", permissions.mode());
-    ///     Ok(())
-    /// }
-    /// ```
+    /// Returns the mode permission bits
     #[stable(feature = "fs_ext", since = "1.1.0")]
     fn mode(&self) -> u32;
 
-    /// Sets the underlying raw bits for this set of permissions.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use std::fs::File;
-    /// use std::os::unix::fs::PermissionsExt;
-    ///
-    /// fn main() -> std::io::Result<()> {
-    ///     let f = File::create("foo.txt")?;
-    ///     let metadata = f.metadata()?;
-    ///     let mut permissions = metadata.permissions();
-    ///
-    ///     permissions.set_mode(0o644); // Read/write for owner and read for others.
-    ///     assert_eq!(permissions.mode(), 0o644);
-    ///     Ok(())
-    /// }
-    /// ```
+    /// Sets the mode permission bits.
     #[stable(feature = "fs_ext", since = "1.1.0")]
     fn set_mode(&mut self, mode: u32);
 
-    /// Creates a new instance of `Permissions` from the given set of Unix
-    /// permission bits.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::fs::Permissions;
-    /// use std::os::unix::fs::PermissionsExt;
-    ///
-    /// // Read/write for owner and read for others.
-    /// let permissions = Permissions::from_mode(0o644);
-    /// assert_eq!(permissions.mode(), 0o644);
-    /// ```
+    /// Creates a new instance from the given mode permission bits.
     #[stable(feature = "fs_ext", since = "1.1.0")]
     #[cfg_attr(not(test), rustc_diagnostic_item = "permissions_from_mode")]
     fn from_mode(mode: u32) -> Self;
@@ -382,24 +497,22 @@ pub trait OpenOptionsExt {
     /// Pass custom flags to the `flags` argument of `open`.
     ///
     /// The bits that define the access mode are masked out with `O_ACCMODE`, to
-    /// ensure they do not interfere with the access mode set by Rusts options.
+    /// ensure they do not interfere with the access mode set by Rust's options.
     ///
-    /// Custom flags can only set flags, not remove flags set by Rusts options.
-    /// This options overwrites any previously set custom flags.
+    /// Custom flags can only set flags, not remove flags set by Rust's options.
+    /// This function overwrites any previously-set custom flags.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # #![feature(rustc_private)]
+    /// # mod libc { pub const O_NOFOLLOW: i32 = 0; }
     /// use std::fs::OpenOptions;
     /// use std::os::unix::fs::OpenOptionsExt;
     ///
     /// # fn main() {
     /// let mut options = OpenOptions::new();
     /// options.write(true);
-    /// if cfg!(unix) {
-    ///     options.custom_flags(libc::O_NOFOLLOW);
-    /// }
+    /// options.custom_flags(libc::O_NOFOLLOW);
     /// let file = options.open("foo.txt");
     /// # }
     /// ```
@@ -1073,4 +1186,40 @@ pub fn lchown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io:
 #[cfg(not(target_os = "fuchsia"))]
 pub fn chroot<P: AsRef<Path>>(dir: P) -> io::Result<()> {
     sys::fs::chroot(dir.as_ref())
+}
+
+/// Create a FIFO special file at the specified path with the specified mode.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #![feature(unix_mkfifo)]
+/// # #[cfg(not(unix))]
+/// # fn main() {}
+/// # #[cfg(unix)]
+/// # fn main() -> std::io::Result<()> {
+/// # use std::{
+/// #     os::unix::fs::{mkfifo, PermissionsExt},
+/// #     fs::{File, Permissions, remove_file},
+/// #     io::{Write, Read},
+/// # };
+/// # let _ = remove_file("/tmp/fifo");
+/// mkfifo("/tmp/fifo", Permissions::from_mode(0o774))?;
+///
+/// let mut wx = File::options().read(true).write(true).open("/tmp/fifo")?;
+/// let mut rx = File::open("/tmp/fifo")?;
+///
+/// wx.write_all(b"hello, world!")?;
+/// drop(wx);
+///
+/// let mut s = String::new();
+/// rx.read_to_string(&mut s)?;
+///
+/// assert_eq!(s, "hello, world!");
+/// # Ok(())
+/// # }
+/// ```
+#[unstable(feature = "unix_mkfifo", issue = "139324")]
+pub fn mkfifo<P: AsRef<Path>>(path: P, permissions: Permissions) -> io::Result<()> {
+    sys::fs::mkfifo(path.as_ref(), permissions.mode())
 }

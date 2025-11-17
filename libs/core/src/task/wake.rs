@@ -40,17 +40,14 @@ impl RawWaker {
     /// of the `vtable` as the first parameter.
     ///
     /// It is important to consider that the `data` pointer must point to a
-    /// thread safe type such as an `[Arc]<T: Send + Sync>`
+    /// thread safe type such as an `Arc<T: Send + Sync>`
     /// when used to construct a [`Waker`]. This restriction is lifted when
     /// constructing a [`LocalWaker`], which allows using types that do not implement
-    /// <code>[Send] + [Sync]</code> like `[Rc]<T>`.
+    /// <code>[Send] + [Sync]</code> like `Rc<T>`.
     ///
     /// The `vtable` customizes the behavior of a `Waker` which gets created
     /// from a `RawWaker`. For each operation on the `Waker`, the associated
     /// function in the `vtable` of the underlying `RawWaker` will be called.
-    ///
-    /// [`Arc`]: std::sync::Arc
-    /// [`Rc`]: std::rc::Rc
     #[inline]
     #[rustc_promotable]
     #[stable(feature = "futures_api", since = "1.36.0")]
@@ -107,6 +104,7 @@ impl RawWaker {
 /// synchronization. This is because [`LocalWaker`] is not thread safe itself, so it cannot
 /// be sent across threads.
 #[stable(feature = "futures_api", since = "1.36.0")]
+#[allow(unpredictable_function_pointer_comparisons)]
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct RawWakerVTable {
     /// This function will be called when the [`RawWaker`] gets cloned, e.g. when
@@ -405,7 +403,7 @@ impl<'a> ContextBuilder<'a> {
 /// [`Wake`]: ../../alloc/task/trait.Wake.html
 #[repr(transparent)]
 #[stable(feature = "futures_api", since = "1.36.0")]
-#[cfg_attr(not(test), rustc_diagnostic_item = "Waker")]
+#[rustc_diagnostic_item = "Waker"]
 pub struct Waker {
     waker: RawWaker,
 }
@@ -903,7 +901,8 @@ impl Clone for LocalWaker {
 }
 
 #[unstable(feature = "local_waker", issue = "118959")]
-impl AsRef<LocalWaker> for Waker {
+#[rustc_const_unstable(feature = "const_convert", issue = "143773")]
+impl const AsRef<LocalWaker> for Waker {
     fn as_ref(&self) -> &LocalWaker {
         // SAFETY: LocalWaker is just Waker without thread safety
         unsafe { transmute(self) }

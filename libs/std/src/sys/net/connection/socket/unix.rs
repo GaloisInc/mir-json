@@ -1,5 +1,6 @@
 use libc::{MSG_PEEK, c_int, c_void, size_t, sockaddr, socklen_t};
 
+#[cfg(not(any(target_os = "espidf", target_os = "nuttx")))]
 use crate::ffi::CStr;
 use crate::io::{self, BorrowedBuf, BorrowedCursor, IoSlice, IoSliceMut};
 use crate::net::{Shutdown, SocketAddr};
@@ -11,10 +12,11 @@ use crate::sys_common::{AsInner, FromInner, IntoInner};
 use crate::time::{Duration, Instant};
 use crate::{cmp, mem};
 
-cfg_if::cfg_if! {
-    if #[cfg(target_vendor = "apple")] {
+cfg_select! {
+    target_vendor = "apple" => {
         use libc::SO_LINGER_SEC as SO_LINGER;
-    } else {
+    }
+    _ => {
         use libc::SO_LINGER;
     }
 }
@@ -71,8 +73,8 @@ impl Socket {
 
     pub fn new_raw(fam: c_int, ty: c_int) -> io::Result<Socket> {
         unsafe {
-            cfg_if::cfg_if! {
-                if #[cfg(any(
+            cfg_select! {
+                any(
                     target_os = "android",
                     target_os = "dragonfly",
                     target_os = "freebsd",
@@ -81,9 +83,10 @@ impl Socket {
                     target_os = "linux",
                     target_os = "netbsd",
                     target_os = "openbsd",
+                    target_os = "cygwin",
                     target_os = "nto",
                     target_os = "solaris",
-                ))] {
+                ) => {
                     // On platforms that support it we pass the SOCK_CLOEXEC
                     // flag to atomically create the socket and set it as
                     // CLOEXEC. On Linux this was added in 2.6.27.
@@ -96,7 +99,8 @@ impl Socket {
                     setsockopt(&socket, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1)?;
 
                     Ok(socket)
-                } else {
+                }
+                _ => {
                     let fd = cvt(libc::socket(fam, ty, 0))?;
                     let fd = FileDesc::from_raw_fd(fd);
                     fd.set_cloexec()?;
@@ -118,8 +122,8 @@ impl Socket {
         unsafe {
             let mut fds = [0, 0];
 
-            cfg_if::cfg_if! {
-                if #[cfg(any(
+            cfg_select! {
+                any(
                     target_os = "android",
                     target_os = "dragonfly",
                     target_os = "freebsd",
@@ -128,12 +132,14 @@ impl Socket {
                     target_os = "hurd",
                     target_os = "netbsd",
                     target_os = "openbsd",
+                    target_os = "cygwin",
                     target_os = "nto",
-                ))] {
+                ) => {
                     // Like above, set cloexec atomically
                     cvt(libc::socketpair(fam, ty | libc::SOCK_CLOEXEC, 0, fds.as_mut_ptr()))?;
                     Ok((Socket(FileDesc::from_raw_fd(fds[0])), Socket(FileDesc::from_raw_fd(fds[1]))))
-                } else {
+                }
+                _ => {
                     cvt(libc::socketpair(fam, ty, 0, fds.as_mut_ptr()))?;
                     let a = FileDesc::from_raw_fd(fds[0]);
                     let b = FileDesc::from_raw_fd(fds[1]);
@@ -247,8 +253,8 @@ impl Socket {
         // atomically set the CLOEXEC flag is to use the `accept4` syscall on
         // platforms that support it. On Linux, this was added in 2.6.28,
         // glibc 2.10 and musl 0.9.5.
-        cfg_if::cfg_if! {
-            if #[cfg(any(
+        cfg_select! {
+            any(
                 target_os = "android",
                 target_os = "dragonfly",
                 target_os = "freebsd",
@@ -257,12 +263,14 @@ impl Socket {
                 target_os = "hurd",
                 target_os = "netbsd",
                 target_os = "openbsd",
-            ))] {
+                target_os = "cygwin",
+            ) => {
                 unsafe {
                     let fd = cvt_r(|| libc::accept4(self.as_raw_fd(), storage, len, libc::SOCK_CLOEXEC))?;
                     Ok(Socket(FileDesc::from_raw_fd(fd)))
                 }
-            } else {
+            }
+            _ => {
                 unsafe {
                     let fd = cvt_r(|| libc::accept(self.as_raw_fd(), storage, len))?;
                     let fd = FileDesc::from_raw_fd(fd);
@@ -275,6 +283,14 @@ impl Socket {
 
     pub fn duplicate(&self) -> io::Result<Socket> {
         self.0.duplicate().map(Socket)
+    }
+
+    pub fn send_with_flags(&self, buf: &[u8], flags: c_int) -> io::Result<usize> {
+        let len = cmp::min(buf.len(), <wrlen_t>::MAX as usize) as wrlen_t;
+        let ret = cvt(unsafe {
+            libc::send(self.as_raw_fd(), buf.as_ptr() as *const c_void, len, flags)
+        })?;
+        Ok(ret as usize)
     }
 
     fn recv_with_flags(&self, mut buf: BorrowedCursor<'_>, flags: c_int) -> io::Result<()> {
@@ -322,8 +338,11 @@ impl Socket {
         buf: &mut [u8],
         flags: c_int,
     ) -> io::Result<(usize, SocketAddr)> {
-        let mut storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
-        let mut addrlen = mem::size_of_val(&storage) as libc::socklen_t;
+        // The `recvfrom` function will fill in the storage with the address,
+        // so we don't need to zero it here.
+        // reference: https://linux.die.net/man/2/recvfrom
+        let mut storage: mem::MaybeUninit<libc::sockaddr_storage> = mem::MaybeUninit::uninit();
+        let mut addrlen = size_of_val(&storage) as libc::socklen_t;
 
         let n = cvt(unsafe {
             libc::recvfrom(
@@ -335,14 +354,14 @@ impl Socket {
                 &mut addrlen,
             )
         })?;
-        Ok((n as usize, unsafe { socket_addr_from_c(&storage, addrlen as usize)? }))
+        Ok((n as usize, unsafe { socket_addr_from_c(storage.as_ptr(), addrlen as usize)? }))
     }
 
     pub fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
         self.recv_from_with_flags(buf, 0)
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn recv_msg(&self, msg: &mut libc::msghdr) -> io::Result<usize> {
         let n = cvt(unsafe { libc::recvmsg(self.as_raw_fd(), msg, libc::MSG_CMSG_CLOEXEC) })?;
         Ok(n as usize)
@@ -365,7 +384,7 @@ impl Socket {
         self.0.is_write_vectored()
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn send_msg(&self, msg: &mut libc::msghdr) -> io::Result<usize> {
         let n = cvt(unsafe { libc::sendmsg(self.as_raw_fd(), msg, 0) })?;
         Ok(n as usize)
@@ -418,10 +437,21 @@ impl Socket {
         Ok(())
     }
 
+    #[cfg(not(target_os = "cygwin"))]
     pub fn set_linger(&self, linger: Option<Duration>) -> io::Result<()> {
         let linger = libc::linger {
             l_onoff: linger.is_some() as libc::c_int,
             l_linger: linger.unwrap_or_default().as_secs() as libc::c_int,
+        };
+
+        setsockopt(self, libc::SOL_SOCKET, SO_LINGER, linger)
+    }
+
+    #[cfg(target_os = "cygwin")]
+    pub fn set_linger(&self, linger: Option<Duration>) -> io::Result<()> {
+        let linger = libc::linger {
+            l_onoff: linger.is_some() as libc::c_ushort,
+            l_linger: linger.unwrap_or_default().as_secs() as libc::c_ushort,
         };
 
         setsockopt(self, libc::SOL_SOCKET, SO_LINGER, linger)
@@ -442,12 +472,12 @@ impl Socket {
         Ok(raw != 0)
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux",))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn set_quickack(&self, quickack: bool) -> io::Result<()> {
         setsockopt(self, libc::IPPROTO_TCP, libc::TCP_QUICKACK, quickack as c_int)
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux",))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn quickack(&self) -> io::Result<bool> {
         let raw: c_int = getsockopt(self, libc::IPPROTO_TCP, libc::TCP_QUICKACK)?;
         Ok(raw != 0)
@@ -496,12 +526,27 @@ impl Socket {
         Ok(name)
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux",))]
+    #[cfg(any(target_os = "solaris", target_os = "illumos"))]
+    pub fn set_exclbind(&self, excl: bool) -> io::Result<()> {
+        // not yet on libc crate
+        const SO_EXCLBIND: i32 = 0x1015;
+        setsockopt(self, libc::SOL_SOCKET, SO_EXCLBIND, excl)
+    }
+
+    #[cfg(any(target_os = "solaris", target_os = "illumos"))]
+    pub fn exclbind(&self) -> io::Result<bool> {
+        // not yet on libc crate
+        const SO_EXCLBIND: i32 = 0x1015;
+        let raw: c_int = getsockopt(self, libc::SOL_SOCKET, SO_EXCLBIND)?;
+        Ok(raw != 0)
+    }
+
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn set_passcred(&self, passcred: bool) -> io::Result<()> {
         setsockopt(self, libc::SOL_SOCKET, libc::SO_PASSCRED, passcred as libc::c_int)
     }
 
-    #[cfg(any(target_os = "android", target_os = "linux",))]
+    #[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
     pub fn passcred(&self) -> io::Result<bool> {
         let passcred: libc::c_int = getsockopt(self, libc::SOL_SOCKET, libc::SO_PASSCRED)?;
         Ok(passcred != 0)

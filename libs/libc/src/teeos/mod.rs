@@ -7,27 +7,7 @@
 
 use crate::prelude::*;
 
-pub type c_schar = i8;
-
-pub type c_uchar = u8;
-
-pub type c_short = i16;
-
-pub type c_ushort = u16;
-
-pub type c_int = i32;
-
-pub type c_uint = u32;
-
 pub type c_bool = i32;
-
-pub type c_float = f32;
-
-pub type c_double = f64;
-
-pub type c_longlong = i64;
-
-pub type c_ulonglong = u64;
 
 pub type intmax_t = i64;
 
@@ -45,17 +25,7 @@ pub type ssize_t = isize;
 
 pub type pid_t = c_int;
 
-// aarch64 specific
-pub type c_char = u8;
-
 pub type wchar_t = u32;
-
-pub type c_long = i64;
-
-pub type c_ulong = u64;
-
-#[repr(align(16))]
-pub struct _CLongDouble(pub u128);
 
 // long double in C means A float point value, which has 128bit length.
 // but some bit maybe not used, so the real length of long double could be 80(x86) or 128(power pc/IEEE)
@@ -90,6 +60,9 @@ pub type wint_t = c_uint;
 pub type wctype_t = c_ulong;
 
 pub type cmpfunc = extern "C" fn(x: *const c_void, y: *const c_void) -> c_int;
+
+#[repr(align(16))]
+pub struct _CLongDouble(pub u128);
 
 #[repr(align(8))]
 #[repr(C)]
@@ -126,7 +99,7 @@ pub struct pthread_attr_t {
 
 #[repr(C)]
 pub struct cpu_set_t {
-    bits: [c_ulong; 128 / core::mem::size_of::<c_ulong>()],
+    bits: [c_ulong; 128 / size_of::<c_ulong>()],
 }
 
 #[repr(C)]
@@ -164,7 +137,7 @@ pub struct mbstate_t {
 
 #[repr(C)]
 pub struct sem_t {
-    pub __val: [c_int; 4 * core::mem::size_of::<c_long>() / core::mem::size_of::<c_int>()],
+    pub __val: [c_int; 4 * size_of::<c_long>() / size_of::<c_int>()],
 }
 
 #[repr(C)]
@@ -1369,7 +1342,7 @@ pub fn errno() -> c_int {
 
 pub fn CPU_COUNT_S(size: usize, cpuset: &cpu_set_t) -> c_int {
     let mut s: u32 = 0;
-    let size_of_mask = core::mem::size_of_val(&cpuset.bits[0]);
+    let size_of_mask = size_of_val(&cpuset.bits[0]);
 
     for i in cpuset.bits[..(size / size_of_mask)].iter() {
         s += i.count_ones();
@@ -1378,5 +1351,5 @@ pub fn CPU_COUNT_S(size: usize, cpuset: &cpu_set_t) -> c_int {
 }
 
 pub fn CPU_COUNT(cpuset: &cpu_set_t) -> c_int {
-    CPU_COUNT_S(core::mem::size_of::<cpu_set_t>(), cpuset)
+    CPU_COUNT_S(size_of::<cpu_set_t>(), cpuset)
 }

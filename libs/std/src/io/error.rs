@@ -18,7 +18,7 @@ use crate::{error, fmt, result, sys};
 /// This type is broadly used across [`std::io`] for any operation which may
 /// produce an error.
 ///
-/// This typedef is generally used to avoid writing out [`io::Error`] directly and
+/// This type alias is generally used to avoid writing out [`io::Error`] directly and
 /// is otherwise a direct mapping to [`Result`].
 ///
 /// While usual Rust style is to import types directly, aliases of [`Result`]
@@ -48,6 +48,7 @@ use crate::{error, fmt, result, sys};
 /// }
 /// ```
 #[stable(feature = "rust1", since = "1.0.0")]
+#[doc(search_unbox)]
 pub type Result<T> = result::Result<T, Error>;
 
 /// The error type for I/O operations of the [`Read`], [`Write`], [`Seek`], and
@@ -83,7 +84,7 @@ impl Error {
 
     pub(crate) const UNKNOWN_THREAD_COUNT: Self = const_error!(
         ErrorKind::NotFound,
-        "The number of hardware threads is not known for the target platform"
+        "the number of hardware threads is not known for the target platform",
     );
 
     pub(crate) const UNSUPPORTED_PLATFORM: Self =
@@ -94,6 +95,9 @@ impl Error {
 
     pub(crate) const ZERO_TIMEOUT: Self =
         const_error!(ErrorKind::InvalidInput, "cannot set a 0 duration timeout");
+
+    pub(crate) const NO_ADDRESSES: Self =
+        const_error!(ErrorKind::InvalidInput, "could not resolve to any addresses");
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -218,6 +222,7 @@ struct Custom {
 /// the recognized error kinds and fail in those cases.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[stable(feature = "rust1", since = "1.0.0")]
+#[cfg_attr(not(test), rustc_diagnostic_item = "io_errorkind")]
 #[allow(deprecated)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -373,8 +378,8 @@ pub enum ErrorKind {
     TooManyLinks,
     /// A filename was invalid.
     ///
-    /// This error can also cause if it exceeded the filename length limit.
-    #[unstable(feature = "io_error_more", issue = "86442")]
+    /// This error can also occur if a length limit for a name was exceeded.
+    #[stable(feature = "io_error_invalid_filename", since = "1.87.0")]
     InvalidFilename,
     /// Program argument list too long.
     ///
@@ -460,8 +465,8 @@ impl ErrorKind {
             Deadlock => "deadlock",
             DirectoryNotEmpty => "directory not empty",
             ExecutableFileBusy => "executable file busy",
-            FilesystemLoop => "filesystem loop or indirection limit (e.g. symlink loop)",
             FileTooLarge => "file too large",
+            FilesystemLoop => "filesystem loop or indirection limit (e.g. symlink loop)",
             HostUnreachable => "host unreachable",
             InProgress => "in progress",
             Interrupted => "operation interrupted",
@@ -561,6 +566,7 @@ impl Error {
     /// let eof_error = Error::from(ErrorKind::UnexpectedEof);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[cfg_attr(not(test), rustc_diagnostic_item = "io_error_new")]
     #[inline(never)]
     pub fn new<E>(kind: ErrorKind, error: E) -> Error
     where
@@ -1046,15 +1052,6 @@ impl fmt::Display for Error {
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl error::Error for Error {
-    #[allow(deprecated, deprecated_in_future)]
-    fn description(&self) -> &str {
-        match self.repr.data() {
-            ErrorData::Os(..) | ErrorData::Simple(..) => self.kind().as_str(),
-            ErrorData::SimpleMessage(msg) => msg.message,
-            ErrorData::Custom(c) => c.error.description(),
-        }
-    }
-
     #[allow(deprecated)]
     fn cause(&self) -> Option<&dyn error::Error> {
         match self.repr.data() {

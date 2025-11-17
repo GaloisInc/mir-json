@@ -278,6 +278,7 @@ macro_rules! impl_from {
     ($s: ident) => {
         #[unstable(feature = "stdarch_powerpc", issue = "111145")]
         impl From<$s> for s_t_l!($s) {
+            #[inline]
             fn from (v: $s) -> Self {
                 unsafe {
                     transmute(v)
@@ -297,9 +298,9 @@ macro_rules! impl_neg {
         #[unstable(feature = "stdarch_powerpc", issue = "111145")]
         impl crate::ops::Neg for s_t_l!($s) {
             type Output = s_t_l!($s);
+            #[inline]
             fn neg(self) -> Self::Output {
-                let zero = $s::splat($zero);
-                unsafe { transmute(simd_sub(zero, transmute(self))) }
+                unsafe { simd_neg(self) }
             }
         }
     };

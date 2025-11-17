@@ -6,6 +6,8 @@
 
 set -ex
 
+export RUSTDOCFLAGS="-D warnings"
+
 dox() {
   if [ "$CI" != "" ]; then
     rustup target add "${1}" || true
@@ -14,18 +16,13 @@ dox() {
   cargo clean --target "${1}"
 
   cargo build --verbose --target "${1}" --manifest-path crates/core_arch/Cargo.toml
-  cargo build --verbose --target "${1}" --manifest-path crates/std_detect/Cargo.toml
-
   cargo doc --verbose --target "${1}" --manifest-path crates/core_arch/Cargo.toml
-  cargo doc --verbose --target "${1}" --manifest-path crates/std_detect/Cargo.toml
 }
 
 if [ -z "$1" ]; then
   dox i686-unknown-linux-gnu
   dox x86_64-unknown-linux-gnu
-  # Disabled temporarily,
-  # See https://github.com/rust-lang/rust/issues/134511
-  #dox armv7-unknown-linux-gnueabihf
+  dox armv7-unknown-linux-gnueabihf
   dox aarch64-unknown-linux-gnu
   dox powerpc-unknown-linux-gnu
   dox powerpc64le-unknown-linux-gnu

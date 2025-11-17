@@ -1,40 +1,44 @@
 use core::convert::TryInto;
-use core::sync::atomic::{AtomicBool, AtomicU16, AtomicUsize, Ordering};
+use core::sync::atomic::{Atomic, AtomicBool, AtomicU16, AtomicUsize, Ordering};
 
 use super::*;
-use crate::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use crate::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use crate::os::xous::services;
 use crate::sync::Arc;
+use crate::sys::net::connection::each_addr;
 use crate::{fmt, io};
 
 macro_rules! unimpl {
     () => {
         return Err(io::const_error!(
             io::ErrorKind::Unsupported,
-            &"This function is not yet implemented",
+            "this function is not yet implemented",
         ));
     };
 }
 
 #[derive(Clone)]
 pub struct TcpListener {
-    fd: Arc<AtomicU16>,
+    fd: Arc<Atomic<u16>>,
     local: SocketAddr,
-    handle_count: Arc<AtomicUsize>,
-    nonblocking: Arc<AtomicBool>,
+    handle_count: Arc<Atomic<usize>>,
+    nonblocking: Arc<Atomic<bool>>,
 }
 
 impl TcpListener {
-    pub fn bind(socketaddr: io::Result<&SocketAddr>) -> io::Result<TcpListener> {
-        let mut addr = *socketaddr?;
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<TcpListener> {
+        return each_addr(addr, inner);
 
-        let fd = TcpListener::bind_inner(&mut addr)?;
-        return Ok(TcpListener {
-            fd: Arc::new(AtomicU16::new(fd)),
-            local: addr,
-            handle_count: Arc::new(AtomicUsize::new(1)),
-            nonblocking: Arc::new(AtomicBool::new(false)),
-        });
+        fn inner(addr: &SocketAddr) -> io::Result<TcpListener> {
+            let mut addr = *addr;
+            let fd = TcpListener::bind_inner(&mut addr)?;
+            Ok(TcpListener {
+                fd: Arc::new(AtomicU16::new(fd)),
+                local: addr,
+                handle_count: Arc::new(AtomicUsize::new(1)),
+                nonblocking: Arc::new(AtomicBool::new(false)),
+            })
+        }
     }
 
     /// This returns the raw fd of a Listener, so that it can also be used by the
@@ -71,7 +75,7 @@ impl TcpListener {
             0,
             4096,
         ) else {
-            return Err(io::const_error!(io::ErrorKind::InvalidInput, &"Invalid response"));
+            return Err(io::const_error!(io::ErrorKind::InvalidInput, "invalid response"));
         };
 
         // The first four bytes should be zero upon success, and will be nonzero
@@ -80,15 +84,15 @@ impl TcpListener {
         if response[0] != 0 || valid == 0 {
             let errcode = response[1];
             if errcode == NetError::SocketInUse as u8 {
-                return Err(io::const_error!(io::ErrorKind::ResourceBusy, &"Socket in use"));
+                return Err(io::const_error!(io::ErrorKind::ResourceBusy, "socket in use"));
             } else if errcode == NetError::Invalid as u8 {
-                return Err(io::const_error!(io::ErrorKind::AddrNotAvailable, &"Invalid address"));
+                return Err(io::const_error!(io::ErrorKind::AddrNotAvailable, "invalid address"));
             } else if errcode == NetError::LibraryError as u8 {
-                return Err(io::const_error!(io::ErrorKind::Other, &"Library error"));
+                return Err(io::const_error!(io::ErrorKind::Other, "library error"));
             } else {
                 return Err(io::const_error!(
                     io::ErrorKind::Other,
-                    &"Unable to connect or internal error"
+                    "unable to connect or internal error",
                 ));
             }
         }
@@ -127,15 +131,13 @@ impl TcpListener {
             if receive_request.raw[0] != 0 {
                 // error case
                 if receive_request.raw[1] == NetError::TimedOut as u8 {
-                    return Err(io::const_error!(io::ErrorKind::TimedOut, &"accept timed out",));
+                    return Err(io::const_error!(io::ErrorKind::TimedOut, "accept timed out"));
                 } else if receive_request.raw[1] == NetError::WouldBlock as u8 {
-                    return Err(
-                        io::const_error!(io::ErrorKind::WouldBlock, &"accept would block",),
-                    );
+                    return Err(io::const_error!(io::ErrorKind::WouldBlock, "accept would block"));
                 } else if receive_request.raw[1] == NetError::LibraryError as u8 {
-                    return Err(io::const_error!(io::ErrorKind::Other, &"Library error"));
+                    return Err(io::const_error!(io::ErrorKind::Other, "library error"));
                 } else {
-                    return Err(io::const_error!(io::ErrorKind::Other, &"library error",));
+                    return Err(io::const_error!(io::ErrorKind::Other, "library error"));
                 }
             } else {
                 // accept successful
@@ -159,7 +161,7 @@ impl TcpListener {
                         port,
                     )
                 } else {
-                    return Err(io::const_error!(io::ErrorKind::Other, &"library error",));
+                    return Err(io::const_error!(io::ErrorKind::Other, "library error"));
                 };
 
                 // replenish the listener
@@ -171,7 +173,7 @@ impl TcpListener {
                 Ok((TcpStream::from_listener(stream_fd, self.local.port(), port, addr), addr))
             }
         } else {
-            Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unable to accept"))
+            Err(io::const_error!(io::ErrorKind::InvalidInput, "unable to accept"))
         }
     }
 
@@ -182,13 +184,13 @@ impl TcpListener {
 
     pub fn set_ttl(&self, ttl: u32) -> io::Result<()> {
         if ttl > 255 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "TTL must be less than 256"));
+            return Err(io::const_error!(io::ErrorKind::InvalidInput, "TTL must be less than 256"));
         }
         crate::os::xous::ffi::blocking_scalar(
             services::net_server(),
             services::NetBlockingScalar::StdSetTtlTcp(self.fd.load(Ordering::Relaxed), ttl).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|_| ())
     }
 
@@ -197,7 +199,7 @@ impl TcpListener {
             services::net_server(),
             services::NetBlockingScalar::StdGetTtlTcp(self.fd.load(Ordering::Relaxed)).into(),
         )
-        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, &"Unexpected return value")))
+        .or(Err(io::const_error!(io::ErrorKind::InvalidInput, "unexpected return value")))
         .map(|res| res[0] as _)?)
     }
 

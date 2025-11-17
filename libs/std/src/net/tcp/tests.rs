@@ -1,5 +1,5 @@
 use crate::io::prelude::*;
-use crate::io::{BorrowedBuf, IoSlice, IoSliceMut};
+use crate::io::{BorrowedBuf, ErrorKind, IoSlice, IoSliceMut};
 use crate::mem::MaybeUninit;
 use crate::net::test::{next_test_ip4, next_test_ip6};
 use crate::net::*;
@@ -315,12 +315,8 @@ fn read_buf() {
         let mut buf = BorrowedBuf::from(buf.as_mut_slice());
         t!(s.read_buf(buf.unfilled()));
         assert_eq!(buf.filled(), &[1, 2, 3, 4]);
-
-        // FIXME: sgx uses default_read_buf that initializes the buffer.
-        if cfg!(not(target_env = "sgx")) {
-            // TcpStream::read_buf should omit buffer initialization.
-            assert_eq!(buf.init_len(), 4);
-        }
+        // TcpStream::read_buf should omit buffer initialization.
+        assert_eq!(buf.init_len(), 4);
 
         t.join().ok().expect("thread panicked");
     })

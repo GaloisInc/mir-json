@@ -86,7 +86,7 @@ pub fn f32_trunc(a: f32) -> f32 {
 #[must_use = "method returns a new number and does not mutate the original value"]
 #[unstable(feature = "wasm_numeric_instr", issue = "133908")]
 pub fn f32_nearest(a: f32) -> f32 {
-    unsafe { crate::intrinsics::rintf32(a) }
+    crate::intrinsics::round_ties_even_f32(a)
 }
 
 /// Generates the [`f32.sqrt`] instruction, returning the square root of the number `a`.
@@ -157,7 +157,7 @@ pub fn f64_trunc(a: f64) -> f64 {
 #[must_use = "method returns a new number and does not mutate the original value"]
 #[unstable(feature = "wasm_numeric_instr", issue = "133908")]
 pub fn f64_nearest(a: f64) -> f64 {
-    unsafe { crate::intrinsics::rintf64(a) }
+    crate::intrinsics::round_ties_even_f64(a)
 }
 
 /// Generates the [`f64.sqrt`] instruction, returning the square root of the number `a`.
@@ -174,7 +174,7 @@ pub fn f64_sqrt(a: f64) -> f64 {
     unsafe { crate::intrinsics::sqrtf64(a) }
 }
 
-extern "C-unwind" {
+unsafe extern "C-unwind" {
     #[link_name = "llvm.wasm.throw"]
     fn wasm_throw(tag: i32, ptr: *mut u8) -> !;
 }
@@ -191,6 +191,16 @@ extern "C-unwind" {
 // #[cfg_attr(test, assert_instr(throw, TAG = 0, ptr = core::ptr::null_mut()))]
 #[inline]
 #[unstable(feature = "wasm_exception_handling_intrinsics", issue = "122465")]
+// FIXME: Since this instruction unwinds, `core` built with `-C panic=unwind`
+//        cannot be linked with `-C panic=abort` programs. But that's not
+//        entirely supported anyway, because runtimes without EH support won't
+//        be able to handle `try` blocks in `-C panic=unwind` crates either.
+//        We ship `-C panic=abort` `core`, so this doesn't affect users
+//        directly. Resolving this will likely require patching out both `try`
+//        and `throw` instructions, at which point we can look into whitelisting
+//        this function in the compiler to allow linking.
+//        See https://github.com/rust-lang/rust/issues/118168.
+#[allow(ffi_unwind_calls)]
 pub unsafe fn throw<const TAG: i32>(ptr: *mut u8) -> ! {
     static_assert!(TAG == 0); // LLVM only supports tag 0 == C++ right now.
     wasm_throw(TAG, ptr)

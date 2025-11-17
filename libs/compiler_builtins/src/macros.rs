@@ -1,21 +1,5 @@
 //! Macros shared throughout the compiler-builtins implementation
 
-/// Changes the visibility to `pub` if feature "public-test-deps" is set
-#[cfg(not(feature = "public-test-deps"))]
-macro_rules! public_test_dep {
-    ($(#[$($meta:meta)*])* pub(crate) $ident:ident $($tokens:tt)*) => {
-        $(#[$($meta)*])* pub(crate) $ident $($tokens)*
-    };
-}
-
-/// Changes the visibility to `pub` if feature "public-test-deps" is set
-#[cfg(feature = "public-test-deps")]
-macro_rules! public_test_dep {
-    {$(#[$($meta:meta)*])* pub(crate) $ident:ident $($tokens:tt)*} => {
-        $(#[$($meta)*])* pub $ident $($tokens)*
-    };
-}
-
 /// The "main macro" used for defining intrinsics.
 ///
 /// The compiler-builtins library is super platform-specific with tons of crazy
@@ -60,9 +44,6 @@ macro_rules! public_test_dep {
 ///   the specified ABI everywhere else.
 /// * `unadjusted_on_win64` - like `aapcs_on_arm` this switches to the
 ///   `"unadjusted"` abi on Win64 and the specified abi elsewhere.
-/// * `win64_128bit_abi_hack` - this attribute is used for 128-bit integer
-///   intrinsics where the ABI is slightly tweaked on Windows platforms, but
-///   it's a normal ABI elsewhere for returning a 128 bit integer.
 /// * `arm_aeabi_alias` - handles the "aliasing" of various intrinsics on ARM
 ///   their otherwise typical names to other prefixed ones.
 /// * `ppc_alias` - changes the name of the symbol on PowerPC platforms without
@@ -151,7 +132,7 @@ macro_rules! intrinsics {
     ) => (
         #[cfg($name = "optimized-c")]
         pub $(unsafe $($empty)? )? extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
-            extern $abi {
+            unsafe extern $abi {
                 fn $name($($argname: $ty),*) $(-> $ret)?;
             }
             unsafe {
@@ -212,7 +193,7 @@ macro_rules! intrinsics {
 
         $($rest:tt)*
     ) => (
-        #[cfg(all(any(windows, all(target_os = "uefi", target_arch = "x86_64")), target_pointer_width = "64"))]
+        #[cfg(all(any(windows, target_os = "cygwin", all(target_os = "uefi", target_arch = "x86_64")), target_pointer_width = "64"))]
         intrinsics! {
             $(#[$($attr)*])*
             pub extern "unadjusted" fn $name( $($argname: $ty),* ) $(-> $ret)? {
@@ -220,52 +201,7 @@ macro_rules! intrinsics {
             }
         }
 
-        #[cfg(not(all(any(windows, all(target_os = "uefi", target_arch = "x86_64")), target_pointer_width = "64")))]
-        intrinsics! {
-            $(#[$($attr)*])*
-            pub extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
-                $($body)*
-            }
-        }
-
-        intrinsics!($($rest)*);
-    );
-
-    // Some intrinsics on win64 which return a 128-bit integer have an.. unusual
-    // calling convention. That's managed here with this "abi hack" which alters
-    // the generated symbol's ABI.
-    //
-    // This will still define a function in this crate with the given name and
-    // signature, but the actual symbol for the intrinsic may have a slightly
-    // different ABI on win64.
-    (
-        #[win64_128bit_abi_hack]
-        $(#[$($attr:tt)*])*
-        pub extern $abi:tt fn $name:ident( $($argname:ident:  $ty:ty),* ) $(-> $ret:ty)? {
-            $($body:tt)*
-        }
-
-        $($rest:tt)*
-    ) => (
-        #[cfg(all(any(windows, target_os = "uefi"), target_arch = "x86_64"))]
-        $(#[$($attr)*])*
-        pub extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
-            $($body)*
-        }
-
-        #[cfg(all(any(windows, target_os = "uefi"), target_arch = "x86_64", not(feature = "mangled-names")))]
-        mod $name {
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
-            extern $abi fn $name( $($argname: $ty),* )
-                -> $crate::macros::win64_128bit_abi_hack::U64x2
-            {
-                let e: $($ret)? = super::$name($($argname),*);
-                $crate::macros::win64_128bit_abi_hack::U64x2::from(e)
-            }
-        }
-
-        #[cfg(not(all(any(windows, target_os = "uefi"), target_arch = "x86_64")))]
+        #[cfg(not(all(any(windows, target_os = "cygwin", all(target_os = "uefi", target_arch = "x86_64")), target_pointer_width = "64")))]
         intrinsics! {
             $(#[$($attr)*])*
             pub extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
@@ -320,8 +256,8 @@ macro_rules! intrinsics {
 
         #[cfg(all(target_vendor = "apple", any(target_arch = "x86", target_arch = "x86_64"), not(feature = "mangled-names")))]
         mod $name {
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             $(#[$($attr)*])*
             extern $abi fn $name( $($argname: u16),* ) $(-> $ret)? {
                 super::$name($(f16::from_bits($argname)),*)
@@ -356,8 +292,8 @@ macro_rules! intrinsics {
 
         #[cfg(all(target_vendor = "apple", any(target_arch = "x86", target_arch = "x86_64"), not(feature = "mangled-names")))]
         mod $name {
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             $(#[$($attr)*])*
             extern $abi fn $name( $($argname: $ty),* ) -> u16 {
                 super::$name($($argname),*).to_bits()
@@ -397,8 +333,8 @@ macro_rules! intrinsics {
 
         #[cfg(all(target_arch = "arm", not(feature = "mangled-names")))]
         mod $name {
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             $(#[$($attr)*])*
             extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
                 super::$name($($argname),*)
@@ -407,8 +343,8 @@ macro_rules! intrinsics {
 
         #[cfg(all(target_arch = "arm", not(feature = "mangled-names")))]
         mod $alias {
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             $(#[$($attr)*])*
             extern "aapcs" fn $alias( $($argname: $ty),* ) $(-> $ret)? {
                 super::$name($($argname),*)
@@ -474,8 +410,8 @@ macro_rules! intrinsics {
         #[cfg(all(feature = "mem", not(feature = "mangled-names")))]
         mod $name {
             $(#[$($attr)*])*
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             unsafe extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
                 super::$name($($argname),*)
             }
@@ -487,7 +423,7 @@ macro_rules! intrinsics {
     // Naked functions are special: we can't generate wrappers for them since
     // they use a custom calling convention.
     (
-        #[naked]
+        #[unsafe(naked)]
         $(#[$($attr:tt)*])*
         pub unsafe extern $abi:tt fn $name:ident( $($argname:ident:  $ty:ty),* ) $(-> $ret:ty)? {
             $($body:tt)*
@@ -497,40 +433,11 @@ macro_rules! intrinsics {
     ) => (
         // `#[naked]` definitions are referenced by other places, so we can't use `cfg` like the others
         pub mod $name {
-            #[naked]
+            #[unsafe(naked)]
             $(#[$($attr)*])*
-            #[cfg_attr(not(feature = "mangled-names"), no_mangle)]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[cfg_attr(not(feature = "mangled-names"), unsafe(no_mangle))]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             pub unsafe extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
-                $($body)*
-            }
-        }
-
-        intrinsics!($($rest)*);
-    );
-
-    // For some intrinsics, AVR uses a custom calling convention¹ that does not
-    // match our definitions here. Ideally we would just use hand-written naked
-    // functions, but that's quite a lot of code to port² - so for the time
-    // being we are just ignoring the problematic functions, letting avr-gcc
-    // (which is required to compile to AVR anyway) link them from libgcc.
-    //
-    // ¹ https://gcc.gnu.org/wiki/avr-gcc (see "Exceptions to the Calling
-    //   Convention")
-    // ² https://github.com/gcc-mirror/gcc/blob/31048012db98f5ec9c2ba537bfd850374bdd771f/libgcc/config/avr/lib1funcs.S
-    (
-        #[avr_skip]
-        $(#[$($attr:tt)*])*
-        pub extern $abi:tt fn $name:ident( $($argname:ident:  $ty:ty),* ) $(-> $ret:ty)? {
-            $($body:tt)*
-        }
-
-        $($rest:tt)*
-    ) => (
-        #[cfg(not(target_arch = "avr"))]
-        intrinsics! {
-            $(#[$($attr)*])*
-            pub extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
                 $($body)*
             }
         }
@@ -566,36 +473,14 @@ macro_rules! intrinsics {
         #[cfg(not(feature = "mangled-names"))]
         mod $name {
             $(#[$($attr)*])*
-            #[no_mangle]
-            #[cfg_attr(not(all(windows, target_env = "gnu")), linkage = "weak")]
+            #[unsafe(no_mangle)]
+            #[cfg_attr(not(any(all(windows, target_env = "gnu"), target_os = "cygwin")), linkage = "weak")]
             $(unsafe $($empty)?)? extern $abi fn $name( $($argname: $ty),* ) $(-> $ret)? {
-                super::$name($($argname),*)
+                // SAFETY: same preconditions.
+                $(unsafe $($empty)?)? { super::$name($($argname),*) }
             }
         }
 
         intrinsics!($($rest)*);
     );
-}
-
-// Hack for LLVM expectations for ABI on windows. This is used by the
-// `#[win64_128bit_abi_hack]` attribute recognized above
-#[cfg(all(any(windows, target_os = "uefi"), target_pointer_width = "64"))]
-pub mod win64_128bit_abi_hack {
-    #[repr(simd)]
-    pub struct U64x2([u64; 2]);
-
-    impl From<i128> for U64x2 {
-        fn from(i: i128) -> U64x2 {
-            use crate::int::DInt;
-            let j = i as u128;
-            U64x2([j.lo(), j.hi()])
-        }
-    }
-
-    impl From<u128> for U64x2 {
-        fn from(i: u128) -> U64x2 {
-            use crate::int::DInt;
-            U64x2([i.lo(), i.hi()])
-        }
-    }
 }

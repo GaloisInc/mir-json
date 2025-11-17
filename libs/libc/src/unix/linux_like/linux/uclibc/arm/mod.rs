@@ -1,10 +1,7 @@
 use crate::off64_t;
 use crate::prelude::*;
 
-pub type c_char = u8;
 pub type wchar_t = c_uint;
-pub type c_long = i32;
-pub type c_ulong = u32;
 pub type time_t = c_long;
 
 pub type clock_t = c_long;
@@ -166,6 +163,8 @@ s! {
         __val: [c_ulong; 2],
     }
 
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_flags: c_ulong,
@@ -219,7 +218,7 @@ s! {
         __unused2: c_ulong,
         pub msg_ctime: crate::time_t,
         __unused3: c_ulong,
-        __msg_cbytes: c_ulong,
+        pub __msg_cbytes: c_ulong,
         pub msg_qnum: crate::msgqnum_t,
         pub msg_qbytes: crate::msglen_t,
         pub msg_lspid: crate::pid_t,
@@ -478,7 +477,6 @@ pub const POLLWRBAND: c_short = 0x200;
 pub const POLLWRNORM: c_short = 0x100;
 pub const PTHREAD_STACK_MIN: size_t = 16384;
 pub const RTLD_GLOBAL: c_int = 0x00100;
-pub const PIDFD_NONBLOCK: c_int = 0x800;
 
 // These are typed unsigned to match sigaction
 pub const SA_NOCLDSTOP: c_ulong = 0x1;
@@ -896,7 +894,7 @@ pub const SYS_pwritev2: c_long = 393;
 pub const SYS_pkey_mprotect: c_long = 394;
 pub const SYS_pkey_alloc: c_long = 395;
 pub const SYS_pkey_free: c_long = 396;
-// FIXME: should be a `c_long` too, but a bug slipped in.
+// FIXME(linux): should be a `c_long` too, but a bug slipped in.
 pub const SYS_statx: c_int = 397;
 pub const SYS_pidfd_send_signal: c_long = 424;
 pub const SYS_io_uring_setup: c_long = 425;

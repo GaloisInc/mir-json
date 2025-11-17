@@ -64,6 +64,24 @@ fn smoke_port_gone() {
 }
 
 #[test]
+fn smoke_receiver_clone() {
+    let (tx, rx) = channel::<i32>();
+    let rx2 = rx.clone();
+    drop(rx);
+    tx.send(1).unwrap();
+    assert_eq!(rx2.recv().unwrap(), 1);
+}
+
+#[test]
+fn smoke_receiver_clone_port_gone() {
+    let (tx, rx) = channel::<i32>();
+    let rx2 = rx.clone();
+    drop(rx);
+    drop(rx2);
+    assert!(tx.send(1).is_err());
+}
+
+#[test]
 fn smoke_shared_port_gone() {
     let (tx, rx) = channel::<i32>();
     drop(rx);
@@ -122,6 +140,18 @@ fn chan_gone_concurrent() {
         tx.send(1).unwrap();
     });
     while rx.recv().is_ok() {}
+}
+
+#[test]
+fn receiver_cloning() {
+    let (tx, rx) = channel::<i32>();
+    let rx2 = rx.clone();
+
+    tx.send(1).unwrap();
+    tx.send(2).unwrap();
+
+    assert_eq!(rx2.recv(), Ok(1));
+    assert_eq!(rx.recv(), Ok(2));
 }
 
 #[test]
@@ -432,31 +462,36 @@ fn oneshot_single_thread_recv_timeout() {
 #[test]
 fn stress_recv_timeout_two_threads() {
     let (tx, rx) = channel();
-    let stress = stress_factor() + 100;
-    let timeout = Duration::from_millis(100);
+    let stress = stress_factor() + 50;
+    let timeout = Duration::from_millis(10);
 
     thread::spawn(move || {
         for i in 0..stress {
             if i % 2 == 0 {
-                thread::sleep(timeout * 2);
+                thread::sleep(timeout * 4);
             }
             tx.send(1usize).unwrap();
         }
     });
 
     let mut recv_count = 0;
+    let mut got_timeout = false;
     loop {
         match rx.recv_timeout(timeout) {
             Ok(n) => {
                 assert_eq!(n, 1usize);
                 recv_count += 1;
             }
-            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Timeout) => {
+                got_timeout = true;
+                continue;
+            }
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
 
     assert_eq!(recv_count, stress);
+    assert!(got_timeout);
 }
 
 #[test]

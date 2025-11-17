@@ -1,4 +1,4 @@
-use crate::simd::{cmp::SimdPartialEq, LaneCount, Simd, SimdElement, SupportedLaneCount};
+use crate::simd::{LaneCount, Simd, SimdElement, SupportedLaneCount, cmp::SimdPartialEq};
 use core::ops::{Add, Mul};
 use core::ops::{BitAnd, BitOr, BitXor};
 use core::ops::{Div, Rem, Sub};
@@ -135,7 +135,6 @@ macro_rules! for_base_types {
                     type Output = $out;
 
                     #[inline]
-                    #[must_use = "operator returns a new vector without mutating the inputs"]
                     // TODO: only useful for int Div::div, but we hope that this
                     // will essentially always get inlined anyway.
                     #[track_caller]

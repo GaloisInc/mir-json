@@ -136,7 +136,8 @@ impl Once {
     /// it will *poison* this [`Once`] instance, causing all future invocations of
     /// `call_once` to also panic.
     ///
-    /// This is similar to [poisoning with mutexes][poison].
+    /// This is similar to [poisoning with mutexes][poison], but this mechanism
+    /// is guaranteed to never skip panics within `f`.
     ///
     /// [poison]: struct.Mutex.html#poisoning
     #[inline]
@@ -284,7 +285,7 @@ impl Once {
     /// If this [`Once`] has been poisoned because an initialization closure has
     /// panicked, this method will also panic. Use [`wait_force`](Self::wait_force)
     /// if this behavior is not desired.
-    #[stable(feature = "once_wait", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "once_wait", since = "1.86.0")]
     pub fn wait(&self) {
         if !self.inner.is_completed() {
             self.inner.wait(false);
@@ -293,7 +294,10 @@ impl Once {
 
     /// Blocks the current thread until initialization has completed, ignoring
     /// poisoning.
-    #[stable(feature = "once_wait", since = "CURRENT_RUSTC_VERSION")]
+    ///
+    /// If this [`Once`] has been poisoned, this function blocks until it
+    /// becomes completed, unlike [`Once::wait()`], which panics in this case.
+    #[stable(feature = "once_wait", since = "1.86.0")]
     pub fn wait_force(&self) {
         if !self.inner.is_completed() {
             self.inner.wait(true);

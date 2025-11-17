@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_features)]
 #![allow(internal_features)]
+#![allow(unsafe_op_in_unsafe_fn)]
 #![deny(rust_2018_idioms)]
 #![feature(
     custom_inner_attributes,
@@ -12,31 +13,27 @@
     proc_macro_hygiene,
     stmt_expr_attributes,
     core_intrinsics,
-    intrinsics,
     no_core,
     fmt_helpers_for_derive,
     rustc_attrs,
     staged_api,
     doc_cfg,
-    tbm_target_feature,
-    sse4a_target_feature,
     riscv_target_feature,
     arm_target_feature,
-    avx512_target_feature,
     mips_target_feature,
     powerpc_target_feature,
+    s390x_target_feature,
     loongarch_target_feature,
     wasm_target_feature,
     abi_unadjusted,
     rtm_target_feature,
     allow_internal_unstable,
     decl_macro,
-    target_feature_11,
-    generic_arg_infer,
     asm_experimental_arch,
-    sha512_sm_x86,
     x86_amx_intrinsics,
-    f16
+    f16,
+    aarch64_unstable_target_feature,
+    bigint_helper_methods
 )]
 #![cfg_attr(test, feature(test, abi_vectorcall, stdarch_internal))]
 #![deny(clippy::missing_inline_in_public_items)]
@@ -69,16 +66,14 @@
     feature(
         stdarch_arm_feature_detection,
         stdarch_powerpc_feature_detection,
-        stdarch_loongarch_feature_detection
+        stdarch_s390x_feature_detection
     )
 )]
 
 #[cfg(test)]
 #[macro_use]
 extern crate std;
-#[cfg(test)]
-#[macro_use]
-extern crate std_detect;
+
 #[path = "mod.rs"]
 mod core_arch;
 

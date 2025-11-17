@@ -1,12 +1,12 @@
 use super::Builder;
 use crate::any::Any;
 use crate::panic::panic_any;
+use crate::result;
 use crate::sync::atomic::{AtomicBool, Ordering};
 use crate::sync::mpsc::{Sender, channel};
 use crate::sync::{Arc, Barrier};
 use crate::thread::{self, Scope, ThreadId};
 use crate::time::{Duration, Instant};
-use crate::{mem, result};
 
 // !!! These tests are dangerous. If something is buggy, they will hang, !!!
 // !!! instead of exiting cleanly. This might wedge the buildbots.       !!!
@@ -108,6 +108,7 @@ fn test_is_finished() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_join_panic() {
     match thread::spawn(move || panic!()).join() {
         result::Result::Err(_) => (),
@@ -210,6 +211,7 @@ fn test_simple_newsched_spawn() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_try_panic_message_string_literal() {
     match thread::spawn(move || {
         panic!("static string");
@@ -226,6 +228,7 @@ fn test_try_panic_message_string_literal() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_try_panic_any_message_owned_str() {
     match thread::spawn(move || {
         panic_any("owned string".to_string());
@@ -242,6 +245,7 @@ fn test_try_panic_any_message_owned_str() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_try_panic_any_message_any() {
     match thread::spawn(move || {
         panic_any(Box::new(413u16) as Box<dyn Any + Send>);
@@ -260,6 +264,7 @@ fn test_try_panic_any_message_any() {
 }
 
 #[test]
+#[cfg_attr(not(panic = "unwind"), ignore = "test requires unwinding support")]
 fn test_try_panic_any_message_unit_struct() {
     struct Juju;
 
@@ -282,6 +287,8 @@ fn test_park_unpark_called_other_thread() {
     for _ in 0..10 {
         let th = thread::current();
 
+        // Here we rely on `thread::spawn` (specifically the part that runs after spawning
+        // the thread) to not consume the parking token.
         let _guard = thread::spawn(move || {
             super::sleep(Duration::from_millis(50));
             th.unpark();
@@ -311,6 +318,8 @@ fn test_park_timeout_unpark_called_other_thread() {
     for _ in 0..10 {
         let th = thread::current();
 
+        // Here we rely on `thread::spawn` (specifically the part that runs after spawning
+        // the thread) to not consume the parking token.
         let _guard = thread::spawn(move || {
             super::sleep(Duration::from_millis(50));
             th.unpark();
@@ -327,7 +336,7 @@ fn sleep_ms_smoke() {
 
 #[test]
 fn test_size_of_option_thread_id() {
-    assert_eq!(mem::size_of::<Option<ThreadId>>(), mem::size_of::<ThreadId>());
+    assert_eq!(size_of::<Option<ThreadId>>(), size_of::<ThreadId>());
 }
 
 #[test]
@@ -339,6 +348,13 @@ fn test_thread_id_equal() {
 fn test_thread_id_not_equal() {
     let spawned_id = thread::spawn(|| thread::current().id()).join().unwrap();
     assert!(thread::current().id() != spawned_id);
+}
+
+#[test]
+fn test_thread_os_id_not_equal() {
+    let spawned_id = thread::spawn(|| thread::current_os_id()).join().unwrap();
+    let current_id = thread::current_os_id();
+    assert!(current_id != spawned_id);
 }
 
 #[test]

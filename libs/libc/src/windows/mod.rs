@@ -2,16 +2,6 @@
 
 use crate::prelude::*;
 
-pub type c_schar = i8;
-pub type c_uchar = u8;
-pub type c_short = i16;
-pub type c_ushort = u16;
-pub type c_int = i32;
-pub type c_uint = u32;
-pub type c_float = f32;
-pub type c_double = f64;
-pub type c_longlong = i64;
-pub type c_ulonglong = u64;
 pub type intmax_t = i64;
 pub type uintmax_t = u64;
 
@@ -22,9 +12,6 @@ pub type uintptr_t = usize;
 pub type ssize_t = isize;
 pub type sighandler_t = usize;
 
-pub type c_char = i8;
-pub type c_long = i32;
-pub type c_ulong = u32;
 pub type wchar_t = u16;
 
 pub type clock_t = i32;
@@ -273,7 +260,7 @@ impl Clone for FILE {
     }
 }
 #[cfg_attr(feature = "extra_traits", derive(Debug))]
-pub enum fpos_t {} // FIXME: fill this out with a struct
+pub enum fpos_t {} // FIXME(windows): fill this out with a struct
 impl Copy for fpos_t {}
 impl Clone for fpos_t {
     fn clone(&self) -> fpos_t {
@@ -395,12 +382,30 @@ extern "C" {
     pub fn signal(signum: c_int, handler: sighandler_t) -> sighandler_t;
     pub fn raise(signum: c_int) -> c_int;
 
+    pub fn clock() -> clock_t;
+    pub fn ctime(sourceTime: *const time_t) -> *mut c_char;
+    pub fn difftime(timeEnd: time_t, timeStart: time_t) -> c_double;
     #[link_name = "_gmtime64_s"]
     pub fn gmtime_s(destTime: *mut tm, srcTime: *const time_t) -> c_int;
+    #[link_name = "_get_daylight"]
+    pub fn get_daylight(hours: *mut c_int) -> errno_t;
+    #[link_name = "_get_dstbias"]
+    pub fn get_dstbias(seconds: *mut c_long) -> errno_t;
+    #[link_name = "_get_timezone"]
+    pub fn get_timezone(seconds: *mut c_long) -> errno_t;
+    #[link_name = "_get_tzname"]
+    pub fn get_tzname(
+        p_return_value: *mut size_t,
+        time_zone_name: *mut c_char,
+        size_in_bytes: size_t,
+        index: c_int,
+    ) -> errno_t;
     #[link_name = "_localtime64_s"]
     pub fn localtime_s(tmDest: *mut tm, sourceTime: *const time_t) -> crate::errno_t;
     #[link_name = "_time64"]
     pub fn time(destTime: *mut time_t) -> time_t;
+    #[link_name = "_tzset"]
+    pub fn tzset();
     #[link_name = "_chmod"]
     pub fn chmod(path: *const c_char, mode: c_int) -> c_int;
     #[link_name = "_wchmod"]

@@ -43,6 +43,7 @@ cfg_if::cfg_if! {
         target_os = "solaris",
         target_os = "illumos",
         target_os = "aix",
+        target_os = "cygwin",
     ))] {
         #[path = "gimli/mmap_unix.rs"]
         mod mmap;
@@ -114,6 +115,8 @@ struct Context<'a> {
 }
 
 impl<'data> Context<'data> {
+    // #[feature(optimize_attr)] is enabled when we're built inside libstd
+    #[cfg_attr(backtrace_in_libstd, optimize(size))]
     fn new(
         stash: &'data Stash,
         object: Object<'data>,
@@ -193,7 +196,7 @@ fn mmap(path: &Path) -> Option<Mmap> {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(windows)] {
+    if #[cfg(any(windows, target_os = "cygwin"))] {
         mod coff;
         use self::coff::{handle_split_dwarf, Object};
     } else if #[cfg(any(target_vendor = "apple"))] {
@@ -209,7 +212,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(windows)] {
+    if #[cfg(any(windows, target_os = "cygwin"))] {
         mod libs_windows;
         use libs_windows::native_libraries;
     } else if #[cfg(target_vendor = "apple")] {
@@ -355,6 +358,8 @@ impl Cache {
     }
 
     // unsafe because this is required to be externally synchronized
+    // #[feature(optimize_attr)] is enabled when we're built inside libstd
+    #[cfg_attr(backtrace_in_libstd, optimize(size))]
     unsafe fn with_global(f: impl FnOnce(&mut Self)) {
         // A very small, very simple LRU cache for debug info mappings.
         //

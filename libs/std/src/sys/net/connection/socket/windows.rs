@@ -8,7 +8,8 @@ use crate::net::{Shutdown, SocketAddr};
 use crate::os::windows::io::{
     AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, OwnedSocket, RawSocket,
 };
-use crate::sync::OnceLock;
+use crate::sync::atomic::Atomic;
+use crate::sync::atomic::Ordering::{AcqRel, Relaxed};
 use crate::sys::c;
 use crate::sys_common::{AsInner, FromInner, IntoInner};
 use crate::time::Duration;
@@ -114,33 +115,38 @@ pub(super) mod netc {
 #[expect(missing_debug_implementations)]
 pub struct Socket(OwnedSocket);
 
-static WSA_CLEANUP: OnceLock<unsafe extern "system" fn() -> i32> = OnceLock::new();
+static WSA_INITIALIZED: Atomic<bool> = Atomic::<bool>::new(false);
 
 /// Checks whether the Windows socket interface has been started already, and
 /// if not, starts it.
+#[inline]
 pub fn init() {
-    let _ = WSA_CLEANUP.get_or_init(|| unsafe {
+    if !WSA_INITIALIZED.load(Relaxed) {
+        wsa_startup();
+    }
+}
+
+#[cold]
+fn wsa_startup() {
+    unsafe {
         let mut data: c::WSADATA = mem::zeroed();
         let ret = c::WSAStartup(
             0x202, // version 2.2
             &mut data,
         );
         assert_eq!(ret, 0);
-
-        // Only register `WSACleanup` if `WSAStartup` is actually ever called.
-        // Workaround to prevent linking to `WS2_32.dll` when no network functionality is used.
-        // See issue #85441.
-        c::WSACleanup
-    });
+        if WSA_INITIALIZED.swap(true, AcqRel) {
+            // If another thread raced with us and called WSAStartup first then call
+            // WSACleanup so it's as though WSAStartup was only called once.
+            c::WSACleanup();
+        }
+    }
 }
 
 pub fn cleanup() {
-    // only perform cleanup if network functionality was actually initialized
-    if let Some(cleanup) = WSA_CLEANUP.get() {
-        unsafe {
-            cleanup();
-        }
-    }
+    // We don't need to call WSACleanup here because exiting the process will cause
+    // the OS to clean everything for us, which is faster than doing it manually.
+    // See #141799.
 }
 
 /// Returns the last error from the Windows socket interface.
@@ -381,7 +387,7 @@ impl Socket {
         flags: c_int,
     ) -> io::Result<(usize, SocketAddr)> {
         let mut storage = unsafe { mem::zeroed::<c::SOCKADDR_STORAGE>() };
-        let mut addrlen = mem::size_of_val(&storage) as netc::socklen_t;
+        let mut addrlen = size_of_val(&storage) as netc::socklen_t;
         let length = cmp::min(buf.len(), <wrlen_t>::MAX as usize) as wrlen_t;
 
         // On unix when a socket is shut down all further reads return 0, so we
@@ -514,13 +520,13 @@ impl Socket {
 
     // This is used by sys_common code to abstract over Windows and Unix.
     pub fn as_raw(&self) -> c::SOCKET {
-        debug_assert_eq!(mem::size_of::<c::SOCKET>(), mem::size_of::<RawSocket>());
-        debug_assert_eq!(mem::align_of::<c::SOCKET>(), mem::align_of::<RawSocket>());
+        debug_assert_eq!(size_of::<c::SOCKET>(), size_of::<RawSocket>());
+        debug_assert_eq!(align_of::<c::SOCKET>(), align_of::<RawSocket>());
         self.as_inner().as_raw_socket() as c::SOCKET
     }
     pub unsafe fn from_raw(raw: c::SOCKET) -> Self {
-        debug_assert_eq!(mem::size_of::<c::SOCKET>(), mem::size_of::<RawSocket>());
-        debug_assert_eq!(mem::align_of::<c::SOCKET>(), mem::align_of::<RawSocket>());
+        debug_assert_eq!(size_of::<c::SOCKET>(), size_of::<RawSocket>());
+        debug_assert_eq!(align_of::<c::SOCKET>(), align_of::<RawSocket>());
         unsafe { Self::from_raw_socket(raw as RawSocket) }
     }
 }

@@ -1,21 +1,6 @@
-pub use crate::arch::c_char_def as c_char;
 use crate::prelude::*;
 
 pub type wchar_t = i32;
-
-cfg_if! {
-    if #[cfg(target_pointer_width = "32")] {
-        pub type c_long = i32;
-        pub type c_ulong = u32;
-    }
-}
-
-cfg_if! {
-    if #[cfg(target_pointer_width = "64")] {
-        pub type c_long = i64;
-        pub type c_ulong = u64;
-    }
-}
 
 pub type blkcnt_t = c_ulong;
 pub type blksize_t = c_long;
@@ -82,7 +67,7 @@ s_no_extra_traits! {
 
     pub struct sockaddr_storage {
         pub ss_family: crate::sa_family_t,
-        __ss_padding: [u8; 128 - mem::size_of::<sa_family_t>() - mem::size_of::<c_ulong>()],
+        __ss_padding: [u8; 128 - size_of::<sa_family_t>() - size_of::<c_ulong>()],
         __ss_align: c_ulong,
     }
 }
@@ -146,6 +131,22 @@ s! {
         pub thousands_sep: *const c_char,
     }
 
+    pub struct msghdr {
+        pub msg_name: *mut c_void,
+        pub msg_namelen: crate::socklen_t,
+        pub msg_iov: *mut crate::iovec,
+        pub msg_iovlen: size_t,
+        pub msg_control: *mut c_void,
+        pub msg_controllen: size_t,
+        pub msg_flags: c_int,
+    }
+
+    pub struct cmsghdr {
+        pub cmsg_len: size_t,
+        pub cmsg_level: c_int,
+        pub cmsg_type: c_int,
+    }
+
     pub struct passwd {
         pub pw_name: *mut c_char,
         pub pw_passwd: *mut c_char,
@@ -156,6 +157,8 @@ s! {
         pub pw_shell: *mut c_char,
     }
 
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_flags: c_ulong,
@@ -195,7 +198,7 @@ s! {
         pub st_dev: crate::dev_t,
         pub st_ino: crate::ino_t,
         pub st_nlink: crate::nlink_t,
-        pub st_mode: crate::mode_t,
+        pub st_mode: mode_t,
         pub st_uid: crate::uid_t,
         pub st_gid: crate::gid_t,
         pub st_rdev: crate::dev_t,
@@ -349,7 +352,7 @@ pub const F_LOCK: c_int = 1;
 pub const F_TLOCK: c_int = 2;
 pub const F_TEST: c_int = 3;
 
-// FIXME: relibc {
+// FIXME(redox): relibc {
 pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
 // }
 
@@ -505,7 +508,7 @@ pub const F_GETFD: c_int = 1;
 pub const F_SETFD: c_int = 2;
 pub const F_GETFL: c_int = 3;
 pub const F_SETFL: c_int = 4;
-// FIXME: relibc {
+// FIXME(redox): relibc {
 pub const F_DUPFD_CLOEXEC: c_int = crate::F_DUPFD;
 // }
 pub const FD_CLOEXEC: c_int = 0x0100_0000;
@@ -527,7 +530,7 @@ pub const O_DIRECTORY: c_int = 0x1000_0000;
 pub const O_PATH: c_int = 0x2000_0000;
 pub const O_SYMLINK: c_int = 0x4000_0000;
 // Negative to allow it to be used as int
-// FIXME: Fix negative values missing from includes
+// FIXME(redox): Fix negative values missing from includes
 pub const O_NOFOLLOW: c_int = -0x8000_0000;
 
 // locale.h
@@ -568,7 +571,7 @@ pub const NI_NAMEREQD: c_int = 0x0008;
 pub const NI_DGRAM: c_int = 0x0010;
 
 // netinet/in.h
-// FIXME: relibc {
+// FIXME(redox): relibc {
 pub const IP_TTL: c_int = 2;
 pub const IPV6_UNICAST_HOPS: c_int = 16;
 pub const IPV6_MULTICAST_IF: c_int = 17;
@@ -593,7 +596,7 @@ pub const IPPROTO_MAX: c_int = 255;
 
 // netinet/tcp.h
 pub const TCP_NODELAY: c_int = 1;
-// FIXME: relibc {
+// FIXME(redox): relibc {
 pub const TCP_KEEPIDLE: c_int = 1;
 // }
 
@@ -660,14 +663,14 @@ pub const SIGPWR: c_int = 30;
 pub const SIGSYS: c_int = 31;
 pub const NSIG: c_int = 32;
 
-pub const SA_NOCLDSTOP: c_ulong = 0x00000001;
-pub const SA_NOCLDWAIT: c_ulong = 0x00000002;
-pub const SA_SIGINFO: c_ulong = 0x00000004;
-pub const SA_RESTORER: c_ulong = 0x04000000;
-pub const SA_ONSTACK: c_ulong = 0x08000000;
-pub const SA_RESTART: c_ulong = 0x10000000;
-pub const SA_NODEFER: c_ulong = 0x40000000;
-pub const SA_RESETHAND: c_ulong = 0x80000000;
+pub const SA_NOCLDWAIT: c_ulong = 0x0000_0002;
+pub const SA_RESTORER: c_ulong = 0x0000_0004; // FIXME(redox): remove after relibc removes it
+pub const SA_SIGINFO: c_ulong = 0x0200_0000;
+pub const SA_ONSTACK: c_ulong = 0x0400_0000;
+pub const SA_RESTART: c_ulong = 0x0800_0000;
+pub const SA_NODEFER: c_ulong = 0x1000_0000;
+pub const SA_RESETHAND: c_ulong = 0x2000_0000;
+pub const SA_NOCLDSTOP: c_ulong = 0x4000_0000;
 
 // sys/file.h
 pub const LOCK_SH: c_int = 1;
@@ -724,7 +727,7 @@ pub const EXIT_SUCCESS: c_int = 0;
 pub const EXIT_FAILURE: c_int = 1;
 
 // sys/ioctl.h
-// FIXME: relibc {
+// FIXME(redox): relibc {
 pub const FIONREAD: c_ulong = 0x541B;
 pub const FIONBIO: c_ulong = 0x5421;
 pub const FIOCLEX: c_ulong = 0x5451;
@@ -781,6 +784,7 @@ pub const MSG_PEEK: c_int = 2;
 pub const MSG_TRUNC: c_int = 32;
 pub const MSG_DONTWAIT: c_int = 64;
 pub const MSG_WAITALL: c_int = 256;
+pub const SCM_RIGHTS: c_int = 1;
 pub const SHUT_RD: c_int = 0;
 pub const SHUT_WR: c_int = 1;
 pub const SHUT_RDWR: c_int = 2;
@@ -1013,24 +1017,35 @@ pub const PRIO_PROCESS: c_int = 0;
 pub const PRIO_PGRP: c_int = 1;
 pub const PRIO_USER: c_int = 2;
 
-// wait.h
 f! {
+    //sys/socket.h
+    pub {const} fn CMSG_ALIGN(len: size_t) -> size_t {
+        (len + size_of::<size_t>() - 1) & !(size_of::<size_t>() - 1)
+    }
+    pub {const} fn CMSG_LEN(length: c_uint) -> c_uint {
+        (CMSG_ALIGN(size_of::<cmsghdr>()) + length as usize) as c_uint
+    }
+    pub {const} fn CMSG_SPACE(len: c_uint) -> c_uint {
+        (CMSG_ALIGN(len as size_t) + CMSG_ALIGN(size_of::<cmsghdr>())) as c_uint
+    }
+
+    // wait.h
     pub fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
         let fd = fd as usize;
-        let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let size = size_of_val(&(*set).fds_bits[0]) * 8;
         (*set).fds_bits[fd / size] &= !(1 << (fd % size));
         return;
     }
 
     pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
         let fd = fd as usize;
-        let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let size = size_of_val(&(*set).fds_bits[0]) * 8;
         return ((*set).fds_bits[fd / size] & (1 << (fd % size))) != 0;
     }
 
     pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
         let fd = fd as usize;
-        let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
+        let size = size_of_val(&(*set).fds_bits[0]) * 8;
         (*set).fds_bits[fd / size] |= 1 << (fd % size);
         return;
     }
@@ -1227,6 +1242,9 @@ extern "C" {
     pub fn setrlimit(resource: c_int, rlim: *const crate::rlimit) -> c_int;
 
     // sys/socket.h
+    pub fn CMSG_DATA(cmsg: *const cmsghdr) -> *mut c_uchar;
+    pub fn CMSG_FIRSTHDR(mhdr: *const msghdr) -> *mut cmsghdr;
+    pub fn CMSG_NXTHDR(mhdr: *const msghdr, cmsg: *const cmsghdr) -> *mut cmsghdr;
     pub fn bind(
         socket: c_int,
         address: *const crate::sockaddr,
@@ -1240,11 +1258,15 @@ extern "C" {
         addr: *mut crate::sockaddr,
         addrlen: *mut crate::socklen_t,
     ) -> ssize_t;
+    pub fn recvmsg(socket: c_int, msg: *mut msghdr, flags: c_int) -> ssize_t;
+    pub fn sendmsg(socket: c_int, msg: *const msghdr, flags: c_int) -> ssize_t;
 
     // sys/stat.h
     pub fn futimens(fd: c_int, times: *const crate::timespec) -> c_int;
 
     // sys/uio.h
+    pub fn preadv(fd: c_int, iov: *const crate::iovec, iovcnt: c_int, offset: off_t) -> ssize_t;
+    pub fn pwritev(fd: c_int, iov: *const crate::iovec, iovcnt: c_int, offset: off_t) -> ssize_t;
     pub fn readv(fd: c_int, iov: *const crate::iovec, iovcnt: c_int) -> ssize_t;
     pub fn writev(fd: c_int, iov: *const crate::iovec, iovcnt: c_int) -> ssize_t;
 
@@ -1277,18 +1299,6 @@ cfg_if! {
 
         impl Eq for dirent {}
 
-        impl fmt::Debug for dirent {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("dirent")
-                    .field("d_ino", &self.d_ino)
-                    .field("d_off", &self.d_off)
-                    .field("d_reclen", &self.d_reclen)
-                    .field("d_type", &self.d_type)
-                    // FIXME: .field("d_name", &self.d_name)
-                    .finish()
-            }
-        }
-
         impl hash::Hash for dirent {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.d_ino.hash(state);
@@ -1312,15 +1322,6 @@ cfg_if! {
 
         impl Eq for sockaddr_un {}
 
-        impl fmt::Debug for sockaddr_un {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sockaddr_un")
-                    .field("sun_family", &self.sun_family)
-                    // FIXME: .field("sun_path", &self.sun_path)
-                    .finish()
-            }
-        }
-
         impl hash::Hash for sockaddr_un {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.sun_family.hash(state);
@@ -1341,16 +1342,6 @@ cfg_if! {
         }
 
         impl Eq for sockaddr_storage {}
-
-        impl fmt::Debug for sockaddr_storage {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sockaddr_storage")
-                    .field("ss_family", &self.ss_family)
-                    .field("__ss_align", &self.__ss_align)
-                    // FIXME: .field("__ss_padding", &self.__ss_padding)
-                    .finish()
-            }
-        }
 
         impl hash::Hash for sockaddr_storage {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -1395,19 +1386,6 @@ cfg_if! {
         }
 
         impl Eq for utsname {}
-
-        impl fmt::Debug for utsname {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("utsname")
-                    // FIXME: .field("sysname", &self.sysname)
-                    // FIXME: .field("nodename", &self.nodename)
-                    // FIXME: .field("release", &self.release)
-                    // FIXME: .field("version", &self.version)
-                    // FIXME: .field("machine", &self.machine)
-                    // FIXME: .field("domainname", &self.domainname)
-                    .finish()
-            }
-        }
 
         impl hash::Hash for utsname {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {

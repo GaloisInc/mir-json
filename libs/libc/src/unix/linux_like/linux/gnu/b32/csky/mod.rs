@@ -1,10 +1,11 @@
 use crate::prelude::*;
 use crate::{off64_t, off_t};
 
-pub type c_char = u8;
 pub type wchar_t = u32;
 
 s! {
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_mask: crate::sigset_t,
@@ -135,7 +136,7 @@ s! {
         __glibc_reserved2: c_ulong,
         pub msg_ctime: crate::time_t,
         __glibc_reserved3: c_ulong,
-        __msg_cbytes: c_ulong,
+        pub __msg_cbytes: c_ulong,
         pub msg_qnum: crate::msgqnum_t,
         pub msg_qbytes: crate::msglen_t,
         pub msg_lspid: crate::pid_t,
@@ -167,7 +168,6 @@ s! {
 }
 
 s_no_extra_traits! {
-    #[allow(missing_debug_implementations)]
     #[repr(align(8))]
     pub struct max_align_t {
         priv_: [i64; 2],

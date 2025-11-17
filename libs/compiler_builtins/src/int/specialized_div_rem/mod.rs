@@ -56,10 +56,9 @@ mod delegate;
 
 // used on SPARC
 #[allow(unused_imports)]
-#[cfg(not(feature = "public-test-deps"))]
+#[cfg(not(feature = "unstable-public-internals"))]
 pub(crate) use self::delegate::u128_divide_sparc;
-
-#[cfg(feature = "public-test-deps")]
+#[cfg(feature = "unstable-public-internals")]
 pub use self::delegate::u128_divide_sparc;
 
 #[macro_use]
@@ -126,10 +125,10 @@ impl_normalization_shift!(
 /// dependencies.
 #[inline]
 fn u64_by_u64_div_rem(duo: u64, div: u64) -> (u64, u64) {
-    if let Some(quo) = duo.checked_div(div) {
-        if let Some(rem) = duo.checked_rem(div) {
-            return (quo, rem);
-        }
+    if let Some(quo) = duo.checked_div(div)
+        && let Some(rem) = duo.checked_rem(div)
+    {
+        return (quo, rem);
     }
     zero_div_fn()
 }
@@ -228,10 +227,10 @@ impl_asymmetric!(
 #[inline]
 #[allow(dead_code)]
 fn u32_by_u32_div_rem(duo: u32, div: u32) -> (u32, u32) {
-    if let Some(quo) = duo.checked_div(div) {
-        if let Some(rem) = duo.checked_rem(div) {
-            return (quo, rem);
-        }
+    if let Some(quo) = duo.checked_div(div)
+        && let Some(rem) = duo.checked_rem(div)
+    {
+        return (quo, rem);
     }
     zero_div_fn()
 }
