@@ -94,6 +94,9 @@ internal environment variables, which most users will not need to care about:
 * `EXPORT_ALL`: If this environment variable is set, then the MIR JSON file
   will export all top-level functions. Otherwise, it will only export those
   functions with a `#[crux::test]` attribute.
+* `MIR_JSON_BUILD_TARGET`: If this environment variable is set to `saw`, then
+  the generation of the test script invoking `crux-mir` (see (3) above) is
+  suppressed.
 
 For the purposes of debugging `mir-json` itself, the environment variable
 `MIR_JSON_USE_RUSTC_LIBRARY` can be defined (with any value) instead of

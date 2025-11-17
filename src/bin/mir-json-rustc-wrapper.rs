@@ -308,8 +308,15 @@ fn go() -> ExitCode {
     );
     link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
 
-    write_test_script(&test_path, &json_path).unwrap();
-    eprintln!("generated test script {}", test_path.display());
+    // Only generate test script for Crux builds, not SAW builds.
+    let is_saw_build = env::var("MIR_JSON_BUILD_TARGET")
+        .map(|v| v == "saw")
+        .unwrap_or(false);
+    if !is_saw_build {
+        write_test_script(&test_path, &json_path).unwrap();
+        eprintln!("generated test script {}", test_path.display());
+    }
+
     ExitCode::SUCCESS
 }
 
