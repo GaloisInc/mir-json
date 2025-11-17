@@ -17,7 +17,7 @@ identify all of the code that was changed in each patch.
   After adding the crucible intrinsics in `core/src/crucible`, we need to add a
   reference to it in `core/src/lib.rs`.
 
-* Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: April 17, 2025)
+* Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: November 17, 2025)
 
   The `is_null` method on pointers works by casting the pointer to an integer
   and comparing to zero.  However, crucible-mir doesn't support casting valid
