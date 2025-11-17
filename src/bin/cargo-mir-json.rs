@@ -33,7 +33,7 @@ fn main() {
         return;
     }
     if version::has_flag(&mut env::args()) {
-        println!("{}", version::string());
+        version::show();
         return;
     }
 

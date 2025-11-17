@@ -26,7 +26,7 @@ fn main() {
     rustc_log::init_logger(rustc_log::LoggerConfig::from_env("RUST_LOG")).unwrap();
 
     if version::has_flag(&mut std::env::args()) {
-        println!("{}", version::string());
+        version::show();
         return;
     }
 

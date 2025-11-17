@@ -22,7 +22,7 @@ use mir_json::version;
 fn main() {
 
     if version::has_flag(&mut std::env::args()) {
-        println!("{}", version::string());
+        version::show();
         return;
     }
 

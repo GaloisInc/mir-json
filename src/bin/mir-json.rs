@@ -51,7 +51,7 @@ fn go() {
     let args: Vec<String> = std::env::args().collect();
 
     if version::has_flag(&mut std::env::args()) {
-        println!("{}", version::string());
+        version::show();
     }
 
     let export_style = if env::var("EXPORT_ALL").is_ok() {

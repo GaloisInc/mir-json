@@ -16,3 +16,8 @@ pub fn has_flag(args: &mut Args) -> bool
 pub fn string() -> String {
     format!("mir-json {} (JSON schema version {})", env!("CARGO_PKG_VERSION"), SCHEMA_VER)
 }
+
+/// Print out the version string.
+pub fn show() {
+    println!("{}", string());
+}

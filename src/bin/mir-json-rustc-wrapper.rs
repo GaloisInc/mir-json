@@ -167,7 +167,7 @@ fn go() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
 
     if version::has_flag(&mut std::env::args()) {
-        println!("{}", version::string());
+        version::show();
     }
 
     // XXX big hack: We need to use normal rustc (with its normal libs) for `build.rs` scripts,
