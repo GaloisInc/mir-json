@@ -29,5 +29,6 @@ pub mod analyz;
 pub mod lib_util;
 pub mod link;
 pub mod schema_ver;
+pub mod version;
 
 mod tar_stream;

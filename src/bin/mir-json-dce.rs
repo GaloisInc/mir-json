@@ -18,11 +18,17 @@ use std::fs::File;
 use std::io;
 use std::time::Instant;
 use mir_json::link;
+use mir_json::version;
 
 
 
 fn main() {
     rustc_log::init_logger(rustc_log::LoggerConfig::from_env("RUST_LOG")).unwrap();
+
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+        return;
+    }
 
     let mut last_time = Instant::now();
     let mut measure = || {

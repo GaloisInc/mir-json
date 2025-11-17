@@ -19,6 +19,7 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
+use mir_json::version;
 use rustc_ast::Crate;
 use rustc_middle::ty::TyCtxt;
 use rustc_driver::Compilation;
@@ -164,6 +165,10 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
 fn go() -> ExitCode {
     // First arg is the name of the `rustc` binary that cargo means to invoke, which we ignore.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+    }
 
     // XXX big hack: We need to use normal rustc (with its normal libs) for `build.rs` scripts,
     // since our custom libs aren't actually functional.  To distinguish `build.rs` and `build.rs`

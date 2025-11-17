@@ -1,6 +1,9 @@
 /* Heavily inspired by cargo-miri */
-extern crate cargo_metadata;
+#![feature(rustc_private)]
 
+extern crate mir_json;
+
+use mir_json::version;
 use std::env;
 use std::path::{PathBuf, Path};
 use std::process;
@@ -23,18 +26,14 @@ fn show_help() {
     println!("{}", CARGO_MIR_JSON_HELP);
 }
 
-fn show_version() {
-    println!("{}", env!("CARGO_PKG_VERSION"));
-}
-
 fn main() {
     // Check for version and help flags even when invoked as 'cargo-mir-json'
     if env::args().any(|a| a == "--help" || a == "-h") {
         show_help();
         return;
     }
-    if env::args().any(|a| a == "--version" || a == "-V") {
-        show_version();
+    if version::has_flag(&mut env::args()) {
+        version::show();
         return;
     }
 

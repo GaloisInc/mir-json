@@ -14,6 +14,7 @@ extern crate rustc_middle;
 extern crate mir_json;
 
 use mir_json::analyz;
+use mir_json::version;
 use rustc_ast::Crate;
 use rustc_driver::Compilation;
 use rustc_interface::interface::Compiler;
@@ -48,6 +49,10 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
 
 fn go() {
     let args: Vec<String> = std::env::args().collect();
+
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+    }
 
     let export_style = if env::var("EXPORT_ALL").is_ok() {
         analyz::ExportStyle::ExportAll
