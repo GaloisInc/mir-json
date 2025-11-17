@@ -122,6 +122,7 @@
 #![feature(core_io_borrowed_buf)]
 #![feature(core_io_internals)]
 #![feature(cursor_split)]
+#![feature(crucible_intrinsics)]
 #![feature(deprecated_suggestion)]
 #![feature(deref_pure_trait)]
 #![feature(derive_const)]
