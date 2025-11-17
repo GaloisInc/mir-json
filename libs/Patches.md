@@ -69,7 +69,7 @@ identify all of the code that was changed in each patch.
   difficult due to limited ability to use generics in a const context.
   Instead, we wrap it in a hook that we can override in crucible-mir.
 
-* Use crucible's allocator in `Box` constructors (last applied: April 24, 2025)
+* Use crucible's allocator in `Box` constructors (last applied: November 17, 2025)
 
   Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
   casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
