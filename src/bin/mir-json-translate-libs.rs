@@ -14,7 +14,7 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     env, fmt, fs,
-    io::BufReader,
+    io::{BufReader, ErrorKind},
     os::unix,
     process::{Command, Stdio},
 };
@@ -622,6 +622,16 @@ fn main() {
             } else {
                 eprintln!("Copying {} to {}", orig_dir, custom_dir);
                 copy_dir(orig_dir, custom_dir);
+                // We don't need the .github directories
+                let custom_dot_github_dir = custom_dir.join(".github");
+                if let Err(err) = fs::remove_dir_all(&custom_dot_github_dir) {
+                    if err.kind() != ErrorKind::NotFound {
+                        eprintln!(
+                            "Error removing {}: {}",
+                            custom_dot_github_dir, err
+                        );
+                    }
+                }
             }
         }
         for unit in &unit_graph.units {
