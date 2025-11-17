@@ -112,6 +112,7 @@
 #![feature(const_eval_select)]
 #![feature(const_heap)]
 #![feature(core_intrinsics)]
+#![feature(crucible_intrinsics)]
 #![feature(deprecated_suggestion)]
 #![feature(deref_pure_trait)]
 #![feature(dispatch_from_dyn)]
