@@ -9,10 +9,10 @@ use stdarch_test::assert_instr;
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_permutex2var_epi8&expand=4262)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm512_permutex2var_epi8(a: __m512i, idx: __m512i, b: __m512i) -> __m512i {
-    transmute(vpermi2b(a.as_i8x64(), idx.as_i8x64(), b.as_i8x64()))
+pub fn _mm512_permutex2var_epi8(a: __m512i, idx: __m512i, b: __m512i) -> __m512i {
+    unsafe { transmute(vpermi2b(a.as_i8x64(), idx.as_i8x64(), b.as_i8x64())) }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -20,16 +20,18 @@ pub unsafe fn _mm512_permutex2var_epi8(a: __m512i, idx: __m512i, b: __m512i) -> 
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_permutex2var_epi8&expand=4259)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermt2b))]
-pub unsafe fn _mm512_mask_permutex2var_epi8(
+pub fn _mm512_mask_permutex2var_epi8(
     a: __m512i,
     k: __mmask64,
     idx: __m512i,
     b: __m512i,
 ) -> __m512i {
-    let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
-    transmute(simd_select_bitmask(k, permute, a.as_i8x64()))
+    unsafe {
+        let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
+        transmute(simd_select_bitmask(k, permute, a.as_i8x64()))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -37,16 +39,18 @@ pub unsafe fn _mm512_mask_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_permutex2var_epi8&expand=4261)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm512_maskz_permutex2var_epi8(
+pub fn _mm512_maskz_permutex2var_epi8(
     k: __mmask64,
     a: __m512i,
     idx: __m512i,
     b: __m512i,
 ) -> __m512i {
-    let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
-    transmute(simd_select_bitmask(k, permute, i8x64::ZERO))
+    unsafe {
+        let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
+        transmute(simd_select_bitmask(k, permute, i8x64::ZERO))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -54,16 +58,18 @@ pub unsafe fn _mm512_maskz_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask2_permutex2var_epi8&expand=4260)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermi2b))]
-pub unsafe fn _mm512_mask2_permutex2var_epi8(
+pub fn _mm512_mask2_permutex2var_epi8(
     a: __m512i,
     idx: __m512i,
     k: __mmask64,
     b: __m512i,
 ) -> __m512i {
-    let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
-    transmute(simd_select_bitmask(k, permute, idx.as_i8x64()))
+    unsafe {
+        let permute = _mm512_permutex2var_epi8(a, idx, b).as_i8x64();
+        transmute(simd_select_bitmask(k, permute, idx.as_i8x64()))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst.
@@ -71,10 +77,10 @@ pub unsafe fn _mm512_mask2_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_permutex2var_epi8&expand=4258)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm256_permutex2var_epi8(a: __m256i, idx: __m256i, b: __m256i) -> __m256i {
-    transmute(vpermi2b256(a.as_i8x32(), idx.as_i8x32(), b.as_i8x32()))
+pub fn _mm256_permutex2var_epi8(a: __m256i, idx: __m256i, b: __m256i) -> __m256i {
+    unsafe { transmute(vpermi2b256(a.as_i8x32(), idx.as_i8x32(), b.as_i8x32())) }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -82,16 +88,18 @@ pub unsafe fn _mm256_permutex2var_epi8(a: __m256i, idx: __m256i, b: __m256i) -> 
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_permutex2var_epi8&expand=4255)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermt2b))]
-pub unsafe fn _mm256_mask_permutex2var_epi8(
+pub fn _mm256_mask_permutex2var_epi8(
     a: __m256i,
     k: __mmask32,
     idx: __m256i,
     b: __m256i,
 ) -> __m256i {
-    let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
-    transmute(simd_select_bitmask(k, permute, a.as_i8x32()))
+    unsafe {
+        let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
+        transmute(simd_select_bitmask(k, permute, a.as_i8x32()))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -99,16 +107,18 @@ pub unsafe fn _mm256_mask_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_permutex2var_epi8&expand=4257)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm256_maskz_permutex2var_epi8(
+pub fn _mm256_maskz_permutex2var_epi8(
     k: __mmask32,
     a: __m256i,
     idx: __m256i,
     b: __m256i,
 ) -> __m256i {
-    let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
-    transmute(simd_select_bitmask(k, permute, i8x32::ZERO))
+    unsafe {
+        let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
+        transmute(simd_select_bitmask(k, permute, i8x32::ZERO))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -116,16 +126,18 @@ pub unsafe fn _mm256_maskz_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask2_permutex2var_epi8&expand=4256)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermi2b))]
-pub unsafe fn _mm256_mask2_permutex2var_epi8(
+pub fn _mm256_mask2_permutex2var_epi8(
     a: __m256i,
     idx: __m256i,
     k: __mmask32,
     b: __m256i,
 ) -> __m256i {
-    let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
-    transmute(simd_select_bitmask(k, permute, idx.as_i8x32()))
+    unsafe {
+        let permute = _mm256_permutex2var_epi8(a, idx, b).as_i8x32();
+        transmute(simd_select_bitmask(k, permute, idx.as_i8x32()))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst.
@@ -133,10 +145,10 @@ pub unsafe fn _mm256_mask2_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_permutex2var_epi8&expand=4254)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm_permutex2var_epi8(a: __m128i, idx: __m128i, b: __m128i) -> __m128i {
-    transmute(vpermi2b128(a.as_i8x16(), idx.as_i8x16(), b.as_i8x16()))
+pub fn _mm_permutex2var_epi8(a: __m128i, idx: __m128i, b: __m128i) -> __m128i {
+    unsafe { transmute(vpermi2b128(a.as_i8x16(), idx.as_i8x16(), b.as_i8x16())) }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -144,16 +156,13 @@ pub unsafe fn _mm_permutex2var_epi8(a: __m128i, idx: __m128i, b: __m128i) -> __m
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_permutex2var_epi8&expand=4251)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermt2b))]
-pub unsafe fn _mm_mask_permutex2var_epi8(
-    a: __m128i,
-    k: __mmask16,
-    idx: __m128i,
-    b: __m128i,
-) -> __m128i {
-    let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
-    transmute(simd_select_bitmask(k, permute, a.as_i8x16()))
+pub fn _mm_mask_permutex2var_epi8(a: __m128i, k: __mmask16, idx: __m128i, b: __m128i) -> __m128i {
+    unsafe {
+        let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
+        transmute(simd_select_bitmask(k, permute, a.as_i8x16()))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -161,16 +170,13 @@ pub unsafe fn _mm_mask_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_permutex2var_epi8&expand=4253)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vperm))] //should be vpermi2b
-pub unsafe fn _mm_maskz_permutex2var_epi8(
-    k: __mmask16,
-    a: __m128i,
-    idx: __m128i,
-    b: __m128i,
-) -> __m128i {
-    let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
-    transmute(simd_select_bitmask(k, permute, i8x16::ZERO))
+pub fn _mm_maskz_permutex2var_epi8(k: __mmask16, a: __m128i, idx: __m128i, b: __m128i) -> __m128i {
+    unsafe {
+        let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
+        transmute(simd_select_bitmask(k, permute, i8x16::ZERO))
+    }
 }
 
 /// Shuffle 8-bit integers in a and b across lanes using the corresponding selector and index in idx, and store the results in dst using writemask k (elements are copied from a when the corresponding mask bit is not set).
@@ -178,16 +184,13 @@ pub unsafe fn _mm_maskz_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask2_permutex2var_epi8&expand=4252)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermi2b))]
-pub unsafe fn _mm_mask2_permutex2var_epi8(
-    a: __m128i,
-    idx: __m128i,
-    k: __mmask16,
-    b: __m128i,
-) -> __m128i {
-    let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
-    transmute(simd_select_bitmask(k, permute, idx.as_i8x16()))
+pub fn _mm_mask2_permutex2var_epi8(a: __m128i, idx: __m128i, k: __mmask16, b: __m128i) -> __m128i {
+    unsafe {
+        let permute = _mm_permutex2var_epi8(a, idx, b).as_i8x16();
+        transmute(simd_select_bitmask(k, permute, idx.as_i8x16()))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
@@ -195,10 +198,10 @@ pub unsafe fn _mm_mask2_permutex2var_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_permutexvar_epi8&expand=4316)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm512_permutexvar_epi8(idx: __m512i, a: __m512i) -> __m512i {
-    transmute(vpermb(a.as_i8x64(), idx.as_i8x64()))
+pub fn _mm512_permutexvar_epi8(idx: __m512i, a: __m512i) -> __m512i {
+    unsafe { transmute(vpermb(a.as_i8x64(), idx.as_i8x64())) }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -206,16 +209,18 @@ pub unsafe fn _mm512_permutexvar_epi8(idx: __m512i, a: __m512i) -> __m512i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_permutexvar_epi8&expand=4314)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm512_mask_permutexvar_epi8(
+pub fn _mm512_mask_permutexvar_epi8(
     src: __m512i,
     k: __mmask64,
     idx: __m512i,
     a: __m512i,
 ) -> __m512i {
-    let permute = _mm512_permutexvar_epi8(idx, a).as_i8x64();
-    transmute(simd_select_bitmask(k, permute, src.as_i8x64()))
+    unsafe {
+        let permute = _mm512_permutexvar_epi8(idx, a).as_i8x64();
+        transmute(simd_select_bitmask(k, permute, src.as_i8x64()))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -223,11 +228,13 @@ pub unsafe fn _mm512_mask_permutexvar_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_permutexvar_epi8&expand=4315)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm512_maskz_permutexvar_epi8(k: __mmask64, idx: __m512i, a: __m512i) -> __m512i {
-    let permute = _mm512_permutexvar_epi8(idx, a).as_i8x64();
-    transmute(simd_select_bitmask(k, permute, i8x64::ZERO))
+pub fn _mm512_maskz_permutexvar_epi8(k: __mmask64, idx: __m512i, a: __m512i) -> __m512i {
+    unsafe {
+        let permute = _mm512_permutexvar_epi8(idx, a).as_i8x64();
+        transmute(simd_select_bitmask(k, permute, i8x64::ZERO))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
@@ -235,10 +242,10 @@ pub unsafe fn _mm512_maskz_permutexvar_epi8(k: __mmask64, idx: __m512i, a: __m51
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_permutexvar_epi8&expand=4313)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm256_permutexvar_epi8(idx: __m256i, a: __m256i) -> __m256i {
-    transmute(vpermb256(a.as_i8x32(), idx.as_i8x32()))
+pub fn _mm256_permutexvar_epi8(idx: __m256i, a: __m256i) -> __m256i {
+    unsafe { transmute(vpermb256(a.as_i8x32(), idx.as_i8x32())) }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -246,16 +253,18 @@ pub unsafe fn _mm256_permutexvar_epi8(idx: __m256i, a: __m256i) -> __m256i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_permutexvar_epi8&expand=4311)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm256_mask_permutexvar_epi8(
+pub fn _mm256_mask_permutexvar_epi8(
     src: __m256i,
     k: __mmask32,
     idx: __m256i,
     a: __m256i,
 ) -> __m256i {
-    let permute = _mm256_permutexvar_epi8(idx, a).as_i8x32();
-    transmute(simd_select_bitmask(k, permute, src.as_i8x32()))
+    unsafe {
+        let permute = _mm256_permutexvar_epi8(idx, a).as_i8x32();
+        transmute(simd_select_bitmask(k, permute, src.as_i8x32()))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -263,11 +272,13 @@ pub unsafe fn _mm256_mask_permutexvar_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_permutexvar_epi8&expand=4312)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm256_maskz_permutexvar_epi8(k: __mmask32, idx: __m256i, a: __m256i) -> __m256i {
-    let permute = _mm256_permutexvar_epi8(idx, a).as_i8x32();
-    transmute(simd_select_bitmask(k, permute, i8x32::ZERO))
+pub fn _mm256_maskz_permutexvar_epi8(k: __mmask32, idx: __m256i, a: __m256i) -> __m256i {
+    unsafe {
+        let permute = _mm256_permutexvar_epi8(idx, a).as_i8x32();
+        transmute(simd_select_bitmask(k, permute, i8x32::ZERO))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst.
@@ -275,10 +286,10 @@ pub unsafe fn _mm256_maskz_permutexvar_epi8(k: __mmask32, idx: __m256i, a: __m25
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_permutexvar_epi8&expand=4310)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm_permutexvar_epi8(idx: __m128i, a: __m128i) -> __m128i {
-    transmute(vpermb128(a.as_i8x16(), idx.as_i8x16()))
+pub fn _mm_permutexvar_epi8(idx: __m128i, a: __m128i) -> __m128i {
+    unsafe { transmute(vpermb128(a.as_i8x16(), idx.as_i8x16())) }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -286,16 +297,13 @@ pub unsafe fn _mm_permutexvar_epi8(idx: __m128i, a: __m128i) -> __m128i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_permutexvar_epi8&expand=4308)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm_mask_permutexvar_epi8(
-    src: __m128i,
-    k: __mmask16,
-    idx: __m128i,
-    a: __m128i,
-) -> __m128i {
-    let permute = _mm_permutexvar_epi8(idx, a).as_i8x16();
-    transmute(simd_select_bitmask(k, permute, src.as_i8x16()))
+pub fn _mm_mask_permutexvar_epi8(src: __m128i, k: __mmask16, idx: __m128i, a: __m128i) -> __m128i {
+    unsafe {
+        let permute = _mm_permutexvar_epi8(idx, a).as_i8x16();
+        transmute(simd_select_bitmask(k, permute, src.as_i8x16()))
+    }
 }
 
 /// Shuffle 8-bit integers in a across lanes using the corresponding index in idx, and store the results in dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -303,11 +311,13 @@ pub unsafe fn _mm_mask_permutexvar_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_permutexvar_epi8&expand=4309)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpermb))]
-pub unsafe fn _mm_maskz_permutexvar_epi8(k: __mmask16, idx: __m128i, a: __m128i) -> __m128i {
-    let permute = _mm_permutexvar_epi8(idx, a).as_i8x16();
-    transmute(simd_select_bitmask(k, permute, i8x16::ZERO))
+pub fn _mm_maskz_permutexvar_epi8(k: __mmask16, idx: __m128i, a: __m128i) -> __m128i {
+    unsafe {
+        let permute = _mm_permutexvar_epi8(idx, a).as_i8x16();
+        transmute(simd_select_bitmask(k, permute, i8x16::ZERO))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst.
@@ -315,10 +325,10 @@ pub unsafe fn _mm_maskz_permutexvar_epi8(k: __mmask16, idx: __m128i, a: __m128i)
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_multishift_epi64_epi8&expand=4026)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm512_multishift_epi64_epi8(a: __m512i, b: __m512i) -> __m512i {
-    transmute(vpmultishiftqb(a.as_i8x64(), b.as_i8x64()))
+pub fn _mm512_multishift_epi64_epi8(a: __m512i, b: __m512i) -> __m512i {
+    unsafe { transmute(vpmultishiftqb(a.as_i8x64(), b.as_i8x64())) }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -326,16 +336,18 @@ pub unsafe fn _mm512_multishift_epi64_epi8(a: __m512i, b: __m512i) -> __m512i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_multishift_epi64_epi8&expand=4024)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm512_mask_multishift_epi64_epi8(
+pub fn _mm512_mask_multishift_epi64_epi8(
     src: __m512i,
     k: __mmask64,
     a: __m512i,
     b: __m512i,
 ) -> __m512i {
-    let multishift = _mm512_multishift_epi64_epi8(a, b).as_i8x64();
-    transmute(simd_select_bitmask(k, multishift, src.as_i8x64()))
+    unsafe {
+        let multishift = _mm512_multishift_epi64_epi8(a, b).as_i8x64();
+        transmute(simd_select_bitmask(k, multishift, src.as_i8x64()))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -343,11 +355,13 @@ pub unsafe fn _mm512_mask_multishift_epi64_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_multishift_epi64_epi8&expand=4025)
 #[inline]
 #[target_feature(enable = "avx512vbmi")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm512_maskz_multishift_epi64_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
-    let multishift = _mm512_multishift_epi64_epi8(a, b).as_i8x64();
-    transmute(simd_select_bitmask(k, multishift, i8x64::ZERO))
+pub fn _mm512_maskz_multishift_epi64_epi8(k: __mmask64, a: __m512i, b: __m512i) -> __m512i {
+    unsafe {
+        let multishift = _mm512_multishift_epi64_epi8(a, b).as_i8x64();
+        transmute(simd_select_bitmask(k, multishift, i8x64::ZERO))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst.
@@ -355,10 +369,10 @@ pub unsafe fn _mm512_maskz_multishift_epi64_epi8(k: __mmask64, a: __m512i, b: __
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_multishift_epi64_epi8&expand=4023)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm256_multishift_epi64_epi8(a: __m256i, b: __m256i) -> __m256i {
-    transmute(vpmultishiftqb256(a.as_i8x32(), b.as_i8x32()))
+pub fn _mm256_multishift_epi64_epi8(a: __m256i, b: __m256i) -> __m256i {
+    unsafe { transmute(vpmultishiftqb256(a.as_i8x32(), b.as_i8x32())) }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -366,16 +380,18 @@ pub unsafe fn _mm256_multishift_epi64_epi8(a: __m256i, b: __m256i) -> __m256i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_multishift_epi64_epi8&expand=4021)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm256_mask_multishift_epi64_epi8(
+pub fn _mm256_mask_multishift_epi64_epi8(
     src: __m256i,
     k: __mmask32,
     a: __m256i,
     b: __m256i,
 ) -> __m256i {
-    let multishift = _mm256_multishift_epi64_epi8(a, b).as_i8x32();
-    transmute(simd_select_bitmask(k, multishift, src.as_i8x32()))
+    unsafe {
+        let multishift = _mm256_multishift_epi64_epi8(a, b).as_i8x32();
+        transmute(simd_select_bitmask(k, multishift, src.as_i8x32()))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -383,11 +399,13 @@ pub unsafe fn _mm256_mask_multishift_epi64_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_multishift_epi64_epi8&expand=4022)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm256_maskz_multishift_epi64_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
-    let multishift = _mm256_multishift_epi64_epi8(a, b).as_i8x32();
-    transmute(simd_select_bitmask(k, multishift, i8x32::ZERO))
+pub fn _mm256_maskz_multishift_epi64_epi8(k: __mmask32, a: __m256i, b: __m256i) -> __m256i {
+    unsafe {
+        let multishift = _mm256_multishift_epi64_epi8(a, b).as_i8x32();
+        transmute(simd_select_bitmask(k, multishift, i8x32::ZERO))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst.
@@ -395,10 +413,10 @@ pub unsafe fn _mm256_maskz_multishift_epi64_epi8(k: __mmask32, a: __m256i, b: __
 /// [Intel's documentation](https://software.intel.com/sites/landingpage/IntrinsicsGuide/IntrinsicsGuide/#text=_mm_multishift_epi64_epi8&expand=4020)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm_multishift_epi64_epi8(a: __m128i, b: __m128i) -> __m128i {
-    transmute(vpmultishiftqb128(a.as_i8x16(), b.as_i8x16()))
+pub fn _mm_multishift_epi64_epi8(a: __m128i, b: __m128i) -> __m128i {
+    unsafe { transmute(vpmultishiftqb128(a.as_i8x16(), b.as_i8x16())) }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using writemask k (elements are copied from src when the corresponding mask bit is not set).
@@ -406,16 +424,18 @@ pub unsafe fn _mm_multishift_epi64_epi8(a: __m128i, b: __m128i) -> __m128i {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mask_multishift_epi64_epi8&expand=4018)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm_mask_multishift_epi64_epi8(
+pub fn _mm_mask_multishift_epi64_epi8(
     src: __m128i,
     k: __mmask16,
     a: __m128i,
     b: __m128i,
 ) -> __m128i {
-    let multishift = _mm_multishift_epi64_epi8(a, b).as_i8x16();
-    transmute(simd_select_bitmask(k, multishift, src.as_i8x16()))
+    unsafe {
+        let multishift = _mm_multishift_epi64_epi8(a, b).as_i8x16();
+        transmute(simd_select_bitmask(k, multishift, src.as_i8x16()))
+    }
 }
 
 /// For each 64-bit element in b, select 8 unaligned bytes using a byte-granular shift control within the corresponding 64-bit element of a, and store the 8 assembled bytes to the corresponding 64-bit element of dst using zeromask k (elements are zeroed out when the corresponding mask bit is not set).
@@ -423,15 +443,17 @@ pub unsafe fn _mm_mask_multishift_epi64_epi8(
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_maskz_multishift_epi64_epi8&expand=4019)
 #[inline]
 #[target_feature(enable = "avx512vbmi,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpmultishiftqb))]
-pub unsafe fn _mm_maskz_multishift_epi64_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
-    let multishift = _mm_multishift_epi64_epi8(a, b).as_i8x16();
-    transmute(simd_select_bitmask(k, multishift, i8x16::ZERO))
+pub fn _mm_maskz_multishift_epi64_epi8(k: __mmask16, a: __m128i, b: __m128i) -> __m128i {
+    unsafe {
+        let multishift = _mm_multishift_epi64_epi8(a, b).as_i8x16();
+        transmute(simd_select_bitmask(k, multishift, i8x16::ZERO))
+    }
 }
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.avx512.vpermi2var.qi.512"]
     fn vpermi2b(a: i8x64, idx: i8x64, b: i8x64) -> i8x64;
     #[link_name = "llvm.x86.avx512.vpermi2var.qi.256"]

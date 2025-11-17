@@ -2,9 +2,6 @@
 
 use crate::prelude::*;
 
-pub type c_long = i64;
-pub type c_ulong = u64;
-
 s! {
     pub struct timeval32 {
         pub tv_sec: i32,
@@ -76,14 +73,6 @@ cfg_if! {
             }
         }
         impl Eq for pthread_attr_t {}
-        impl fmt::Debug for pthread_attr_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("pthread_attr_t")
-                    .field("__sig", &self.__sig)
-                    // FIXME: .field("__opaque", &self.__opaque)
-                    .finish()
-            }
-        }
         impl hash::Hash for pthread_attr_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.__sig.hash(state);
@@ -101,13 +90,6 @@ cfg_if! {
             }
         }
         impl Eq for pthread_once_t {}
-        impl fmt::Debug for pthread_once_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("pthread_once_t")
-                    .field("__sig", &self.__sig)
-                    .finish()
-            }
-        }
         impl hash::Hash for pthread_once_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.__sig.hash(state);

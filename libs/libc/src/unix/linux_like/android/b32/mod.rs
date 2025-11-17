@@ -3,8 +3,6 @@ use crate::prelude::*;
 // The following definitions are correct for arm and i686,
 // but may be wrong for mips
 
-pub type c_long = i32;
-pub type c_ulong = u32;
 pub type mode_t = u16;
 pub type off64_t = c_longlong;
 pub type sigset_t = c_ulong;
@@ -14,6 +12,8 @@ pub type __u64 = c_ulonglong;
 pub type __s64 = c_longlong;
 
 s! {
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_mask: crate::sigset_t,
@@ -180,18 +180,6 @@ s! {
 s_no_extra_traits! {
     pub struct sigset64_t {
         __bits: [c_ulong; 2],
-    }
-}
-
-cfg_if! {
-    if #[cfg(feature = "extra_traits")] {
-        impl fmt::Debug for sigset64_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sigset64_t")
-                    .field("__bits", &self.__bits)
-                    .finish()
-            }
-        }
     }
 }
 

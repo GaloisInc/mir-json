@@ -93,7 +93,7 @@ macro_rules! dsp_call {
     };
 }
 
-extern "unadjusted" {
+unsafe extern "unadjusted" {
     #[link_name = "llvm.arm.qadd8"]
     fn arm_qadd8(a: i32, b: i32) -> i32;
 
@@ -500,7 +500,7 @@ pub unsafe fn __usada8(a: int8x4_t, b: int8x4_t, c: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_arch::simd::{i16x2, i8x4, u8x4};
+    use crate::core_arch::simd::{i8x4, i16x2, u8x4};
     use std::mem::transmute;
     use stdarch_test::simd_test;
 

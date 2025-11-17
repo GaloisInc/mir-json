@@ -69,9 +69,8 @@ s! {
         // This is normally "struct vnode".
         /// Pointer to executable file.
         pub ki_textvp: *mut c_void,
-        // This is normally "struct filedesc".
         /// Pointer to open file info.
-        pub ki_fd: *mut c_void,
+        pub ki_fd: *mut crate::filedesc,
         // This is normally "struct vmspace".
         /// Pointer to kernel vmspace struct.
         pub ki_vmspace: *mut c_void,
@@ -227,6 +226,8 @@ s! {
         // This is normally "struct pwddesc".
         /// Pointer to process paths info.
         pub ki_pd: *mut c_void,
+        /// Address of the ext err msg place
+        pub ki_uerrmsg: *mut c_void,
         pub ki_spareptrs: [*mut c_void; crate::KI_NSPARE_PTR],
         pub ki_sparelongs: [c_long; crate::KI_NSPARE_LONG],
         /// PS_* flags.
@@ -266,7 +267,8 @@ s! {
         pub st_blksize: crate::blksize_t,
         pub st_flags: crate::fflags_t,
         pub st_gen: u64,
-        pub st_spare: [u64; 10],
+        pub st_filerev: u64,
+        pub st_spare: [u64; 9],
     }
 }
 
@@ -354,29 +356,6 @@ cfg_if! {
             }
         }
         impl Eq for statfs {}
-        impl fmt::Debug for statfs {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("statfs")
-                    .field("f_bsize", &self.f_bsize)
-                    .field("f_iosize", &self.f_iosize)
-                    .field("f_blocks", &self.f_blocks)
-                    .field("f_bfree", &self.f_bfree)
-                    .field("f_bavail", &self.f_bavail)
-                    .field("f_files", &self.f_files)
-                    .field("f_ffree", &self.f_ffree)
-                    .field("f_syncwrites", &self.f_syncwrites)
-                    .field("f_asyncwrites", &self.f_asyncwrites)
-                    .field("f_syncreads", &self.f_syncreads)
-                    .field("f_asyncreads", &self.f_asyncreads)
-                    .field("f_namemax", &self.f_namemax)
-                    .field("f_owner", &self.f_owner)
-                    .field("f_fsid", &self.f_fsid)
-                    .field("f_fstypename", &self.f_fstypename)
-                    .field("f_mntfromname", &&self.f_mntfromname[..])
-                    .field("f_mntonname", &&self.f_mntonname[..])
-                    .finish()
-            }
-        }
         impl hash::Hash for statfs {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.f_version.hash(state);
@@ -417,18 +396,6 @@ cfg_if! {
             }
         }
         impl Eq for dirent {}
-        impl fmt::Debug for dirent {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("dirent")
-                    .field("d_fileno", &self.d_fileno)
-                    .field("d_off", &self.d_off)
-                    .field("d_reclen", &self.d_reclen)
-                    .field("d_type", &self.d_type)
-                    .field("d_namlen", &self.d_namlen)
-                    .field("d_name", &&self.d_name[..self.d_namlen as _])
-                    .finish()
-            }
-        }
         impl hash::Hash for dirent {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.d_fileno.hash(state);
@@ -456,22 +423,6 @@ cfg_if! {
             }
         }
         impl Eq for vnstat {}
-        impl fmt::Debug for vnstat {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let self_vn_devname: &[c_char] = &self.vn_devname;
-
-                f.debug_struct("vnstat")
-                    .field("vn_fileid", &self.vn_fileid)
-                    .field("vn_size", &self.vn_size)
-                    .field("vn_dev", &self.vn_dev)
-                    .field("vn_fsid", &self.vn_fsid)
-                    .field("vn_mntdir", &self.vn_mntdir)
-                    .field("vn_type", &self.vn_type)
-                    .field("vn_mode", &self.vn_mode)
-                    .field("vn_devname", &self_vn_devname)
-                    .finish()
-            }
-        }
         impl hash::Hash for vnstat {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 let self_vn_devname: &[c_char] = &self.vn_devname;
@@ -496,7 +447,7 @@ pub const KF_TYPE_EVENTFD: c_int = 13;
 
 /// max length of devicename
 pub const SPECNAMELEN: c_int = 255;
-pub const KI_NSPARE_PTR: usize = 5;
+pub const KI_NSPARE_PTR: usize = 4;
 
 /// domainset policies
 pub const DOMAINSET_POLICY_INVALID: c_int = 0;
@@ -518,14 +469,12 @@ safe_f! {
         dev |= ((minor & 0xffff00ff) as dev_t) << 0;
         dev
     }
-}
 
-f! {
-    pub fn major(dev: crate::dev_t) -> c_int {
+    pub {const} fn major(dev: crate::dev_t) -> c_int {
         (((dev >> 32) & 0xffffff00) | ((dev >> 8) & 0xff)) as c_int
     }
 
-    pub fn minor(dev: crate::dev_t) -> c_int {
+    pub {const} fn minor(dev: crate::dev_t) -> c_int {
         (((dev >> 24) & 0xff00) | (dev & 0xffff00ff)) as c_int
     }
 }

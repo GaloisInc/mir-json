@@ -11,9 +11,9 @@ use stdarch_test::assert_instr;
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtsd_i64&expand=1792)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsd2si))]
-pub unsafe fn _mm_cvtsd_i64(a: __m128d) -> i64 {
+pub fn _mm_cvtsd_i64(a: __m128d) -> i64 {
     _mm_cvtsd_si64(a)
 }
 
@@ -22,9 +22,9 @@ pub unsafe fn _mm_cvtsd_i64(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtss_i64&expand=1894)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtss2si))]
-pub unsafe fn _mm_cvtss_i64(a: __m128) -> i64 {
+pub fn _mm_cvtss_i64(a: __m128) -> i64 {
     _mm_cvtss_si64(a)
 }
 
@@ -33,10 +33,10 @@ pub unsafe fn _mm_cvtss_i64(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtss_u64&expand=1902)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtss2usi))]
-pub unsafe fn _mm_cvtss_u64(a: __m128) -> u64 {
-    vcvtss2usi64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvtss_u64(a: __m128) -> u64 {
+    unsafe { vcvtss2usi64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to an unsigned 64-bit integer, and store the result in dst.
@@ -44,10 +44,10 @@ pub unsafe fn _mm_cvtss_u64(a: __m128) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtsd_u64&expand=1800)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsd2usi))]
-pub unsafe fn _mm_cvtsd_u64(a: __m128d) -> u64 {
-    vcvtsd2usi64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvtsd_u64(a: __m128d) -> u64 {
+    unsafe { vcvtsd2usi64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the signed 64-bit integer b to a single-precision (32-bit) floating-point element, store the result in the lower element of dst, and copy the upper 3 packed elements from a to the upper elements of dst.
@@ -55,11 +55,13 @@ pub unsafe fn _mm_cvtsd_u64(a: __m128d) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=mm_cvti64_ss&expand=1643)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2ss))]
-pub unsafe fn _mm_cvti64_ss(a: __m128, b: i64) -> __m128 {
-    let b = b as f32;
-    simd_insert!(a, 0, b)
+pub fn _mm_cvti64_ss(a: __m128, b: i64) -> __m128 {
+    unsafe {
+        let b = b as f32;
+        simd_insert!(a, 0, b)
+    }
 }
 
 /// Convert the signed 64-bit integer b to a double-precision (64-bit) floating-point element, store the result in the lower element of dst, and copy the upper element from a to the upper element of dst.
@@ -67,11 +69,13 @@ pub unsafe fn _mm_cvti64_ss(a: __m128, b: i64) -> __m128 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvti64_sd&expand=1644)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2sd))]
-pub unsafe fn _mm_cvti64_sd(a: __m128d, b: i64) -> __m128d {
-    let b = b as f64;
-    simd_insert!(a, 0, b)
+pub fn _mm_cvti64_sd(a: __m128d, b: i64) -> __m128d {
+    unsafe {
+        let b = b as f64;
+        simd_insert!(a, 0, b)
+    }
 }
 
 /// Convert the unsigned 64-bit integer b to a single-precision (32-bit) floating-point element, store the result in the lower element of dst, and copy the upper 3 packed elements from a to the upper elements of dst.
@@ -79,11 +83,13 @@ pub unsafe fn _mm_cvti64_sd(a: __m128d, b: i64) -> __m128d {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtu64_ss&expand=2035)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtusi2ss))]
-pub unsafe fn _mm_cvtu64_ss(a: __m128, b: u64) -> __m128 {
-    let b = b as f32;
-    simd_insert!(a, 0, b)
+pub fn _mm_cvtu64_ss(a: __m128, b: u64) -> __m128 {
+    unsafe {
+        let b = b as f32;
+        simd_insert!(a, 0, b)
+    }
 }
 
 /// Convert the unsigned 64-bit integer b to a double-precision (64-bit) floating-point element, store the result in the lower element of dst, and copy the upper element from a to the upper element of dst.
@@ -91,11 +97,13 @@ pub unsafe fn _mm_cvtu64_ss(a: __m128, b: u64) -> __m128 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtu64_sd&expand=2034)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtusi2sd))]
-pub unsafe fn _mm_cvtu64_sd(a: __m128d, b: u64) -> __m128d {
-    let b = b as f64;
-    simd_insert!(a, 0, b)
+pub fn _mm_cvtu64_sd(a: __m128d, b: u64) -> __m128d {
+    unsafe {
+        let b = b as f64;
+        simd_insert!(a, 0, b)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.
@@ -103,10 +111,10 @@ pub unsafe fn _mm_cvtu64_sd(a: __m128d, b: u64) -> __m128d {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvttsd_i64&expand=2016)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttsd2si))]
-pub unsafe fn _mm_cvttsd_i64(a: __m128d) -> i64 {
-    vcvttsd2si64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvttsd_i64(a: __m128d) -> i64 {
+    unsafe { vcvttsd2si64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to an unsigned 64-bit integer with truncation, and store the result in dst.
@@ -114,10 +122,10 @@ pub unsafe fn _mm_cvttsd_i64(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvttsd_u64&expand=2021)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttsd2usi))]
-pub unsafe fn _mm_cvttsd_u64(a: __m128d) -> u64 {
-    vcvttsd2usi64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvttsd_u64(a: __m128d) -> u64 {
+    unsafe { vcvttsd2usi64(a.as_f64x2(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.
@@ -125,10 +133,10 @@ pub unsafe fn _mm_cvttsd_u64(a: __m128d) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=#text=_mm_cvttss_i64&expand=2023)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttss2si))]
-pub unsafe fn _mm_cvttss_i64(a: __m128) -> i64 {
-    vcvttss2si64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvttss_i64(a: __m128) -> i64 {
+    unsafe { vcvttss2si64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to an unsigned 64-bit integer with truncation, and store the result in dst.
@@ -136,10 +144,10 @@ pub unsafe fn _mm_cvttss_i64(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvttss_u64&expand=2027)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttss2usi))]
-pub unsafe fn _mm_cvttss_u64(a: __m128) -> u64 {
-    vcvttss2usi64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION)
+pub fn _mm_cvttss_u64(a: __m128) -> u64 {
+    unsafe { vcvttss2usi64(a.as_f32x4(), _MM_FROUND_CUR_DIRECTION) }
 }
 
 /// Convert the signed 64-bit integer b to a double-precision (64-bit) floating-point element, store the result in the lower element of dst, and copy the upper element from a to the upper element of dst.
@@ -153,14 +161,16 @@ pub unsafe fn _mm_cvttss_u64(a: __m128) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundi64_sd&expand=1313)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2sd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> __m128d {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    let r = vcvtsi2sd64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> __m128d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        let r = vcvtsi2sd64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the signed 64-bit integer b to a double-precision (64-bit) floating-point element, store the result in the lower element of dst, and copy the upper element from a to the upper element of dst.
@@ -174,14 +184,16 @@ pub unsafe fn _mm_cvt_roundi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> __
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundsi64_sd&expand=1367)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2sd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundsi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> __m128d {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    let r = vcvtsi2sd64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundsi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> __m128d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        let r = vcvtsi2sd64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the signed 64-bit integer b to a single-precision (32-bit) floating-point element, store the result in the lower element of dst, and copy the upper 3 packed elements from a to the upper elements of dst.
@@ -195,14 +207,16 @@ pub unsafe fn _mm_cvt_roundsi64_sd<const ROUNDING: i32>(a: __m128d, b: i64) -> _
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundi64_ss&expand=1314)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2ss, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __m128 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    let r = vcvtsi2ss64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __m128 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        let r = vcvtsi2ss64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the unsigned 64-bit integer b to a double-precision (64-bit) floating-point element, store the result in the lower element of dst, and copy the upper element from a to the upper element of dst.\
@@ -216,14 +230,16 @@ pub unsafe fn _mm_cvt_roundi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __m
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundu64_sd&expand=1379)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtusi2sd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundu64_sd<const ROUNDING: i32>(a: __m128d, b: u64) -> __m128d {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    let r = vcvtusi2sd64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundu64_sd<const ROUNDING: i32>(a: __m128d, b: u64) -> __m128d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        let r = vcvtusi2sd64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the signed 64-bit integer b to a single-precision (32-bit) floating-point element, store the result in the lower element of dst, and copy the upper 3 packed elements from a to the upper elements of dst.
@@ -237,14 +253,16 @@ pub unsafe fn _mm_cvt_roundu64_sd<const ROUNDING: i32>(a: __m128d, b: u64) -> __
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundsi64_ss&expand=1368)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsi2ss, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundsi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __m128 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    let r = vcvtsi2ss64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundsi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __m128 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        let r = vcvtsi2ss64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the unsigned 64-bit integer b to a single-precision (32-bit) floating-point element, store the result in the lower element of dst, and copy the upper 3 packed elements from a to the upper elements of dst.\
@@ -258,14 +276,16 @@ pub unsafe fn _mm_cvt_roundsi64_ss<const ROUNDING: i32>(a: __m128, b: i64) -> __
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundu64_ss&expand=1380)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtusi2ss, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm_cvt_roundu64_ss<const ROUNDING: i32>(a: __m128, b: u64) -> __m128 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    let r = vcvtusi2ss64(a, b, ROUNDING);
-    transmute(r)
+pub fn _mm_cvt_roundu64_ss<const ROUNDING: i32>(a: __m128, b: u64) -> __m128 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        let r = vcvtusi2ss64(a, b, ROUNDING);
+        transmute(r)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to a 64-bit integer, and store the result in dst.\
@@ -279,13 +299,15 @@ pub unsafe fn _mm_cvt_roundu64_ss<const ROUNDING: i32>(a: __m128, b: u64) -> __m
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundsd_si64&expand=1360)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsd2si, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundsd_si64<const ROUNDING: i32>(a: __m128d) -> i64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    vcvtsd2si64(a, ROUNDING)
+pub fn _mm_cvt_roundsd_si64<const ROUNDING: i32>(a: __m128d) -> i64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        vcvtsd2si64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to a 64-bit integer, and store the result in dst.\
@@ -299,13 +321,15 @@ pub unsafe fn _mm_cvt_roundsd_si64<const ROUNDING: i32>(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundsd_i64&expand=1358)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsd2si, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundsd_i64<const ROUNDING: i32>(a: __m128d) -> i64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    vcvtsd2si64(a, ROUNDING)
+pub fn _mm_cvt_roundsd_i64<const ROUNDING: i32>(a: __m128d) -> i64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        vcvtsd2si64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to an unsigned 64-bit integer, and store the result in dst.\
@@ -319,13 +343,15 @@ pub unsafe fn _mm_cvt_roundsd_i64<const ROUNDING: i32>(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundsd_u64&expand=1365)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtsd2usi, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundsd_u64<const ROUNDING: i32>(a: __m128d) -> u64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f64x2();
-    vcvtsd2usi64(a, ROUNDING)
+pub fn _mm_cvt_roundsd_u64<const ROUNDING: i32>(a: __m128d) -> u64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f64x2();
+        vcvtsd2usi64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to a 64-bit integer, and store the result in dst.\
@@ -339,13 +365,15 @@ pub unsafe fn _mm_cvt_roundsd_u64<const ROUNDING: i32>(a: __m128d) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundss_si64&expand=1375)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtss2si, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundss_si64<const ROUNDING: i32>(a: __m128) -> i64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    vcvtss2si64(a, ROUNDING)
+pub fn _mm_cvt_roundss_si64<const ROUNDING: i32>(a: __m128) -> i64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        vcvtss2si64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to a 64-bit integer, and store the result in dst.\
@@ -359,13 +387,15 @@ pub unsafe fn _mm_cvt_roundss_si64<const ROUNDING: i32>(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundss_i64&expand=1370)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtss2si, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundss_i64<const ROUNDING: i32>(a: __m128) -> i64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    vcvtss2si64(a, ROUNDING)
+pub fn _mm_cvt_roundss_i64<const ROUNDING: i32>(a: __m128) -> i64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        vcvtss2si64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to an unsigned 64-bit integer, and store the result in dst.\
@@ -379,13 +409,15 @@ pub unsafe fn _mm_cvt_roundss_i64<const ROUNDING: i32>(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvt_roundss_u64&expand=1377)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvtss2usi, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvt_roundss_u64<const ROUNDING: i32>(a: __m128) -> u64 {
-    static_assert_rounding!(ROUNDING);
-    let a = a.as_f32x4();
-    vcvtss2usi64(a, ROUNDING)
+pub fn _mm_cvt_roundss_u64<const ROUNDING: i32>(a: __m128) -> u64 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let a = a.as_f32x4();
+        vcvtss2usi64(a, ROUNDING)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.\
@@ -394,13 +426,15 @@ pub unsafe fn _mm_cvt_roundss_u64<const ROUNDING: i32>(a: __m128) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundsd_si64&expand=1931)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttsd2si, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundsd_si64<const SAE: i32>(a: __m128d) -> i64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f64x2();
-    vcvttsd2si64(a, SAE)
+pub fn _mm_cvtt_roundsd_si64<const SAE: i32>(a: __m128d) -> i64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f64x2();
+        vcvttsd2si64(a, SAE)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.\
@@ -409,13 +443,15 @@ pub unsafe fn _mm_cvtt_roundsd_si64<const SAE: i32>(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundsd_i64&expand=1929)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttsd2si, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundsd_i64<const SAE: i32>(a: __m128d) -> i64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f64x2();
-    vcvttsd2si64(a, SAE)
+pub fn _mm_cvtt_roundsd_i64<const SAE: i32>(a: __m128d) -> i64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f64x2();
+        vcvttsd2si64(a, SAE)
+    }
 }
 
 /// Convert the lower double-precision (64-bit) floating-point element in a to an unsigned 64-bit integer with truncation, and store the result in dst.\
@@ -424,13 +460,15 @@ pub unsafe fn _mm_cvtt_roundsd_i64<const SAE: i32>(a: __m128d) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundsd_u64&expand=1933)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttsd2usi, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundsd_u64<const SAE: i32>(a: __m128d) -> u64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f64x2();
-    vcvttsd2usi64(a, SAE)
+pub fn _mm_cvtt_roundsd_u64<const SAE: i32>(a: __m128d) -> u64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f64x2();
+        vcvttsd2usi64(a, SAE)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.\
@@ -439,13 +477,15 @@ pub unsafe fn _mm_cvtt_roundsd_u64<const SAE: i32>(a: __m128d) -> u64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundss_i64&expand=1935)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttss2si, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundss_i64<const SAE: i32>(a: __m128) -> i64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f32x4();
-    vcvttss2si64(a, SAE)
+pub fn _mm_cvtt_roundss_i64<const SAE: i32>(a: __m128) -> i64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f32x4();
+        vcvttss2si64(a, SAE)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to a 64-bit integer with truncation, and store the result in dst.\
@@ -454,13 +494,15 @@ pub unsafe fn _mm_cvtt_roundss_i64<const SAE: i32>(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundss_si64&expand=1937)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttss2si, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundss_si64<const SAE: i32>(a: __m128) -> i64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f32x4();
-    vcvttss2si64(a, SAE)
+pub fn _mm_cvtt_roundss_si64<const SAE: i32>(a: __m128) -> i64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f32x4();
+        vcvttss2si64(a, SAE)
+    }
 }
 
 /// Convert the lower single-precision (32-bit) floating-point element in a to an unsigned 64-bit integer with truncation, and store the result in dst.\
@@ -469,17 +511,19 @@ pub unsafe fn _mm_cvtt_roundss_si64<const SAE: i32>(a: __m128) -> i64 {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cvtt_roundss_u64&expand=1939)
 #[inline]
 #[target_feature(enable = "avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vcvttss2usi, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-pub unsafe fn _mm_cvtt_roundss_u64<const SAE: i32>(a: __m128) -> u64 {
-    static_assert_sae!(SAE);
-    let a = a.as_f32x4();
-    vcvttss2usi64(a, SAE)
+pub fn _mm_cvtt_roundss_u64<const SAE: i32>(a: __m128) -> u64 {
+    unsafe {
+        static_assert_sae!(SAE);
+        let a = a.as_f32x4();
+        vcvttss2usi64(a, SAE)
+    }
 }
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.avx512.vcvtss2si64"]
     fn vcvtss2si64(a: f32x4, rounding: i32) -> i64;
     #[link_name = "llvm.x86.avx512.vcvtss2usi64"]
@@ -7397,7 +7441,7 @@ mod tests {
         let arr: [f64; 128] = core::array::from_fn(|i| i as f64);
         // A multiplier of 8 is word-addressing
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i32gather_pd::<8>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i32gather_pd::<8>(index, arr.as_ptr());
         assert_eq_m512d(r, _mm512_setr_pd(0., 16., 32., 48., 64., 80., 96., 112.));
     }
 
@@ -7408,7 +7452,7 @@ mod tests {
         let mask = 0b10101010;
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 8 is word-addressing
-        let r = _mm512_mask_i32gather_pd::<8>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i32gather_pd::<8>(src, mask, index, arr.as_ptr());
         assert_eq_m512d(r, _mm512_setr_pd(2., 16., 2., 48., 2., 80., 2., 112.));
     }
 
@@ -7417,7 +7461,7 @@ mod tests {
         let arr: [f64; 128] = core::array::from_fn(|i| i as f64);
         // A multiplier of 8 is word-addressing
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i64gather_pd::<8>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i64gather_pd::<8>(index, arr.as_ptr());
         assert_eq_m512d(r, _mm512_setr_pd(0., 16., 32., 48., 64., 80., 96., 112.));
     }
 
@@ -7428,7 +7472,7 @@ mod tests {
         let mask = 0b10101010;
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 8 is word-addressing
-        let r = _mm512_mask_i64gather_pd::<8>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i64gather_pd::<8>(src, mask, index, arr.as_ptr());
         assert_eq_m512d(r, _mm512_setr_pd(2., 16., 2., 48., 2., 80., 2., 112.));
     }
 
@@ -7438,7 +7482,7 @@ mod tests {
         // A multiplier of 4 is word-addressing
         #[rustfmt::skip]
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i64gather_ps::<4>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i64gather_ps::<4>(index, arr.as_ptr());
         assert_eq_m256(r, _mm256_setr_ps(0., 16., 32., 48., 64., 80., 96., 112.));
     }
 
@@ -7450,7 +7494,7 @@ mod tests {
         #[rustfmt::skip]
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 4 is word-addressing
-        let r = _mm512_mask_i64gather_ps::<4>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i64gather_ps::<4>(src, mask, index, arr.as_ptr());
         assert_eq_m256(r, _mm256_setr_ps(2., 16., 2., 48., 2., 80., 2., 112.));
     }
 
@@ -7462,7 +7506,7 @@ mod tests {
         }
         // A multiplier of 8 is word-addressing
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i32gather_epi64::<8>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i32gather_epi64::<8>(index, arr.as_ptr());
         assert_eq_m512i(r, _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112));
     }
 
@@ -7476,7 +7520,7 @@ mod tests {
         let mask = 0b10101010;
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 8 is word-addressing
-        let r = _mm512_mask_i32gather_epi64::<8>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i32gather_epi64::<8>(src, mask, index, arr.as_ptr());
         assert_eq_m512i(r, _mm512_setr_epi64(2, 16, 2, 48, 2, 80, 2, 112));
     }
 
@@ -7488,7 +7532,7 @@ mod tests {
         }
         // A multiplier of 8 is word-addressing
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i64gather_epi64::<8>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i64gather_epi64::<8>(index, arr.as_ptr());
         assert_eq_m512i(r, _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112));
     }
 
@@ -7502,7 +7546,7 @@ mod tests {
         let mask = 0b10101010;
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 8 is word-addressing
-        let r = _mm512_mask_i64gather_epi64::<8>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i64gather_epi64::<8>(src, mask, index, arr.as_ptr());
         assert_eq_m512i(r, _mm512_setr_epi64(2, 16, 2, 48, 2, 80, 2, 112));
     }
 
@@ -7514,7 +7558,7 @@ mod tests {
         }
         // A multiplier of 8 is word-addressing
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
-        let r = _mm512_i64gather_epi32::<8>(index, arr.as_ptr() as *const u8);
+        let r = _mm512_i64gather_epi32::<8>(index, arr.as_ptr() as *const i32);
         assert_eq_m256i(r, _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112));
     }
 
@@ -7528,7 +7572,7 @@ mod tests {
         let mask = 0b10101010;
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         // A multiplier of 8 is word-addressing
-        let r = _mm512_mask_i64gather_epi32::<8>(src, mask, index, arr.as_ptr() as *const u8);
+        let r = _mm512_mask_i64gather_epi32::<8>(src, mask, index, arr.as_ptr() as *const i32);
         assert_eq_m256i(r, _mm256_setr_epi32(2, 16, 2, 48, 2, 80, 2, 112));
     }
 
@@ -7538,7 +7582,7 @@ mod tests {
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_pd(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 8 is word-addressing
-        _mm512_i32scatter_pd::<8>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i32scatter_pd::<8>(arr.as_mut_ptr(), index, src);
         let mut expected = [0f64; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as f64;
@@ -7553,7 +7597,7 @@ mod tests {
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_pd(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 8 is word-addressing
-        _mm512_mask_i32scatter_pd::<8>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i32scatter_pd::<8>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0f64; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2. * (i + 1) as f64;
@@ -7567,7 +7611,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_pd(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 8 is word-addressing
-        _mm512_i64scatter_pd::<8>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i64scatter_pd::<8>(arr.as_mut_ptr(), index, src);
         let mut expected = [0f64; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as f64;
@@ -7582,7 +7626,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_pd(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 8 is word-addressing
-        _mm512_mask_i64scatter_pd::<8>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i64scatter_pd::<8>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0f64; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2. * (i + 1) as f64;
@@ -7596,7 +7640,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm256_setr_ps(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 4 is word-addressing
-        _mm512_i64scatter_ps::<4>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i64scatter_ps::<4>(arr.as_mut_ptr(), index, src);
         let mut expected = [0f32; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as f32;
@@ -7611,7 +7655,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm256_setr_ps(1., 2., 3., 4., 5., 6., 7., 8.);
         // A multiplier of 4 is word-addressing
-        _mm512_mask_i64scatter_ps::<4>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i64scatter_ps::<4>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0f32; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2. * (i + 1) as f32;
@@ -7625,7 +7669,7 @@ mod tests {
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_epi64(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 8 is word-addressing
-        _mm512_i32scatter_epi64::<8>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i32scatter_epi64::<8>(arr.as_mut_ptr(), index, src);
         let mut expected = [0i64; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as i64;
@@ -7640,7 +7684,7 @@ mod tests {
         let index = _mm256_setr_epi32(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_epi64(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 8 is word-addressing
-        _mm512_mask_i32scatter_epi64::<8>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i32scatter_epi64::<8>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0i64; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2 * (i + 1) as i64;
@@ -7654,7 +7698,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_epi64(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 8 is word-addressing
-        _mm512_i64scatter_epi64::<8>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i64scatter_epi64::<8>(arr.as_mut_ptr(), index, src);
         let mut expected = [0i64; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as i64;
@@ -7669,7 +7713,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm512_setr_epi64(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 8 is word-addressing
-        _mm512_mask_i64scatter_epi64::<8>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i64scatter_epi64::<8>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0i64; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2 * (i + 1) as i64;
@@ -7683,7 +7727,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 4 is word-addressing
-        _mm512_i64scatter_epi32::<4>(arr.as_mut_ptr() as *mut u8, index, src);
+        _mm512_i64scatter_epi32::<4>(arr.as_mut_ptr(), index, src);
         let mut expected = [0i32; 128];
         for i in 0..8 {
             expected[i * 16] = (i + 1) as i32;
@@ -7698,7 +7742,7 @@ mod tests {
         let index = _mm512_setr_epi64(0, 16, 32, 48, 64, 80, 96, 112);
         let src = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 8);
         // A multiplier of 4 is word-addressing
-        _mm512_mask_i64scatter_epi32::<4>(arr.as_mut_ptr() as *mut u8, mask, index, src);
+        _mm512_mask_i64scatter_epi32::<4>(arr.as_mut_ptr(), mask, index, src);
         let mut expected = [0i32; 128];
         for i in 0..4 {
             expected[i * 32 + 16] = 2 * (i + 1) as i32;
@@ -7710,7 +7754,7 @@ mod tests {
     unsafe fn test_mm512_i32logather_epi64() {
         let base_addr: [i64; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
-        let r = _mm512_i32logather_epi64::<8>(vindex, base_addr.as_ptr().cast());
+        let r = _mm512_i32logather_epi64::<8>(vindex, base_addr.as_ptr());
         let expected = _mm512_setr_epi64(2, 3, 4, 5, 6, 7, 8, 1);
         assert_eq_m512i(expected, r);
     }
@@ -7720,8 +7764,7 @@ mod tests {
         let base_addr: [i64; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let src = _mm512_setr_epi64(9, 10, 11, 12, 13, 14, 15, 16);
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
-        let r =
-            _mm512_mask_i32logather_epi64::<8>(src, 0b01010101, vindex, base_addr.as_ptr().cast());
+        let r = _mm512_mask_i32logather_epi64::<8>(src, 0b01010101, vindex, base_addr.as_ptr());
         let expected = _mm512_setr_epi64(2, 10, 4, 12, 6, 14, 8, 16);
         assert_eq_m512i(expected, r);
     }
@@ -7730,7 +7773,7 @@ mod tests {
     unsafe fn test_mm512_i32logather_pd() {
         let base_addr: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
-        let r = _mm512_i32logather_pd::<8>(vindex, base_addr.as_ptr().cast());
+        let r = _mm512_i32logather_pd::<8>(vindex, base_addr.as_ptr());
         let expected = _mm512_setr_pd(2., 3., 4., 5., 6., 7., 8., 1.);
         assert_eq_m512d(expected, r);
     }
@@ -7740,7 +7783,7 @@ mod tests {
         let base_addr: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
         let src = _mm512_setr_pd(9., 10., 11., 12., 13., 14., 15., 16.);
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
-        let r = _mm512_mask_i32logather_pd::<8>(src, 0b01010101, vindex, base_addr.as_ptr().cast());
+        let r = _mm512_mask_i32logather_pd::<8>(src, 0b01010101, vindex, base_addr.as_ptr());
         let expected = _mm512_setr_pd(2., 10., 4., 12., 6., 14., 8., 16.);
         assert_eq_m512d(expected, r);
     }
@@ -7750,7 +7793,7 @@ mod tests {
         let mut base_addr: [i64; 8] = [0; 8];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
         let src = _mm512_setr_epi64(2, 3, 4, 5, 6, 7, 8, 1);
-        _mm512_i32loscatter_epi64::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm512_i32loscatter_epi64::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(expected, base_addr);
     }
@@ -7760,7 +7803,7 @@ mod tests {
         let mut base_addr: [i64; 8] = [0; 8];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
         let src = _mm512_setr_epi64(2, 3, 4, 5, 6, 7, 8, 1);
-        _mm512_mask_i32loscatter_epi64::<8>(base_addr.as_mut_ptr().cast(), 0b01010101, vindex, src);
+        _mm512_mask_i32loscatter_epi64::<8>(base_addr.as_mut_ptr(), 0b01010101, vindex, src);
         let expected = [0, 2, 0, 4, 0, 6, 0, 8];
         assert_eq!(expected, base_addr);
     }
@@ -7770,7 +7813,7 @@ mod tests {
         let mut base_addr: [f64; 8] = [0.; 8];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
         let src = _mm512_setr_pd(2., 3., 4., 5., 6., 7., 8., 1.);
-        _mm512_i32loscatter_pd::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm512_i32loscatter_pd::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4., 5., 6., 7., 8.];
         assert_eq!(expected, base_addr);
     }
@@ -7780,7 +7823,7 @@ mod tests {
         let mut base_addr: [f64; 8] = [0.; 8];
         let vindex = _mm512_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0, -1, -1, -1, -1, -1, -1, -1, -1);
         let src = _mm512_setr_pd(2., 3., 4., 5., 6., 7., 8., 1.);
-        _mm512_mask_i32loscatter_pd::<8>(base_addr.as_mut_ptr().cast(), 0b01010101, vindex, src);
+        _mm512_mask_i32loscatter_pd::<8>(base_addr.as_mut_ptr(), 0b01010101, vindex, src);
         let expected = [0., 2., 0., 4., 0., 6., 0., 8.];
         assert_eq!(expected, base_addr);
     }
@@ -7790,7 +7833,7 @@ mod tests {
         let base_addr: [i32; 4] = [1, 2, 3, 4];
         let src = _mm_setr_epi32(5, 6, 7, 8);
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
-        let r = _mm_mmask_i32gather_epi32::<4>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i32gather_epi32::<4>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm_setr_epi32(2, 6, 4, 8);
         assert_eq_m128i(expected, r);
     }
@@ -7800,7 +7843,7 @@ mod tests {
         let base_addr: [i64; 2] = [1, 2];
         let src = _mm_setr_epi64x(5, 6);
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
-        let r = _mm_mmask_i32gather_epi64::<8>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i32gather_epi64::<8>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_epi64x(2, 6);
         assert_eq_m128i(expected, r);
     }
@@ -7810,7 +7853,7 @@ mod tests {
         let base_addr: [f64; 2] = [1., 2.];
         let src = _mm_setr_pd(5., 6.);
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
-        let r = _mm_mmask_i32gather_pd::<8>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i32gather_pd::<8>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_pd(2., 6.);
         assert_eq_m128d(expected, r);
     }
@@ -7820,7 +7863,7 @@ mod tests {
         let base_addr: [f32; 4] = [1., 2., 3., 4.];
         let src = _mm_setr_ps(5., 6., 7., 8.);
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
-        let r = _mm_mmask_i32gather_ps::<4>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i32gather_ps::<4>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm_setr_ps(2., 6., 4., 8.);
         assert_eq_m128(expected, r);
     }
@@ -7830,7 +7873,7 @@ mod tests {
         let base_addr: [i32; 2] = [1, 2];
         let src = _mm_setr_epi32(5, 6, 7, 8);
         let vindex = _mm_setr_epi64x(1, 0);
-        let r = _mm_mmask_i64gather_epi32::<4>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i64gather_epi32::<4>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_epi32(2, 6, 0, 0);
         assert_eq_m128i(expected, r);
     }
@@ -7840,7 +7883,7 @@ mod tests {
         let base_addr: [i64; 2] = [1, 2];
         let src = _mm_setr_epi64x(5, 6);
         let vindex = _mm_setr_epi64x(1, 0);
-        let r = _mm_mmask_i64gather_epi64::<8>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i64gather_epi64::<8>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_epi64x(2, 6);
         assert_eq_m128i(expected, r);
     }
@@ -7850,7 +7893,7 @@ mod tests {
         let base_addr: [f64; 2] = [1., 2.];
         let src = _mm_setr_pd(5., 6.);
         let vindex = _mm_setr_epi64x(1, 0);
-        let r = _mm_mmask_i64gather_pd::<8>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i64gather_pd::<8>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_pd(2., 6.);
         assert_eq_m128d(expected, r);
     }
@@ -7860,7 +7903,7 @@ mod tests {
         let base_addr: [f32; 2] = [1., 2.];
         let src = _mm_setr_ps(5., 6., 7., 8.);
         let vindex = _mm_setr_epi64x(1, 0);
-        let r = _mm_mmask_i64gather_ps::<4>(src, 0b01, vindex, base_addr.as_ptr().cast());
+        let r = _mm_mmask_i64gather_ps::<4>(src, 0b01, vindex, base_addr.as_ptr());
         let expected = _mm_setr_ps(2., 6., 0., 0.);
         assert_eq_m128(expected, r);
     }
@@ -7870,8 +7913,7 @@ mod tests {
         let base_addr: [i32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let src = _mm256_setr_epi32(9, 10, 11, 12, 13, 14, 15, 16);
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
-        let r =
-            _mm256_mmask_i32gather_epi32::<4>(src, 0b01010101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i32gather_epi32::<4>(src, 0b01010101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_epi32(2, 10, 4, 12, 6, 14, 8, 16);
         assert_eq_m256i(expected, r);
     }
@@ -7881,7 +7923,7 @@ mod tests {
         let base_addr: [i64; 4] = [1, 2, 3, 4];
         let src = _mm256_setr_epi64x(9, 10, 11, 12);
         let vindex = _mm_setr_epi32(1, 2, 3, 4);
-        let r = _mm256_mmask_i32gather_epi64::<8>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i32gather_epi64::<8>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_epi64x(2, 10, 4, 12);
         assert_eq_m256i(expected, r);
     }
@@ -7891,7 +7933,7 @@ mod tests {
         let base_addr: [f64; 4] = [1., 2., 3., 4.];
         let src = _mm256_setr_pd(9., 10., 11., 12.);
         let vindex = _mm_setr_epi32(1, 2, 3, 4);
-        let r = _mm256_mmask_i32gather_pd::<8>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i32gather_pd::<8>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_pd(2., 10., 4., 12.);
         assert_eq_m256d(expected, r);
     }
@@ -7901,7 +7943,7 @@ mod tests {
         let base_addr: [f32; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
         let src = _mm256_setr_ps(9., 10., 11., 12., 13., 14., 15., 16.);
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
-        let r = _mm256_mmask_i32gather_ps::<4>(src, 0b01010101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i32gather_ps::<4>(src, 0b01010101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_ps(2., 10., 4., 12., 6., 14., 8., 16.);
         assert_eq_m256(expected, r);
     }
@@ -7911,7 +7953,7 @@ mod tests {
         let base_addr: [i32; 4] = [1, 2, 3, 4];
         let src = _mm_setr_epi32(9, 10, 11, 12);
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
-        let r = _mm256_mmask_i64gather_epi32::<4>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i64gather_epi32::<4>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm_setr_epi32(2, 10, 4, 12);
         assert_eq_m128i(expected, r);
     }
@@ -7921,7 +7963,7 @@ mod tests {
         let base_addr: [i64; 4] = [1, 2, 3, 4];
         let src = _mm256_setr_epi64x(9, 10, 11, 12);
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
-        let r = _mm256_mmask_i64gather_epi64::<8>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i64gather_epi64::<8>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_epi64x(2, 10, 4, 12);
         assert_eq_m256i(expected, r);
     }
@@ -7931,7 +7973,7 @@ mod tests {
         let base_addr: [f64; 4] = [1., 2., 3., 4.];
         let src = _mm256_setr_pd(9., 10., 11., 12.);
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
-        let r = _mm256_mmask_i64gather_pd::<8>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i64gather_pd::<8>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm256_setr_pd(2., 10., 4., 12.);
         assert_eq_m256d(expected, r);
     }
@@ -7941,7 +7983,7 @@ mod tests {
         let base_addr: [f32; 4] = [1., 2., 3., 4.];
         let src = _mm_setr_ps(9., 10., 11., 12.);
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
-        let r = _mm256_mmask_i64gather_ps::<4>(src, 0b0101, vindex, base_addr.as_ptr().cast());
+        let r = _mm256_mmask_i64gather_ps::<4>(src, 0b0101, vindex, base_addr.as_ptr());
         let expected = _mm_setr_ps(2., 10., 4., 12.);
         assert_eq_m128(expected, r);
     }
@@ -7951,7 +7993,7 @@ mod tests {
         let mut base_addr: [i32; 4] = [0; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm_setr_epi32(2, 3, 4, 1);
-        _mm_i32scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i32scatter_epi32::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4];
         assert_eq!(expected, base_addr);
     }
@@ -7961,7 +8003,7 @@ mod tests {
         let mut base_addr: [i32; 4] = [0; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm_setr_epi32(2, 3, 4, 1);
-        _mm_mask_i32scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm_mask_i32scatter_epi32::<4>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0, 2, 0, 4];
         assert_eq!(expected, base_addr);
     }
@@ -7971,7 +8013,7 @@ mod tests {
         let mut base_addr: [i64; 2] = [0; 2];
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
         let src = _mm_setr_epi64x(2, 1);
-        _mm_i32scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i32scatter_epi64::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2];
         assert_eq!(expected, base_addr);
     }
@@ -7981,7 +8023,7 @@ mod tests {
         let mut base_addr: [i64; 2] = [0; 2];
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
         let src = _mm_setr_epi64x(2, 1);
-        _mm_mask_i32scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i32scatter_epi64::<8>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0, 2];
         assert_eq!(expected, base_addr);
     }
@@ -7991,7 +8033,7 @@ mod tests {
         let mut base_addr: [f64; 2] = [0.; 2];
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
         let src = _mm_setr_pd(2., 1.);
-        _mm_i32scatter_pd::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i32scatter_pd::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8001,7 +8043,7 @@ mod tests {
         let mut base_addr: [f64; 2] = [0.; 2];
         let vindex = _mm_setr_epi32(1, 0, -1, -1);
         let src = _mm_setr_pd(2., 1.);
-        _mm_mask_i32scatter_pd::<8>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i32scatter_pd::<8>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8011,7 +8053,7 @@ mod tests {
         let mut base_addr: [f32; 4] = [0.; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm_setr_ps(2., 3., 4., 1.);
-        _mm_i32scatter_ps::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i32scatter_ps::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8021,7 +8063,7 @@ mod tests {
         let mut base_addr: [f32; 4] = [0.; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm_setr_ps(2., 3., 4., 1.);
-        _mm_mask_i32scatter_ps::<4>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm_mask_i32scatter_ps::<4>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0., 2., 0., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8031,7 +8073,7 @@ mod tests {
         let mut base_addr: [i32; 2] = [0; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_epi32(2, 1, -1, -1);
-        _mm_i64scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i64scatter_epi32::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2];
         assert_eq!(expected, base_addr);
     }
@@ -8041,7 +8083,7 @@ mod tests {
         let mut base_addr: [i32; 2] = [0; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_epi32(2, 1, -1, -1);
-        _mm_mask_i64scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i64scatter_epi32::<4>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0, 2];
         assert_eq!(expected, base_addr);
     }
@@ -8051,7 +8093,7 @@ mod tests {
         let mut base_addr: [i64; 2] = [0; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_epi64x(2, 1);
-        _mm_i64scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i64scatter_epi64::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2];
         assert_eq!(expected, base_addr);
     }
@@ -8061,7 +8103,7 @@ mod tests {
         let mut base_addr: [i64; 2] = [0; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_epi64x(2, 1);
-        _mm_mask_i64scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i64scatter_epi64::<8>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0, 2];
         assert_eq!(expected, base_addr);
     }
@@ -8071,7 +8113,7 @@ mod tests {
         let mut base_addr: [f64; 2] = [0.; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_pd(2., 1.);
-        _mm_i64scatter_pd::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i64scatter_pd::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8081,7 +8123,7 @@ mod tests {
         let mut base_addr: [f64; 2] = [0.; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_pd(2., 1.);
-        _mm_mask_i64scatter_pd::<8>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i64scatter_pd::<8>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8091,7 +8133,7 @@ mod tests {
         let mut base_addr: [f32; 2] = [0.; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_ps(2., 1., -1., -1.);
-        _mm_i64scatter_ps::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm_i64scatter_ps::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8101,7 +8143,7 @@ mod tests {
         let mut base_addr: [f32; 2] = [0.; 2];
         let vindex = _mm_setr_epi64x(1, 0);
         let src = _mm_setr_ps(2., 1., -1., -1.);
-        _mm_mask_i64scatter_ps::<4>(base_addr.as_mut_ptr().cast(), 0b01, vindex, src);
+        _mm_mask_i64scatter_ps::<4>(base_addr.as_mut_ptr(), 0b01, vindex, src);
         let expected = [0., 2.];
         assert_eq!(expected, base_addr);
     }
@@ -8111,7 +8153,7 @@ mod tests {
         let mut base_addr: [i32; 8] = [0; 8];
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
         let src = _mm256_setr_epi32(2, 3, 4, 5, 6, 7, 8, 1);
-        _mm256_i32scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i32scatter_epi32::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(expected, base_addr);
     }
@@ -8121,7 +8163,7 @@ mod tests {
         let mut base_addr: [i32; 8] = [0; 8];
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
         let src = _mm256_setr_epi32(2, 3, 4, 5, 6, 7, 8, 1);
-        _mm256_mask_i32scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), 0b01010101, vindex, src);
+        _mm256_mask_i32scatter_epi32::<4>(base_addr.as_mut_ptr(), 0b01010101, vindex, src);
         let expected = [0, 2, 0, 4, 0, 6, 0, 8];
         assert_eq!(expected, base_addr);
     }
@@ -8131,7 +8173,7 @@ mod tests {
         let mut base_addr: [i64; 4] = [0; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm256_setr_epi64x(2, 3, 4, 1);
-        _mm256_i32scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i32scatter_epi64::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8141,7 +8183,7 @@ mod tests {
         let mut base_addr: [i64; 4] = [0; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm256_setr_epi64x(2, 3, 4, 1);
-        _mm256_mask_i32scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i32scatter_epi64::<8>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0, 2, 0, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8151,7 +8193,7 @@ mod tests {
         let mut base_addr: [f64; 4] = [0.; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm256_setr_pd(2., 3., 4., 1.);
-        _mm256_i32scatter_pd::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i32scatter_pd::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8161,7 +8203,7 @@ mod tests {
         let mut base_addr: [f64; 4] = [0.; 4];
         let vindex = _mm_setr_epi32(1, 2, 3, 0);
         let src = _mm256_setr_pd(2., 3., 4., 1.);
-        _mm256_mask_i32scatter_pd::<8>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i32scatter_pd::<8>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0., 2., 0., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8171,7 +8213,7 @@ mod tests {
         let mut base_addr: [f32; 8] = [0.; 8];
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
         let src = _mm256_setr_ps(2., 3., 4., 5., 6., 7., 8., 1.);
-        _mm256_i32scatter_ps::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i32scatter_ps::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4., 5., 6., 7., 8.];
         assert_eq!(expected, base_addr);
     }
@@ -8181,7 +8223,7 @@ mod tests {
         let mut base_addr: [f32; 8] = [0.; 8];
         let vindex = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
         let src = _mm256_setr_ps(2., 3., 4., 5., 6., 7., 8., 1.);
-        _mm256_mask_i32scatter_ps::<4>(base_addr.as_mut_ptr().cast(), 0b01010101, vindex, src);
+        _mm256_mask_i32scatter_ps::<4>(base_addr.as_mut_ptr(), 0b01010101, vindex, src);
         let expected = [0., 2., 0., 4., 0., 6., 0., 8.];
         assert_eq!(expected, base_addr);
     }
@@ -8191,7 +8233,7 @@ mod tests {
         let mut base_addr: [i32; 4] = [0; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm_setr_epi32(2, 3, 4, 1);
-        _mm256_i64scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i64scatter_epi32::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8201,7 +8243,7 @@ mod tests {
         let mut base_addr: [i32; 4] = [0; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm_setr_epi32(2, 3, 4, 1);
-        _mm256_mask_i64scatter_epi32::<4>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i64scatter_epi32::<4>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0, 2, 0, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8211,7 +8253,7 @@ mod tests {
         let mut base_addr: [i64; 4] = [0; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm256_setr_epi64x(2, 3, 4, 1);
-        _mm256_i64scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i64scatter_epi64::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1, 2, 3, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8221,7 +8263,7 @@ mod tests {
         let mut base_addr: [i64; 4] = [0; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm256_setr_epi64x(2, 3, 4, 1);
-        _mm256_mask_i64scatter_epi64::<8>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i64scatter_epi64::<8>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0, 2, 0, 4];
         assert_eq!(expected, base_addr);
     }
@@ -8231,7 +8273,7 @@ mod tests {
         let mut base_addr: [f64; 4] = [0.; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm256_setr_pd(2., 3., 4., 1.);
-        _mm256_i64scatter_pd::<8>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i64scatter_pd::<8>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8241,7 +8283,7 @@ mod tests {
         let mut base_addr: [f64; 4] = [0.; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm256_setr_pd(2., 3., 4., 1.);
-        _mm256_mask_i64scatter_pd::<8>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i64scatter_pd::<8>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0., 2., 0., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8251,7 +8293,7 @@ mod tests {
         let mut base_addr: [f32; 4] = [0.; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm_setr_ps(2., 3., 4., 1.);
-        _mm256_i64scatter_ps::<4>(base_addr.as_mut_ptr().cast(), vindex, src);
+        _mm256_i64scatter_ps::<4>(base_addr.as_mut_ptr(), vindex, src);
         let expected = [1., 2., 3., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -8261,7 +8303,7 @@ mod tests {
         let mut base_addr: [f32; 4] = [0.; 4];
         let vindex = _mm256_setr_epi64x(1, 2, 3, 0);
         let src = _mm_setr_ps(2., 3., 4., 1.);
-        _mm256_mask_i64scatter_ps::<4>(base_addr.as_mut_ptr().cast(), 0b0101, vindex, src);
+        _mm256_mask_i64scatter_ps::<4>(base_addr.as_mut_ptr(), 0b0101, vindex, src);
         let expected = [0., 2., 0., 4.];
         assert_eq!(expected, base_addr);
     }
@@ -12147,7 +12189,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtepi64_storeu_epi16() {
         let a = _mm512_set1_epi64(9);
         let mut r = _mm_undefined_si128();
-        _mm512_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set1_epi16(9);
         assert_eq_m128i(r, e);
     }
@@ -12156,7 +12198,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtepi64_storeu_epi16() {
         let a = _mm256_set1_epi64x(9);
         let mut r = _mm_set1_epi16(0);
-        _mm256_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm256_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(0, 0, 0, 0, 9, 9, 9, 9);
         assert_eq_m128i(r, e);
     }
@@ -12165,7 +12207,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtepi64_storeu_epi16() {
         let a = _mm_set1_epi64x(9);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm_mask_cvtepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(0, 0, 0, 0, 0, 0, 9, 9);
         assert_eq_m128i(r, e);
     }
@@ -12174,7 +12216,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtsepi64_storeu_epi16() {
         let a = _mm512_set1_epi64(i64::MAX);
         let mut r = _mm_undefined_si128();
-        _mm512_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set1_epi16(i16::MAX);
         assert_eq_m128i(r, e);
     }
@@ -12183,7 +12225,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtsepi64_storeu_epi16() {
         let a = _mm256_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm256_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm256_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(0, 0, 0, 0, i16::MAX, i16::MAX, i16::MAX, i16::MAX);
         assert_eq_m128i(r, e);
     }
@@ -12192,7 +12234,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtsepi64_storeu_epi16() {
         let a = _mm_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm_mask_cvtsepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(0, 0, 0, 0, 0, 0, i16::MAX, i16::MAX);
         assert_eq_m128i(r, e);
     }
@@ -12201,7 +12243,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtusepi64_storeu_epi16() {
         let a = _mm512_set1_epi64(i64::MAX);
         let mut r = _mm_undefined_si128();
-        _mm512_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set1_epi16(u16::MAX as i16);
         assert_eq_m128i(r, e);
     }
@@ -12210,7 +12252,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtusepi64_storeu_epi16() {
         let a = _mm256_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm256_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm256_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(
             0,
             0,
@@ -12228,7 +12270,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtusepi64_storeu_epi16() {
         let a = _mm_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm_mask_cvtusepi64_storeu_epi16(&mut r as *mut _ as *mut i16, 0b11111111, a);
         let e = _mm_set_epi16(0, 0, 0, 0, 0, 0, u16::MAX as i16, u16::MAX as i16);
         assert_eq_m128i(r, e);
     }
@@ -12348,7 +12390,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtepi64_storeu_epi32() {
         let a = _mm512_set1_epi64(9);
         let mut r = _mm256_undefined_si256();
-        _mm512_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b11111111, a);
         let e = _mm256_set1_epi32(9);
         assert_eq_m256i(r, e);
     }
@@ -12357,7 +12399,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtepi64_storeu_epi32() {
         let a = _mm256_set1_epi64x(9);
         let mut r = _mm_set1_epi32(0);
-        _mm256_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm256_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b11111111, a);
         let e = _mm_set_epi32(9, 9, 9, 9);
         assert_eq_m128i(r, e);
     }
@@ -12366,7 +12408,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtepi64_storeu_epi32() {
         let a = _mm_set1_epi64x(9);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm_mask_cvtepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b11111111, a);
         let e = _mm_set_epi32(0, 0, 9, 9);
         assert_eq_m128i(r, e);
     }
@@ -12375,7 +12417,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtsepi64_storeu_epi32() {
         let a = _mm512_set1_epi64(i64::MAX);
         let mut r = _mm256_undefined_si256();
-        _mm512_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b11111111, a);
         let e = _mm256_set1_epi32(i32::MAX);
         assert_eq_m256i(r, e);
     }
@@ -12384,7 +12426,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtsepi64_storeu_epi32() {
         let a = _mm256_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi32(0);
-        _mm256_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b00001111, a);
+        _mm256_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b00001111, a);
         let e = _mm_set1_epi32(i32::MAX);
         assert_eq_m128i(r, e);
     }
@@ -12393,7 +12435,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtsepi64_storeu_epi32() {
         let a = _mm_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b00000011, a);
+        _mm_mask_cvtsepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b00000011, a);
         let e = _mm_set_epi32(0, 0, i32::MAX, i32::MAX);
         assert_eq_m128i(r, e);
     }
@@ -12402,7 +12444,7 @@ mod tests {
     unsafe fn test_mm512_mask_cvtusepi64_storeu_epi32() {
         let a = _mm512_set1_epi64(i64::MAX);
         let mut r = _mm256_undefined_si256();
-        _mm512_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b11111111, a);
+        _mm512_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b11111111, a);
         let e = _mm256_set1_epi32(u32::MAX as i32);
         assert_eq_m256i(r, e);
     }
@@ -12411,7 +12453,7 @@ mod tests {
     unsafe fn test_mm256_mask_cvtusepi64_storeu_epi32() {
         let a = _mm256_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi32(0);
-        _mm256_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b00001111, a);
+        _mm256_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b00001111, a);
         let e = _mm_set1_epi32(u32::MAX as i32);
         assert_eq_m128i(r, e);
     }
@@ -12420,7 +12462,7 @@ mod tests {
     unsafe fn test_mm_mask_cvtusepi64_storeu_epi32() {
         let a = _mm_set1_epi64x(i64::MAX);
         let mut r = _mm_set1_epi16(0);
-        _mm_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i8, 0b00000011, a);
+        _mm_mask_cvtusepi64_storeu_epi32(&mut r as *mut _ as *mut i32, 0b00000011, a);
         let e = _mm_set_epi32(0, 0, u32::MAX as i32, u32::MAX as i32);
         assert_eq_m128i(r, e);
     }

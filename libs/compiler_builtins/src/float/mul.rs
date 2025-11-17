@@ -143,7 +143,7 @@ where
         // a zero of the appropriate sign.  Mathematically there is no need to
         // handle this case separately, but we make it a special case to
         // simplify the shift logic.
-        let shift = one.wrapping_sub(product_exponent.cast()).cast();
+        let shift: u32 = one.wrapping_sub(product_exponent.cast_lossy()).cast();
         if shift >= bits {
             return F::from_bits(product_sign);
         }
@@ -180,14 +180,17 @@ where
 }
 
 intrinsics! {
-    #[avr_skip]
+    #[cfg(f16_enabled)]
+    pub extern "C" fn __mulhf3(a: f16, b: f16) -> f16 {
+        mul(a, b)
+    }
+
     #[aapcs_on_arm]
     #[arm_aeabi_alias = __aeabi_fmul]
     pub extern "C" fn __mulsf3(a: f32, b: f32) -> f32 {
         mul(a, b)
     }
 
-    #[avr_skip]
     #[aapcs_on_arm]
     #[arm_aeabi_alias = __aeabi_dmul]
     pub extern "C" fn __muldf3(a: f64, b: f64) -> f64 {

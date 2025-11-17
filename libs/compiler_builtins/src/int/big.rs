@@ -2,8 +2,9 @@
 
 #![allow(unused)]
 
-use crate::int::{DInt, HInt, Int, MinInt};
 use core::{fmt, ops};
+
+use crate::int::{DInt, HInt, Int, MinInt};
 
 const WORD_LO_MASK: u64 = 0x00000000ffffffff;
 const WORD_HI_MASK: u64 = 0xffffffff00000000;
@@ -44,7 +45,7 @@ impl i256 {
 impl MinInt for u256 {
     type OtherSign = i256;
 
-    type UnsignedInt = u256;
+    type Unsigned = u256;
 
     const SIGNED: bool = false;
     const BITS: u32 = 256;
@@ -57,14 +58,14 @@ impl MinInt for u256 {
 impl MinInt for i256 {
     type OtherSign = u256;
 
-    type UnsignedInt = u256;
+    type Unsigned = u256;
 
     const SIGNED: bool = false;
     const BITS: u32 = 256;
     const ZERO: Self = Self([0u64; 4]);
     const ONE: Self = Self([1, 0, 0, 0]);
     const MIN: Self = Self([0, 0, 0, 1 << 63]);
-    const MAX: Self = Self([u64::MAX, u64::MAX, u64::MAX, u64::MAX << 1]);
+    const MAX: Self = Self([u64::MAX, u64::MAX, u64::MAX, u64::MAX >> 1]);
 }
 
 macro_rules! impl_common {

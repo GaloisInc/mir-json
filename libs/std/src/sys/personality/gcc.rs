@@ -86,19 +86,19 @@ const UNWIND_DATA_REG: (i32, i32) = (0, 1); // R0, R1
 #[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
 const UNWIND_DATA_REG: (i32, i32) = (10, 11); // x10, x11
 
-#[cfg(target_arch = "loongarch64")]
+#[cfg(any(target_arch = "loongarch32", target_arch = "loongarch64"))]
 const UNWIND_DATA_REG: (i32, i32) = (4, 5); // a0, a1
 
 // The following code is based on GCC's C and C++ personality routines.  For reference, see:
 // https://github.com/gcc-mirror/gcc/blob/master/libstdc++-v3/libsupc++/eh_personality.cc
 // https://github.com/gcc-mirror/gcc/blob/trunk/libgcc/unwind-c.c
 
-cfg_if::cfg_if! {
-    if #[cfg(all(
+cfg_select! {
+    all(
         target_arch = "arm",
         not(target_vendor = "apple"),
         not(target_os = "netbsd"),
-    ))] {
+    ) => {
         /// personality fn called by [ARM EHABI][armeabi-eh]
         ///
         /// 32-bit ARM on iOS/tvOS/watchOS does not use ARM EHABI, it uses
@@ -202,7 +202,8 @@ cfg_if::cfg_if! {
                 }
             }
         }
-    } else {
+    }
+    _ => {
         /// Default personality routine, which is used directly on most targets
         /// and indirectly on Windows x86_64 and AArch64 via SEH.
         unsafe extern "C" fn rust_eh_personality_impl(
@@ -220,7 +221,7 @@ cfg_if::cfg_if! {
                     Ok(action) => action,
                     Err(_) => return uw::_URC_FATAL_PHASE1_ERROR,
                 };
-                if actions as i32 & uw::_UA_SEARCH_PHASE as i32 != 0 {
+                if actions & uw::_UA_SEARCH_PHASE != 0 {
                     match eh_action {
                         EHAction::None | EHAction::Cleanup(_) => uw::_URC_CONTINUE_UNWIND,
                         EHAction::Catch(_) | EHAction::Filter(_) => uw::_URC_HANDLER_FOUND,
@@ -230,7 +231,7 @@ cfg_if::cfg_if! {
                     match eh_action {
                         EHAction::None => uw::_URC_CONTINUE_UNWIND,
                         // Forced unwinding hits a terminate action.
-                        EHAction::Filter(_) if actions as i32 & uw::_UA_FORCE_UNWIND as i32 != 0 => uw::_URC_CONTINUE_UNWIND,
+                        EHAction::Filter(_) if actions & uw::_UA_FORCE_UNWIND != 0 => uw::_URC_CONTINUE_UNWIND,
                         EHAction::Cleanup(lpad) | EHAction::Catch(lpad) | EHAction::Filter(lpad) => {
                             uw::_Unwind_SetGR(
                                 context,
@@ -247,8 +248,11 @@ cfg_if::cfg_if! {
             }
         }
 
-        cfg_if::cfg_if! {
-            if #[cfg(all(windows, any(target_arch = "aarch64", target_arch = "x86_64"), target_env = "gnu"))] {
+        cfg_select! {
+            any(
+                all(windows, any(target_arch = "aarch64", target_arch = "x86_64"), target_env = "gnu"),
+                target_os = "cygwin",
+            ) => {
                 /// personality fn called by [Windows Structured Exception Handling][windows-eh]
                 ///
                 /// On x86_64 and AArch64 MinGW targets, the unwinding mechanism is SEH,
@@ -276,7 +280,8 @@ cfg_if::cfg_if! {
                         )
                     }
                 }
-            } else {
+            }
+            _ => {
                 /// personality fn called by [Itanium C++ ABI Exception Handling][itanium-eh]
                 ///
                 /// The personality routine for most non-Windows targets. This will be called by

@@ -22,8 +22,32 @@ use crate::fmt::{self, Debug, Display, Formatter};
 /// accessing that error via [`Error::source()`]. This makes it possible for the
 /// high-level module to provide its own errors while also revealing some of the
 /// implementation for debugging.
+///
+/// # Example
+///
+/// Implementing the `Error` trait only requires that `Debug` and `Display` are implemented too.
+///
+/// ```
+/// use std::error::Error;
+/// use std::fmt;
+/// use std::path::PathBuf;
+///
+/// #[derive(Debug)]
+/// struct ReadConfigError {
+///     path: PathBuf
+/// }
+///
+/// impl fmt::Display for ReadConfigError {
+///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+///         let path = self.path.display();
+///         write!(f, "unable to read configuration at {path}")
+///     }
+/// }
+///
+/// impl Error for ReadConfigError {}
+/// ```
 #[stable(feature = "rust1", since = "1.0.0")]
-#[cfg_attr(not(test), rustc_diagnostic_item = "Error")]
+#[rustc_diagnostic_item = "Error"]
 #[rustc_has_incoherent_inherent_impls]
 #[allow(multiple_supertrait_upcastable)]
 pub trait Error: Debug + Display {
@@ -323,7 +347,7 @@ impl dyn Error {
     /// let b = B(Some(Box::new(A)));
     ///
     /// // let err : Box<Error> = b.into(); // or
-    /// let err = &b as &(dyn Error);
+    /// let err = &b as &dyn Error;
     ///
     /// let mut iter = err.sources();
     ///
@@ -423,28 +447,28 @@ where
 /// separated by API boundaries:
 ///
 /// * Consumer - the consumer requests objects using a Request instance; eg a crate that offers
-/// fancy `Error`/`Result` reporting to users wants to request a Backtrace from a given `dyn Error`.
+///   fancy `Error`/`Result` reporting to users wants to request a Backtrace from a given `dyn Error`.
 ///
 /// * Producer - the producer provides objects when requested via Request; eg. a library with an
-/// an `Error` implementation that automatically captures backtraces at the time instances are
-/// created.
+///   an `Error` implementation that automatically captures backtraces at the time instances are
+///   created.
 ///
 /// The consumer only needs to know where to submit their request and are expected to handle the
 /// request not being fulfilled by the use of `Option<T>` in the responses offered by the producer.
 ///
 /// * A Producer initializes the value of one of its fields of a specific type. (or is otherwise
-/// prepared to generate a value requested). eg, `backtrace::Backtrace` or
-/// `std::backtrace::Backtrace`
+///   prepared to generate a value requested). eg, `backtrace::Backtrace` or
+///   `std::backtrace::Backtrace`
 /// * A Consumer requests an object of a specific type (say `std::backtrace::Backtrace`). In the
-/// case of a `dyn Error` trait object (the Producer), there are functions called `request_ref` and
-/// `request_value` to simplify obtaining an `Option<T>` for a given type.
+///   case of a `dyn Error` trait object (the Producer), there are functions called `request_ref` and
+///   `request_value` to simplify obtaining an `Option<T>` for a given type.
 /// * The Producer, when requested, populates the given Request object which is given as a mutable
-/// reference.
+///   reference.
 /// * The Consumer extracts a value or reference to the requested type from the `Request` object
-/// wrapped in an `Option<T>`; in the case of `dyn Error` the aforementioned `request_ref` and `
-/// request_value` methods mean that `dyn Error` users don't have to deal with the `Request` type at
-/// all (but `Error` implementors do). The `None` case of the `Option` suggests only that the
-/// Producer cannot currently offer an instance of the requested type, not it can't or never will.
+///   wrapped in an `Option<T>`; in the case of `dyn Error` the aforementioned `request_ref` and `
+///   request_value` methods mean that `dyn Error` users don't have to deal with the `Request` type at
+///   all (but `Error` implementors do). The `None` case of the `Option` suggests only that the
+///   Producer cannot currently offer an instance of the requested type, not it can't or never will.
 ///
 /// # Examples
 ///
@@ -1018,11 +1042,6 @@ impl<'a> crate::iter::FusedIterator for Source<'a> {}
 
 #[stable(feature = "error_by_ref", since = "1.51.0")]
 impl<'a, T: Error + ?Sized> Error for &'a T {
-    #[allow(deprecated, deprecated_in_future)]
-    fn description(&self) -> &str {
-        Error::description(&**self)
-    }
-
     #[allow(deprecated)]
     fn cause(&self) -> Option<&dyn Error> {
         Error::cause(&**self)
@@ -1038,36 +1057,16 @@ impl<'a, T: Error + ?Sized> Error for &'a T {
 }
 
 #[stable(feature = "fmt_error", since = "1.11.0")]
-impl Error for crate::fmt::Error {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "an error occurred when formatting an argument"
-    }
-}
+impl Error for crate::fmt::Error {}
 
 #[stable(feature = "try_borrow", since = "1.13.0")]
-impl Error for crate::cell::BorrowError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "already mutably borrowed"
-    }
-}
+impl Error for crate::cell::BorrowError {}
 
 #[stable(feature = "try_borrow", since = "1.13.0")]
-impl Error for crate::cell::BorrowMutError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "already borrowed"
-    }
-}
+impl Error for crate::cell::BorrowMutError {}
 
 #[stable(feature = "try_from", since = "1.34.0")]
-impl Error for crate::char::CharTryFromError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "converted integer out of range for `char`"
-    }
-}
+impl Error for crate::char::CharTryFromError {}
 
 #[stable(feature = "duration_checked_float", since = "1.66.0")]
 impl Error for crate::time::TryFromFloatSecsError {}
@@ -1075,5 +1074,5 @@ impl Error for crate::time::TryFromFloatSecsError {}
 #[stable(feature = "cstr_from_bytes_until_nul", since = "1.69.0")]
 impl Error for crate::ffi::FromBytesUntilNulError {}
 
-#[stable(feature = "get_many_mut", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "get_many_mut", since = "1.86.0")]
 impl Error for crate::slice::GetDisjointMutError {}

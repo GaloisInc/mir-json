@@ -245,6 +245,7 @@ where
         ) {
             (elf::EM_AARCH64, true) => Architecture::Aarch64,
             (elf::EM_AARCH64, false) => Architecture::Aarch64_Ilp32,
+            (elf::EM_ALPHA, true) => Architecture::Alpha,
             (elf::EM_ARM, _) => Architecture::Arm,
             (elf::EM_AVR, _) => Architecture::Avr,
             (elf::EM_BPF, _) => Architecture::Bpf,
@@ -255,6 +256,7 @@ where
             (elf::EM_X86_64, false) => Architecture::X86_64_X32,
             (elf::EM_X86_64, true) => Architecture::X86_64,
             (elf::EM_HEXAGON, _) => Architecture::Hexagon,
+            (elf::EM_LOONGARCH, false) => Architecture::LoongArch32,
             (elf::EM_LOONGARCH, true) => Architecture::LoongArch64,
             (elf::EM_68K, false) => Architecture::M68k,
             (elf::EM_MIPS, false) => {
@@ -266,6 +268,7 @@ where
             }
             (elf::EM_MIPS, true) => Architecture::Mips64,
             (elf::EM_MSP430, _) => Architecture::Msp430,
+            (elf::EM_PARISC, _) => Architecture::Hppa,
             (elf::EM_PPC, _) => Architecture::PowerPc,
             (elf::EM_PPC64, _) => Architecture::PowerPc64,
             (elf::EM_RISCV, false) => Architecture::Riscv32,
@@ -279,6 +282,7 @@ where
             (elf::EM_SPARC32PLUS, false) => Architecture::Sparc32Plus,
             (elf::EM_SPARCV9, true) => Architecture::Sparc64,
             (elf::EM_XTENSA, false) => Architecture::Xtensa,
+            (elf::EM_SH, false) => Architecture::SuperH,
             _ => Architecture::Unknown,
         }
     }

@@ -10,7 +10,6 @@ use core::{fmt, mem, ops, ptr, slice};
 use crate::borrow::{Cow, ToOwned};
 use crate::boxed::Box;
 use crate::rc::Rc;
-use crate::slice::hack::into_vec;
 use crate::string::String;
 #[cfg(target_has_atomic = "ptr")]
 use crate::sync::Arc;
@@ -103,7 +102,7 @@ use crate::vec::Vec;
 /// of `CString` instances can lead to invalid memory accesses, memory leaks,
 /// and other memory errors.
 #[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
-#[cfg_attr(not(test), rustc_diagnostic_item = "cstring_type")]
+#[rustc_diagnostic_item = "cstring_type"]
 #[stable(feature = "alloc_c_string", since = "1.64.0")]
 pub struct CString {
     // Invariant 1: the slice ends with a zero byte and has a length of at least one.
@@ -352,9 +351,14 @@ impl CString {
     /// # Safety
     ///
     /// This should only ever be called with a pointer that was earlier
-    /// obtained by calling [`CString::into_raw`]. Other usage (e.g., trying to take
-    /// ownership of a string that was allocated by foreign code) is likely to lead
-    /// to undefined behavior or allocator corruption.
+    /// obtained by calling [`CString::into_raw`], and the memory it points to must not be accessed
+    /// through any other pointer during the lifetime of reconstructed `CString`.
+    /// Other usage (e.g., trying to take ownership of a string that was allocated by foreign code)
+    /// is likely to lead to undefined behavior or allocator corruption.
+    ///
+    /// This function does not validate ownership of the raw pointer's memory.
+    /// A double-free may occur if the function is called twice on the same raw pointer.
+    /// Additionally, the caller must ensure the pointer is not dangling.
     ///
     /// It should be noted that the length isn't just "recomputed," but that
     /// the recomputed length must match the original length from the
@@ -491,7 +495,7 @@ impl CString {
     #[must_use = "`self` will be dropped if the result is not used"]
     #[stable(feature = "cstring_into", since = "1.7.0")]
     pub fn into_bytes(self) -> Vec<u8> {
-        let mut vec = into_vec(self.into_inner());
+        let mut vec = self.into_inner().into_vec();
         let _nul = vec.pop();
         debug_assert_eq!(_nul, Some(0u8));
         vec
@@ -512,7 +516,7 @@ impl CString {
     #[must_use = "`self` will be dropped if the result is not used"]
     #[stable(feature = "cstring_into", since = "1.7.0")]
     pub fn into_bytes_with_nul(self) -> Vec<u8> {
-        into_vec(self.into_inner())
+        self.into_inner().into_vec()
     }
 
     /// Returns the contents of this `CString` as a slice of bytes.
@@ -573,9 +577,9 @@ impl CString {
     #[inline]
     #[must_use]
     #[stable(feature = "as_c_str", since = "1.20.0")]
-    #[cfg_attr(not(test), rustc_diagnostic_item = "cstring_as_c_str")]
+    #[rustc_diagnostic_item = "cstring_as_c_str"]
     pub fn as_c_str(&self) -> &CStr {
-        &*self
+        unsafe { CStr::from_bytes_with_nul_unchecked(self.as_bytes_with_nul()) }
     }
 
     /// Converts this `CString` into a boxed [`CStr`].
@@ -706,14 +710,16 @@ impl ops::Deref for CString {
 
     #[inline]
     fn deref(&self) -> &CStr {
-        unsafe { CStr::from_bytes_with_nul_unchecked(self.as_bytes_with_nul()) }
+        self.as_c_str()
     }
 }
 
+/// Delegates to the [`CStr`] implementation of [`fmt::Debug`],
+/// showing invalid UTF-8 as hex escapes.
 #[stable(feature = "rust1", since = "1.0.0")]
 impl fmt::Debug for CString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&**self, f)
+        fmt::Debug::fmt(self.as_c_str(), f)
     }
 }
 
@@ -755,7 +761,6 @@ impl<'a> From<Cow<'a, CStr>> for CString {
     }
 }
 
-#[cfg(not(test))]
 #[stable(feature = "box_from_c_str", since = "1.17.0")]
 impl From<&CStr> for Box<CStr> {
     /// Converts a `&CStr` into a `Box<CStr>`,
@@ -766,7 +771,6 @@ impl From<&CStr> for Box<CStr> {
     }
 }
 
-#[cfg(not(test))]
 #[stable(feature = "box_from_mut_slice", since = "1.84.0")]
 impl From<&mut CStr> for Box<CStr> {
     /// Converts a `&mut CStr` into a `Box<CStr>`,
@@ -821,6 +825,7 @@ impl From<Vec<NonZero<u8>>> for CString {
     }
 }
 
+#[stable(feature = "c_string_from_str", since = "1.85.0")]
 impl FromStr for CString {
     type Err = NulError;
 
@@ -833,6 +838,7 @@ impl FromStr for CString {
     }
 }
 
+#[stable(feature = "c_string_from_str", since = "1.85.0")]
 impl TryFrom<CString> for String {
     type Error = IntoStringError;
 
@@ -845,7 +851,6 @@ impl TryFrom<CString> for String {
     }
 }
 
-#[cfg(not(test))]
 #[stable(feature = "more_box_slice_clone", since = "1.29.0")]
 impl Clone for Box<CStr> {
     #[inline]
@@ -971,7 +976,6 @@ impl Default for Rc<CStr> {
     }
 }
 
-#[cfg(not(test))]
 #[stable(feature = "default_box_extra", since = "1.17.0")]
 impl Default for Box<CStr> {
     fn default() -> Box<CStr> {
@@ -1057,17 +1061,10 @@ impl IntoStringError {
     }
 }
 
-impl IntoStringError {
-    fn description(&self) -> &str {
-        "C string contained non-utf8 bytes"
-    }
-}
-
 #[stable(feature = "cstring_into", since = "1.7.0")]
 impl fmt::Display for IntoStringError {
-    #[allow(deprecated, deprecated_in_future)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.description().fmt(f)
+        "C string contained non-utf8 bytes".fmt(f)
     }
 }
 
@@ -1080,7 +1077,7 @@ impl ToOwned for CStr {
     }
 
     fn clone_into(&self, target: &mut CString) {
-        let mut b = into_vec(mem::take(&mut target.inner));
+        let mut b = mem::take(&mut target.inner).into_vec();
         self.to_bytes_with_nul().clone_into(&mut b);
         target.inner = b.into_boxed_slice();
     }
@@ -1092,6 +1089,46 @@ impl From<&CStr> for CString {
     /// by copying the contents into a new allocation.
     fn from(s: &CStr) -> CString {
         s.to_owned()
+    }
+}
+
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<CStr> for CString {
+    #[inline]
+    fn eq(&self, other: &CStr) -> bool {
+        **self == *other
+    }
+
+    #[inline]
+    fn ne(&self, other: &CStr) -> bool {
+        **self != *other
+    }
+}
+
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<&CStr> for CString {
+    #[inline]
+    fn eq(&self, other: &&CStr) -> bool {
+        **self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &&CStr) -> bool {
+        **self != **other
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<Cow<'_, CStr>> for CString {
+    #[inline]
+    fn eq(&self, other: &Cow<'_, CStr>) -> bool {
+        **self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &Cow<'_, CStr>) -> bool {
+        **self != **other
     }
 }
 
@@ -1113,7 +1150,6 @@ impl AsRef<CStr> for CString {
     }
 }
 
-#[cfg(not(test))]
 impl CStr {
     /// Converts a `CStr` into a <code>[Cow]<[str]></code>.
     ///
@@ -1122,7 +1158,7 @@ impl CStr {
     /// with the corresponding <code>&[str]</code> slice. Otherwise, it will
     /// replace any invalid UTF-8 sequences with
     /// [`U+FFFD REPLACEMENT CHARACTER`][U+FFFD] and return a
-    /// <code>[Cow]::[Owned]\(&[str])</code> with the result.
+    /// <code>[Cow]::[Owned]\([String])</code> with the result.
     ///
     /// [str]: prim@str "str"
     /// [Borrowed]: Cow::Borrowed
@@ -1178,24 +1214,83 @@ impl CStr {
     }
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
-impl core::error::Error for NulError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "nul byte found in data"
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<CString> for CStr {
+    #[inline]
+    fn eq(&self, other: &CString) -> bool {
+        *self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &CString) -> bool {
+        *self != **other
     }
 }
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<Cow<'_, Self>> for CStr {
+    #[inline]
+    fn eq(&self, other: &Cow<'_, Self>) -> bool {
+        *self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &Cow<'_, Self>) -> bool {
+        *self != **other
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<CStr> for Cow<'_, CStr> {
+    #[inline]
+    fn eq(&self, other: &CStr) -> bool {
+        **self == *other
+    }
+
+    #[inline]
+    fn ne(&self, other: &CStr) -> bool {
+        **self != *other
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<&CStr> for Cow<'_, CStr> {
+    #[inline]
+    fn eq(&self, other: &&CStr) -> bool {
+        **self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &&CStr) -> bool {
+        **self != **other
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "c_string_eq_c_str", since = "1.90.0")]
+impl PartialEq<CString> for Cow<'_, CStr> {
+    #[inline]
+    fn eq(&self, other: &CString) -> bool {
+        **self == **other
+    }
+
+    #[inline]
+    fn ne(&self, other: &CString) -> bool {
+        **self != **other
+    }
+}
+
+#[stable(feature = "rust1", since = "1.0.0")]
+impl core::error::Error for NulError {}
 
 #[stable(feature = "cstring_from_vec_with_nul", since = "1.58.0")]
 impl core::error::Error for FromVecWithNulError {}
 
 #[stable(feature = "cstring_into", since = "1.7.0")]
 impl core::error::Error for IntoStringError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "C string contained non-utf8 bytes"
-    }
-
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.error)
     }

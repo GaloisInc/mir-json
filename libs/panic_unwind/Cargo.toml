@@ -4,7 +4,7 @@ version = "0.0.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rust-lang/rust.git"
 description = "Implementation of Rust panics via stack unwinding"
-edition = "2021"
+edition = "2024"
 
 [lib]
 test = false
@@ -13,10 +13,8 @@ doc = false
 
 [dependencies]
 alloc = { path = "../alloc" }
-core = { path = "../core" }
+core = { path = "../rustc-std-workspace-core", package = "rustc-std-workspace-core" }
 unwind = { path = "../unwind" }
-compiler_builtins = "0.1.0"
-cfg-if = { version = "1.0", features = ['rustc-dep-of-std'] }
 
 [target.'cfg(not(all(windows, target_env = "msvc")))'.dependencies]
 libc = { version = "0.2", default-features = false }

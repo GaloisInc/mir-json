@@ -140,7 +140,7 @@ impl Socket {
                 0 => {}
                 _ => {
                     // WASI poll does not return  POLLHUP or POLLERR in revents. Check if the
-                    // connnection actually succeeded and return ok only when the socket is
+                    // connection actually succeeded and return ok only when the socket is
                     // ready and no errors were found.
                     if let Some(e) = self.take_error()? {
                         return Err(e);
@@ -211,7 +211,7 @@ impl Socket {
         flags: c_int,
     ) -> io::Result<(usize, SocketAddr)> {
         let mut storage: netc::sockaddr_storage = unsafe { mem::zeroed() };
-        let mut addrlen = mem::size_of_val(&storage) as netc::socklen_t;
+        let mut addrlen = size_of_val(&storage) as netc::socklen_t;
 
         let n = cvt(unsafe {
             netc::recvfrom(

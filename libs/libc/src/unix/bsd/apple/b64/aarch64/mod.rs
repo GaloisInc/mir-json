@@ -5,7 +5,7 @@ pub type mcontext_t = *mut __darwin_mcontext64;
 
 s! {
     pub struct malloc_zone_t {
-        __private: [crate::uintptr_t; 18], // FIXME: needs arm64 auth pointers support
+        __private: [crate::uintptr_t; 18], // FIXME(macos): needs arm64 auth pointers support
     }
 
     pub struct ucontext_t {
@@ -47,7 +47,6 @@ s! {
 }
 
 s_no_extra_traits! {
-    #[allow(missing_debug_implementations)]
     pub struct max_align_t {
         priv_: f64,
     }

@@ -1,13 +1,17 @@
 #![allow(internal_features)]
 #![feature(stdarch_internal)]
 #![cfg_attr(target_arch = "arm", feature(stdarch_arm_feature_detection))]
-#![cfg_attr(target_arch = "aarch64", feature(stdarch_aarch64_feature_detection))]
+#![cfg_attr(
+    any(target_arch = "aarch64", target_arch = "arm64ec"),
+    feature(stdarch_aarch64_feature_detection)
+)]
+#![cfg_attr(
+    any(target_arch = "riscv32", target_arch = "riscv64"),
+    feature(stdarch_riscv_feature_detection)
+)]
 #![cfg_attr(target_arch = "powerpc", feature(stdarch_powerpc_feature_detection))]
 #![cfg_attr(target_arch = "powerpc64", feature(stdarch_powerpc_feature_detection))]
-#![cfg_attr(
-    any(target_arch = "x86", target_arch = "x86_64"),
-    feature(sha512_sm_x86, x86_amx_intrinsics, xop_target_feature)
-)]
+#![cfg_attr(target_arch = "s390x", feature(stdarch_s390x_feature_detection))]
 #![allow(clippy::unwrap_used, clippy::use_debug, clippy::print_stdout)]
 
 #[cfg_attr(
@@ -15,13 +19,24 @@
         target_arch = "arm",
         target_arch = "aarch64",
         target_arch = "arm64ec",
-        target_arch = "x86",
-        target_arch = "x86_64",
+        target_arch = "riscv32",
+        target_arch = "riscv64",
         target_arch = "powerpc",
-        target_arch = "powerpc64"
+        target_arch = "powerpc64",
+        target_arch = "s390x",
     ),
     macro_use
 )]
+#[cfg(any(
+    target_arch = "arm",
+    target_arch = "aarch64",
+    target_arch = "arm64ec",
+    target_arch = "riscv32",
+    target_arch = "riscv64",
+    target_arch = "powerpc",
+    target_arch = "powerpc64",
+    target_arch = "s390x",
+))]
 extern crate std_detect;
 
 #[test]
@@ -54,10 +69,7 @@ fn arm_linux() {
 }
 
 #[test]
-#[cfg(all(
-    target_arch = "aarch64",
-    any(target_os = "linux", target_os = "android")
-))]
+#[cfg(all(target_arch = "aarch64", any(target_os = "linux", target_os = "android")))]
 fn aarch64_linux() {
     println!("asimd: {}", is_aarch64_feature_detected!("asimd"));
     println!("neon: {}", is_aarch64_feature_detected!("neon"));
@@ -92,10 +104,7 @@ fn aarch64_linux() {
     println!("sve2-aes: {}", is_aarch64_feature_detected!("sve2-aes"));
     println!("sve2-sm4: {}", is_aarch64_feature_detected!("sve2-sm4"));
     println!("sve2-sha3: {}", is_aarch64_feature_detected!("sve2-sha3"));
-    println!(
-        "sve2-bitperm: {}",
-        is_aarch64_feature_detected!("sve2-bitperm")
-    );
+    println!("sve2-bitperm: {}", is_aarch64_feature_detected!("sve2-bitperm"));
     println!("frintts: {}", is_aarch64_feature_detected!("frintts"));
     println!("i8mm: {}", is_aarch64_feature_detected!("i8mm"));
     println!("f32mm: {}", is_aarch64_feature_detected!("f32mm"));
@@ -133,25 +142,13 @@ fn aarch64_linux() {
     println!("sme-lutv2: {}", is_aarch64_feature_detected!("sme-lutv2"));
     println!("sme-f8f16: {}", is_aarch64_feature_detected!("sme-f8f16"));
     println!("sme-f8f32: {}", is_aarch64_feature_detected!("sme-f8f32"));
-    println!(
-        "ssve-fp8fma: {}",
-        is_aarch64_feature_detected!("ssve-fp8fma")
-    );
-    println!(
-        "ssve-fp8dot4: {}",
-        is_aarch64_feature_detected!("ssve-fp8dot4")
-    );
-    println!(
-        "ssve-fp8dot2: {}",
-        is_aarch64_feature_detected!("ssve-fp8dot2")
-    );
+    println!("ssve-fp8fma: {}", is_aarch64_feature_detected!("ssve-fp8fma"));
+    println!("ssve-fp8dot4: {}", is_aarch64_feature_detected!("ssve-fp8dot4"));
+    println!("ssve-fp8dot2: {}", is_aarch64_feature_detected!("ssve-fp8dot2"));
 }
 
 #[test]
-#[cfg(all(
-    any(target_arch = "aarch64", target_arch = "arm64ec"),
-    target_os = "windows"
-))]
+#[cfg(all(any(target_arch = "aarch64", target_arch = "arm64ec"), target_os = "windows"))]
 fn aarch64_windows() {
     println!("asimd: {:?}", is_aarch64_feature_detected!("asimd"));
     println!("fp: {:?}", is_aarch64_feature_detected!("fp"));
@@ -166,10 +163,7 @@ fn aarch64_windows() {
 }
 
 #[test]
-#[cfg(all(
-    target_arch = "aarch64",
-    any(target_os = "freebsd", target_os = "openbsd")
-))]
+#[cfg(all(target_arch = "aarch64", any(target_os = "freebsd", target_os = "openbsd")))]
 fn aarch64_bsd() {
     println!("asimd: {:?}", is_aarch64_feature_detected!("asimd"));
     println!("pmull: {:?}", is_aarch64_feature_detected!("pmull"));
@@ -222,6 +216,102 @@ fn aarch64_darwin() {
 }
 
 #[test]
+#[cfg(all(
+    any(target_arch = "riscv32", target_arch = "riscv64"),
+    any(target_os = "linux", target_os = "android")
+))]
+fn riscv_linux() {
+    println!("rv32i: {}", is_riscv_feature_detected!("rv32i"));
+    println!("rv32e: {}", is_riscv_feature_detected!("rv32e"));
+    println!("rv64i: {}", is_riscv_feature_detected!("rv64i"));
+    println!("rv128i: {}", is_riscv_feature_detected!("rv128i"));
+    println!("unaligned-scalar-mem: {}", is_riscv_feature_detected!("unaligned-scalar-mem"));
+    println!("unaligned-vector-mem: {}", is_riscv_feature_detected!("unaligned-vector-mem"));
+    println!("zicsr: {}", is_riscv_feature_detected!("zicsr"));
+    println!("zicntr: {}", is_riscv_feature_detected!("zicntr"));
+    println!("zihpm: {}", is_riscv_feature_detected!("zihpm"));
+    println!("zifencei: {}", is_riscv_feature_detected!("zifencei"));
+    println!("zihintntl: {}", is_riscv_feature_detected!("zihintntl"));
+    println!("zihintpause: {}", is_riscv_feature_detected!("zihintpause"));
+    println!("zimop: {}", is_riscv_feature_detected!("zimop"));
+    println!("zicbom: {}", is_riscv_feature_detected!("zicbom"));
+    println!("zicboz: {}", is_riscv_feature_detected!("zicboz"));
+    println!("zicond: {}", is_riscv_feature_detected!("zicond"));
+    println!("m: {}", is_riscv_feature_detected!("m"));
+    println!("a: {}", is_riscv_feature_detected!("a"));
+    println!("zalrsc: {}", is_riscv_feature_detected!("zalrsc"));
+    println!("zaamo: {}", is_riscv_feature_detected!("zaamo"));
+    println!("zawrs: {}", is_riscv_feature_detected!("zawrs"));
+    println!("zabha: {}", is_riscv_feature_detected!("zabha"));
+    println!("zacas: {}", is_riscv_feature_detected!("zacas"));
+    println!("zam: {}", is_riscv_feature_detected!("zam"));
+    println!("ztso: {}", is_riscv_feature_detected!("ztso"));
+    println!("f: {}", is_riscv_feature_detected!("f"));
+    println!("d: {}", is_riscv_feature_detected!("d"));
+    println!("q: {}", is_riscv_feature_detected!("q"));
+    println!("zfh: {}", is_riscv_feature_detected!("zfh"));
+    println!("zfhmin: {}", is_riscv_feature_detected!("zfhmin"));
+    println!("zfa: {}", is_riscv_feature_detected!("zfa"));
+    println!("zfbfmin: {}", is_riscv_feature_detected!("zfbfmin"));
+    println!("zfinx: {}", is_riscv_feature_detected!("zfinx"));
+    println!("zdinx: {}", is_riscv_feature_detected!("zdinx"));
+    println!("zhinx: {}", is_riscv_feature_detected!("zhinx"));
+    println!("zhinxmin: {}", is_riscv_feature_detected!("zhinxmin"));
+    println!("c: {}", is_riscv_feature_detected!("c"));
+    println!("zca: {}", is_riscv_feature_detected!("zca"));
+    println!("zcf: {}", is_riscv_feature_detected!("zcf"));
+    println!("zcd: {}", is_riscv_feature_detected!("zcd"));
+    println!("zcb: {}", is_riscv_feature_detected!("zcb"));
+    println!("zcmop: {}", is_riscv_feature_detected!("zcmop"));
+    println!("b: {}", is_riscv_feature_detected!("b"));
+    println!("zba: {}", is_riscv_feature_detected!("zba"));
+    println!("zbb: {}", is_riscv_feature_detected!("zbb"));
+    println!("zbc: {}", is_riscv_feature_detected!("zbc"));
+    println!("zbs: {}", is_riscv_feature_detected!("zbs"));
+    println!("zbkb: {}", is_riscv_feature_detected!("zbkb"));
+    println!("zbkc: {}", is_riscv_feature_detected!("zbkc"));
+    println!("zbkx: {}", is_riscv_feature_detected!("zbkx"));
+    println!("zknd: {}", is_riscv_feature_detected!("zknd"));
+    println!("zkne: {}", is_riscv_feature_detected!("zkne"));
+    println!("zknh: {}", is_riscv_feature_detected!("zknh"));
+    println!("zksed: {}", is_riscv_feature_detected!("zksed"));
+    println!("zksh: {}", is_riscv_feature_detected!("zksh"));
+    println!("zkr: {}", is_riscv_feature_detected!("zkr"));
+    println!("zkn: {}", is_riscv_feature_detected!("zkn"));
+    println!("zks: {}", is_riscv_feature_detected!("zks"));
+    println!("zk: {}", is_riscv_feature_detected!("zk"));
+    println!("zkt: {}", is_riscv_feature_detected!("zkt"));
+    println!("v: {}", is_riscv_feature_detected!("v"));
+    println!("zve32x: {}", is_riscv_feature_detected!("zve32x"));
+    println!("zve32f: {}", is_riscv_feature_detected!("zve32f"));
+    println!("zve64x: {}", is_riscv_feature_detected!("zve64x"));
+    println!("zve64f: {}", is_riscv_feature_detected!("zve64f"));
+    println!("zve64d: {}", is_riscv_feature_detected!("zve64d"));
+    println!("zvfh: {}", is_riscv_feature_detected!("zvfh"));
+    println!("zvfhmin: {}", is_riscv_feature_detected!("zvfhmin"));
+    println!("zvfbfmin: {}", is_riscv_feature_detected!("zvfbfmin"));
+    println!("zvfbfwma: {}", is_riscv_feature_detected!("zvfbfwma"));
+    println!("zvbb: {}", is_riscv_feature_detected!("zvbb"));
+    println!("zvbc: {}", is_riscv_feature_detected!("zvbc"));
+    println!("zvkb: {}", is_riscv_feature_detected!("zvkb"));
+    println!("zvkg: {}", is_riscv_feature_detected!("zvkg"));
+    println!("zvkned: {}", is_riscv_feature_detected!("zvkned"));
+    println!("zvknha: {}", is_riscv_feature_detected!("zvknha"));
+    println!("zvknhb: {}", is_riscv_feature_detected!("zvknhb"));
+    println!("zvksed: {}", is_riscv_feature_detected!("zvksed"));
+    println!("zvksh: {}", is_riscv_feature_detected!("zvksh"));
+    println!("zvkn: {}", is_riscv_feature_detected!("zvkn"));
+    println!("zvknc: {}", is_riscv_feature_detected!("zvknc"));
+    println!("zvkng: {}", is_riscv_feature_detected!("zvkng"));
+    println!("zvks: {}", is_riscv_feature_detected!("zvks"));
+    println!("zvksc: {}", is_riscv_feature_detected!("zvksc"));
+    println!("zvksg: {}", is_riscv_feature_detected!("zvksg"));
+    println!("zvkt: {}", is_riscv_feature_detected!("zvkt"));
+    println!("j: {}", is_riscv_feature_detected!("j"));
+    println!("p: {}", is_riscv_feature_detected!("p"));
+}
+
+#[test]
 #[cfg(all(target_arch = "powerpc", target_os = "linux"))]
 fn powerpc_linux() {
     println!("altivec: {}", is_powerpc_feature_detected!("altivec"));
@@ -230,96 +320,16 @@ fn powerpc_linux() {
 }
 
 #[test]
-#[cfg(all(
-    target_arch = "powerpc64",
-    any(target_os = "linux", target_os = "freebsd"),
-))]
+#[cfg(all(target_arch = "powerpc64", any(target_os = "linux", target_os = "freebsd"),))]
 fn powerpc64_linux_or_freebsd() {
     println!("altivec: {}", is_powerpc64_feature_detected!("altivec"));
     println!("vsx: {}", is_powerpc64_feature_detected!("vsx"));
     println!("power8: {}", is_powerpc64_feature_detected!("power8"));
+    println!("power9: {}", is_powerpc64_feature_detected!("power9"));
 }
 
 #[test]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-fn x86_all() {
-    println!("aes: {:?}", is_x86_feature_detected!("aes"));
-    println!("pcmulqdq: {:?}", is_x86_feature_detected!("pclmulqdq"));
-    println!("rdrand: {:?}", is_x86_feature_detected!("rdrand"));
-    println!("rdseed: {:?}", is_x86_feature_detected!("rdseed"));
-    println!("tsc: {:?}", is_x86_feature_detected!("tsc"));
-    println!("mmx: {:?}", is_x86_feature_detected!("mmx"));
-    println!("sse: {:?}", is_x86_feature_detected!("sse"));
-    println!("sse2: {:?}", is_x86_feature_detected!("sse2"));
-    println!("sse3: {:?}", is_x86_feature_detected!("sse3"));
-    println!("ssse3: {:?}", is_x86_feature_detected!("ssse3"));
-    println!("sse4.1: {:?}", is_x86_feature_detected!("sse4.1"));
-    println!("sse4.2: {:?}", is_x86_feature_detected!("sse4.2"));
-    println!("sse4a: {:?}", is_x86_feature_detected!("sse4a"));
-    println!("sha: {:?}", is_x86_feature_detected!("sha"));
-    println!("avx: {:?}", is_x86_feature_detected!("avx"));
-    println!("avx2: {:?}", is_x86_feature_detected!("avx2"));
-    println!("sha512: {:?}", is_x86_feature_detected!("sha512"));
-    println!("sm3: {:?}", is_x86_feature_detected!("sm3"));
-    println!("sm4: {:?}", is_x86_feature_detected!("sm4"));
-    println!("avx512f: {:?}", is_x86_feature_detected!("avx512f"));
-    println!("avx512cd: {:?}", is_x86_feature_detected!("avx512cd"));
-    println!("avx512er: {:?}", is_x86_feature_detected!("avx512er"));
-    println!("avx512pf: {:?}", is_x86_feature_detected!("avx512pf"));
-    println!("avx512bw: {:?}", is_x86_feature_detected!("avx512bw"));
-    println!("avx512dq: {:?}", is_x86_feature_detected!("avx512dq"));
-    println!("avx512vl: {:?}", is_x86_feature_detected!("avx512vl"));
-    println!("avx512ifma: {:?}", is_x86_feature_detected!("avx512ifma"));
-    println!("avx512vbmi: {:?}", is_x86_feature_detected!("avx512vbmi"));
-    println!(
-        "avx512vpopcntdq: {:?}",
-        is_x86_feature_detected!("avx512vpopcntdq")
-    );
-    println!("avx512vbmi2 {:?}", is_x86_feature_detected!("avx512vbmi2"));
-    println!("gfni {:?}", is_x86_feature_detected!("gfni"));
-    println!("vaes {:?}", is_x86_feature_detected!("vaes"));
-    println!("vpclmulqdq {:?}", is_x86_feature_detected!("vpclmulqdq"));
-    println!("avx512vnni {:?}", is_x86_feature_detected!("avx512vnni"));
-    println!(
-        "avx512bitalg {:?}",
-        is_x86_feature_detected!("avx512bitalg")
-    );
-    println!("avx512bf16 {:?}", is_x86_feature_detected!("avx512bf16"));
-    println!(
-        "avx512vp2intersect {:?}",
-        is_x86_feature_detected!("avx512vp2intersect")
-    );
-    println!("avx512fp16 {:?}", is_x86_feature_detected!("avx512fp16"));
-    println!("f16c: {:?}", is_x86_feature_detected!("f16c"));
-    println!("fma: {:?}", is_x86_feature_detected!("fma"));
-    println!("bmi1: {:?}", is_x86_feature_detected!("bmi1"));
-    println!("bmi2: {:?}", is_x86_feature_detected!("bmi2"));
-    println!("abm: {:?}", is_x86_feature_detected!("abm"));
-    println!("lzcnt: {:?}", is_x86_feature_detected!("lzcnt"));
-    println!("tbm: {:?}", is_x86_feature_detected!("tbm"));
-    println!("movbe: {:?}", is_x86_feature_detected!("movbe"));
-    println!("popcnt: {:?}", is_x86_feature_detected!("popcnt"));
-    println!("fxsr: {:?}", is_x86_feature_detected!("fxsr"));
-    println!("xsave: {:?}", is_x86_feature_detected!("xsave"));
-    println!("xsaveopt: {:?}", is_x86_feature_detected!("xsaveopt"));
-    println!("xsaves: {:?}", is_x86_feature_detected!("xsaves"));
-    println!("xsavec: {:?}", is_x86_feature_detected!("xsavec"));
-    println!("amx-bf16: {:?}", is_x86_feature_detected!("amx-bf16"));
-    println!("amx-tile: {:?}", is_x86_feature_detected!("amx-tile"));
-    println!("amx-int8: {:?}", is_x86_feature_detected!("amx-int8"));
-    println!("amx-fp16: {:?}", is_x86_feature_detected!("amx-fp16"));
-    println!("amx-complex: {:?}", is_x86_feature_detected!("amx-complex"));
-    println!("xop: {:?}", is_x86_feature_detected!("xop"));
-}
-
-#[test]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[allow(deprecated)]
-fn x86_deprecated() {
-    println!("avx512gfni {:?}", is_x86_feature_detected!("avx512gfni"));
-    println!("avx512vaes {:?}", is_x86_feature_detected!("avx512vaes"));
-    println!(
-        "avx512vpclmulqdq {:?}",
-        is_x86_feature_detected!("avx512vpclmulqdq")
-    );
+#[cfg(all(target_arch = "s390x", target_os = "linux",))]
+fn s390x_linux() {
+    println!("vector: {}", is_s390x_feature_detected!("vector"));
 }

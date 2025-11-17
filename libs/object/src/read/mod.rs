@@ -338,6 +338,10 @@ impl FileKind {
             | [0x64, 0xaa, ..]
             // COFF arm64ec
             | [0x41, 0xa6, ..]
+            // COFF ppc
+            | [0xf0, 0x01, ..]
+            | [0xf1, 0x01, ..]
+            | [0xf2, 0x01, ..]
             // COFF x86
             | [0x4c, 0x01, ..]
             // COFF x86-64
@@ -998,11 +1002,11 @@ impl<'data> CompressedData<'data> {
                     CompressionFormat::Zstandard => {
                         let mut input = self.data;
                         while !input.is_empty() {
-                            let mut decoder = match ruzstd::StreamingDecoder::new(&mut input) {
+                            let mut decoder = match ruzstd::decoding::StreamingDecoder::new(&mut input) {
                                 Ok(decoder) => decoder,
                                 Err(
-                                    ruzstd::frame_decoder::FrameDecoderError::ReadFrameHeaderError(
-                                        ruzstd::frame::ReadFrameHeaderError::SkipFrame {
+                                    ruzstd::decoding::errors::FrameDecoderError::ReadFrameHeaderError(
+                                        ruzstd::decoding::errors::ReadFrameHeaderError::SkipFrame {
                                             length,
                                             ..
                                         },

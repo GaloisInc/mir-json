@@ -1,7 +1,6 @@
 use crate::off64_t;
 use crate::prelude::*;
 
-pub type c_char = i8;
 pub type wchar_t = i32;
 pub type greg_t = i64;
 pub type __u64 = c_ulonglong;
@@ -113,7 +112,6 @@ s_no_extra_traits! {
         uc_sigmask64: crate::sigset64_t,
     }
 
-    #[allow(missing_debug_implementations)]
     #[repr(align(16))]
     pub struct max_align_t {
         priv_: [f64; 4],
@@ -196,15 +194,6 @@ cfg_if! {
             }
         }
         impl Eq for _libc_fpxreg {}
-        impl fmt::Debug for _libc_fpxreg {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("_libc_fpxreg")
-                    .field("significand", &self.significand)
-                    .field("exponent", &self.exponent)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
         impl hash::Hash for _libc_fpxreg {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.significand.hash(state);
@@ -229,23 +218,6 @@ cfg_if! {
             }
         }
         impl Eq for _libc_fpstate {}
-        impl fmt::Debug for _libc_fpstate {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("_libc_fpstate")
-                    .field("cwd", &self.cwd)
-                    .field("swd", &self.swd)
-                    .field("ftw", &self.ftw)
-                    .field("fop", &self.fop)
-                    .field("rip", &self.rip)
-                    .field("rdp", &self.rdp)
-                    .field("mxcsr", &self.mxcsr)
-                    .field("mxcr_mask", &self.mxcr_mask)
-                    .field("_st", &self._st)
-                    .field("_xmm", &self._xmm)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
         impl hash::Hash for _libc_fpstate {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.cwd.hash(state);
@@ -269,15 +241,6 @@ cfg_if! {
             }
         }
         impl Eq for mcontext_t {}
-        impl fmt::Debug for mcontext_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("mcontext_t")
-                    .field("gregs", &self.gregs)
-                    .field("fpregs", &self.fpregs)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
         impl hash::Hash for mcontext_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.gregs.hash(state);
@@ -297,18 +260,6 @@ cfg_if! {
             }
         }
         impl Eq for ucontext_t {}
-        impl fmt::Debug for ucontext_t {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("ucontext_t")
-                    .field("uc_flags", &self.uc_flags)
-                    .field("uc_link", &self.uc_link)
-                    .field("uc_stack", &self.uc_stack)
-                    .field("uc_mcontext", &self.uc_mcontext)
-                    .field("uc_sigmask64", &self.uc_sigmask64)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
         impl hash::Hash for ucontext_t {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
                 self.uc_flags.hash(state);
@@ -341,24 +292,6 @@ cfg_if! {
         }
 
         impl Eq for user_fpregs_struct {}
-
-        impl fmt::Debug for user_fpregs_struct {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("user_fpregs_struct")
-                    .field("cwd", &self.cwd)
-                    .field("swd", &self.swd)
-                    .field("ftw", &self.ftw)
-                    .field("fop", &self.fop)
-                    .field("rip", &self.rip)
-                    .field("rdp", &self.rdp)
-                    .field("mxcsr", &self.mxcsr)
-                    .field("mxcr_mask", &self.mxcr_mask)
-                    .field("st_space", &self.st_space)
-                    // FIXME: .field("xmm_space", &self.xmm_space)
-                    // Ignore padding field
-                    .finish()
-            }
-        }
 
         impl hash::Hash for user_fpregs_struct {
             fn hash<H: hash::Hasher>(&self, state: &mut H) {
@@ -546,7 +479,7 @@ pub const SYS_munlockall: c_long = 152;
 pub const SYS_vhangup: c_long = 153;
 pub const SYS_modify_ldt: c_long = 154;
 pub const SYS_pivot_root: c_long = 155;
-// FIXME: SYS__sysctl is in the NDK sources but for some reason is
+// FIXME(android): SYS__sysctl is in the NDK sources but for some reason is
 //        not available in the tests
 // pub const SYS__sysctl: c_long = 156;
 pub const SYS_prctl: c_long = 157;
@@ -566,10 +499,13 @@ pub const SYS_sethostname: c_long = 170;
 pub const SYS_setdomainname: c_long = 171;
 pub const SYS_iopl: c_long = 172;
 pub const SYS_ioperm: c_long = 173;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_create_module: c_long = 174;
 pub const SYS_init_module: c_long = 175;
 pub const SYS_delete_module: c_long = 176;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_get_kernel_syms: c_long = 177;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_query_module: c_long = 178;
 pub const SYS_quotactl: c_long = 179;
 pub const SYS_nfsservctl: c_long = 180;

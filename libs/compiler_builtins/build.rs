@@ -1,8 +1,8 @@
-use std::{collections::BTreeMap, env, path::PathBuf, sync::atomic::Ordering};
-
 mod configure;
 
-use configure::{configure_f16_f128, Target};
+use std::env;
+
+use configure::{Target, configure_aliases};
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
@@ -12,11 +12,14 @@ fn main() {
     let cwd = env::current_dir().unwrap();
 
     configure_check_cfg();
-    configure_f16_f128(&target);
+    configure_aliases(&target);
 
     configure_libm(&target);
 
     println!("cargo:compiler-rt={}", cwd.join("compiler-rt").display());
+
+    println!("cargo::rustc-check-cfg=cfg(kernel_user_helpers)");
+    println!("cargo::rustc-check-cfg=cfg(feature, values(\"mem-unaligned\"))");
 
     // Emscripten's runtime includes all the builtins
     if target.os == "emscripten" {
@@ -43,7 +46,6 @@ fn main() {
     }
 
     // These targets have hardware unaligned access support.
-    println!("cargo::rustc-check-cfg=cfg(feature, values(\"mem-unaligned\"))");
     if target.arch.contains("x86_64")
         || target.arch.contains("x86")
         || target.arch.contains("aarch64")
@@ -71,33 +73,14 @@ fn main() {
         }
     }
 
-    // To compile intrinsics.rs for thumb targets, where there is no libc
-    println!("cargo::rustc-check-cfg=cfg(thumb)");
-    if llvm_target[0].starts_with("thumb") {
-        println!("cargo:rustc-cfg=thumb")
-    }
-
-    // compiler-rt `cfg`s away some intrinsics for thumbv6m and thumbv8m.base because
-    // these targets do not have full Thumb-2 support but only original Thumb-1.
-    // We have to cfg our code accordingly.
-    println!("cargo::rustc-check-cfg=cfg(thumb_1)");
-    if llvm_target[0] == "thumbv6m" || llvm_target[0] == "thumbv8m.base" {
-        println!("cargo:rustc-cfg=thumb_1")
-    }
-
     // Only emit the ARM Linux atomic emulation on pre-ARMv6 architectures. This
     // includes the old androideabi. It is deprecated but it is available as a
     // rustc target (arm-linux-androideabi).
-    println!("cargo::rustc-check-cfg=cfg(kernel_user_helpers)");
     if llvm_target[0] == "armv4t"
         || llvm_target[0] == "armv5te"
         || target.triple == "arm-linux-androideabi"
     {
         println!("cargo:rustc-cfg=kernel_user_helpers")
-    }
-
-    if llvm_target[0].starts_with("aarch64") {
-        generate_aarch64_outlined_atomics();
     }
 }
 
@@ -114,22 +97,13 @@ fn configure_libm(target: &Target) {
     println!("cargo:rustc-cfg=intrinsics_enabled");
 
     // The arch module may contain assembly.
-    if cfg!(feature = "no-asm") {
-        println!("cargo:rustc-cfg=feature=\"force-soft-floats\"");
-    } else {
+    if !cfg!(feature = "no-asm") {
         println!("cargo:rustc-cfg=arch_enabled");
     }
 
     println!("cargo:rustc-check-cfg=cfg(optimizations_enabled)");
     if !matches!(target.opt_level.as_str(), "0" | "1") {
         println!("cargo:rustc-cfg=optimizations_enabled");
-    }
-
-    // Config shorthands
-    println!("cargo:rustc-check-cfg=cfg(x86_no_sse)");
-    if target.arch == "x86" && !target.features.iter().any(|f| f == "sse") {
-        // Shorthand to detect i586 targets
-        println!("cargo:rustc-cfg=x86_no_sse");
     }
 
     println!(
@@ -141,61 +115,6 @@ fn configure_libm(target: &Target) {
 
     // Activate libm's unstable features to make full use of Nightly.
     println!("cargo:rustc-cfg=feature=\"unstable-intrinsics\"");
-}
-
-fn aarch64_symbol(ordering: Ordering) -> &'static str {
-    match ordering {
-        Ordering::Relaxed => "relax",
-        Ordering::Acquire => "acq",
-        Ordering::Release => "rel",
-        Ordering::AcqRel => "acq_rel",
-        _ => panic!("unknown symbol for {:?}", ordering),
-    }
-}
-
-/// The `concat_idents` macro is extremely annoying and doesn't allow us to define new items.
-/// Define them from the build script instead.
-/// Note that the majority of the code is still defined in `aarch64.rs` through inline macros.
-fn generate_aarch64_outlined_atomics() {
-    use std::fmt::Write;
-    // #[macro_export] so that we can use this in tests
-    let gen_macro =
-        |name| format!("#[macro_export] macro_rules! foreach_{name} {{ ($macro:path) => {{\n");
-
-    // Generate different macros for add/clr/eor/set so that we can test them separately.
-    let sym_names = ["cas", "ldadd", "ldclr", "ldeor", "ldset", "swp"];
-    let mut macros = BTreeMap::new();
-    for sym in sym_names {
-        macros.insert(sym, gen_macro(sym));
-    }
-
-    // Only CAS supports 16 bytes, and it has a different implementation that uses a different macro.
-    let mut cas16 = gen_macro("cas16");
-
-    for ordering in [
-        Ordering::Relaxed,
-        Ordering::Acquire,
-        Ordering::Release,
-        Ordering::AcqRel,
-    ] {
-        let sym_ordering = aarch64_symbol(ordering);
-        for size in [1, 2, 4, 8] {
-            for (sym, macro_) in &mut macros {
-                let name = format!("__aarch64_{sym}{size}_{sym_ordering}");
-                writeln!(macro_, "$macro!( {ordering:?}, {size}, {name} );").unwrap();
-            }
-        }
-        let name = format!("__aarch64_cas16_{sym_ordering}");
-        writeln!(cas16, "$macro!( {ordering:?}, {name} );").unwrap();
-    }
-
-    let mut buf = String::new();
-    for macro_def in macros.values().chain(std::iter::once(&cas16)) {
-        buf += macro_def;
-        buf += "}; }\n";
-    }
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    std::fs::write(out_dir.join("outlined_atomics.rs"), buf).unwrap();
 }
 
 /// Emit directives for features we expect to support that aren't in `Cargo.toml`.
@@ -241,7 +160,7 @@ fn configure_check_cfg() {
 
         for op_size in op_sizes {
             for ordering in ["relax", "acq", "rel", "acq_rel"] {
-                aarch_atomic.push(format!("__aarch64_{}{}_{}", aarch_op, op_size, ordering));
+                aarch_atomic.push(format!("__aarch64_{aarch_op}{op_size}_{ordering}"));
             }
         }
     }
@@ -251,10 +170,7 @@ fn configure_check_cfg() {
         .copied()
         .chain(aarch_atomic.iter().map(|s| s.as_str()))
     {
-        println!(
-            "cargo::rustc-check-cfg=cfg({}, values(\"optimized-c\"))",
-            fn_name
-        );
+        println!("cargo::rustc-check-cfg=cfg({fn_name}, values(\"optimized-c\"))",);
     }
 
     // Rustc is unaware of sparc target features, but this does show up from
@@ -570,12 +486,11 @@ mod c {
 
         if (target.arch == "aarch64" || target.arch == "arm64ec") && consider_float_intrinsics {
             sources.extend(&[
-                ("__comparetf2", "comparetf2.c"),
                 ("__fe_getround", "fp_mode.c"),
                 ("__fe_raise_inexact", "fp_mode.c"),
             ]);
 
-            if target.os != "windows" {
+            if target.os != "windows" && target.os != "cygwin" {
                 sources.extend(&[("__multc3", "multc3.c")]);
             }
         }
@@ -585,11 +500,11 @@ mod c {
         }
 
         if target.arch == "mips64" {
-            sources.extend(&[("__netf2", "comparetf2.c"), ("__fe_getround", "fp_mode.c")]);
+            sources.extend(&[("__fe_getround", "fp_mode.c")]);
         }
 
         if target.arch == "loongarch64" {
-            sources.extend(&[("__netf2", "comparetf2.c"), ("__fe_getround", "fp_mode.c")]);
+            sources.extend(&[("__fe_getround", "fp_mode.c")]);
         }
 
         // Remove the assembly implementations that won't compile for the target
@@ -608,13 +523,15 @@ mod c {
             sources.remove(&["__aeabi_cdcmp", "__aeabi_cfcmp"]);
         }
 
-        // Android uses emulated TLS so we need a runtime support function.
-        if target.os == "android" {
+        // Android and Cygwin uses emulated TLS so we need a runtime support function.
+        if target.os == "android" || target.os == "cygwin" {
             sources.extend(&[("__emutls_get_address", "emutls.c")]);
+        }
 
-            // Work around a bug in the NDK headers (fixed in
-            // https://r.android.com/2038949 which will be released in a future
-            // NDK version) by providing a definition of LONG_BIT.
+        // Work around a bug in the NDK headers (fixed in
+        // https://r.android.com/2038949 which will be released in a future
+        // NDK version) by providing a definition of LONG_BIT.
+        if target.os == "android" {
             cfg.define("LONG_BIT", "(8 * sizeof(long))");
         }
 
@@ -623,17 +540,28 @@ mod c {
             sources.extend(&[("__emutls_get_address", "emutls.c")]);
         }
 
+        // Optionally, link against a prebuilt llvm compiler-rt containing the builtins
+        // library. Only the builtins library is required. On many platforms, this is
+        // available as a library named libclang_rt.builtins.a.
+        let link_against_prebuilt_rt = env::var_os("LLVM_COMPILER_RT_LIB").is_some();
+
         // When compiling the C code we require the user to tell us where the
         // source code is, and this is largely done so when we're compiling as
         // part of rust-lang/rust we can use the same llvm-project repository as
         // rust-lang/rust.
         let root = match env::var_os("RUST_COMPILER_RT_ROOT") {
             Some(s) => PathBuf::from(s),
+            // If a prebuild libcompiler-rt is provided, set a valid
+            // path to simplify later logic. Nothing should be compiled.
+            None if link_against_prebuilt_rt => PathBuf::new(),
             None => {
-                panic!("RUST_COMPILER_RT_ROOT is not set. You may need to download compiler-rt.")
+                panic!(
+                    "RUST_COMPILER_RT_ROOT is not set. You may need to run \
+                    `ci/download-compiler-rt.sh`."
+                );
             }
         };
-        if !root.exists() {
+        if !link_against_prebuilt_rt && !root.exists() {
             panic!("RUST_COMPILER_RT_ROOT={} does not exist", root.display());
         }
 
@@ -649,7 +577,7 @@ mod c {
         let src_dir = root.join("lib/builtins");
         if target.arch == "aarch64" && target.env != "msvc" && target.os != "uefi" {
             // See below for why we're building these as separate libraries.
-            build_aarch64_out_of_line_atomics_libraries(&src_dir, cfg);
+            build_aarch64_out_of_line_atomics_libraries(&src_dir, cfg, link_against_prebuilt_rt);
 
             // Some run-time CPU feature detection is necessary, as well.
             let cpu_model_src = if src_dir.join("cpu_model.c").exists() {
@@ -663,20 +591,45 @@ mod c {
         let mut added_sources = HashSet::new();
         for (sym, src) in sources.map.iter() {
             let src = src_dir.join(src);
-            if added_sources.insert(src.clone()) {
+            if !link_against_prebuilt_rt && added_sources.insert(src.clone()) {
                 cfg.file(&src);
                 println!("cargo:rerun-if-changed={}", src.display());
             }
             println!("cargo:rustc-cfg={}=\"optimized-c\"", sym);
         }
 
-        cfg.compile("libcompiler-rt.a");
+        if link_against_prebuilt_rt {
+            let rt_builtins_ext = PathBuf::from(env::var_os("LLVM_COMPILER_RT_LIB").unwrap());
+            if !rt_builtins_ext.exists() {
+                panic!(
+                    "LLVM_COMPILER_RT_LIB={} does not exist",
+                    rt_builtins_ext.display()
+                );
+            }
+            if let Some(dir) = rt_builtins_ext.parent() {
+                println!("cargo::rustc-link-search=native={}", dir.display());
+            }
+            if let Some(lib) = rt_builtins_ext.file_name() {
+                println!(
+                    "cargo::rustc-link-lib=static:+verbatim={}",
+                    lib.to_str().unwrap()
+                );
+            }
+        } else {
+            cfg.compile("libcompiler-rt.a");
+        }
     }
 
-    fn build_aarch64_out_of_line_atomics_libraries(builtins_dir: &Path, cfg: &mut cc::Build) {
+    fn build_aarch64_out_of_line_atomics_libraries(
+        builtins_dir: &Path,
+        cfg: &mut cc::Build,
+        link_against_prebuilt_rt: bool,
+    ) {
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         let outlined_atomics_file = builtins_dir.join("aarch64").join("lse.S");
-        println!("cargo:rerun-if-changed={}", outlined_atomics_file.display());
+        if !link_against_prebuilt_rt {
+            println!("cargo:rerun-if-changed={}", outlined_atomics_file.display());
+        }
 
         cfg.include(&builtins_dir);
 
@@ -689,6 +642,13 @@ mod c {
                 for (model_number, model_name) in
                     &[(1, "relax"), (2, "acq"), (3, "rel"), (4, "acq_rel")]
                 {
+                    let sym = format!("__aarch64_{}{}_{}", instruction_type, size, model_name);
+                    println!("cargo:rustc-cfg={}=\"optimized-c\"", sym);
+
+                    if link_against_prebuilt_rt {
+                        continue;
+                    }
+
                     // The original compiler-rt build system compiles the same
                     // source file multiple times with different compiler
                     // options. Here we do something slightly different: we
@@ -712,9 +672,6 @@ mod c {
                     .unwrap();
                     drop(file);
                     cfg.file(path);
-
-                    let sym = format!("__aarch64_{}{}_{}", instruction_type, size, model_name);
-                    println!("cargo:rustc-cfg={}=\"optimized-c\"", sym);
                 }
             }
         }

@@ -29,7 +29,7 @@ fn normalize(mut symbol: &str) -> String {
 
     // Normalize to no leading underscore to handle platforms that may
     // inject extra ones in symbol names.
-    while symbol.starts_with('_') {
+    while symbol.starts_with('_') || symbol.starts_with('.') {
         symbol.remove(0);
     }
     // Windows/x86 has a suffix such as @@4.
@@ -77,7 +77,7 @@ pub(crate) fn disassemble_myself() -> HashSet<Function> {
     let add_args = if cfg!(target_vendor = "apple") && cfg!(target_arch = "aarch64") {
         // Target features need to be enabled for LLVM objdump on Darwin ARM64
         vec!["--mattr=+v8.6a,+crypto,+tme"]
-    } else if cfg!(target_arch = "riscv64") {
+    } else if cfg!(any(target_arch = "riscv32", target_arch = "riscv64")) {
         vec!["--mattr=+zk,+zks,+zbc,+zbb"]
     } else {
         vec![]
@@ -185,7 +185,12 @@ fn parse(output: &str) -> HashSet<Function> {
                     _ => {}
                 };
             }
+
             instructions.push(parts.join(" "));
+            if matches!(&**instructions.last().unwrap(), "ret" | "retq") {
+                cached_header = None;
+                break;
+            }
         }
         let function = Function {
             name: symbol,

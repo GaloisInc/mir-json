@@ -63,10 +63,11 @@ where
     R: Read,
     W: Write,
 {
-    cfg_if::cfg_if! {
-        if #[cfg(any(target_os = "linux", target_os = "android"))] {
+    cfg_select! {
+        any(target_os = "linux", target_os = "android") => {
             crate::sys::kernel_copy::copy_spec(reader, writer)
-        } else {
+        }
+        _ => {
             generic_copy(reader, writer)
         }
     }
@@ -248,8 +249,11 @@ impl<I: Write + ?Sized> BufferedWriterSpec for BufWriter<I> {
                     Err(e) => return Err(e),
                 }
             } else {
+                // All the bytes that were already in the buffer are initialized,
+                // treat them as such when the buffer is flushed.
+                init += buf.len();
+
                 self.flush_buf()?;
-                init = 0;
             }
         }
     }

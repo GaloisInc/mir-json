@@ -23,7 +23,7 @@ macro_rules! check_cfg_feature {
         $(cfg!(target_feature = $target_feature_lit);)*
     };
     ($feature:tt, $feature_lit:tt, without cfg check: $feature_cfg_check:literal) => {
-        #[expect(unexpected_cfgs, reason = $feature_lit)]
+        #[allow(unexpected_cfgs, reason = $feature_lit)]
         { cfg!(target_feature = $feature_lit) }
     };
 }
@@ -131,14 +131,13 @@ macro_rules! features {
             };
         }
 
-        #[test]
         #[deny(unexpected_cfgs)]
         #[deny(unfulfilled_lint_expectations)]
-        fn unexpected_cfgs() {
+        const _: () = {
             $(
                 check_cfg_feature!($feature, $feature_lit $(, without cfg check: $feature_cfg_check)? $(: $($target_feature_lit),*)?);
             )*
-        }
+        };
 
         /// Each variant denotes a position in a bitset for a particular feature.
         ///
@@ -168,6 +167,7 @@ macro_rules! features {
                     Feature::_last => unreachable!(),
                 }
             }
+
             #[cfg(feature = "std_detect_env_override")]
             pub(crate) fn from_str(s: &str) -> Result<Feature, ()> {
                 match s {

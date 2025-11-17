@@ -13,7 +13,7 @@
 #[cfg(test)]
 use stdarch_test::assert_instr;
 
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.tbm.bextri.u64"]
     fn bextri_u64(a: u64, control: u64) -> u64;
 }
@@ -206,7 +206,7 @@ mod tests {
     }
 
     #[simd_test(enable = "tbm")]
-    unsafe fn test_t1mksc_u64() {
+    unsafe fn test_t1mskc_u64() {
         assert_eq!(
             _t1mskc_u64(0b0101_0111u64),
             0b1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1000u64
