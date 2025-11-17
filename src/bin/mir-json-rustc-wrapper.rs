@@ -89,7 +89,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     }
 }
 
-fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> PathBuf {
+fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Option<PathBuf> {
     let mut callbacks = GetOutputPathCallbacks {
         crate_name: None,
         outputs: None,
@@ -97,7 +97,7 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Pa
         use_override_crates: use_override_crates.clone(),
     };
     rustc_driver::run_compiler(&args, &mut callbacks);
-    callbacks.output_path.unwrap()
+    callbacks.output_path
 }
 
 fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
@@ -263,7 +263,13 @@ fn go() -> ExitCode {
     // We're still using the original args (with only a few modifications), so the output path
     // should be the path of the test binary.
     eprintln!("test build - extract output path - {:?}", args);
-    let test_path = get_output_path(&args, &use_override_crates);
+    let test_path = match get_output_path(&args, &use_override_crates) {
+        Some(path) => path,
+        None => {
+            // rustc exited early (e.g., --version, --help, --print, etc.)
+            return ExitCode::SUCCESS;
+        }
+    };
 
     args.remove(test_idx);
 
