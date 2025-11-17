@@ -5,7 +5,7 @@ source "$(dirname "$0")/../../common.sh"
 rm -f test.linked-mir.json libtest.mir libtest.rlib test
 
 echo "Testing SAW build (saw-rustc)..."
-OUTPUT=$(${SAW_RUSTC} test.rs 2>&1)
+${SAW_RUSTC} test.rs >/dev/null 2>&1
 
 # Verify .linked-mir.json file was created
 if [ ! -f test.linked-mir.json ]; then
@@ -24,7 +24,7 @@ echo "SAW build correctly skipped test script"
 rm -f test.linked-mir.json libtest.mir libtest.rlib
 
 echo "Testing Crux build (crux-rustc)..."
-OUTPUT=$(crux-rustc --test test.rs 2>&1)
+crux-rustc --test test.rs >/dev/null 2>&1
 
 # Verify .linked-mir.json file was created
 if [ ! -f test.linked-mir.json ]; then
@@ -37,3 +37,5 @@ if [ ! -e test ] || [ ! -x test ]; then
     echo "ERROR: Crux build should create executable test script"
     exit 1
 fi
+
+echo "Crux build correctly created executable test script"
