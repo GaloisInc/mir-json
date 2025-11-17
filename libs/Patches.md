@@ -81,7 +81,7 @@ identify all of the code that was changed in each patch.
 
   Crucible doesn't support a `deallocate` operation.
 
-* Don't deallocate in `Arc::drop` and related functions (last applied: April 25, 2025)
+* Don't deallocate in `Arc::drop` and related functions (last applied: November 17, 2025)
 
   Crucible doesn't support a `deallocate` operation.
 
