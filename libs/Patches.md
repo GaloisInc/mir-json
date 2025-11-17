@@ -77,10 +77,9 @@ identify all of the code that was changed in each patch.
   functions to call built-in Crucible allocation functions instead (e.g.
   `crucible::alloc::allocate`).
 
-* Don't deallocate in `Box::drop` (last applied: April 24, 2025)
+* Don't deallocate in `Box::drop` (last applied: November 17, 2025)
 
-  Crucible doesn't support a `deallocate` operation, and the logic in `drop`
-  also includes a call to the unsupported `mem::size_of_val` function.
+  Crucible doesn't support a `deallocate` operation.
 
 * Don't deallocate in `Arc::drop` and related functions (last applied: April 25, 2025)
 

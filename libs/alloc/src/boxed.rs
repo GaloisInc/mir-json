@@ -1662,6 +1662,8 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Box<T, A> {
     fn drop(&mut self) {
         // the T in the Box is dropped by the compiler before the destructor is run
 
+        // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+        /*
         let ptr = self.0;
 
         unsafe {
@@ -1670,6 +1672,7 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Box<T, A> {
                 self.1.deallocate(From::from(ptr.cast()), layout);
             }
         }
+        */
     }
 }
 
