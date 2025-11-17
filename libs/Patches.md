@@ -147,6 +147,18 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
   unsupported by crucible-mir (though it probably wouldn't be too hard to add).
 
+* Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: June 10, 2026)
+
+  The `is_null` method on pointers works by casting the pointer to an integer
+  and comparing to zero.  However, crucible-mir doesn't support casting valid
+  pointers to integers (e.g. `&x as *const _ as usize` will always fail).  We
+  reimplement `is_null` in terms of `crucible::ptr::compare_usize(ptr, n)`,
+  which directly checks whether `ptr` is the result of casting `n` to a pointer
+  type.
+
+  The internal function `alloc::rc::is_dangling` is implemented similarly to
+  `is_null`, so we reimplement it in terms of `compare_usize` as well.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
