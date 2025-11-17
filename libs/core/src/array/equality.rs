@@ -149,6 +149,7 @@ impl<T: [const] PartialEq<Other>, Other, const N: usize> const SpecArrayEq<Other
     }
 }
 
+/*
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
 impl<T: [const] BytewiseEq<U>, U, const N: usize> const SpecArrayEq<U, N> for T {
     fn spec_eq(a: &[T; N], b: &[U; N]) -> bool {
@@ -161,3 +162,4 @@ impl<T: [const] BytewiseEq<U>, U, const N: usize> const SpecArrayEq<U, N> for T 
         !Self::spec_eq(a, b)
     }
 }
+*/
