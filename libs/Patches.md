@@ -32,7 +32,9 @@ identify all of the code that was changed in each patch.
 
 * Disable bytewise equality comparisons for `[T]` (last applied: April 18, 2025)
 
-  These require the `size_of_val` intrinsic, which isn't current supported.
+  These require the `compare_bytes` intrinsic, which Crucible doesn't currently
+  support. These also require pointer casts to `*const u8` that Crucible can't
+  support.
 
 * Remove the most common uses of `ptr::from_raw_parts` (last applied: April 22, 2025)
 
@@ -74,8 +76,7 @@ identify all of the code that was changed in each patch.
 
 * Don't deallocate in `Box::drop` (last applied: April 24, 2025)
 
-  Crucible doesn't support a `deallocate` operation, and the logic in `drop`
-  also includes a call to the unsupported `mem::size_of_val` function.
+  Crucible doesn't support a `deallocate` operation.
 
 * Don't deallocate in `Arc::drop` and related functions (last applied: April 25, 2025)
 
