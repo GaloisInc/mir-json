@@ -500,7 +500,7 @@ fn main() {
         let prefix = EMPTY_PROJECT_NAME.to_owned() + "-";
         builder.prefix(&prefix);
         if keep_temp_build {
-            builder.keep(true);
+            builder.disable_cleanup(true);
             fs::create_dir_all(out_dir)
                 .expect("creating out_dir should succeed");
             builder.tempdir_in(out_dir)

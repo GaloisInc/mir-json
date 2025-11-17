@@ -20,7 +20,7 @@ cargo = { version = "0.91", features = [ "vendored-openssl" ] }
 toml = "0.9"
 clap = "3.1.0"
 shell-escape = "0.1.5"
-tempfile = "3.8"
+tempfile = "3.20"
 log = "0.4.27"
 env_logger = "0.11.8"
 
