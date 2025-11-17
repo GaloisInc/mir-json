@@ -52,7 +52,7 @@ identify all of the code that was changed in each patch.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
-* Avoid `transmute` in `Layout` and `Alignment` (last applied: April 22, 2025)
+* Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
   value, assuming that the integer is a valid discriminant for the enum.
