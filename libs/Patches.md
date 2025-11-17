@@ -48,7 +48,7 @@ identify all of the code that was changed in each patch.
   `ptr::slice_from_raw_parts`, and `slice::from_raw_parts`, and removes an
   indirect use through `byte_add` from `Option::as_slice`.
 
-* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: April 22, 2025)
+* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: November 19, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
