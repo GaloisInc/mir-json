@@ -12,6 +12,11 @@ patch that we apply, along with rationale for why the patch is necessary. The
 intent is that this document can be used in conjunction with `git blame` to
 identify all of the code that was changed in each patch.
 
+* Add reference to `core::crucible` module (last applied: November 18, 2025)
+
+  After adding the crucible intrinsics in `core/src/crucible`, we need to add a
+  reference to it in `core/src/lib.rs`.
+
 * Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: April 17, 2025)
 
   The `is_null` method on pointers works by casting the pointer to an integer
