@@ -18,3 +18,8 @@ If you need to update the implementation of a patch later, make sure to include
 an *Update* line (along with a date) describing what the patch does. That way,
 when the next Rust toolchain upgrade is performed, the update can be folded
 into the main commit for that patch, and then the *Update* line can be removed.
+
+* Add reference to `core::crucible` module (last applied: June 9, 2026)
+
+  After adding the crucible intrinsics in `core/src/crucible`, we need to add a
+  reference to it in `core/src/lib.rs`.
