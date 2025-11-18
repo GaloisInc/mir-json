@@ -398,3 +398,6 @@ pub mod simd {
 }
 
 include!("primitive_docs.rs");
+
+#[unstable(feature = "crucible_intrinsics", issue = "none")]
+pub mod crucible;
