@@ -913,6 +913,9 @@ fn main() {
                     args.push("-l".into());
                     args.push(linked_lib.into());
                 }
+                // Don't let deny lints cause builds to fail
+                args.push("--cap-lints".into());
+                args.push("warn".into());
                 args
             },
             env: lib.target.env,
