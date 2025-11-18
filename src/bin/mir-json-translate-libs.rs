@@ -634,32 +634,35 @@ fn main() {
                 }
             }
         }
+        fn copy_adjacent(path_info: &LibPathInfo, name: &'static str) {
+            copy(
+                &path_info.orig_pkg_dir.with_file_name(name),
+                &path_info.custom_pkg_dir.with_file_name(name),
+            );
+        }
         for unit in &unit_graph.units {
             if let CustomTarget::TargetLib(path_info) =
                 unit.get_pkg_path_info(&artifact_outputs, &new_sources_dir)
             {
                 copy(path_info.orig_pkg_dir, &path_info.custom_pkg_dir);
-                // These modules are located outside of the `core`/`std` source
-                // tree but compiled together with `core`/`std` using #[path],
+                // These modules are located outside of the
+                // `core`/`compiler_builtins`/`std` source tree but compiled
+                // together with `core`/`compiler_builtins`/`std` using #[path],
                 // so they don't show up in the unit graph and we have to add
-                // them manually. `core`/`std` expects them to be located
-                // alongside `core`/`std`.
-                if unit.target.name == "core" {
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("stdarch"),
-                        &path_info.custom_pkg_dir.with_file_name("stdarch"),
-                    );
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("portable-simd"),
-                        &path_info
-                            .custom_pkg_dir
-                            .with_file_name("portable-simd"),
-                    );
-                } else if unit.target.name == "std" {
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("backtrace"),
-                        &path_info.custom_pkg_dir.with_file_name("backtrace"),
-                    );
+                // them manually. `core`/`compiler_builtins`/`std` expects them
+                // to be located alongside `core`/`compiler_builtins`/`std`.
+                match &*unit.target.name {
+                    "core" => {
+                        copy_adjacent(&path_info, "stdarch");
+                        copy_adjacent(&path_info, "portable-simd");
+                    }
+                    "compiler_builtins" => {
+                        copy_adjacent(&path_info, "libm");
+                    }
+                    "std" => {
+                        copy_adjacent(&path_info, "backtrace");
+                    }
+                    _ => {}
                 }
             }
         }
