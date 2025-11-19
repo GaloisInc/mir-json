@@ -35,7 +35,7 @@ identify all of the code that was changed in each patch.
   on the other `SpecArrayEq` instances that are slower (but easier to
   translate).
 
-* Disable bytewise equality comparisons for `[T]` (last applied: April 18, 2025)
+* Disable bytewise equality comparisons for `[T]` (last applied: November 19, 2025)
 
   These require the `size_of_val` intrinsic, which isn't current supported.
 
