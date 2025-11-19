@@ -133,6 +133,7 @@ where
     }
 }
 
+/*
 // When each element can be compared byte-wise, we can compare all the bytes
 // from the whole size in one call to the intrinsics.
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
@@ -153,6 +154,7 @@ where
         }
     }
 }
+*/
 
 #[doc(hidden)]
 #[const_trait]
@@ -306,6 +308,7 @@ unsafe impl const UnsignedBytewiseOrd for Option<NonZero<u8>> {}
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
 unsafe impl const UnsignedBytewiseOrd for ascii::Char {}
 
+/*
 // `compare_bytes` compares a sequence of unsigned bytes lexicographically, so
 // use it if the requirements for `UnsignedBytewiseOrd` are fulfilled.
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
@@ -366,6 +369,7 @@ impl<A: [const] PartialOrd + [const] UnsignedBytewiseOrd> const SliceChain for A
         }
     }
 }
+*/
 
 pub(super) trait SliceContains: Sized {
     fn slice_contains(&self, x: &[Self]) -> bool;
