@@ -72,7 +72,8 @@ unsafe fn new_cap<T>(cap: usize) -> Cap {
 /// `Box<[T]>`, since `capacity()` won't yield the length.
 #[allow(missing_debug_implementations)]
 pub(crate) struct RawVec<T, A: Allocator = Global> {
-    inner: RawVecInner<A>,
+    inner: RawVecInner<crucible::TypedAllocator<T>>,
+    orig_alloc: A,
     _marker: PhantomData<T>,
 }
 
@@ -125,7 +126,12 @@ impl<T> RawVec<T, Global> {
     #[inline]
     #[track_caller]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self { inner: RawVecInner::with_capacity(capacity, T::LAYOUT), _marker: PhantomData }
+        let alloc = crucible::TypedAllocator::new();
+        Self {
+            inner: RawVecInner::with_capacity_in(capacity, alloc, T::LAYOUT),
+            orig_alloc: Global,
+            _marker: PhantomData,
+        }
     }
 
     /// Like `with_capacity`, but guarantees the buffer is zeroed.
@@ -134,8 +140,10 @@ impl<T> RawVec<T, Global> {
     #[inline]
     #[track_caller]
     pub(crate) fn with_capacity_zeroed(capacity: usize) -> Self {
+        let alloc = crucible::TypedAllocator::new();
         Self {
-            inner: RawVecInner::with_capacity_zeroed_in(capacity, Global, T::LAYOUT),
+            inner: RawVecInner::with_capacity_zeroed_in(capacity, alloc, T::LAYOUT),
+            orig_alloc: Global,
             _marker: PhantomData,
         }
     }
@@ -177,7 +185,13 @@ impl<T, A: Allocator> RawVec<T, A> {
     /// the returned `RawVec`.
     #[inline]
     pub(crate) const fn new_in(alloc: A) -> Self {
-        Self { inner: RawVecInner::new_in(alloc, Alignment::of::<T>()), _marker: PhantomData }
+        // Rustc complains about const-stability if we call `new()` here.
+        let inner_alloc = crucible::TypedAllocator(PhantomData);
+        Self {
+            inner: RawVecInner::new_in(inner_alloc, Alignment::of::<T>()),
+            orig_alloc: alloc,
+            _marker: PhantomData,
+        }
     }
 
     /// Like `with_capacity`, but parameterized over the choice of
@@ -186,8 +200,10 @@ impl<T, A: Allocator> RawVec<T, A> {
     #[inline]
     #[track_caller]
     pub(crate) fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+        let inner_alloc = crucible::TypedAllocator::new();
         Self {
-            inner: RawVecInner::with_capacity_in(capacity, alloc, T::LAYOUT),
+            inner: RawVecInner::with_capacity_in(capacity, inner_alloc, T::LAYOUT),
+            orig_alloc: alloc,
             _marker: PhantomData,
         }
     }
@@ -196,8 +212,9 @@ impl<T, A: Allocator> RawVec<T, A> {
     /// allocator for the returned `RawVec`.
     #[inline]
     pub(crate) fn try_with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
-        match RawVecInner::try_with_capacity_in(capacity, alloc, T::LAYOUT) {
-            Ok(inner) => Ok(Self { inner, _marker: PhantomData }),
+        let inner_alloc = crucible::TypedAllocator::new();
+        match RawVecInner::try_with_capacity_in(capacity, inner_alloc, T::LAYOUT) {
+            Ok(inner) => Ok(Self { inner, orig_alloc: alloc, _marker: PhantomData }),
             Err(e) => Err(e),
         }
     }
@@ -208,8 +225,10 @@ impl<T, A: Allocator> RawVec<T, A> {
     #[inline]
     #[track_caller]
     pub(crate) fn with_capacity_zeroed_in(capacity: usize, alloc: A) -> Self {
+        let inner_alloc = crucible::TypedAllocator::new();
         Self {
-            inner: RawVecInner::with_capacity_zeroed_in(capacity, alloc, T::LAYOUT),
+            inner: RawVecInner::with_capacity_zeroed_in(capacity, inner_alloc, T::LAYOUT),
+            orig_alloc: alloc,
             _marker: PhantomData,
         }
     }
@@ -236,7 +255,7 @@ impl<T, A: Allocator> RawVec<T, A> {
         let me = ManuallyDrop::new(self);
         unsafe {
             let slice = ptr::slice_from_raw_parts_mut(me.ptr() as *mut MaybeUninit<T>, len);
-            Box::from_raw_in(slice, ptr::read(&me.inner.alloc))
+            Box::from_raw_in(slice, ptr::read(&me.orig_alloc))
         }
     }
 
@@ -256,8 +275,10 @@ impl<T, A: Allocator> RawVec<T, A> {
         unsafe {
             let ptr = ptr.cast();
             let capacity = new_cap::<T>(capacity);
+            let inner_alloc = crucible::TypedAllocator::new();
             Self {
-                inner: RawVecInner::from_raw_parts_in(ptr, capacity, alloc),
+                inner: RawVecInner::from_raw_parts_in(ptr, capacity, inner_alloc),
+                orig_alloc: alloc,
                 _marker: PhantomData,
             }
         }
@@ -274,7 +295,12 @@ impl<T, A: Allocator> RawVec<T, A> {
         unsafe {
             let ptr = ptr.cast();
             let capacity = new_cap::<T>(capacity);
-            Self { inner: RawVecInner::from_nonnull_in(ptr, capacity, alloc), _marker: PhantomData }
+            let inner_alloc = crucible::TypedAllocator::new();
+            Self {
+                inner: RawVecInner::from_nonnull_in(ptr, capacity, inner_alloc),
+                orig_alloc: alloc,
+                _marker: PhantomData,
+            }
         }
     }
 
@@ -302,7 +328,7 @@ impl<T, A: Allocator> RawVec<T, A> {
     /// Returns a shared reference to the allocator backing this `RawVec`.
     #[inline]
     pub(crate) fn allocator(&self) -> &A {
-        self.inner.allocator()
+        &self.orig_alloc
     }
 
     /// Ensures that the buffer contains at least enough space to hold `len +

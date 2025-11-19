@@ -92,7 +92,7 @@ identify all of the code that was changed in each patch.
   `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
   unsupported by crucible-mir (though it probably wouldn't be too hard to add).
 
-* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: April 28, 2025)
+* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: November 19, 2025)
 
   Upstream has polymorphized the `RawVec` implementation by factoring out most
   of the logic into a new `RawVecInner` type that's parameterized only by an
