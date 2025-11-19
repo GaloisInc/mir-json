@@ -62,7 +62,7 @@ identify all of the code that was changed in each patch.
   it.  Finally, this patch removes a `transmute` in the opposite direction from
   `Alignment::as_usize`.
 
-* Add a hook in `NonZero::new` (last applied: April 22, 2025)
+* Add a hook in `NonZero::new` (last applied: November 19, 2025)
 
   The new generic `NonZero::new` relies on transmute to convert `u32` to
   `Option<NonZero<u32>>` in a const context.  Removing this transmute is
