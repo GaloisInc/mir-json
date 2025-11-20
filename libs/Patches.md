@@ -140,6 +140,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   overlap check relies pointer-to-integer casts that `crucible-mir` does not
   currently support. As such, we use a Crucible override for the overlap check.
 
+* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: June 9, 2026)
+
+  `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
+  guard against attempts to drop the statically-allocated `Arc` used for
+  `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
+  unsupported by crucible-mir (though it probably wouldn't be too hard to add).
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
