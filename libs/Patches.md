@@ -39,7 +39,7 @@ identify all of the code that was changed in each patch.
 
   These require the `size_of_val` intrinsic, which isn't current supported.
 
-* Remove the most common uses of `ptr::from_raw_parts` (last applied: April 22, 2025)
+* Remove the most common uses of `ptr::from_raw_parts` (last applied: November 20, 2025)
 
   The `ptr::from_raw_parts` function implicitly performs a pointer cast through
   the `AggregateKind::RawPtr` intrinsic, which is difficult for crucible-mir to
@@ -47,6 +47,7 @@ identify all of the code that was changed in each patch.
   This patch removes direct calls to `ptr::from_raw_parts` from `ptr::null`,
   `ptr::slice_from_raw_parts`, and `slice::from_raw_parts`, and removes an
   indirect use through `byte_add` from `Option::as_slice`.
+  TODO: edit this
 
 * Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: November 19, 2025)
 
