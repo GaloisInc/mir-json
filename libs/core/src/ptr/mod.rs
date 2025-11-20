@@ -831,7 +831,10 @@ pub unsafe fn drop_in_place<T: PointeeSized>(to_drop: *mut T) {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null"]
 pub const fn null<T: PointeeSized + Thin>() -> *const T {
-    from_raw_parts(without_provenance::<()>(0), ())
+    const fn crucible_null_hook<T: ?Sized + Thin>() -> *const T {
+        from_raw_parts(without_provenance::<()>(0), ())
+    }
+    crucible_null_hook()
 }
 
 /// Creates a null mutable raw pointer.
@@ -856,7 +859,10 @@ pub const fn null<T: PointeeSized + Thin>() -> *const T {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null_mut"]
 pub const fn null_mut<T: PointeeSized + Thin>() -> *mut T {
-    from_raw_parts_mut(without_provenance_mut::<()>(0), ())
+    const fn crucible_null_hook<T: ?Sized + Thin>() -> *mut T {
+        from_raw_parts_mut(without_provenance_mut::<()>(0), ())
+    }
+    crucible_null_hook()
 }
 
 /// Creates a pointer with the given address and no [provenance][crate::ptr#provenance].
