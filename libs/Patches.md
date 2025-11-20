@@ -101,7 +101,7 @@ identify all of the code that was changed in each patch.
   and has the effect of threading the element type through to the crucible-mir
   allocation functions.
 
-* Use `Box::new` instead of `box_new` in `vec!` macro (last applied: April 28, 2025)
+* Use `Box::new` instead of `box_new` in `vec!` macro (last applied: November 20, 2025)
 
   Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
   `exchange_malloc`, which is an untyped allocation function and thus
