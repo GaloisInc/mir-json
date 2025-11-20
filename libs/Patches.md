@@ -122,6 +122,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   Crucible doesn't support a `deallocate` operation.
 
+* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: September 21, 2026)
+
+  `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
+  guard against attempts to drop the statically-allocated `Arc` used for
+  `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
+  unsupported by crucible-mir (though it probably wouldn't be too hard to add).
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
