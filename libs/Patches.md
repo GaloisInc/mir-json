@@ -83,7 +83,7 @@ identify all of the code that was changed in each patch.
 
   Crucible doesn't support a `deallocate` operation.
 
-* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: April 25, 2025)
+* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: November 20, 2025)
 
   `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
   guard against attempts to drop the statically-allocated `Arc` used for
