@@ -293,6 +293,7 @@
 #![feature(f16)]
 #![feature(f128)]
 #![feature(ffi_const)]
+#![feature(fn_traits)]
 #![feature(formatting_options)]
 #![feature(funnel_shifts)]
 #![feature(hash_map_internals)]
@@ -322,6 +323,7 @@
 #![feature(try_blocks)]
 #![feature(try_trait_v2)]
 #![feature(type_alias_impl_trait)]
+#![feature(unboxed_closures)]
 // tidy-alphabetical-end
 //
 // Library features (core):

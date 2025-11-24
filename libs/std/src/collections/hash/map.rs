@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests;
 
-use hashbrown::hash_map as base;
+use super::crucible_map as base;
 
 use self::Entry::*;
 use crate::borrow::Borrow;
-use crate::collections::{TryReserveError, TryReserveErrorKind};
+use crate::collections::TryReserveError;
 use crate::error::Error;
 use crate::fmt::{self, Debug};
 use crate::hash::{BuildHasher, Hash, RandomState};
@@ -2838,15 +2838,8 @@ fn map_entry<'a, K: 'a, V: 'a>(raw: base::RustcEntry<'a, K, V>) -> Entry<'a, K, 
 }
 
 #[inline]
-pub(super) fn map_try_reserve_error(err: hashbrown::TryReserveError) -> TryReserveError {
-    match err {
-        hashbrown::TryReserveError::CapacityOverflow => {
-            TryReserveErrorKind::CapacityOverflow.into()
-        }
-        hashbrown::TryReserveError::AllocError { layout } => {
-            TryReserveErrorKind::AllocError { layout, non_exhaustive: () }.into()
-        }
-    }
+pub(super) fn map_try_reserve_error(err: TryReserveError) -> TryReserveError {
+    err
 }
 
 #[allow(dead_code)]
