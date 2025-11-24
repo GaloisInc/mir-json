@@ -207,6 +207,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   u8` and then trying to write `u8` values into it. We instead rewrite the code
   slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
   u8`, thereby avoiding the need for `u32` altogether.
+
+* Implement `HashMap` in terms of `Vec` (last applied: October 1, 2026)
+
+  The actual implementation (in terms of `hashbrown`) is too complicated for
+  Crucible to handle effectively. In particular, it has a mixed-type allocation
+  that we don't support. It makes one big allocation and uses the first N bytes
+  as flags and the remaining M bytes as key-value pairs.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written

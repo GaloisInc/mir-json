@@ -314,6 +314,7 @@
 #![feature(try_blocks)]
 #![feature(try_trait_v2)]
 #![feature(type_alias_impl_trait)]
+#![feature(unboxed_closures)]
 #![feature(unwrap_infallible)]
 // tidy-alphabetical-end
 //
@@ -345,6 +346,7 @@
 #![feature(exact_size_is_empty)]
 #![feature(exclusive_wrapper)]
 #![feature(extend_one)]
+#![feature(fn_traits)]
 #![feature(float_gamma)]
 #![feature(float_minimum_maximum)]
 #![feature(fmt_internals)]
