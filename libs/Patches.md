@@ -132,7 +132,7 @@ identify all of the code that was changed in each patch.
   casting `MirReference_Integer` pointers back to an integer, which would allow
   for the `pointer -> integer -> pointer` casts that are used in the iterator.
 
-* Implement `HashMap` in terms of `Vec` (last applied: May 1, 2025)
+* Implement `HashMap` in terms of `Vec` (last applied: November 21, 2025)
 
   The actual implementation (in terms of `hashbrown`) is too complicated for
   Crucible to handle effectively. In particular, it has a mixed-type allocation
