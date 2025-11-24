@@ -205,3 +205,8 @@ identify all of the code that was changed in each patch.
   calls the `write_bytes` intrinsic, neither of which are currently supported.)
   We replace this function with a slower (but easier-to-translate),
   macro-generated version.
+
+* Remove the dynamic CPU support detection in `memchr` package (last applied: November 24, 2025)
+
+  This feature was using an `AtomicPtr<()>` with a cast from function
+  pointer to `*mut ()` that we don't support in its initializer.
