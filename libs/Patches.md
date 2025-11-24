@@ -169,6 +169,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `transmute` that it does support, and changes `into_inner` and `as_ptr`
   methods to access the innermost field directly without `transmute` or casts.
 
+* Implement `HashMap` in terms of `Vec` (last applied: June 10, 2026)
+
+  The actual implementation (in terms of `hashbrown`) is too complicated for
+  Crucible to handle effectively. In particular, it has a mixed-type allocation
+  that we don't support. It makes one big allocation and uses the first N bytes
+  as flags and the remaining M bytes as key-value pairs.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written

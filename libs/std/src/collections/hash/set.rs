@@ -3,10 +3,9 @@ mod tests;
 
 use hashbrown::hash_set as base;
 
-use super::map::map_try_reserve_error;
 use crate::alloc::{Allocator, Global};
 use crate::borrow::Borrow;
-use crate::collections::TryReserveError;
+use crate::collections::{TryReserveError, TryReserveErrorKind};
 use crate::fmt;
 use crate::hash::{BuildHasher, Hash, RandomState};
 use crate::iter::{Chain, FusedIterator};
@@ -2515,5 +2514,17 @@ fn assert_covariance() {
     }
     fn drain<'new>(d: Drain<'static, &'static str>) -> Drain<'new, &'new str> {
         d
+    }
+}
+
+#[inline]
+fn map_try_reserve_error(err: hashbrown::TryReserveError) -> TryReserveError {
+    match err {
+        hashbrown::TryReserveError::CapacityOverflow => {
+            TryReserveErrorKind::CapacityOverflow.into()
+        }
+        hashbrown::TryReserveError::AllocError { layout } => {
+            TryReserveErrorKind::AllocError { layout, non_exhaustive: () }.into()
+        }
     }
 }

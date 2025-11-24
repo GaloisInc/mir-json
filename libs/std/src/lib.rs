@@ -285,6 +285,7 @@
 #![feature(f16)]
 #![feature(f128)]
 #![feature(ffi_const)]
+#![feature(fn_traits)]
 #![feature(intra_doc_pointers)]
 #![feature(lang_items)]
 #![feature(link_cfg)]
@@ -307,6 +308,7 @@
 #![feature(try_blocks)]
 #![feature(try_trait_v2)]
 #![feature(type_alias_impl_trait)]
+#![feature(unboxed_closures)]
 // tidy-alphabetical-end
 //
 // Library features (core):
