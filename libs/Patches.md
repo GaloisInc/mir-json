@@ -185,7 +185,7 @@ identify all of the code that was changed in each patch.
   Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
   with Crucible's representation of arrays.
 
-* Use `crucible_slice_from_mut_hook` in `core::slice::from_mut` (last applied: July 25, 2025)
+* Use `crucible_slice_from_mut_hook` in `core::slice::from_mut` (last applied: November 25, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
