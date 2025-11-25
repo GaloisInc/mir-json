@@ -39,7 +39,8 @@ pub use core::time::TryFromFloatSecsError;
 use crate::error::Error;
 use crate::fmt;
 use crate::ops::{Add, AddAssign, Sub, SubAssign};
-use crate::sys::{FromInner, IntoInner, time};
+use crate::sys::{self, FromInner, IntoInner};
+use crate::sys::crux::time;
 
 /// A measurement of a monotonically nondecreasing clock.
 /// Opaque and useful only with [`Duration`].
@@ -855,5 +856,17 @@ impl FromInner<time::SystemTime> for SystemTime {
 impl IntoInner<time::SystemTime> for SystemTime {
     fn into_inner(self) -> time::SystemTime {
         self.0
+    }
+}
+
+impl FromInner<sys::time::SystemTime> for SystemTime {
+    fn from_inner(time: sys::time::SystemTime) -> SystemTime {
+        SystemTime(time::SystemTime::from_inner(time))
+    }
+}
+
+impl IntoInner<sys::time::SystemTime> for SystemTime {
+    fn into_inner(self) -> sys::time::SystemTime {
+        self.0.into_inner()
     }
 }
