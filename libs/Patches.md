@@ -169,7 +169,7 @@ identify all of the code that was changed in each patch.
   arrays, so we implement this function by explicitly creating a
   `MaybeUninit<[T; N]>` and copying into it.
 
-* Avoid use of `const { MaybeUninit::uninit() }` (last applied: October 10, 2025)
+* Avoid use of `const { MaybeUninit::uninit() }` (last applied: November 25, 2025)
 
   Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
   general, producing rendered constants for unions (like `MaybeUninit`) is
