@@ -88,6 +88,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   on valid pointers that's used to read and write the tag.  This patch replaces
   the tagged pointer representation with an enum.
 
+* Replace `sys::time` with Crux-specific implementation (last applied: September 18, 2026)
+
+  Crux's version is not suitable for doing actual timing (it hard-codes the
+  time to a fixed date), but it does simulate much more easily than the actual
+  implementation.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
