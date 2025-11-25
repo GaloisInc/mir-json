@@ -389,7 +389,6 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             }),
             ty::InstanceKind::CloneShim(did, ty) => {
                 let sub_tys = match *ty.kind() {
-                    ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(_closure_did, args) =>
                         args.as_closure().upvar_tys()[..].to_owned(),
