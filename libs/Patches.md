@@ -157,7 +157,7 @@ identify all of the code that was changed in each patch.
   ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
   concurrent crucible support.
 
-* Replace `sys::time` with Crux-specific implementation (last applied: May 8, 2025)
+* Replace `sys::time` with Crux-specific implementation (last applied: November 25, 2025)
 
   Crux's version is not suitable for doing actual timing (it hard-codes the
   time to a fixed date), but it does simulate much more easily than the actual
