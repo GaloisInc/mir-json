@@ -23,6 +23,7 @@
 #![allow(missing_debug_implementations)]
 
 pub mod common;
+pub mod crux;
 
 cfg_select! {
     unix => {
