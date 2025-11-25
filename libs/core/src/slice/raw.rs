@@ -201,7 +201,10 @@ pub const unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, len: usize) -> &'a m
 #[rustc_diagnostic_item = "slice_from_ref"]
 #[must_use]
 pub const fn from_ref<T>(s: &T) -> &[T] {
-    array::from_ref(s)
+    const fn crucible_slice_from_ref_hook<T>(r: &T) -> &[T] {
+        array::from_ref(r)
+    }
+    crucible_slice_from_ref_hook(s)
 }
 
 /// Converts a reference to T into a slice of length 1 (without copying).
