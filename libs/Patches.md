@@ -30,3 +30,11 @@ into the main commit for that patch, and then the *Update* line can be removed.
   that Crucible doesn't support. We instead fall back on the other
   `SpecArrayEq`/`SlicePartialEq` instances that are slower (but easier to
   translate).
+
+* Avoid use of `const { MaybeUninit::uninit() }` (last applied: June 9, 2026)
+
+  Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
+  general, producing rendered constants for unions (like `MaybeUninit`) is
+  difficult because we don't have a good way to detect which union variant is
+  active.  This specifically affects `array::from_fn` and
+  `Iterator::next_chunk`.

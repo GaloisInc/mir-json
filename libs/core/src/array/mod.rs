@@ -150,7 +150,10 @@ where
     R: [const] Try<Residual: [const] Residual<[R::Output; N]>, Output: [const] Destruct>,
     F: [const] FnMut(usize) -> R + [const] Destruct,
 {
-    let mut array = [const { MaybeUninit::uninit() }; N];
+    let array: MaybeUninit<[MaybeUninit<_>; N]> = MaybeUninit::uninit();
+    // `MaybeUninit::uninit().assume_init()` is normally undefined behavior, but in this case the
+    // value we're getting out doesn't contain any initialized data, only `N` `MaybeUninit`s.
+    let mut array: [MaybeUninit<_>; N] = unsafe { array.assume_init() };
     match try_from_fn_erased(&mut array, cb) {
         ControlFlow::Break(r) => FromResidual::from_residual(r),
         ControlFlow::Continue(()) => {
@@ -1007,7 +1010,14 @@ impl<T: [const] Destruct> const Drop for Guard<'_, T> {
 pub(crate) fn iter_next_chunk<T, const N: usize>(
     iter: &mut impl Iterator<Item = T>,
 ) -> Result<[T; N], IntoIter<T, N>> {
-    let mut array = [const { MaybeUninit::uninit() }; N];
+    // We ensure that the call to MaybeUninit::uninit() below is not in a const
+    // context so that the function call appears in the MIR JSON, thereby
+    // allowing crucible-mir to override it. We must be careful not to write
+    // something like `array = [MaybeUninit::uninit(); N]`, as that would
+    // require `T` to implement `Copy` (which doesn't hold here). Thankfully,
+    // `array::from_fn` allows us to write an equivalent expression without
+    // requiring `Copy`.
+    let mut array = from_fn(|_| MaybeUninit::uninit());
     let r = iter_next_chunk_erased(&mut array, iter);
     match r {
         Ok(()) => {
