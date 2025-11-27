@@ -150,7 +150,7 @@ identify all of the code that was changed in each patch.
   producing `&Cell<T>` values (see [this
   commit](https://github.com/GaloisInc/crucible/commit/e703d3014c50a999d3913460dcd99d17ab4f1e9f)).
 
-* Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: May 6, 2025)
+* Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: November 27, 2025)
 
   Because Crucible is effectively single-threaded, we can use `std`'s
   `no_threads` implementations of locks which are much simpler than the real
