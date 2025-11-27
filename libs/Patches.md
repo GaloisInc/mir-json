@@ -270,6 +270,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   with the `unsupported` configuration, where all parking-related functions are
   treated as no-ops.
 
+* Use `no_threads` version of `condvar`, `mutex`, `once`, and `rwlock` (last applied: June 10, 2026)
+
+  Because Crucible is effectively single-threaded, we can use `std`'s
+  `no_threads` implementations of locks which are much simpler than the real
+  ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
+  concurrent crucible support.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
