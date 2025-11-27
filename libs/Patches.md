@@ -214,6 +214,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   on valid pointers that's used to read and write the tag.  This patch replaces
   the tagged pointer representation with an enum.
 
+* Use `no_threads` version of `condvar`, `mutex`, `once`, and `rwlock` (last applied: June 10, 2026)
+
+  Because Crucible is effectively single-threaded, we can use `std`'s
+  `no_threads` implementations of locks which are much simpler than the real
+  ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
+  concurrent crucible support.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
