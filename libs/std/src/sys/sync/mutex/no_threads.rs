@@ -1,7 +1,5 @@
 use crate::cell::Cell;
-
-#[cfg(target_has_threads)]
-compile_error!("Using no_threads implementation on a target with threads");
+use core::crucible::concurrency;
 
 pub struct Mutex {
     // This platform has no threads, so we can use a Cell here.
@@ -19,11 +17,13 @@ impl Mutex {
 
     #[inline]
     pub fn lock(&self) {
+        concurrency::mutex_lock(self);
         assert_eq!(self.locked.replace(true), false, "cannot recursively acquire mutex");
     }
 
     #[inline]
     pub unsafe fn unlock(&self) {
+        concurrency::mutex_unlock(self);
         self.locked.set(false);
     }
 

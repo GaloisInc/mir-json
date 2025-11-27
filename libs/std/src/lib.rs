@@ -457,6 +457,8 @@
     since = "1.90.0"
 )]
 
+#![feature(crucible_intrinsics)]
+
 // The Rust prelude
 // The compiler expects the prelude definition to be defined before its use statement.
 pub mod prelude;
