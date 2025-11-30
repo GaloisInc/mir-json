@@ -193,7 +193,7 @@ identify all of the code that was changed in each patch.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
-* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: July 28, 2025)
+* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: November 27, 2025)
 
   Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
   with Crucible's representation of arrays.
