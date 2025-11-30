@@ -282,7 +282,7 @@ impl<T, A: Allocator> RawVec<T, A> {
     pub(crate) const unsafe fn from_raw_parts_in(ptr: *mut T, capacity: usize, alloc: A) -> Self {
         // SAFETY: Precondition passed to the caller
         unsafe {
-            let ptr = ptr.cast();
+            let ptr = core::mem::transmute::<*mut T, *mut u8>(ptr);
             let capacity = new_cap::<T>(capacity);
             let inner_alloc = crucible::TypedAllocator::NEW;
             Self {
@@ -303,7 +303,7 @@ impl<T, A: Allocator> RawVec<T, A> {
     pub(crate) const unsafe fn from_nonnull_in(ptr: NonNull<T>, capacity: usize, alloc: A) -> Self {
         // SAFETY: Precondition passed to the caller
         unsafe {
-            let ptr = ptr.cast();
+            let ptr = core::mem::transmute::<NonNull<T>, NonNull<u8>>(ptr);
             let capacity = new_cap::<T>(capacity);
             let inner_alloc = crucible::TypedAllocator::new();
             Self {

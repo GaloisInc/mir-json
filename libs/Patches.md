@@ -227,6 +227,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   time to a fixed date), but it does simulate much more easily than the actual
   implementation.
 
+* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: June 10, 2026)
+
+  `RawVec` casts `*mut T` to `*mut u8` to store it with the type erased, and
+  casts back later before dereferencing.  When `T = [u8; N]`, Crucible handles
+  the `*mut [u8; N]` to `*mut u8` cast by inserting an indexing projection,
+  which is unwanted here and results in an invalid reference after casting
+  back.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
