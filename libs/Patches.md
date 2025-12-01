@@ -206,3 +206,8 @@ identify all of the code that was changed in each patch.
   calls the `write_bytes` intrinsic, neither of which are currently supported.)
   We replace this function with a slower (but easier-to-translate),
   macro-generated version.
+
+* Avoid `transmute` in `impl PartialEq for TypeId` (last applied: December 1, 2025)
+
+  Crucible doesn't support transmuting a struct into a `u128`. We always use the
+  `type_id_eq` fallback instead.
