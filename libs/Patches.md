@@ -114,7 +114,7 @@ identify all of the code that was changed in each patch.
   operation is not supported in crucible-mir, so this patch replaces the
   intrinsic calls with some ordinary two-way comparisons.
 
-* Replace end pointer with length in slice iterator (last applied: April 28, 2025)
+* Replace end pointer with length in slice iterator (last applied: December 1, 2025)
 
   The standard library implementation of slice iterators for non-ZSTs consists
   of a start pointer and an end pointer.  This is a problem because pointer
