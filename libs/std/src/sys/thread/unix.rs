@@ -621,6 +621,9 @@ pub fn sleep(dur: Duration) {
 
 // Any unix that has clock_nanosleep
 // If this list changes update the MIRI chock_nanosleep shim
+//
+// Crucible: we combine the "any unix that has clock_nanosleep" and the `target_vendor = "apple"`
+// cases and use the same simplified implementation for both of them.
 #[cfg(any(
     target_os = "freebsd",
     target_os = "netbsd",
@@ -632,135 +635,12 @@ pub fn sleep(dur: Duration) {
     target_os = "hurd",
     target_os = "vxworks",
     target_os = "wasi",
+    target_vendor = "apple",
 ))]
 pub fn sleep_until(deadline: crate::time::Instant) {
-    use crate::time::Instant;
-
-    #[cfg(all(
-        target_os = "linux",
-        target_env = "gnu",
-        target_pointer_width = "32",
-        not(target_arch = "riscv32")
-    ))]
-    {
-        use crate::sys::pal::time::__timespec64;
-        use crate::sys::pal::weak::weak;
-
-        // This got added in glibc 2.31, along with a 64-bit `clock_gettime`
-        // function.
-        weak! {
-            fn __clock_nanosleep_time64(
-                clock_id: libc::clockid_t,
-                flags: libc::c_int,
-                req: *const __timespec64,
-                rem: *mut __timespec64,
-            ) -> libc::c_int;
-        }
-
-        if let Some(clock_nanosleep) = __clock_nanosleep_time64.get() {
-            let ts = deadline.into_inner().into_timespec().to_timespec64();
-            loop {
-                let r = unsafe {
-                    clock_nanosleep(
-                        crate::sys::time::Instant::CLOCK_ID,
-                        libc::TIMER_ABSTIME,
-                        &ts,
-                        core::ptr::null_mut(),
-                    )
-                };
-
-                match r {
-                    0 => return,
-                    libc::EINTR => continue,
-                    // If the underlying kernel doesn't support the 64-bit
-                    // syscall, `__clock_nanosleep_time64` will fail. The
-                    // error code nowadays is EOVERFLOW, but it used to be
-                    // ENOSYS – so just don't rely on any particular value.
-                    // The parameters are all valid, so the only reasons
-                    // why the call might fail are EINTR and the call not
-                    // being supported. Fall through to the clamping version
-                    // in that case.
-                    _ => break,
-                }
-            }
-        }
-    }
-
-    let Some(ts) = deadline.into_inner().into_timespec().to_timespec() else {
-        // The deadline is further in the future then can be passed to
-        // clock_nanosleep. We have to use Self::sleep instead. This might
-        // happen on 32 bit platforms, especially closer to 2038.
-        let now = Instant::now();
-        if let Some(delay) = deadline.checked_duration_since(now) {
-            sleep(delay);
-        }
-        return;
-    };
-
-    unsafe {
-        // When we get interrupted (res = EINTR) call clock_nanosleep again
-        loop {
-            let res = libc::clock_nanosleep(
-                crate::sys::time::Instant::CLOCK_ID,
-                libc::TIMER_ABSTIME,
-                &ts,
-                core::ptr::null_mut(), // not required with TIMER_ABSTIME
-            );
-
-            if res == 0 {
-                break;
-            } else {
-                assert_eq!(
-                    res,
-                    libc::EINTR,
-                    "timespec is in range,
-                         clockid is valid and kernel should support it"
-                );
-            }
-        }
-    }
-}
-
-#[cfg(target_vendor = "apple")]
-pub fn sleep_until(deadline: crate::time::Instant) {
-    unsafe extern "C" {
-        // This is defined in the public header mach/mach_time.h alongside
-        // `mach_absolute_time`, and like it has been available since the very
-        // beginning.
-        //
-        // There isn't really any documentation on this function, except for a
-        // short reference in technical note 2169:
-        // https://developer.apple.com/library/archive/technotes/tn2169/_index.html
-        safe fn mach_wait_until(deadline: u64) -> libc::kern_return_t;
-    }
-
-    // Make sure to round up to ensure that we definitely sleep until after
-    // the deadline has elapsed.
-    let Some(deadline) = deadline.into_inner().into_mach_absolute_time_ceil() else {
-        // Since the deadline is before the system boot time, it has already
-        // passed, so we can return immediately.
-        return;
-    };
-
-    // If the deadline is not representable, then sleep for the maximum duration
-    // possible and worry about the potential clock issues later (in ca. 600 years).
-    let deadline = deadline.try_into().unwrap_or(u64::MAX);
-    loop {
-        match mach_wait_until(deadline) {
-            // Success! The deadline has passed.
-            libc::KERN_SUCCESS => break,
-            // If the sleep gets interrupted by a signal, `mach_wait_until`
-            // returns KERN_ABORTED, so we need to restart the syscall.
-            // Also see Apple's implementation of the POSIX `nanosleep`, which
-            // converts this error to the POSIX equivalent EINTR:
-            // https://github.com/apple-oss-distributions/Libc/blob/55b54c0a0c37b3b24393b42b90a4c561d6c606b1/gen/nanosleep.c#L281-L306
-            libc::KERN_ABORTED => continue,
-            // All other errors indicate that something has gone wrong...
-            error => {
-                let description = unsafe { CStr::from_ptr(libc::mach_error_string(error)) };
-                panic!("mach_wait_until failed: {} (code {error})", description.display())
-            }
-        }
+    let now = crate::time::Instant::now();
+    if let Some(delay) = deadline.checked_duration_since(now) {
+        sleep(delay);
     }
 }
 

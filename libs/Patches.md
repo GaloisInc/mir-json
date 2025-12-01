@@ -235,6 +235,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   which is unwanted here and results in an invalid reference after casting
   back.
 
+* Always use regular `sleep` in `std::sys::thread::unix::sleep_until` (last applied: June 10, 2026)
+
+  The `sleep_until` implementation on unix tries to use `clock_nanosleep` when
+  applicable, by getting a `Timespec` out of the passed-in `time::Instant`. Our
+  Crux-specific time implementation does not have a `Timespec` in it, so we
+  instead always use the regular `sleep` function just like on other platforms.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
