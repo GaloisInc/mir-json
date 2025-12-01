@@ -3,6 +3,10 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 6
+
+Upgrade the supported Rust toolchain to `nightly-2025-09-14` (`1.91`).
+
 ## 5
 
 * Add a `needs_drop` field to interned types, tracking whether or not the type

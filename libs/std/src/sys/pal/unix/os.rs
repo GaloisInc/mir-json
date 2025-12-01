@@ -5,30 +5,18 @@
 #[cfg(test)]
 mod tests;
 
-use core::slice::memchr;
-
 use libc::{c_char, c_int, c_void};
 
-use crate::error::Error as StdError;
-use crate::ffi::{CStr, CString, OsStr, OsString};
+use crate::ffi::{CStr, OsStr, OsString};
 use crate::os::unix::prelude::*;
 use crate::path::{self, PathBuf};
-use crate::sync::{PoisonError, RwLock};
-use crate::sys::common::small_c_string::{run_path_with_cstr, run_with_cstr};
-#[cfg(all(target_env = "gnu", not(target_os = "vxworks")))]
-use crate::sys::weak::weak;
-use crate::sys::{cvt, fd};
-use crate::{fmt, io, iter, mem, ptr, slice, str, vec};
+use crate::sys::common::small_c_string::run_path_with_cstr;
+use crate::sys::cvt;
+use crate::{fmt, io, iter, mem, ptr, slice, str};
 
 const TMPBUF_SZ: usize = 128;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "redox")] {
-        const PATH_SEPARATOR: u8 = b';';
-    } else {
-        const PATH_SEPARATOR: u8 = b':';
-    }
-}
+const PATH_SEPARATOR: u8 = if cfg!(target_os = "redox") { b';' } else { b':' };
 
 unsafe extern "C" {
     #[cfg(not(any(target_os = "dragonfly", target_os = "vxworks", target_os = "rtems")))]
@@ -46,6 +34,7 @@ unsafe extern "C" {
         any(
             target_os = "netbsd",
             target_os = "openbsd",
+            target_os = "cygwin",
             target_os = "android",
             target_os = "redox",
             target_os = "nuttx",
@@ -58,11 +47,14 @@ unsafe extern "C" {
     #[cfg_attr(any(target_os = "freebsd", target_vendor = "apple"), link_name = "__error")]
     #[cfg_attr(target_os = "haiku", link_name = "_errnop")]
     #[cfg_attr(target_os = "aix", link_name = "_Errno")]
-    fn errno_location() -> *mut c_int;
+    // SAFETY: this will always return the same pointer on a given thread.
+    #[unsafe(ffi_const)]
+    pub safe fn errno_location() -> *mut c_int;
 }
 
 /// Returns the platform-specific value of errno
 #[cfg(not(any(target_os = "dragonfly", target_os = "vxworks", target_os = "rtems")))]
+#[inline]
 pub fn errno() -> i32 {
     unsafe { (*errno_location()) as i32 }
 }
@@ -71,16 +63,19 @@ pub fn errno() -> i32 {
 // needed for readdir and syscall!
 #[cfg(all(not(target_os = "dragonfly"), not(target_os = "vxworks"), not(target_os = "rtems")))]
 #[allow(dead_code)] // but not all target cfgs actually end up using it
+#[inline]
 pub fn set_errno(e: i32) {
     unsafe { *errno_location() = e as c_int }
 }
 
 #[cfg(target_os = "vxworks")]
+#[inline]
 pub fn errno() -> i32 {
     unsafe { libc::errnoGet() }
 }
 
 #[cfg(target_os = "rtems")]
+#[inline]
 pub fn errno() -> i32 {
     unsafe extern "C" {
         #[thread_local]
@@ -91,6 +86,7 @@ pub fn errno() -> i32 {
 }
 
 #[cfg(target_os = "dragonfly")]
+#[inline]
 pub fn errno() -> i32 {
     unsafe extern "C" {
         #[thread_local]
@@ -102,6 +98,7 @@ pub fn errno() -> i32 {
 
 #[cfg(target_os = "dragonfly")]
 #[allow(dead_code)]
+#[inline]
 pub fn set_errno(e: i32) {
     unsafe extern "C" {
         #[thread_local]
@@ -118,7 +115,12 @@ pub fn error_string(errno: i32) -> String {
     unsafe extern "C" {
         #[cfg_attr(
             all(
-                any(target_os = "linux", target_os = "hurd", target_env = "newlib"),
+                any(
+                    target_os = "linux",
+                    target_os = "hurd",
+                    target_env = "newlib",
+                    target_os = "cygwin"
+                ),
                 not(target_env = "ohos")
             ),
             link_name = "__xpg_strerror_r"
@@ -184,33 +186,24 @@ pub fn chdir(p: &path::Path) -> io::Result<()> {
     if result == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
 }
 
-pub struct SplitPaths<'a> {
-    iter: iter::Map<slice::Split<'a, u8, fn(&u8) -> bool>, fn(&'a [u8]) -> PathBuf>,
-}
+// This can't just be `impl Iterator` because that requires `'a` to be live on
+// drop (see #146045).
+pub type SplitPaths<'a> = iter::Map<
+    slice::Split<'a, u8, impl FnMut(&u8) -> bool + 'static>,
+    impl FnMut(&[u8]) -> PathBuf + 'static,
+>;
 
+#[define_opaque(SplitPaths)]
 pub fn split_paths(unparsed: &OsStr) -> SplitPaths<'_> {
-    fn bytes_to_path(b: &[u8]) -> PathBuf {
-        PathBuf::from(<OsStr as OsStrExt>::from_bytes(b))
+    fn is_separator(&b: &u8) -> bool {
+        b == PATH_SEPARATOR
     }
-    fn is_separator(b: &u8) -> bool {
-        *b == PATH_SEPARATOR
-    }
-    let unparsed = unparsed.as_bytes();
-    SplitPaths {
-        iter: unparsed
-            .split(is_separator as fn(&u8) -> bool)
-            .map(bytes_to_path as fn(&[u8]) -> PathBuf),
-    }
-}
 
-impl<'a> Iterator for SplitPaths<'a> {
-    type Item = PathBuf;
-    fn next(&mut self) -> Option<PathBuf> {
-        self.iter.next()
+    fn into_pathbuf(part: &[u8]) -> PathBuf {
+        PathBuf::from(OsStr::from_bytes(part))
     }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
+
+    unparsed.as_bytes().split(is_separator).map(into_pathbuf)
 }
 
 #[derive(Debug)]
@@ -242,12 +235,7 @@ impl fmt::Display for JoinPathsError {
     }
 }
 
-impl StdError for JoinPathsError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "failed to join paths"
-    }
-}
+impl crate::error::Error for JoinPathsError {}
 
 #[cfg(target_os = "aix")]
 pub fn current_exe() -> io::Result<PathBuf> {
@@ -260,7 +248,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
     let exe_path = env::args().next().ok_or(io::const_error!(
         ErrorKind::NotFound,
-        "an executable path was not found because no arguments were provided through argv"
+        "an executable path was not found because no arguments were provided through argv",
     ))?;
     let path = PathBuf::from(exe_path);
     if path.is_absolute() {
@@ -273,7 +261,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
         return getcwd().map(|cwd| cwd.join(path))?.canonicalize();
     }
     // Search PATH to infer current_exe.
-    if let Some(p) = getenv(OsStr::from_bytes("PATH".as_bytes())) {
+    if let Some(p) = env::var_os(OsStr::from_bytes("PATH".as_bytes())) {
         for search_path in split_paths(&p) {
             let pb = search_path.join(&path);
             if pb.is_file()
@@ -382,9 +370,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
         cvt(libc::sysctl(mib, 4, argv.as_mut_ptr() as *mut _, &mut argv_len, ptr::null_mut(), 0))?;
         argv.set_len(argv_len as usize);
         if argv[0].is_null() {
-            return Err(
-                io::const_error!(io::ErrorKind::Uncategorized, "no current exe available",),
-            );
+            return Err(io::const_error!(io::ErrorKind::Uncategorized, "no current exe available"));
         }
         let argv0 = CStr::from_ptr(argv[0]).to_bytes();
         if argv0[0] == b'.' || argv0.iter().any(|b| *b == b'/') {
@@ -397,6 +383,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
 #[cfg(any(
     target_os = "linux",
+    target_os = "cygwin",
     target_os = "hurd",
     target_os = "android",
     target_os = "nuttx",
@@ -470,14 +457,14 @@ pub fn current_exe() -> io::Result<PathBuf> {
     unsafe {
         let result = libc::find_path(
             crate::ptr::null_mut(),
-            libc::path_base_directory::B_FIND_PATH_IMAGE_PATH,
+            libc::B_FIND_PATH_IMAGE_PATH,
             crate::ptr::null_mut(),
             name.as_mut_ptr(),
             name.len(),
         );
         if result != libc::B_OK {
             use crate::io::ErrorKind;
-            Err(io::const_error!(ErrorKind::Uncategorized, "Error getting executable path"))
+            Err(io::const_error!(ErrorKind::Uncategorized, "error getting executable path"))
         } else {
             // find_path adds the null terminator.
             let name = CStr::from_ptr(name.as_ptr()).to_bytes();
@@ -486,7 +473,12 @@ pub fn current_exe() -> io::Result<PathBuf> {
     }
 }
 
-#[cfg(any(target_os = "redox", target_os = "rtems"))]
+#[cfg(target_os = "redox")]
+pub fn current_exe() -> io::Result<PathBuf> {
+    crate::fs::read_to_string("/scheme/sys/exe").map(PathBuf::from)
+}
+
+#[cfg(target_os = "rtems")]
 pub fn current_exe() -> io::Result<PathBuf> {
     crate::fs::read_to_string("sys:exe").map(PathBuf::from)
 }
@@ -494,7 +486,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 #[cfg(target_os = "l4re")]
 pub fn current_exe() -> io::Result<PathBuf> {
     use crate::io::ErrorKind;
-    Err(io::const_error!(ErrorKind::Unsupported, "Not yet implemented!"))
+    Err(io::const_error!(ErrorKind::Unsupported, "not yet implemented!"))
 }
 
 #[cfg(target_os = "vxworks")]
@@ -526,172 +518,12 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
     let exe_path = env::args().next().ok_or(io::const_error!(
         ErrorKind::Uncategorized,
-        "an executable path was not found because no arguments were provided through argv"
+        "an executable path was not found because no arguments were provided through argv",
     ))?;
     let path = PathBuf::from(exe_path);
 
     // Prepend the current working directory to the path if it's not absolute.
     if !path.is_absolute() { getcwd().map(|cwd| cwd.join(path)) } else { Ok(path) }
-}
-
-pub struct Env {
-    iter: vec::IntoIter<(OsString, OsString)>,
-}
-
-// FIXME(https://github.com/rust-lang/rust/issues/114583): Remove this when <OsStr as Debug>::fmt matches <str as Debug>::fmt.
-pub struct EnvStrDebug<'a> {
-    slice: &'a [(OsString, OsString)],
-}
-
-impl fmt::Debug for EnvStrDebug<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self { slice } = self;
-        f.debug_list()
-            .entries(slice.iter().map(|(a, b)| (a.to_str().unwrap(), b.to_str().unwrap())))
-            .finish()
-    }
-}
-
-impl Env {
-    pub fn str_debug(&self) -> impl fmt::Debug + '_ {
-        let Self { iter } = self;
-        EnvStrDebug { slice: iter.as_slice() }
-    }
-}
-
-impl fmt::Debug for Env {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self { iter } = self;
-        f.debug_list().entries(iter.as_slice()).finish()
-    }
-}
-
-impl !Send for Env {}
-impl !Sync for Env {}
-
-impl Iterator for Env {
-    type Item = (OsString, OsString);
-    fn next(&mut self) -> Option<(OsString, OsString)> {
-        self.iter.next()
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
-// Use `_NSGetEnviron` on Apple platforms.
-//
-// `_NSGetEnviron` is the documented alternative (see `man environ`), and has
-// been available since the first versions of both macOS and iOS.
-//
-// Nowadays, specifically since macOS 10.8, `environ` has been exposed through
-// `libdyld.dylib`, which is linked via. `libSystem.dylib`:
-// <https://github.com/apple-oss-distributions/dyld/blob/dyld-1160.6/libdyld/libdyldGlue.cpp#L913>
-//
-// So in the end, it likely doesn't really matter which option we use, but the
-// performance cost of using `_NSGetEnviron` is extremely miniscule, and it
-// might be ever so slightly more supported, so let's just use that.
-//
-// NOTE: The header where this is defined (`crt_externs.h`) was added to the
-// iOS 13.0 SDK, which has been the source of a great deal of confusion in the
-// past about the availability of this API.
-//
-// NOTE(madsmtm): Neither this nor using `environ` has been verified to not
-// cause App Store rejections; if this is found to be the case, an alternative
-// implementation of this is possible using `[NSProcessInfo environment]`
-// - which internally uses `_NSGetEnviron` and a system-wide lock on the
-// environment variables to protect against `setenv`, so using that might be
-// desirable anyhow? Though it also means that we have to link to Foundation.
-#[cfg(target_vendor = "apple")]
-pub unsafe fn environ() -> *mut *const *const c_char {
-    libc::_NSGetEnviron() as *mut *const *const c_char
-}
-
-// Use the `environ` static which is part of POSIX.
-#[cfg(not(target_vendor = "apple"))]
-pub unsafe fn environ() -> *mut *const *const c_char {
-    unsafe extern "C" {
-        static mut environ: *const *const c_char;
-    }
-    &raw mut environ
-}
-
-static ENV_LOCK: RwLock<()> = RwLock::new(());
-
-pub fn env_read_lock() -> impl Drop {
-    ENV_LOCK.read().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// Returns a vector of (variable, value) byte-vector pairs for all the
-/// environment variables of the current process.
-pub fn env() -> Env {
-    unsafe {
-        let _guard = env_read_lock();
-        let mut environ = *environ();
-        let mut result = Vec::new();
-        if !environ.is_null() {
-            while !(*environ).is_null() {
-                if let Some(key_value) = parse(CStr::from_ptr(*environ).to_bytes()) {
-                    result.push(key_value);
-                }
-                environ = environ.add(1);
-            }
-        }
-        return Env { iter: result.into_iter() };
-    }
-
-    fn parse(input: &[u8]) -> Option<(OsString, OsString)> {
-        // Strategy (copied from glibc): Variable name and value are separated
-        // by an ASCII equals sign '='. Since a variable name must not be
-        // empty, allow variable names starting with an equals sign. Skip all
-        // malformed lines.
-        if input.is_empty() {
-            return None;
-        }
-        let pos = memchr::memchr(b'=', &input[1..]).map(|p| p + 1);
-        pos.map(|p| {
-            (
-                OsStringExt::from_vec(input[..p].to_vec()),
-                OsStringExt::from_vec(input[p + 1..].to_vec()),
-            )
-        })
-    }
-}
-
-pub fn getenv(k: &OsStr) -> Option<OsString> {
-    // environment variables with a nul byte can't be set, so their value is
-    // always None as well
-    run_with_cstr(k.as_bytes(), &|k| {
-        let _guard = env_read_lock();
-        let v = unsafe { libc::getenv(k.as_ptr()) } as *const libc::c_char;
-
-        if v.is_null() {
-            Ok(None)
-        } else {
-            // SAFETY: `v` cannot be mutated while executing this line since we've a read lock
-            let bytes = unsafe { CStr::from_ptr(v) }.to_bytes().to_vec();
-
-            Ok(Some(OsStringExt::from_vec(bytes)))
-        }
-    })
-    .ok()
-    .flatten()
-}
-
-pub unsafe fn setenv(k: &OsStr, v: &OsStr) -> io::Result<()> {
-    run_with_cstr(k.as_bytes(), &|k| {
-        run_with_cstr(v.as_bytes(), &|v| {
-            let _guard = ENV_LOCK.write();
-            cvt(libc::setenv(k.as_ptr(), v.as_ptr(), 1)).map(drop)
-        })
-    })
-}
-
-pub unsafe fn unsetenv(n: &OsStr) -> io::Result<()> {
-    run_with_cstr(n.as_bytes(), &|nbuf| {
-        let _guard = ENV_LOCK.write();
-        cvt(libc::unsetenv(nbuf.as_ptr())).map(drop)
-    })
 }
 
 #[cfg(not(target_os = "espidf"))]
@@ -767,20 +599,19 @@ fn darwin_temp_dir() -> PathBuf {
 
 pub fn temp_dir() -> PathBuf {
     crate::env::var_os("TMPDIR").map(PathBuf::from).unwrap_or_else(|| {
-        cfg_if::cfg_if! {
-            if #[cfg(all(target_vendor = "apple", not(miri)))] {
-                darwin_temp_dir()
-            } else if #[cfg(target_os = "android")] {
-                PathBuf::from("/data/local/tmp")
-            } else {
-                PathBuf::from("/tmp")
-            }
+        cfg_select! {
+            all(target_vendor = "apple", not(miri)) => darwin_temp_dir(),
+            target_os = "android" => PathBuf::from("/data/local/tmp"),
+            _ => PathBuf::from("/tmp"),
         }
     })
 }
 
 pub fn home_dir() -> Option<PathBuf> {
-    return crate::env::var_os("HOME").or_else(|| unsafe { fallback() }).map(PathBuf::from);
+    return crate::env::var_os("HOME")
+        .filter(|s| !s.is_empty())
+        .or_else(|| unsafe { fallback() })
+        .map(PathBuf::from);
 
     #[cfg(any(
         target_os = "android",

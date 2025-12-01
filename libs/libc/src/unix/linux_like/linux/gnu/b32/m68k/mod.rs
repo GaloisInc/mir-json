@@ -1,10 +1,11 @@
 use crate::prelude::*;
 use crate::{off64_t, off_t};
 
-pub type c_char = i8;
 pub type wchar_t = i32;
 
 s! {
+    // FIXME(1.0): This should not implement `PartialEq`
+    #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
         pub sa_mask: crate::sigset_t,
@@ -135,7 +136,7 @@ s! {
         __glibc_reserved2: c_uint,
         pub msg_ctime: crate::time_t,
         __glibc_reserved3: c_uint,
-        __msg_cbytes: c_ulong,
+        pub __msg_cbytes: c_ulong,
         pub msg_qnum: crate::msgqnum_t,
         pub msg_qbytes: crate::msglen_t,
         pub msg_lspid: crate::pid_t,
@@ -160,7 +161,6 @@ s! {
 }
 
 s_no_extra_traits! {
-    #[allow(missing_debug_implementations)]
     #[repr(align(2))]
     pub struct max_align_t {
         priv_: [i8; 20],
@@ -190,7 +190,6 @@ pub const O_NDELAY: c_int = 0x800;
 pub const MADV_SOFT_OFFLINE: c_int = 101;
 pub const MAP_LOCKED: c_int = 0x02000;
 pub const MAP_NORESERVE: c_int = 0x04000;
-pub const MAP_32BIT: c_int = 0x0040;
 pub const MAP_ANON: c_int = 0x0020;
 pub const MAP_ANONYMOUS: c_int = 0x0020;
 pub const MAP_DENYWRITE: c_int = 0x0800;
@@ -549,9 +548,11 @@ pub const SYS_cacheflush: c_long = 123;
 pub const SYS_adjtimex_time32: c_long = 124;
 pub const SYS_mprotect: c_long = 125;
 pub const SYS_sigprocmask: c_long = 126;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_create_module: c_long = 127;
 pub const SYS_init_module: c_long = 128;
 pub const SYS_delete_module: c_long = 129;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_get_kernel_syms: c_long = 130;
 pub const SYS_quotactl: c_long = 131;
 pub const SYS_getpgid: c_long = 132;
@@ -588,6 +589,7 @@ pub const SYS_mremap: c_long = 163;
 pub const SYS_setresuid16: c_long = 164;
 pub const SYS_getresuid16: c_long = 165;
 pub const SYS_getpagesize: c_long = 166;
+#[deprecated(since = "0.2.70", note = "Functional up to 2.6 kernel")]
 pub const SYS_query_module: c_long = 167;
 pub const SYS_poll: c_long = 168;
 pub const SYS_nfsservctl: c_long = 169;

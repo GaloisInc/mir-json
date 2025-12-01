@@ -11,7 +11,7 @@ use crate::core_arch::x86::__m128i;
 use stdarch_test::assert_instr;
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.pclmulqdq"]
     fn pclmulqdq(a: __m128i, round_key: __m128i, imm8: u8) -> __m128i;
 }
@@ -28,9 +28,9 @@ extern "C" {
 #[cfg_attr(test, assert_instr(pclmul, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
 #[stable(feature = "simd_x86", since = "1.27.0")]
-pub unsafe fn _mm_clmulepi64_si128<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128i {
+pub fn _mm_clmulepi64_si128<const IMM8: i32>(a: __m128i, b: __m128i) -> __m128i {
     static_assert_uimm_bits!(IMM8, 8);
-    pclmulqdq(a, b, IMM8 as u8)
+    unsafe { pclmulqdq(a, b, IMM8 as u8) }
 }
 
 #[cfg(test)]

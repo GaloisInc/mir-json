@@ -56,57 +56,76 @@ impl bool {
     /// ```
     #[doc(alias = "then_with")]
     #[stable(feature = "lazy_bool_to_option", since = "1.50.0")]
-    #[cfg_attr(not(test), rustc_diagnostic_item = "bool_then")]
+    #[rustc_diagnostic_item = "bool_then"]
     #[inline]
     pub fn then<T, F: FnOnce() -> T>(self, f: F) -> Option<T> {
         if self { Some(f()) } else { None }
     }
 
-    /// Returns either `true_val` or `false_val` depending on the value of
-    /// `self`, with a hint to the compiler that `self` is unlikely
-    /// to be correctly predicted by a CPU’s branch predictor.
+    /// Returns `Ok(())` if the `bool` is [`true`](../std/keyword.true.html),
+    /// or `Err(err)` otherwise.
     ///
-    /// This method is functionally equivalent to
-    /// ```ignore (this is just for illustrative purposes)
-    /// fn select_unpredictable<T>(b: bool, true_val: T, false_val: T) -> T {
-    ///     if b { true_val } else { false_val }
-    /// }
-    /// ```
-    /// but might generate different assembly. In particular, on platforms with
-    /// a conditional move or select instruction (like `cmov` on x86 or `csel`
-    /// on ARM) the optimizer might use these instructions to avoid branches,
-    /// which can benefit performance if the branch predictor is struggling
-    /// with predicting `condition`, such as in an implementation of  binary
-    /// search.
+    /// Arguments passed to `ok_or` are eagerly evaluated; if you are
+    /// passing the result of a function call, it is recommended to use
+    /// [`ok_or_else`], which is lazily evaluated.
     ///
-    /// Note however that this lowering is not guaranteed (on any platform) and
-    /// should not be relied upon when trying to write constant-time code. Also
-    /// be aware that this lowering might *decrease* performance if `condition`
-    /// is well-predictable. It is advisable to perform benchmarks to tell if
-    /// this function is useful.
+    /// [`ok_or_else`]: bool::ok_or_else
     ///
     /// # Examples
     ///
-    /// Distribute values evenly between two buckets:
     /// ```
-    /// #![feature(select_unpredictable)]
+    /// #![feature(bool_to_result)]
     ///
-    /// use std::hash::BuildHasher;
-    ///
-    /// fn append<H: BuildHasher>(hasher: &H, v: i32, bucket_one: &mut Vec<i32>, bucket_two: &mut Vec<i32>) {
-    ///     let hash = hasher.hash_one(&v);
-    ///     let bucket = (hash % 2 == 0).select_unpredictable(bucket_one, bucket_two);
-    ///     bucket.push(v);
-    /// }
-    /// # let hasher = std::collections::hash_map::RandomState::new();
-    /// # let mut bucket_one = Vec::new();
-    /// # let mut bucket_two = Vec::new();
-    /// # append(&hasher, 42, &mut bucket_one, &mut bucket_two);
-    /// # assert_eq!(bucket_one.len() + bucket_two.len(), 1);
+    /// assert_eq!(false.ok_or(0), Err(0));
+    /// assert_eq!(true.ok_or(0), Ok(()));
     /// ```
-    #[inline(always)]
-    #[unstable(feature = "select_unpredictable", issue = "133962")]
-    pub fn select_unpredictable<T>(self, true_val: T, false_val: T) -> T {
-        crate::intrinsics::select_unpredictable(self, true_val, false_val)
+    ///
+    /// ```
+    /// #![feature(bool_to_result)]
+    ///
+    /// let mut a = 0;
+    /// let mut function_with_side_effects = || { a += 1; };
+    ///
+    /// assert!(true.ok_or(function_with_side_effects()).is_ok());
+    /// assert!(false.ok_or(function_with_side_effects()).is_err());
+    ///
+    /// // `a` is incremented twice because the value passed to `ok_or` is
+    /// // evaluated eagerly.
+    /// assert_eq!(a, 2);
+    /// ```
+    #[unstable(feature = "bool_to_result", issue = "142748")]
+    #[inline]
+    pub fn ok_or<E>(self, err: E) -> Result<(), E> {
+        if self { Ok(()) } else { Err(err) }
+    }
+
+    /// Returns `Ok(())` if the `bool` is [`true`](../std/keyword.true.html),
+    /// or `Err(f())` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(bool_to_result)]
+    ///
+    /// assert_eq!(false.ok_or_else(|| 0), Err(0));
+    /// assert_eq!(true.ok_or_else(|| 0), Ok(()));
+    /// ```
+    ///
+    /// ```
+    /// #![feature(bool_to_result)]
+    ///
+    /// let mut a = 0;
+    ///
+    /// assert!(true.ok_or_else(|| { a += 1; }).is_ok());
+    /// assert!(false.ok_or_else(|| { a += 1; }).is_err());
+    ///
+    /// // `a` is incremented once because the closure is evaluated lazily by
+    /// // `ok_or_else`.
+    /// assert_eq!(a, 1);
+    /// ```
+    #[unstable(feature = "bool_to_result", issue = "142748")]
+    #[inline]
+    pub fn ok_or_else<E, F: FnOnce() -> E>(self, f: F) -> Result<(), E> {
+        if self { Ok(()) } else { Err(f()) }
     }
 }

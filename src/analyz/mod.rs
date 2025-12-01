@@ -1,6 +1,6 @@
 #![macro_use]
 
-use rustc_ast::{ast, token, tokenstream, ptr, Crate};
+use rustc_ast::{ast, token, tokenstream, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
@@ -643,6 +643,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref target,
                 unwind: _,
                 replace: _,
+                // it seems like drop and async_fut are only used by the
+                // experimental async_drop feature, so we ignore them for now
+                drop: _,
+                async_fut: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.tcx).ty;
                 json!({
@@ -972,33 +976,8 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
     let crux = Symbol::intern("crux");
     let test = Symbol::intern("test");
 
-    // As a special case, return false early if the DefId is a synthetic (i.e.,
-    // compiler-generated) definition, as these will never have the crux::test
-    // attribute. More importantly, async closure bodies (a particular form of
-    // synthetic definition) cause the currently supported Rust nightly to
-    // panic when calling get_attrs_unchecked() below, as seen in #187. This
-    // special case avoids the panic.
-    //
-    // TODO: The description of this panic bears a striking resemblance to the
-    // one reported in https://github.com/rust-lang/rust/issues/134335, which
-    // has been fixed upstream. It is possible that this special case may no
-    // longer be needed after updating to a more recent Rust toolchain.
-    if tcx.is_synthetic_mir(def_id) {
-        return false;
-    }
-
-    for attr in tcx.get_attrs_unchecked(def_id) {
-        match &attr.kind {
-            rustc_hir::AttrKind::Normal(ref na) => {
-                let segs = &na.path.segments;
-                if segs.len() == 2 && segs[0].name == crux && segs[1].name == test {
-                    return true;
-                }
-            }
-            _ => { }
-        }
-    }
-    return false;
+    tcx.get_all_attrs(def_id).iter()
+        .any(|attr| attr.path_matches(&[crux, test]))
 }
 
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
@@ -1352,7 +1331,6 @@ fn inst_abi<'tcx>(
                 _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceKind::Intrinsic(_) => ExternAbi::RustIntrinsic,
         ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
         ty::InstanceKind::FnPtrShim(..) => ExternAbi::RustCall,
         _ => ExternAbi::Rust,
@@ -1504,7 +1482,7 @@ pub use analyz::to_json::ExportStyle;
 fn make_attr(key: &str, value: &str) -> ast::Attribute {
     ast::Attribute {
         kind: ast::AttrKind::Normal(
-            ptr::P(ast::NormalAttr {
+            Box::new(ast::NormalAttr {
                 item: ast::AttrItem {
                     unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),

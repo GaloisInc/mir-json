@@ -4,7 +4,8 @@
         target_os = "emscripten",
         all(target_os = "wasi", target_env = "p1"),
         target_env = "sgx",
-        target_os = "xous"
+        target_os = "xous",
+        target_os = "trusty",
     ))
 ))]
 mod tests;
@@ -119,7 +120,7 @@ impl UdpSocket {
     /// [`Ipv4Addr::UNSPECIFIED`] or [`Ipv6Addr::UNSPECIFIED`].
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<UdpSocket> {
-        super::each_addr(addr, net_imp::UdpSocket::bind).map(UdpSocket)
+        net_imp::UdpSocket::bind(addr).map(UdpSocket)
     }
 
     /// Receives a single datagram message on the socket. On success, returns the number
@@ -676,7 +677,7 @@ impl UdpSocket {
     /// on the platform.
     #[stable(feature = "net2_mutators", since = "1.9.0")]
     pub fn connect<A: ToSocketAddrs>(&self, addr: A) -> io::Result<()> {
-        super::each_addr(addr, |addr| self.0.connect(addr))
+        self.0.connect(addr)
     }
 
     /// Sends data on the socket to the remote address to which it is connected.

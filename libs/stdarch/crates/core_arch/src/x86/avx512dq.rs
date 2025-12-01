@@ -14,10 +14,12 @@ use crate::{
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_and_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let and = _mm_and_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, and, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_and_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let and = _mm_and_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, and, src.as_f64x2()))
+    }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b and
@@ -27,10 +29,12 @@ pub unsafe fn _mm_mask_and_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_and_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let and = _mm_and_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, and, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_and_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let and = _mm_and_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, and, f64x2::ZERO))
+    }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b
@@ -41,10 +45,12 @@ pub unsafe fn _mm_maskz_and_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_and_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let and = _mm256_and_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, and, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_and_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let and = _mm256_and_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, and, src.as_f64x4()))
+    }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b and
@@ -54,10 +60,12 @@ pub unsafe fn _mm256_mask_and_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m25
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_and_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let and = _mm256_and_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, and, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_and_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let and = _mm256_and_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, and, f64x4::ZERO))
+    }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b
@@ -67,9 +75,9 @@ pub unsafe fn _mm256_maskz_and_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandp))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_and_pd(a: __m512d, b: __m512d) -> __m512d {
-    transmute(simd_and(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b)))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_and_pd(a: __m512d, b: __m512d) -> __m512d {
+    unsafe { transmute(simd_and(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b))) }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b
@@ -80,10 +88,12 @@ pub unsafe fn _mm512_and_pd(a: __m512d, b: __m512d) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_and_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let and = _mm512_and_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, and, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_and_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let and = _mm512_and_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, and, src.as_f64x8()))
+    }
 }
 
 /// Compute the bitwise AND of packed double-precision (64-bit) floating point numbers in a and b and
@@ -93,10 +103,12 @@ pub unsafe fn _mm512_mask_and_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m51
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_and_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let and = _mm512_and_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, and, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_and_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let and = _mm512_and_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, and, f64x8::ZERO))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b
@@ -107,10 +119,12 @@ pub unsafe fn _mm512_maskz_and_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_and_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let and = _mm_and_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, and, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_and_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let and = _mm_and_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, and, src.as_f32x4()))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b and
@@ -120,10 +134,12 @@ pub unsafe fn _mm_mask_and_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) ->
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_and_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let and = _mm_and_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, and, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_and_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let and = _mm_and_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, and, f32x4::ZERO))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b
@@ -134,10 +150,12 @@ pub unsafe fn _mm_maskz_and_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_and_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let and = _mm256_and_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, and, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_and_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let and = _mm256_and_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, and, src.as_f32x8()))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b and
@@ -147,10 +165,12 @@ pub unsafe fn _mm256_mask_and_ps(src: __m256, k: __mmask8, a: __m256, b: __m256)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_and_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let and = _mm256_and_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, and, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_and_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let and = _mm256_and_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, and, f32x8::ZERO))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b
@@ -160,12 +180,14 @@ pub unsafe fn _mm256_maskz_and_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_and_ps(a: __m512, b: __m512) -> __m512 {
-    transmute(simd_and(
-        transmute::<_, u32x16>(a),
-        transmute::<_, u32x16>(b),
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_and_ps(a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        transmute(simd_and(
+            transmute::<_, u32x16>(a),
+            transmute::<_, u32x16>(b),
+        ))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b
@@ -176,10 +198,12 @@ pub unsafe fn _mm512_and_ps(a: __m512, b: __m512) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_and_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let and = _mm512_and_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, and, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_and_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let and = _mm512_and_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, and, src.as_f32x16()))
+    }
 }
 
 /// Compute the bitwise AND of packed single-precision (32-bit) floating point numbers in a and b and
@@ -189,10 +213,12 @@ pub unsafe fn _mm512_mask_and_ps(src: __m512, k: __mmask16, a: __m512, b: __m512
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_and_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let and = _mm512_and_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, and, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_and_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let and = _mm512_and_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, and, f32x16::ZERO))
+    }
 }
 
 // Andnot
@@ -205,10 +231,12 @@ pub unsafe fn _mm512_maskz_and_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_andnot_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let andnot = _mm_andnot_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, andnot, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_andnot_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let andnot = _mm_andnot_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, andnot, src.as_f64x2()))
+    }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -219,10 +247,12 @@ pub unsafe fn _mm_mask_andnot_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m12
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_andnot_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let andnot = _mm_andnot_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, andnot, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_andnot_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let andnot = _mm_andnot_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, andnot, f64x2::ZERO))
+    }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -233,10 +263,12 @@ pub unsafe fn _mm_maskz_andnot_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_andnot_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let andnot = _mm256_andnot_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, andnot, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_andnot_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let andnot = _mm256_andnot_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, andnot, src.as_f64x4()))
+    }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -247,10 +279,12 @@ pub unsafe fn _mm256_mask_andnot_pd(src: __m256d, k: __mmask8, a: __m256d, b: __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_andnot_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let andnot = _mm256_andnot_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, andnot, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_andnot_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let andnot = _mm256_andnot_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, andnot, f64x4::ZERO))
+    }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -260,9 +294,9 @@ pub unsafe fn _mm256_maskz_andnot_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnp))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_andnot_pd(a: __m512d, b: __m512d) -> __m512d {
-    _mm512_and_pd(_mm512_xor_pd(a, transmute(_mm512_set1_epi64(-1))), b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_andnot_pd(a: __m512d, b: __m512d) -> __m512d {
+    unsafe { _mm512_and_pd(_mm512_xor_pd(a, transmute(_mm512_set1_epi64(-1))), b) }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -273,10 +307,12 @@ pub unsafe fn _mm512_andnot_pd(a: __m512d, b: __m512d) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_andnot_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let andnot = _mm512_andnot_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, andnot, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_andnot_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let andnot = _mm512_andnot_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, andnot, src.as_f64x8()))
+    }
 }
 
 /// Compute the bitwise NOT of packed double-precision (64-bit) floating point numbers in a and then
@@ -287,10 +323,12 @@ pub unsafe fn _mm512_mask_andnot_pd(src: __m512d, k: __mmask8, a: __m512d, b: __
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_andnot_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let andnot = _mm512_andnot_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, andnot, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_andnot_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let andnot = _mm512_andnot_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, andnot, f64x8::ZERO))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -301,10 +339,12 @@ pub unsafe fn _mm512_maskz_andnot_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_andnot_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let andnot = _mm_andnot_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, andnot, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_andnot_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let andnot = _mm_andnot_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, andnot, src.as_f32x4()))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -315,10 +355,12 @@ pub unsafe fn _mm_mask_andnot_ps(src: __m128, k: __mmask8, a: __m128, b: __m128)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_andnot_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let andnot = _mm_andnot_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, andnot, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_andnot_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let andnot = _mm_andnot_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, andnot, f32x4::ZERO))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -329,10 +371,12 @@ pub unsafe fn _mm_maskz_andnot_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_andnot_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let andnot = _mm256_andnot_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, andnot, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_andnot_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let andnot = _mm256_andnot_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, andnot, src.as_f32x8()))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -343,10 +387,12 @@ pub unsafe fn _mm256_mask_andnot_ps(src: __m256, k: __mmask8, a: __m256, b: __m2
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_andnot_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let andnot = _mm256_andnot_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, andnot, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_andnot_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let andnot = _mm256_andnot_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, andnot, f32x8::ZERO))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -356,9 +402,9 @@ pub unsafe fn _mm256_maskz_andnot_ps(k: __mmask8, a: __m256, b: __m256) -> __m25
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_andnot_ps(a: __m512, b: __m512) -> __m512 {
-    _mm512_and_ps(_mm512_xor_ps(a, transmute(_mm512_set1_epi32(-1))), b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_andnot_ps(a: __m512, b: __m512) -> __m512 {
+    unsafe { _mm512_and_ps(_mm512_xor_ps(a, transmute(_mm512_set1_epi32(-1))), b) }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -369,10 +415,12 @@ pub unsafe fn _mm512_andnot_ps(a: __m512, b: __m512) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_andnot_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let andnot = _mm512_andnot_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, andnot, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_andnot_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let andnot = _mm512_andnot_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, andnot, src.as_f32x16()))
+    }
 }
 
 /// Compute the bitwise NOT of packed single-precision (32-bit) floating point numbers in a and then
@@ -383,10 +431,12 @@ pub unsafe fn _mm512_mask_andnot_ps(src: __m512, k: __mmask16, a: __m512, b: __m
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vandnps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_andnot_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let andnot = _mm512_andnot_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, andnot, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_andnot_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let andnot = _mm512_andnot_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, andnot, f32x16::ZERO))
+    }
 }
 
 // Or
@@ -399,10 +449,12 @@ pub unsafe fn _mm512_maskz_andnot_ps(k: __mmask16, a: __m512, b: __m512) -> __m5
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_or_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let or = _mm_or_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, or, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_or_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let or = _mm_or_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, or, src.as_f64x2()))
+    }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -412,10 +464,12 @@ pub unsafe fn _mm_mask_or_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_or_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let or = _mm_or_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, or, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_or_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let or = _mm_or_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, or, f64x2::ZERO))
+    }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b
@@ -426,10 +480,12 @@ pub unsafe fn _mm_maskz_or_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_or_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let or = _mm256_or_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, or, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_or_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let or = _mm256_or_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, or, src.as_f64x4()))
+    }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -439,10 +495,12 @@ pub unsafe fn _mm256_mask_or_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_or_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let or = _mm256_or_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, or, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_or_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let or = _mm256_or_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, or, f64x4::ZERO))
+    }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b
@@ -452,9 +510,9 @@ pub unsafe fn _mm256_maskz_or_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorp))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_or_pd(a: __m512d, b: __m512d) -> __m512d {
-    transmute(simd_or(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b)))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_or_pd(a: __m512d, b: __m512d) -> __m512d {
+    unsafe { transmute(simd_or(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b))) }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -465,10 +523,12 @@ pub unsafe fn _mm512_or_pd(a: __m512d, b: __m512d) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_or_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let or = _mm512_or_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, or, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_or_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let or = _mm512_or_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, or, src.as_f64x8()))
+    }
 }
 
 /// Compute the bitwise OR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -478,10 +538,12 @@ pub unsafe fn _mm512_mask_or_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_or_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let or = _mm512_or_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, or, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_or_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let or = _mm512_or_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, or, f64x8::ZERO))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b
@@ -492,10 +554,12 @@ pub unsafe fn _mm512_maskz_or_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_or_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let or = _mm_or_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, or, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_or_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let or = _mm_or_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, or, src.as_f32x4()))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -505,10 +569,12 @@ pub unsafe fn _mm_mask_or_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_or_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let or = _mm_or_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, or, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_or_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let or = _mm_or_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, or, f32x4::ZERO))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b
@@ -519,10 +585,12 @@ pub unsafe fn _mm_maskz_or_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_or_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let or = _mm256_or_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, or, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_or_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let or = _mm256_or_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, or, src.as_f32x8()))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -532,10 +600,12 @@ pub unsafe fn _mm256_mask_or_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_or_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let or = _mm256_or_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, or, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_or_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let or = _mm256_or_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, or, f32x8::ZERO))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b
@@ -545,12 +615,14 @@ pub unsafe fn _mm256_maskz_or_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_or_ps(a: __m512, b: __m512) -> __m512 {
-    transmute(simd_or(
-        transmute::<_, u32x16>(a),
-        transmute::<_, u32x16>(b),
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_or_ps(a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        transmute(simd_or(
+            transmute::<_, u32x16>(a),
+            transmute::<_, u32x16>(b),
+        ))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -561,10 +633,12 @@ pub unsafe fn _mm512_or_ps(a: __m512, b: __m512) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_or_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let or = _mm512_or_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, or, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_or_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let or = _mm512_or_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, or, src.as_f32x16()))
+    }
 }
 
 /// Compute the bitwise OR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -574,10 +648,12 @@ pub unsafe fn _mm512_mask_or_ps(src: __m512, k: __mmask16, a: __m512, b: __m512)
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_or_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let or = _mm512_or_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, or, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_or_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let or = _mm512_or_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, or, f32x16::ZERO))
+    }
 }
 
 // Xor
@@ -590,10 +666,12 @@ pub unsafe fn _mm512_maskz_or_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_xor_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let xor = _mm_xor_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, xor, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_xor_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let xor = _mm_xor_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, xor, src.as_f64x2()))
+    }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -603,10 +681,12 @@ pub unsafe fn _mm_mask_xor_pd(src: __m128d, k: __mmask8, a: __m128d, b: __m128d)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_xor_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
-    let xor = _mm_xor_pd(a, b).as_f64x2();
-    transmute(simd_select_bitmask(k, xor, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_xor_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+    unsafe {
+        let xor = _mm_xor_pd(a, b).as_f64x2();
+        transmute(simd_select_bitmask(k, xor, f64x2::ZERO))
+    }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b
@@ -617,10 +697,12 @@ pub unsafe fn _mm_maskz_xor_pd(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_xor_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let xor = _mm256_xor_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, xor, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_xor_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let xor = _mm256_xor_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, xor, src.as_f64x4()))
+    }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -630,10 +712,12 @@ pub unsafe fn _mm256_mask_xor_pd(src: __m256d, k: __mmask8, a: __m256d, b: __m25
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_xor_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
-    let xor = _mm256_xor_pd(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, xor, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_xor_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
+    unsafe {
+        let xor = _mm256_xor_pd(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, xor, f64x4::ZERO))
+    }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b
@@ -643,9 +727,9 @@ pub unsafe fn _mm256_maskz_xor_pd(k: __mmask8, a: __m256d, b: __m256d) -> __m256
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorp))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_xor_pd(a: __m512d, b: __m512d) -> __m512d {
-    transmute(simd_xor(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b)))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_xor_pd(a: __m512d, b: __m512d) -> __m512d {
+    unsafe { transmute(simd_xor(transmute::<_, u64x8>(a), transmute::<_, u64x8>(b))) }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -656,10 +740,12 @@ pub unsafe fn _mm512_xor_pd(a: __m512d, b: __m512d) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_xor_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let xor = _mm512_xor_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, xor, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_xor_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let xor = _mm512_xor_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, xor, src.as_f64x8()))
+    }
 }
 
 /// Compute the bitwise XOR of packed double-precision (64-bit) floating point numbers in a and b and
@@ -669,10 +755,12 @@ pub unsafe fn _mm512_mask_xor_pd(src: __m512d, k: __mmask8, a: __m512d, b: __m51
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorpd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_xor_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
-    let xor = _mm512_xor_pd(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, xor, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_xor_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
+    unsafe {
+        let xor = _mm512_xor_pd(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, xor, f64x8::ZERO))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b
@@ -683,10 +771,12 @@ pub unsafe fn _mm512_maskz_xor_pd(k: __mmask8, a: __m512d, b: __m512d) -> __m512
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_xor_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let xor = _mm_xor_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, xor, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_xor_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let xor = _mm_xor_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, xor, src.as_f32x4()))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -696,10 +786,12 @@ pub unsafe fn _mm_mask_xor_ps(src: __m128, k: __mmask8, a: __m128, b: __m128) ->
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_xor_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
-    let xor = _mm_xor_ps(a, b).as_f32x4();
-    transmute(simd_select_bitmask(k, xor, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_xor_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+    unsafe {
+        let xor = _mm_xor_ps(a, b).as_f32x4();
+        transmute(simd_select_bitmask(k, xor, f32x4::ZERO))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b
@@ -710,10 +802,12 @@ pub unsafe fn _mm_maskz_xor_ps(k: __mmask8, a: __m128, b: __m128) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_xor_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let xor = _mm256_xor_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, xor, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_xor_ps(src: __m256, k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let xor = _mm256_xor_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, xor, src.as_f32x8()))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -723,10 +817,12 @@ pub unsafe fn _mm256_mask_xor_ps(src: __m256, k: __mmask8, a: __m256, b: __m256)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_xor_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
-    let xor = _mm256_xor_ps(a, b).as_f32x8();
-    transmute(simd_select_bitmask(k, xor, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_xor_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
+    unsafe {
+        let xor = _mm256_xor_ps(a, b).as_f32x8();
+        transmute(simd_select_bitmask(k, xor, f32x8::ZERO))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b
@@ -736,12 +832,14 @@ pub unsafe fn _mm256_maskz_xor_ps(k: __mmask8, a: __m256, b: __m256) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_xor_ps(a: __m512, b: __m512) -> __m512 {
-    transmute(simd_xor(
-        transmute::<_, u32x16>(a),
-        transmute::<_, u32x16>(b),
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_xor_ps(a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        transmute(simd_xor(
+            transmute::<_, u32x16>(a),
+            transmute::<_, u32x16>(b),
+        ))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -752,10 +850,12 @@ pub unsafe fn _mm512_xor_ps(a: __m512, b: __m512) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_xor_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let xor = _mm512_xor_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, xor, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_xor_ps(src: __m512, k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let xor = _mm512_xor_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, xor, src.as_f32x16()))
+    }
 }
 
 /// Compute the bitwise XOR of packed single-precision (32-bit) floating point numbers in a and b and
@@ -765,10 +865,12 @@ pub unsafe fn _mm512_mask_xor_ps(src: __m512, k: __mmask16, a: __m512, b: __m512
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vxorps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_xor_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
-    let xor = _mm512_xor_ps(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, xor, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_xor_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 {
+    unsafe {
+        let xor = _mm512_xor_ps(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, xor, f32x16::ZERO))
+    }
 }
 
 // Broadcast
@@ -779,10 +881,12 @@ pub unsafe fn _mm512_maskz_xor_ps(k: __mmask16, a: __m512, b: __m512) -> __m512 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_broadcast_f32x2&ig_expand=509)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_broadcast_f32x2(a: __m128) -> __m256 {
-    let b: f32x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_broadcast_f32x2(a: __m128) -> __m256 {
+    unsafe {
+        let b: f32x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the lower 2 packed single-precision (32-bit) floating-point elements from a to all
@@ -792,10 +896,12 @@ pub unsafe fn _mm256_broadcast_f32x2(a: __m128) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcastf32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_broadcast_f32x2(src: __m256, k: __mmask8, a: __m128) -> __m256 {
-    let b = _mm256_broadcast_f32x2(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_broadcast_f32x2(src: __m256, k: __mmask8, a: __m128) -> __m256 {
+    unsafe {
+        let b = _mm256_broadcast_f32x2(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    }
 }
 
 /// Broadcasts the lower 2 packed single-precision (32-bit) floating-point elements from a to all
@@ -805,10 +911,12 @@ pub unsafe fn _mm256_mask_broadcast_f32x2(src: __m256, k: __mmask8, a: __m128) -
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcastf32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_broadcast_f32x2(k: __mmask8, a: __m128) -> __m256 {
-    let b = _mm256_broadcast_f32x2(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_broadcast_f32x2(k: __mmask8, a: __m128) -> __m256 {
+    unsafe {
+        let b = _mm256_broadcast_f32x2(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+    }
 }
 
 /// Broadcasts the lower 2 packed single-precision (32-bit) floating-point elements from a to all
@@ -817,10 +925,12 @@ pub unsafe fn _mm256_maskz_broadcast_f32x2(k: __mmask8, a: __m128) -> __m256 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_f32x2&ig_expand=512)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_f32x2(a: __m128) -> __m512 {
-    let b: f32x16 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_f32x2(a: __m128) -> __m512 {
+    unsafe {
+        let b: f32x16 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the lower 2 packed single-precision (32-bit) floating-point elements from a to all
@@ -830,10 +940,12 @@ pub unsafe fn _mm512_broadcast_f32x2(a: __m128) -> __m512 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vbroadcastf32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_f32x2(src: __m512, k: __mmask16, a: __m128) -> __m512 {
-    let b = _mm512_broadcast_f32x2(a).as_f32x16();
-    transmute(simd_select_bitmask(k, b, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_f32x2(src: __m512, k: __mmask16, a: __m128) -> __m512 {
+    unsafe {
+        let b = _mm512_broadcast_f32x2(a).as_f32x16();
+        transmute(simd_select_bitmask(k, b, src.as_f32x16()))
+    }
 }
 
 /// Broadcasts the lower 2 packed single-precision (32-bit) floating-point elements from a to all
@@ -843,10 +955,12 @@ pub unsafe fn _mm512_mask_broadcast_f32x2(src: __m512, k: __mmask16, a: __m128) 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vbroadcastf32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_f32x2(k: __mmask16, a: __m128) -> __m512 {
-    let b = _mm512_broadcast_f32x2(a).as_f32x16();
-    transmute(simd_select_bitmask(k, b, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_f32x2(k: __mmask16, a: __m128) -> __m512 {
+    unsafe {
+        let b = _mm512_broadcast_f32x2(a).as_f32x16();
+        transmute(simd_select_bitmask(k, b, f32x16::ZERO))
+    }
 }
 
 /// Broadcasts the 8 packed single-precision (32-bit) floating-point elements from a to all
@@ -855,10 +969,12 @@ pub unsafe fn _mm512_maskz_broadcast_f32x2(k: __mmask16, a: __m128) -> __m512 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_f32x8&ig_expand=521)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_f32x8(a: __m256) -> __m512 {
-    let b: f32x16 = simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_f32x8(a: __m256) -> __m512 {
+    unsafe {
+        let b: f32x16 = simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 8 packed single-precision (32-bit) floating-point elements from a to all
@@ -867,10 +983,12 @@ pub unsafe fn _mm512_broadcast_f32x8(a: __m256) -> __m512 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcast_f32x8&ig_expand=522)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_f32x8(src: __m512, k: __mmask16, a: __m256) -> __m512 {
-    let b = _mm512_broadcast_f32x8(a).as_f32x16();
-    transmute(simd_select_bitmask(k, b, src.as_f32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_f32x8(src: __m512, k: __mmask16, a: __m256) -> __m512 {
+    unsafe {
+        let b = _mm512_broadcast_f32x8(a).as_f32x16();
+        transmute(simd_select_bitmask(k, b, src.as_f32x16()))
+    }
 }
 
 /// Broadcasts the 8 packed single-precision (32-bit) floating-point elements from a to all
@@ -879,10 +997,12 @@ pub unsafe fn _mm512_mask_broadcast_f32x8(src: __m512, k: __mmask16, a: __m256) 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcast_f32x8&ig_expand=523)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_f32x8(k: __mmask16, a: __m256) -> __m512 {
-    let b = _mm512_broadcast_f32x8(a).as_f32x16();
-    transmute(simd_select_bitmask(k, b, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_f32x8(k: __mmask16, a: __m256) -> __m512 {
+    unsafe {
+        let b = _mm512_broadcast_f32x8(a).as_f32x16();
+        transmute(simd_select_bitmask(k, b, f32x16::ZERO))
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -891,10 +1011,12 @@ pub unsafe fn _mm512_maskz_broadcast_f32x8(k: __mmask16, a: __m256) -> __m512 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_broadcast_f64x2&ig_expand=524)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_broadcast_f64x2(a: __m128d) -> __m256d {
-    let b: f64x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_broadcast_f64x2(a: __m128d) -> __m256d {
+    unsafe {
+        let b: f64x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -903,10 +1025,12 @@ pub unsafe fn _mm256_broadcast_f64x2(a: __m128d) -> __m256d {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_broadcast_f64x2&ig_expand=525)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_broadcast_f64x2(src: __m256d, k: __mmask8, a: __m128d) -> __m256d {
-    let b = _mm256_broadcast_f64x2(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_broadcast_f64x2(src: __m256d, k: __mmask8, a: __m128d) -> __m256d {
+    unsafe {
+        let b = _mm256_broadcast_f64x2(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -915,10 +1039,12 @@ pub unsafe fn _mm256_mask_broadcast_f64x2(src: __m256d, k: __mmask8, a: __m128d)
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_broadcast_f64x2&ig_expand=526)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m256d {
-    let b = _mm256_broadcast_f64x2(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m256d {
+    unsafe {
+        let b = _mm256_broadcast_f64x2(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -927,10 +1053,12 @@ pub unsafe fn _mm256_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m256d {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_f64x2&ig_expand=527)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_f64x2(a: __m128d) -> __m512d {
-    let b: f64x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_f64x2(a: __m128d) -> __m512d {
+    unsafe {
+        let b: f64x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -939,10 +1067,12 @@ pub unsafe fn _mm512_broadcast_f64x2(a: __m128d) -> __m512d {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcast_f64x2&ig_expand=528)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_f64x2(src: __m512d, k: __mmask8, a: __m128d) -> __m512d {
-    let b = _mm512_broadcast_f64x2(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_f64x2(src: __m512d, k: __mmask8, a: __m128d) -> __m512d {
+    unsafe {
+        let b = _mm512_broadcast_f64x2(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    }
 }
 
 /// Broadcasts the 2 packed double-precision (64-bit) floating-point elements from a to all
@@ -951,10 +1081,12 @@ pub unsafe fn _mm512_mask_broadcast_f64x2(src: __m512d, k: __mmask8, a: __m128d)
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcast_f64x2&ig_expand=529)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m512d {
-    let b = _mm512_broadcast_f64x2(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m512d {
+    unsafe {
+        let b = _mm512_broadcast_f64x2(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst.
@@ -962,11 +1094,13 @@ pub unsafe fn _mm512_maskz_broadcast_f64x2(k: __mmask8, a: __m128d) -> __m512d {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_broadcast_i32x2&ig_expand=533)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_broadcast_i32x2(a: __m128i) -> __m128i {
-    let a = a.as_i32x4();
-    let b: i32x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_broadcast_i32x2(a: __m128i) -> __m128i {
+    unsafe {
+        let a = a.as_i32x4();
+        let b: i32x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using writemask k
@@ -976,10 +1110,12 @@ pub unsafe fn _mm_broadcast_i32x2(a: __m128i) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_broadcast_i32x2(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
-    let b = _mm_broadcast_i32x2(a).as_i32x4();
-    transmute(simd_select_bitmask(k, b, src.as_i32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_broadcast_i32x2(src: __m128i, k: __mmask8, a: __m128i) -> __m128i {
+    unsafe {
+        let b = _mm_broadcast_i32x2(a).as_i32x4();
+        transmute(simd_select_bitmask(k, b, src.as_i32x4()))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using zeromask k
@@ -989,10 +1125,12 @@ pub unsafe fn _mm_mask_broadcast_i32x2(src: __m128i, k: __mmask8, a: __m128i) ->
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m128i {
-    let b = _mm_broadcast_i32x2(a).as_i32x4();
-    transmute(simd_select_bitmask(k, b, i32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m128i {
+    unsafe {
+        let b = _mm_broadcast_i32x2(a).as_i32x4();
+        transmute(simd_select_bitmask(k, b, i32x4::ZERO))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst.
@@ -1000,11 +1138,13 @@ pub unsafe fn _mm_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m128i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_broadcast_i32x2&ig_expand=536)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_broadcast_i32x2(a: __m128i) -> __m256i {
-    let a = a.as_i32x4();
-    let b: i32x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_broadcast_i32x2(a: __m128i) -> __m256i {
+    unsafe {
+        let a = a.as_i32x4();
+        let b: i32x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using writemask k
@@ -1014,10 +1154,12 @@ pub unsafe fn _mm256_broadcast_i32x2(a: __m128i) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_broadcast_i32x2(src: __m256i, k: __mmask8, a: __m128i) -> __m256i {
-    let b = _mm256_broadcast_i32x2(a).as_i32x8();
-    transmute(simd_select_bitmask(k, b, src.as_i32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_broadcast_i32x2(src: __m256i, k: __mmask8, a: __m128i) -> __m256i {
+    unsafe {
+        let b = _mm256_broadcast_i32x2(a).as_i32x8();
+        transmute(simd_select_bitmask(k, b, src.as_i32x8()))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using zeromask k
@@ -1027,10 +1169,12 @@ pub unsafe fn _mm256_mask_broadcast_i32x2(src: __m256i, k: __mmask8, a: __m128i)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m256i {
-    let b = _mm256_broadcast_i32x2(a).as_i32x8();
-    transmute(simd_select_bitmask(k, b, i32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m256i {
+    unsafe {
+        let b = _mm256_broadcast_i32x2(a).as_i32x8();
+        transmute(simd_select_bitmask(k, b, i32x8::ZERO))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst.
@@ -1038,11 +1182,13 @@ pub unsafe fn _mm256_maskz_broadcast_i32x2(k: __mmask8, a: __m128i) -> __m256i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_i32x2&ig_expand=539)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_i32x2(a: __m128i) -> __m512i {
-    let a = a.as_i32x4();
-    let b: i32x16 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_i32x2(a: __m128i) -> __m512i {
+    unsafe {
+        let a = a.as_i32x4();
+        let b: i32x16 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using writemask k
@@ -1052,10 +1198,12 @@ pub unsafe fn _mm512_broadcast_i32x2(a: __m128i) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_i32x2(src: __m512i, k: __mmask16, a: __m128i) -> __m512i {
-    let b = _mm512_broadcast_i32x2(a).as_i32x16();
-    transmute(simd_select_bitmask(k, b, src.as_i32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_i32x2(src: __m512i, k: __mmask16, a: __m128i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i32x2(a).as_i32x16();
+        transmute(simd_select_bitmask(k, b, src.as_i32x16()))
+    }
 }
 
 /// Broadcasts the lower 2 packed 32-bit integers from a to all elements of dst using zeromask k
@@ -1065,10 +1213,12 @@ pub unsafe fn _mm512_mask_broadcast_i32x2(src: __m512i, k: __mmask16, a: __m128i
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vbroadcasti32x2))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_i32x2(k: __mmask16, a: __m128i) -> __m512i {
-    let b = _mm512_broadcast_i32x2(a).as_i32x16();
-    transmute(simd_select_bitmask(k, b, i32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_i32x2(k: __mmask16, a: __m128i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i32x2(a).as_i32x16();
+        transmute(simd_select_bitmask(k, b, i32x16::ZERO))
+    }
 }
 
 /// Broadcasts the 8 packed 32-bit integers from a to all elements of dst.
@@ -1076,11 +1226,13 @@ pub unsafe fn _mm512_maskz_broadcast_i32x2(k: __mmask16, a: __m128i) -> __m512i 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_i32x8&ig_expand=548)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_i32x8(a: __m256i) -> __m512i {
-    let a = a.as_i32x8();
-    let b: i32x16 = simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_i32x8(a: __m256i) -> __m512i {
+    unsafe {
+        let a = a.as_i32x8();
+        let b: i32x16 = simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 8 packed 32-bit integers from a to all elements of dst using writemask k
@@ -1089,10 +1241,12 @@ pub unsafe fn _mm512_broadcast_i32x8(a: __m256i) -> __m512i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcast_i32x8&ig_expand=549)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_i32x8(src: __m512i, k: __mmask16, a: __m256i) -> __m512i {
-    let b = _mm512_broadcast_i32x8(a).as_i32x16();
-    transmute(simd_select_bitmask(k, b, src.as_i32x16()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_i32x8(src: __m512i, k: __mmask16, a: __m256i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i32x8(a).as_i32x16();
+        transmute(simd_select_bitmask(k, b, src.as_i32x16()))
+    }
 }
 
 /// Broadcasts the 8 packed 32-bit integers from a to all elements of dst using zeromask k
@@ -1101,10 +1255,12 @@ pub unsafe fn _mm512_mask_broadcast_i32x8(src: __m512i, k: __mmask16, a: __m256i
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcast_i32x8&ig_expand=550)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_i32x8(k: __mmask16, a: __m256i) -> __m512i {
-    let b = _mm512_broadcast_i32x8(a).as_i32x16();
-    transmute(simd_select_bitmask(k, b, i32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_i32x8(k: __mmask16, a: __m256i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i32x8(a).as_i32x16();
+        transmute(simd_select_bitmask(k, b, i32x16::ZERO))
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst.
@@ -1112,11 +1268,13 @@ pub unsafe fn _mm512_maskz_broadcast_i32x8(k: __mmask16, a: __m256i) -> __m512i 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_broadcast_i64x2&ig_expand=551)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_broadcast_i64x2(a: __m128i) -> __m256i {
-    let a = a.as_i64x2();
-    let b: i64x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_broadcast_i64x2(a: __m128i) -> __m256i {
+    unsafe {
+        let a = a.as_i64x2();
+        let b: i64x4 = simd_shuffle!(a, a, [0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst using writemask k
@@ -1125,10 +1283,12 @@ pub unsafe fn _mm256_broadcast_i64x2(a: __m128i) -> __m256i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_mask_broadcast_i64x2&ig_expand=552)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_broadcast_i64x2(src: __m256i, k: __mmask8, a: __m128i) -> __m256i {
-    let b = _mm256_broadcast_i64x2(a).as_i64x4();
-    transmute(simd_select_bitmask(k, b, src.as_i64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_broadcast_i64x2(src: __m256i, k: __mmask8, a: __m128i) -> __m256i {
+    unsafe {
+        let b = _mm256_broadcast_i64x2(a).as_i64x4();
+        transmute(simd_select_bitmask(k, b, src.as_i64x4()))
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst using zeromask k
@@ -1137,10 +1297,12 @@ pub unsafe fn _mm256_mask_broadcast_i64x2(src: __m256i, k: __mmask8, a: __m128i)
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_maskz_broadcast_i64x2&ig_expand=553)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m256i {
-    let b = _mm256_broadcast_i64x2(a).as_i64x4();
-    transmute(simd_select_bitmask(k, b, i64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m256i {
+    unsafe {
+        let b = _mm256_broadcast_i64x2(a).as_i64x4();
+        transmute(simd_select_bitmask(k, b, i64x4::ZERO))
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst.
@@ -1148,11 +1310,13 @@ pub unsafe fn _mm256_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m256i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_broadcast_i64x2&ig_expand=554)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_broadcast_i64x2(a: __m128i) -> __m512i {
-    let a = a.as_i64x2();
-    let b: i64x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_broadcast_i64x2(a: __m128i) -> __m512i {
+    unsafe {
+        let a = a.as_i64x2();
+        let b: i64x8 = simd_shuffle!(a, a, [0, 1, 0, 1, 0, 1, 0, 1]);
+        transmute(b)
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst using writemask k
@@ -1161,10 +1325,12 @@ pub unsafe fn _mm512_broadcast_i64x2(a: __m128i) -> __m512i {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_mask_broadcast_i64x2&ig_expand=555)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_broadcast_i64x2(src: __m512i, k: __mmask8, a: __m128i) -> __m512i {
-    let b = _mm512_broadcast_i64x2(a).as_i64x8();
-    transmute(simd_select_bitmask(k, b, src.as_i64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_broadcast_i64x2(src: __m512i, k: __mmask8, a: __m128i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i64x2(a).as_i64x8();
+        transmute(simd_select_bitmask(k, b, src.as_i64x8()))
+    }
 }
 
 /// Broadcasts the 2 packed 64-bit integers from a to all elements of dst using zeromask k
@@ -1173,10 +1339,12 @@ pub unsafe fn _mm512_mask_broadcast_i64x2(src: __m512i, k: __mmask8, a: __m128i)
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_maskz_broadcast_i64x2&ig_expand=556)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m512i {
-    let b = _mm512_broadcast_i64x2(a).as_i64x8();
-    transmute(simd_select_bitmask(k, b, i64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m512i {
+    unsafe {
+        let b = _mm512_broadcast_i64x2(a).as_i64x8();
+        transmute(simd_select_bitmask(k, b, i64x8::ZERO))
+    }
 }
 
 // Extract
@@ -1188,12 +1356,14 @@ pub unsafe fn _mm512_maskz_broadcast_i64x2(k: __mmask8, a: __m128i) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_extractf32x8_ps<const IMM8: i32>(a: __m512) -> __m256 {
-    static_assert_uimm_bits!(IMM8, 1);
-    match IMM8 & 1 {
-        0 => simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7]),
-        _ => simd_shuffle!(a, a, [8, 9, 10, 11, 12, 13, 14, 15]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_extractf32x8_ps<const IMM8: i32>(a: __m512) -> __m256 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        match IMM8 & 1 {
+            0 => simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7]),
+            _ => simd_shuffle!(a, a, [8, 9, 10, 11, 12, 13, 14, 15]),
+        }
     }
 }
 
@@ -1206,15 +1376,13 @@ pub unsafe fn _mm512_extractf32x8_ps<const IMM8: i32>(a: __m512) -> __m256 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextractf32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_extractf32x8_ps<const IMM8: i32>(
-    src: __m256,
-    k: __mmask8,
-    a: __m512,
-) -> __m256 {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm512_extractf32x8_ps::<IMM8>(a);
-    transmute(simd_select_bitmask(k, b.as_f32x8(), src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_extractf32x8_ps<const IMM8: i32>(src: __m256, k: __mmask8, a: __m512) -> __m256 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm512_extractf32x8_ps::<IMM8>(a);
+        transmute(simd_select_bitmask(k, b.as_f32x8(), src.as_f32x8()))
+    }
 }
 
 /// Extracts 256 bits (composed of 8 packed single-precision (32-bit) floating-point elements) from a,
@@ -1226,11 +1394,13 @@ pub unsafe fn _mm512_mask_extractf32x8_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextractf32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_extractf32x8_ps<const IMM8: i32>(k: __mmask8, a: __m512) -> __m256 {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm512_extractf32x8_ps::<IMM8>(a);
-    transmute(simd_select_bitmask(k, b.as_f32x8(), f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_extractf32x8_ps<const IMM8: i32>(k: __mmask8, a: __m512) -> __m256 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm512_extractf32x8_ps::<IMM8>(a);
+        transmute(simd_select_bitmask(k, b.as_f32x8(), f32x8::ZERO))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed double-precision (64-bit) floating-point elements) from a,
@@ -1240,12 +1410,14 @@ pub unsafe fn _mm512_maskz_extractf32x8_ps<const IMM8: i32>(k: __mmask8, a: __m5
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_extractf64x2_pd<const IMM8: i32>(a: __m256d) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 1);
-    match IMM8 & 1 {
-        0 => simd_shuffle!(a, a, [0, 1]),
-        _ => simd_shuffle!(a, a, [2, 3]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_extractf64x2_pd<const IMM8: i32>(a: __m256d) -> __m128d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        match IMM8 & 1 {
+            0 => simd_shuffle!(a, a, [0, 1]),
+            _ => simd_shuffle!(a, a, [2, 3]),
+        }
     }
 }
 
@@ -1258,15 +1430,17 @@ pub unsafe fn _mm256_extractf64x2_pd<const IMM8: i32>(a: __m256d) -> __m128d {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vextractf64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_extractf64x2_pd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_extractf64x2_pd<const IMM8: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m256d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm256_extractf64x2_pd::<IMM8>(a);
-    transmute(simd_select_bitmask(k, b.as_f64x2(), src.as_f64x2()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm256_extractf64x2_pd::<IMM8>(a);
+        transmute(simd_select_bitmask(k, b.as_f64x2(), src.as_f64x2()))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed double-precision (64-bit) floating-point elements) from a,
@@ -1278,11 +1452,13 @@ pub unsafe fn _mm256_mask_extractf64x2_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vextractf64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m256d) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm256_extractf64x2_pd::<IMM8>(a);
-    transmute(simd_select_bitmask(k, b.as_f64x2(), f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m256d) -> __m128d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm256_extractf64x2_pd::<IMM8>(a);
+        transmute(simd_select_bitmask(k, b.as_f64x2(), f64x2::ZERO))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed double-precision (64-bit) floating-point elements) from a,
@@ -1292,14 +1468,16 @@ pub unsafe fn _mm256_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m2
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_extractf64x2_pd<const IMM8: i32>(a: __m512d) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 2);
-    match IMM8 & 3 {
-        0 => simd_shuffle!(a, a, [0, 1]),
-        1 => simd_shuffle!(a, a, [2, 3]),
-        2 => simd_shuffle!(a, a, [4, 5]),
-        _ => simd_shuffle!(a, a, [6, 7]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_extractf64x2_pd<const IMM8: i32>(a: __m512d) -> __m128d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        match IMM8 & 3 {
+            0 => simd_shuffle!(a, a, [0, 1]),
+            1 => simd_shuffle!(a, a, [2, 3]),
+            2 => simd_shuffle!(a, a, [4, 5]),
+            _ => simd_shuffle!(a, a, [6, 7]),
+        }
     }
 }
 
@@ -1312,15 +1490,17 @@ pub unsafe fn _mm512_extractf64x2_pd<const IMM8: i32>(a: __m512d) -> __m128d {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextractf64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_extractf64x2_pd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_extractf64x2_pd<const IMM8: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m512d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 2);
-    let b = _mm512_extractf64x2_pd::<IMM8>(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let b = _mm512_extractf64x2_pd::<IMM8>(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed double-precision (64-bit) floating-point elements) from a,
@@ -1332,11 +1512,13 @@ pub unsafe fn _mm512_mask_extractf64x2_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextractf64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m512d) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 2);
-    let b = _mm512_extractf64x2_pd::<IMM8>(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m512d) -> __m128d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let b = _mm512_extractf64x2_pd::<IMM8>(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+    }
 }
 
 /// Extracts 256 bits (composed of 8 packed 32-bit integers) from a, selected with IMM8, and stores
@@ -1346,15 +1528,17 @@ pub unsafe fn _mm512_maskz_extractf64x2_pd<const IMM8: i32>(k: __mmask8, a: __m5
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_extracti32x8_epi32<const IMM8: i32>(a: __m512i) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let a = a.as_i32x16();
-    let b: i32x8 = match IMM8 & 1 {
-        0 => simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7]),
-        _ => simd_shuffle!(a, a, [8, 9, 10, 11, 12, 13, 14, 15]),
-    };
-    transmute(b)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_extracti32x8_epi32<const IMM8: i32>(a: __m512i) -> __m256i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let a = a.as_i32x16();
+        let b: i32x8 = match IMM8 & 1 {
+            0 => simd_shuffle!(a, a, [0, 1, 2, 3, 4, 5, 6, 7]),
+            _ => simd_shuffle!(a, a, [8, 9, 10, 11, 12, 13, 14, 15]),
+        };
+        transmute(b)
+    }
 }
 
 /// Extracts 256 bits (composed of 8 packed 32-bit integers) from a, selected with IMM8, and stores
@@ -1365,15 +1549,17 @@ pub unsafe fn _mm512_extracti32x8_epi32<const IMM8: i32>(a: __m512i) -> __m256i 
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextracti32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_extracti32x8_epi32<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_extracti32x8_epi32<const IMM8: i32>(
     src: __m256i,
     k: __mmask8,
     a: __m512i,
 ) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm512_extracti32x8_epi32::<IMM8>(a).as_i32x8();
-    transmute(simd_select_bitmask(k, b, src.as_i32x8()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm512_extracti32x8_epi32::<IMM8>(a).as_i32x8();
+        transmute(simd_select_bitmask(k, b, src.as_i32x8()))
+    }
 }
 
 /// Extracts 256 bits (composed of 8 packed 32-bit integers) from a, selected with IMM8, and stores
@@ -1384,11 +1570,13 @@ pub unsafe fn _mm512_mask_extracti32x8_epi32<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextracti32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_extracti32x8_epi32<const IMM8: i32>(k: __mmask8, a: __m512i) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm512_extracti32x8_epi32::<IMM8>(a).as_i32x8();
-    transmute(simd_select_bitmask(k, b, i32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_extracti32x8_epi32<const IMM8: i32>(k: __mmask8, a: __m512i) -> __m256i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm512_extracti32x8_epi32::<IMM8>(a).as_i32x8();
+        transmute(simd_select_bitmask(k, b, i32x8::ZERO))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed 64-bit integers) from a, selected with IMM8, and stores
@@ -1398,13 +1586,15 @@ pub unsafe fn _mm512_maskz_extracti32x8_epi32<const IMM8: i32>(k: __mmask8, a: _
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_extracti64x2_epi64<const IMM8: i32>(a: __m256i) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let a = a.as_i64x4();
-    match IMM8 & 1 {
-        0 => simd_shuffle!(a, a, [0, 1]),
-        _ => simd_shuffle!(a, a, [2, 3]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_extracti64x2_epi64<const IMM8: i32>(a: __m256i) -> __m128i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let a = a.as_i64x4();
+        match IMM8 & 1 {
+            0 => simd_shuffle!(a, a, [0, 1]),
+            _ => simd_shuffle!(a, a, [2, 3]),
+        }
     }
 }
 
@@ -1416,15 +1606,17 @@ pub unsafe fn _mm256_extracti64x2_epi64<const IMM8: i32>(a: __m256i) -> __m128i 
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vextracti64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_extracti64x2_epi64<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_extracti64x2_epi64<const IMM8: i32>(
     src: __m128i,
     k: __mmask8,
     a: __m256i,
 ) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm256_extracti64x2_epi64::<IMM8>(a).as_i64x2();
-    transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm256_extracti64x2_epi64::<IMM8>(a).as_i64x2();
+        transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed 64-bit integers) from a, selected with IMM8, and stores
@@ -1435,11 +1627,13 @@ pub unsafe fn _mm256_mask_extracti64x2_epi64<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vextracti64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: __m256i) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm256_extracti64x2_epi64::<IMM8>(a).as_i64x2();
-    transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: __m256i) -> __m128i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm256_extracti64x2_epi64::<IMM8>(a).as_i64x2();
+        transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed 64-bit integers) from a, selected with IMM8, and stores
@@ -1449,15 +1643,17 @@ pub unsafe fn _mm256_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_extracti64x2_epi64<const IMM8: i32>(a: __m512i) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let a = a.as_i64x8();
-    match IMM8 & 3 {
-        0 => simd_shuffle!(a, a, [0, 1]),
-        1 => simd_shuffle!(a, a, [2, 3]),
-        2 => simd_shuffle!(a, a, [4, 5]),
-        _ => simd_shuffle!(a, a, [6, 7]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_extracti64x2_epi64<const IMM8: i32>(a: __m512i) -> __m128i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let a = a.as_i64x8();
+        match IMM8 & 3 {
+            0 => simd_shuffle!(a, a, [0, 1]),
+            1 => simd_shuffle!(a, a, [2, 3]),
+            2 => simd_shuffle!(a, a, [4, 5]),
+            _ => simd_shuffle!(a, a, [6, 7]),
+        }
     }
 }
 
@@ -1469,15 +1665,17 @@ pub unsafe fn _mm512_extracti64x2_epi64<const IMM8: i32>(a: __m512i) -> __m128i 
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextracti64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_extracti64x2_epi64<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_extracti64x2_epi64<const IMM8: i32>(
     src: __m128i,
     k: __mmask8,
     a: __m512i,
 ) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let b = _mm512_extracti64x2_epi64::<IMM8>(a).as_i64x2();
-    transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let b = _mm512_extracti64x2_epi64::<IMM8>(a).as_i64x2();
+        transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+    }
 }
 
 /// Extracts 128 bits (composed of 2 packed 64-bit integers) from a, selected with IMM8, and stores
@@ -1488,11 +1686,13 @@ pub unsafe fn _mm512_mask_extracti64x2_epi64<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vextracti64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: __m512i) -> __m128i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let b = _mm512_extracti64x2_epi64::<IMM8>(a).as_i64x2();
-    transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: __m512i) -> __m128i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let b = _mm512_extracti64x2_epi64::<IMM8>(a).as_i64x2();
+        transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+    }
 }
 
 // Insert
@@ -1504,21 +1704,27 @@ pub unsafe fn _mm512_maskz_extracti64x2_epi64<const IMM8: i32>(k: __mmask8, a: _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_insertf32x8<const IMM8: i32>(a: __m512, b: __m256) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm512_castps256_ps512(b);
-    match IMM8 & 1 {
-        0 => simd_shuffle!(
-            a,
-            b,
-            [16, 17, 18, 19, 20, 21, 22, 23, 8, 9, 10, 11, 12, 13, 14, 15]
-        ),
-        _ => simd_shuffle!(
-            a,
-            b,
-            [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23]
-        ),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_insertf32x8<const IMM8: i32>(a: __m512, b: __m256) -> __m512 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm512_castps256_ps512(b);
+        match IMM8 & 1 {
+            0 => {
+                simd_shuffle!(
+                    a,
+                    b,
+                    [16, 17, 18, 19, 20, 21, 22, 23, 8, 9, 10, 11, 12, 13, 14, 15]
+                )
+            }
+            _ => {
+                simd_shuffle!(
+                    a,
+                    b,
+                    [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23]
+                )
+            }
+        }
     }
 }
 
@@ -1531,16 +1737,18 @@ pub unsafe fn _mm512_insertf32x8<const IMM8: i32>(a: __m512, b: __m256) -> __m51
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinsertf32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_insertf32x8<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_insertf32x8<const IMM8: i32>(
     src: __m512,
     k: __mmask16,
     a: __m512,
     b: __m256,
 ) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm512_insertf32x8::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_f32x16(), src.as_f32x16()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm512_insertf32x8::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_f32x16(), src.as_f32x16()))
+    }
 }
 
 /// Copy a to tmp, then insert 256 bits (composed of 8 packed single-precision (32-bit) floating-point
@@ -1552,15 +1760,13 @@ pub unsafe fn _mm512_mask_insertf32x8<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinsertf32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_insertf32x8<const IMM8: i32>(
-    k: __mmask16,
-    a: __m512,
-    b: __m256,
-) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm512_insertf32x8::<IMM8>(a, b).as_f32x16();
-    transmute(simd_select_bitmask(k, c, f32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_insertf32x8<const IMM8: i32>(k: __mmask16, a: __m512, b: __m256) -> __m512 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm512_insertf32x8::<IMM8>(a, b).as_f32x16();
+        transmute(simd_select_bitmask(k, c, f32x16::ZERO))
+    }
 }
 
 /// Copy a to dst, then insert 128 bits (composed of 2 packed double-precision (64-bit) floating-point
@@ -1570,13 +1776,15 @@ pub unsafe fn _mm512_maskz_insertf32x8<const IMM8: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_insertf64x2<const IMM8: i32>(a: __m256d, b: __m128d) -> __m256d {
-    static_assert_uimm_bits!(IMM8, 1);
-    let b = _mm256_castpd128_pd256(b);
-    match IMM8 & 1 {
-        0 => simd_shuffle!(a, b, [4, 5, 2, 3]),
-        _ => simd_shuffle!(a, b, [0, 1, 4, 5]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_insertf64x2<const IMM8: i32>(a: __m256d, b: __m128d) -> __m256d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let b = _mm256_castpd128_pd256(b);
+        match IMM8 & 1 {
+            0 => simd_shuffle!(a, b, [4, 5, 2, 3]),
+            _ => simd_shuffle!(a, b, [0, 1, 4, 5]),
+        }
     }
 }
 
@@ -1589,16 +1797,18 @@ pub unsafe fn _mm256_insertf64x2<const IMM8: i32>(a: __m256d, b: __m128d) -> __m
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vinsertf64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_insertf64x2<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_insertf64x2<const IMM8: i32>(
     src: __m256d,
     k: __mmask8,
     a: __m256d,
     b: __m128d,
 ) -> __m256d {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm256_insertf64x2::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_f64x4(), src.as_f64x4()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm256_insertf64x2::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_f64x4(), src.as_f64x4()))
+    }
 }
 
 /// Copy a to tmp, then insert 128 bits (composed of 2 packed double-precision (64-bit) floating-point
@@ -1610,15 +1820,13 @@ pub unsafe fn _mm256_mask_insertf64x2<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vinsertf64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_insertf64x2<const IMM8: i32>(
-    k: __mmask8,
-    a: __m256d,
-    b: __m128d,
-) -> __m256d {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm256_insertf64x2::<IMM8>(a, b).as_f64x4();
-    transmute(simd_select_bitmask(k, c, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_insertf64x2<const IMM8: i32>(k: __mmask8, a: __m256d, b: __m128d) -> __m256d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm256_insertf64x2::<IMM8>(a, b).as_f64x4();
+        transmute(simd_select_bitmask(k, c, f64x4::ZERO))
+    }
 }
 
 /// Copy a to dst, then insert 128 bits (composed of 2 packed double-precision (64-bit) floating-point
@@ -1628,15 +1836,17 @@ pub unsafe fn _mm256_maskz_insertf64x2<const IMM8: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_insertf64x2<const IMM8: i32>(a: __m512d, b: __m128d) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 2);
-    let b = _mm512_castpd128_pd512(b);
-    match IMM8 & 3 {
-        0 => simd_shuffle!(a, b, [8, 9, 2, 3, 4, 5, 6, 7]),
-        1 => simd_shuffle!(a, b, [0, 1, 8, 9, 4, 5, 6, 7]),
-        2 => simd_shuffle!(a, b, [0, 1, 2, 3, 8, 9, 6, 7]),
-        _ => simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 8, 9]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_insertf64x2<const IMM8: i32>(a: __m512d, b: __m128d) -> __m512d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let b = _mm512_castpd128_pd512(b);
+        match IMM8 & 3 {
+            0 => simd_shuffle!(a, b, [8, 9, 2, 3, 4, 5, 6, 7]),
+            1 => simd_shuffle!(a, b, [0, 1, 8, 9, 4, 5, 6, 7]),
+            2 => simd_shuffle!(a, b, [0, 1, 2, 3, 8, 9, 6, 7]),
+            _ => simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 8, 9]),
+        }
     }
 }
 
@@ -1649,16 +1859,18 @@ pub unsafe fn _mm512_insertf64x2<const IMM8: i32>(a: __m512d, b: __m128d) -> __m
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinsertf64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_insertf64x2<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_insertf64x2<const IMM8: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512d,
     b: __m128d,
 ) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 2);
-    let c = _mm512_insertf64x2::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_f64x8(), src.as_f64x8()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let c = _mm512_insertf64x2::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_f64x8(), src.as_f64x8()))
+    }
 }
 
 /// Copy a to tmp, then insert 128 bits (composed of 2 packed double-precision (64-bit) floating-point
@@ -1670,15 +1882,13 @@ pub unsafe fn _mm512_mask_insertf64x2<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinsertf64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_insertf64x2<const IMM8: i32>(
-    k: __mmask8,
-    a: __m512d,
-    b: __m128d,
-) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 2);
-    let c = _mm512_insertf64x2::<IMM8>(a, b).as_f64x8();
-    transmute(simd_select_bitmask(k, c, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_insertf64x2<const IMM8: i32>(k: __mmask8, a: __m512d, b: __m128d) -> __m512d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let c = _mm512_insertf64x2::<IMM8>(a, b).as_f64x8();
+        transmute(simd_select_bitmask(k, c, f64x8::ZERO))
+    }
 }
 
 /// Copy a to dst, then insert 256 bits (composed of 8 packed 32-bit integers) from b into dst at the
@@ -1688,24 +1898,30 @@ pub unsafe fn _mm512_maskz_insertf64x2<const IMM8: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_inserti32x8<const IMM8: i32>(a: __m512i, b: __m256i) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let a = a.as_i32x16();
-    let b = _mm512_castsi256_si512(b).as_i32x16();
-    let r: i32x16 = match IMM8 & 1 {
-        0 => simd_shuffle!(
-            a,
-            b,
-            [16, 17, 18, 19, 20, 21, 22, 23, 8, 9, 10, 11, 12, 13, 14, 15]
-        ),
-        _ => simd_shuffle!(
-            a,
-            b,
-            [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23]
-        ),
-    };
-    transmute(r)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_inserti32x8<const IMM8: i32>(a: __m512i, b: __m256i) -> __m512i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let a = a.as_i32x16();
+        let b = _mm512_castsi256_si512(b).as_i32x16();
+        let r: i32x16 = match IMM8 & 1 {
+            0 => {
+                simd_shuffle!(
+                    a,
+                    b,
+                    [16, 17, 18, 19, 20, 21, 22, 23, 8, 9, 10, 11, 12, 13, 14, 15]
+                )
+            }
+            _ => {
+                simd_shuffle!(
+                    a,
+                    b,
+                    [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23]
+                )
+            }
+        };
+        transmute(r)
+    }
 }
 
 /// Copy a to tmp, then insert 256 bits (composed of 8 packed 32-bit integers) from b into tmp at the
@@ -1717,16 +1933,18 @@ pub unsafe fn _mm512_inserti32x8<const IMM8: i32>(a: __m512i, b: __m256i) -> __m
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinserti32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_inserti32x8<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_inserti32x8<const IMM8: i32>(
     src: __m512i,
     k: __mmask16,
     a: __m512i,
     b: __m256i,
 ) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm512_inserti32x8::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_i32x16(), src.as_i32x16()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm512_inserti32x8::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_i32x16(), src.as_i32x16()))
+    }
 }
 
 /// Copy a to tmp, then insert 256 bits (composed of 8 packed 32-bit integers) from b into tmp at the
@@ -1738,15 +1956,13 @@ pub unsafe fn _mm512_mask_inserti32x8<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinserti32x8, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_inserti32x8<const IMM8: i32>(
-    k: __mmask16,
-    a: __m512i,
-    b: __m256i,
-) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm512_inserti32x8::<IMM8>(a, b).as_i32x16();
-    transmute(simd_select_bitmask(k, c, i32x16::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_inserti32x8<const IMM8: i32>(k: __mmask16, a: __m512i, b: __m256i) -> __m512i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm512_inserti32x8::<IMM8>(a, b).as_i32x16();
+        transmute(simd_select_bitmask(k, c, i32x16::ZERO))
+    }
 }
 
 /// Copy a to dst, then insert 128 bits (composed of 2 packed 64-bit integers) from b into dst at the
@@ -1756,14 +1972,16 @@ pub unsafe fn _mm512_maskz_inserti32x8<const IMM8: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_inserti64x2<const IMM8: i32>(a: __m256i, b: __m128i) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let a = a.as_i64x4();
-    let b = _mm256_castsi128_si256(b).as_i64x4();
-    match IMM8 & 1 {
-        0 => simd_shuffle!(a, b, [4, 5, 2, 3]),
-        _ => simd_shuffle!(a, b, [0, 1, 4, 5]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_inserti64x2<const IMM8: i32>(a: __m256i, b: __m128i) -> __m256i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let a = a.as_i64x4();
+        let b = _mm256_castsi128_si256(b).as_i64x4();
+        match IMM8 & 1 {
+            0 => simd_shuffle!(a, b, [4, 5, 2, 3]),
+            _ => simd_shuffle!(a, b, [0, 1, 4, 5]),
+        }
     }
 }
 
@@ -1776,16 +1994,18 @@ pub unsafe fn _mm256_inserti64x2<const IMM8: i32>(a: __m256i, b: __m128i) -> __m
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vinserti64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_inserti64x2<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_inserti64x2<const IMM8: i32>(
     src: __m256i,
     k: __mmask8,
     a: __m256i,
     b: __m128i,
 ) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm256_inserti64x2::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_i64x4(), src.as_i64x4()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm256_inserti64x2::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_i64x4(), src.as_i64x4()))
+    }
 }
 
 /// Copy a to tmp, then insert 128 bits (composed of 2 packed 64-bit integers) from b into tmp at the
@@ -1797,15 +2017,13 @@ pub unsafe fn _mm256_mask_inserti64x2<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vinserti64x2, IMM8 = 1))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_inserti64x2<const IMM8: i32>(
-    k: __mmask8,
-    a: __m256i,
-    b: __m128i,
-) -> __m256i {
-    static_assert_uimm_bits!(IMM8, 1);
-    let c = _mm256_inserti64x2::<IMM8>(a, b).as_i64x4();
-    transmute(simd_select_bitmask(k, c, i64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_inserti64x2<const IMM8: i32>(k: __mmask8, a: __m256i, b: __m128i) -> __m256i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 1);
+        let c = _mm256_inserti64x2::<IMM8>(a, b).as_i64x4();
+        transmute(simd_select_bitmask(k, c, i64x4::ZERO))
+    }
 }
 
 /// Copy a to dst, then insert 128 bits (composed of 2 packed 64-bit integers) from b into dst at the
@@ -1815,16 +2033,18 @@ pub unsafe fn _mm256_maskz_inserti64x2<const IMM8: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_inserti64x2<const IMM8: i32>(a: __m512i, b: __m128i) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let a = a.as_i64x8();
-    let b = _mm512_castsi128_si512(b).as_i64x8();
-    match IMM8 & 3 {
-        0 => simd_shuffle!(a, b, [8, 9, 2, 3, 4, 5, 6, 7]),
-        1 => simd_shuffle!(a, b, [0, 1, 8, 9, 4, 5, 6, 7]),
-        2 => simd_shuffle!(a, b, [0, 1, 2, 3, 8, 9, 6, 7]),
-        _ => simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 8, 9]),
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_inserti64x2<const IMM8: i32>(a: __m512i, b: __m128i) -> __m512i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let a = a.as_i64x8();
+        let b = _mm512_castsi128_si512(b).as_i64x8();
+        match IMM8 & 3 {
+            0 => simd_shuffle!(a, b, [8, 9, 2, 3, 4, 5, 6, 7]),
+            1 => simd_shuffle!(a, b, [0, 1, 8, 9, 4, 5, 6, 7]),
+            2 => simd_shuffle!(a, b, [0, 1, 2, 3, 8, 9, 6, 7]),
+            _ => simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 8, 9]),
+        }
     }
 }
 
@@ -1837,16 +2057,18 @@ pub unsafe fn _mm512_inserti64x2<const IMM8: i32>(a: __m512i, b: __m128i) -> __m
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinserti64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_inserti64x2<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_inserti64x2<const IMM8: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m512i,
     b: __m128i,
 ) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let c = _mm512_inserti64x2::<IMM8>(a, b);
-    transmute(simd_select_bitmask(k, c.as_i64x8(), src.as_i64x8()))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let c = _mm512_inserti64x2::<IMM8>(a, b);
+        transmute(simd_select_bitmask(k, c.as_i64x8(), src.as_i64x8()))
+    }
 }
 
 /// Copy a to tmp, then insert 128 bits (composed of 2 packed 64-bit integers) from b into tmp at the
@@ -1858,15 +2080,13 @@ pub unsafe fn _mm512_mask_inserti64x2<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vinserti64x2, IMM8 = 3))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_inserti64x2<const IMM8: i32>(
-    k: __mmask8,
-    a: __m512i,
-    b: __m128i,
-) -> __m512i {
-    static_assert_uimm_bits!(IMM8, 2);
-    let c = _mm512_inserti64x2::<IMM8>(a, b).as_i64x8();
-    transmute(simd_select_bitmask(k, c, i64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_inserti64x2<const IMM8: i32>(k: __mmask8, a: __m512i, b: __m128i) -> __m512i {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 2);
+        let c = _mm512_inserti64x2::<IMM8>(a, b).as_i64x8();
+        transmute(simd_select_bitmask(k, c, i64x8::ZERO))
+    }
 }
 
 // Convert
@@ -1885,10 +2105,12 @@ pub unsafe fn _mm512_maskz_inserti64x2<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundepi64_pd<const ROUNDING: i32>(a: __m512i) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtqq2pd_512(a.as_i64x8(), ROUNDING))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundepi64_pd<const ROUNDING: i32>(a: __m512i) -> __m512d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtqq2pd_512(a.as_i64x8(), ROUNDING))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1906,15 +2128,17 @@ pub unsafe fn _mm512_cvt_roundepi64_pd<const ROUNDING: i32>(a: __m512i) -> __m51
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundepi64_pd<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundepi64_pd<const ROUNDING: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512i,
 ) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepi64_pd::<ROUNDING>(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepi64_pd::<ROUNDING>(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1932,14 +2156,13 @@ pub unsafe fn _mm512_mask_cvt_roundepi64_pd<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundepi64_pd<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512i,
-) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepi64_pd::<ROUNDING>(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundepi64_pd<const ROUNDING: i32>(k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepi64_pd::<ROUNDING>(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1949,9 +2172,9 @@ pub unsafe fn _mm512_maskz_cvt_roundepi64_pd<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtepi64_pd(a: __m128i) -> __m128d {
-    transmute(vcvtqq2pd_128(a.as_i64x2(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtepi64_pd(a: __m128i) -> __m128d {
+    unsafe { transmute(vcvtqq2pd_128(a.as_i64x2(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1962,10 +2185,12 @@ pub unsafe fn _mm_cvtepi64_pd(a: __m128i) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtepi64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m128d {
-    let b = _mm_cvtepi64_pd(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtepi64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m128d {
+    unsafe {
+        let b = _mm_cvtepi64_pd(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1975,10 +2200,12 @@ pub unsafe fn _mm_mask_cvtepi64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtepi64_pd(k: __mmask8, a: __m128i) -> __m128d {
-    let b = _mm_cvtepi64_pd(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtepi64_pd(k: __mmask8, a: __m128i) -> __m128d {
+    unsafe {
+        let b = _mm_cvtepi64_pd(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -1988,9 +2215,9 @@ pub unsafe fn _mm_maskz_cvtepi64_pd(k: __mmask8, a: __m128i) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtepi64_pd(a: __m256i) -> __m256d {
-    transmute(vcvtqq2pd_256(a.as_i64x4(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtepi64_pd(a: __m256i) -> __m256d {
+    unsafe { transmute(vcvtqq2pd_256(a.as_i64x4(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2001,10 +2228,12 @@ pub unsafe fn _mm256_cvtepi64_pd(a: __m256i) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtepi64_pd(src: __m256d, k: __mmask8, a: __m256i) -> __m256d {
-    let b = _mm256_cvtepi64_pd(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtepi64_pd(src: __m256d, k: __mmask8, a: __m256i) -> __m256d {
+    unsafe {
+        let b = _mm256_cvtepi64_pd(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2014,10 +2243,12 @@ pub unsafe fn _mm256_mask_cvtepi64_pd(src: __m256d, k: __mmask8, a: __m256i) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtepi64_pd(k: __mmask8, a: __m256i) -> __m256d {
-    let b = _mm256_cvtepi64_pd(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtepi64_pd(k: __mmask8, a: __m256i) -> __m256d {
+    unsafe {
+        let b = _mm256_cvtepi64_pd(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2027,9 +2258,9 @@ pub unsafe fn _mm256_maskz_cvtepi64_pd(k: __mmask8, a: __m256i) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtepi64_pd(a: __m512i) -> __m512d {
-    transmute(vcvtqq2pd_512(a.as_i64x8(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtepi64_pd(a: __m512i) -> __m512d {
+    unsafe { transmute(vcvtqq2pd_512(a.as_i64x8(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2040,10 +2271,12 @@ pub unsafe fn _mm512_cvtepi64_pd(a: __m512i) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtepi64_pd(src: __m512d, k: __mmask8, a: __m512i) -> __m512d {
-    let b = _mm512_cvtepi64_pd(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtepi64_pd(src: __m512d, k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        let b = _mm512_cvtepi64_pd(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2053,10 +2286,12 @@ pub unsafe fn _mm512_mask_cvtepi64_pd(src: __m512d, k: __mmask8, a: __m512i) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtepi64_pd(k: __mmask8, a: __m512i) -> __m512d {
-    let b = _mm512_cvtepi64_pd(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtepi64_pd(k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        let b = _mm512_cvtepi64_pd(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2073,10 +2308,12 @@ pub unsafe fn _mm512_maskz_cvtepi64_pd(k: __mmask8, a: __m512i) -> __m512d {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundepi64_ps<const ROUNDING: i32>(a: __m512i) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtqq2ps_512(a.as_i64x8(), ROUNDING))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundepi64_ps<const ROUNDING: i32>(a: __m512i) -> __m256 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtqq2ps_512(a.as_i64x8(), ROUNDING))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2094,15 +2331,17 @@ pub unsafe fn _mm512_cvt_roundepi64_ps<const ROUNDING: i32>(a: __m512i) -> __m25
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundepi64_ps<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundepi64_ps<const ROUNDING: i32>(
     src: __m256,
     k: __mmask8,
     a: __m512i,
 ) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepi64_ps::<ROUNDING>(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepi64_ps::<ROUNDING>(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2120,14 +2359,13 @@ pub unsafe fn _mm512_mask_cvt_roundepi64_ps<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundepi64_ps<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512i,
-) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepi64_ps::<ROUNDING>(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundepi64_ps<const ROUNDING: i32>(k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepi64_ps::<ROUNDING>(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2137,8 +2375,8 @@ pub unsafe fn _mm512_maskz_cvt_roundepi64_ps<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtepi64_ps(a: __m128i) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtepi64_ps(a: __m128i) -> __m128 {
     _mm_mask_cvtepi64_ps(_mm_undefined_ps(), 0xff, a)
 }
 
@@ -2150,9 +2388,9 @@ pub unsafe fn _mm_cvtepi64_ps(a: __m128i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m128 {
-    transmute(vcvtqq2ps_128(a.as_i64x2(), src.as_f32x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m128 {
+    unsafe { transmute(vcvtqq2ps_128(a.as_i64x2(), src.as_f32x4(), k)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2162,8 +2400,8 @@ pub unsafe fn _mm_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m1
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtepi64_ps(k: __mmask8, a: __m128i) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtepi64_ps(k: __mmask8, a: __m128i) -> __m128 {
     _mm_mask_cvtepi64_ps(_mm_setzero_ps(), k, a)
 }
 
@@ -2174,9 +2412,9 @@ pub unsafe fn _mm_maskz_cvtepi64_ps(k: __mmask8, a: __m128i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtepi64_ps(a: __m256i) -> __m128 {
-    transmute(vcvtqq2ps_256(a.as_i64x4(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtepi64_ps(a: __m256i) -> __m128 {
+    unsafe { transmute(vcvtqq2ps_256(a.as_i64x4(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2187,10 +2425,12 @@ pub unsafe fn _mm256_cvtepi64_ps(a: __m256i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m256i) -> __m128 {
-    let b = _mm256_cvtepi64_ps(a).as_f32x4();
-    transmute(simd_select_bitmask(k, b, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m256i) -> __m128 {
+    unsafe {
+        let b = _mm256_cvtepi64_ps(a).as_f32x4();
+        transmute(simd_select_bitmask(k, b, src.as_f32x4()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2200,10 +2440,12 @@ pub unsafe fn _mm256_mask_cvtepi64_ps(src: __m128, k: __mmask8, a: __m256i) -> _
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtepi64_ps(k: __mmask8, a: __m256i) -> __m128 {
-    let b = _mm256_cvtepi64_ps(a).as_f32x4();
-    transmute(simd_select_bitmask(k, b, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtepi64_ps(k: __mmask8, a: __m256i) -> __m128 {
+    unsafe {
+        let b = _mm256_cvtepi64_ps(a).as_f32x4();
+        transmute(simd_select_bitmask(k, b, f32x4::ZERO))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2213,9 +2455,9 @@ pub unsafe fn _mm256_maskz_cvtepi64_ps(k: __mmask8, a: __m256i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtepi64_ps(a: __m512i) -> __m256 {
-    transmute(vcvtqq2ps_512(a.as_i64x8(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtepi64_ps(a: __m512i) -> __m256 {
+    unsafe { transmute(vcvtqq2ps_512(a.as_i64x8(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2226,10 +2468,12 @@ pub unsafe fn _mm512_cvtepi64_ps(a: __m512i) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtepi64_ps(src: __m256, k: __mmask8, a: __m512i) -> __m256 {
-    let b = _mm512_cvtepi64_ps(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtepi64_ps(src: __m256, k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        let b = _mm512_cvtepi64_ps(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    }
 }
 
 /// Convert packed signed 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2239,10 +2483,12 @@ pub unsafe fn _mm512_mask_cvtepi64_ps(src: __m256, k: __mmask8, a: __m512i) -> _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtepi64_ps(k: __mmask8, a: __m512i) -> __m256 {
-    let b = _mm512_cvtepi64_ps(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtepi64_ps(k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        let b = _mm512_cvtepi64_ps(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2259,10 +2505,12 @@ pub unsafe fn _mm512_maskz_cvtepi64_ps(k: __mmask8, a: __m512i) -> __m256 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundepu64_pd<const ROUNDING: i32>(a: __m512i) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtuqq2pd_512(a.as_u64x8(), ROUNDING))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundepu64_pd<const ROUNDING: i32>(a: __m512i) -> __m512d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtuqq2pd_512(a.as_u64x8(), ROUNDING))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2280,15 +2528,17 @@ pub unsafe fn _mm512_cvt_roundepu64_pd<const ROUNDING: i32>(a: __m512i) -> __m51
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundepu64_pd<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundepu64_pd<const ROUNDING: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512i,
 ) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepu64_pd::<ROUNDING>(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepu64_pd::<ROUNDING>(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2306,14 +2556,13 @@ pub unsafe fn _mm512_mask_cvt_roundepu64_pd<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundepu64_pd<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512i,
-) -> __m512d {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepu64_pd::<ROUNDING>(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundepu64_pd<const ROUNDING: i32>(k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepu64_pd::<ROUNDING>(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2323,9 +2572,9 @@ pub unsafe fn _mm512_maskz_cvt_roundepu64_pd<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtepu64_pd(a: __m128i) -> __m128d {
-    transmute(vcvtuqq2pd_128(a.as_u64x2(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtepu64_pd(a: __m128i) -> __m128d {
+    unsafe { transmute(vcvtuqq2pd_128(a.as_u64x2(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2336,10 +2585,12 @@ pub unsafe fn _mm_cvtepu64_pd(a: __m128i) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtepu64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m128d {
-    let b = _mm_cvtepu64_pd(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtepu64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m128d {
+    unsafe {
+        let b = _mm_cvtepu64_pd(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, src.as_f64x2()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2349,10 +2600,12 @@ pub unsafe fn _mm_mask_cvtepu64_pd(src: __m128d, k: __mmask8, a: __m128i) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtepu64_pd(k: __mmask8, a: __m128i) -> __m128d {
-    let b = _mm_cvtepu64_pd(a).as_f64x2();
-    transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtepu64_pd(k: __mmask8, a: __m128i) -> __m128d {
+    unsafe {
+        let b = _mm_cvtepu64_pd(a).as_f64x2();
+        transmute(simd_select_bitmask(k, b, f64x2::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2362,9 +2615,9 @@ pub unsafe fn _mm_maskz_cvtepu64_pd(k: __mmask8, a: __m128i) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtepu64_pd(a: __m256i) -> __m256d {
-    transmute(vcvtuqq2pd_256(a.as_u64x4(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtepu64_pd(a: __m256i) -> __m256d {
+    unsafe { transmute(vcvtuqq2pd_256(a.as_u64x4(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2375,10 +2628,12 @@ pub unsafe fn _mm256_cvtepu64_pd(a: __m256i) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtepu64_pd(src: __m256d, k: __mmask8, a: __m256i) -> __m256d {
-    let b = _mm256_cvtepu64_pd(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtepu64_pd(src: __m256d, k: __mmask8, a: __m256i) -> __m256d {
+    unsafe {
+        let b = _mm256_cvtepu64_pd(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, src.as_f64x4()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2388,10 +2643,12 @@ pub unsafe fn _mm256_mask_cvtepu64_pd(src: __m256d, k: __mmask8, a: __m256i) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtepu64_pd(k: __mmask8, a: __m256i) -> __m256d {
-    let b = _mm256_cvtepu64_pd(a).as_f64x4();
-    transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtepu64_pd(k: __mmask8, a: __m256i) -> __m256d {
+    unsafe {
+        let b = _mm256_cvtepu64_pd(a).as_f64x4();
+        transmute(simd_select_bitmask(k, b, f64x4::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2401,9 +2658,9 @@ pub unsafe fn _mm256_maskz_cvtepu64_pd(k: __mmask8, a: __m256i) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtepu64_pd(a: __m512i) -> __m512d {
-    transmute(vcvtuqq2pd_512(a.as_u64x8(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtepu64_pd(a: __m512i) -> __m512d {
+    unsafe { transmute(vcvtuqq2pd_512(a.as_u64x8(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2414,10 +2671,12 @@ pub unsafe fn _mm512_cvtepu64_pd(a: __m512i) -> __m512d {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtepu64_pd(src: __m512d, k: __mmask8, a: __m512i) -> __m512d {
-    let b = _mm512_cvtepu64_pd(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtepu64_pd(src: __m512d, k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        let b = _mm512_cvtepu64_pd(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, src.as_f64x8()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed double-precision (64-bit) floating-point elements,
@@ -2427,10 +2686,12 @@ pub unsafe fn _mm512_mask_cvtepu64_pd(src: __m512d, k: __mmask8, a: __m512i) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2pd))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtepu64_pd(k: __mmask8, a: __m512i) -> __m512d {
-    let b = _mm512_cvtepu64_pd(a).as_f64x8();
-    transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtepu64_pd(k: __mmask8, a: __m512i) -> __m512d {
+    unsafe {
+        let b = _mm512_cvtepu64_pd(a).as_f64x8();
+        transmute(simd_select_bitmask(k, b, f64x8::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2447,10 +2708,12 @@ pub unsafe fn _mm512_maskz_cvtepu64_pd(k: __mmask8, a: __m512i) -> __m512d {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundepu64_ps<const ROUNDING: i32>(a: __m512i) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtuqq2ps_512(a.as_u64x8(), ROUNDING))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundepu64_ps<const ROUNDING: i32>(a: __m512i) -> __m256 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtuqq2ps_512(a.as_u64x8(), ROUNDING))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2468,15 +2731,17 @@ pub unsafe fn _mm512_cvt_roundepu64_ps<const ROUNDING: i32>(a: __m512i) -> __m25
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundepu64_ps<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundepu64_ps<const ROUNDING: i32>(
     src: __m256,
     k: __mmask8,
     a: __m512i,
 ) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepu64_ps::<ROUNDING>(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepu64_ps::<ROUNDING>(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2494,14 +2759,13 @@ pub unsafe fn _mm512_mask_cvt_roundepu64_ps<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundepu64_ps<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512i,
-) -> __m256 {
-    static_assert_rounding!(ROUNDING);
-    let b = _mm512_cvt_roundepu64_ps::<ROUNDING>(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundepu64_ps<const ROUNDING: i32>(k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        let b = _mm512_cvt_roundepu64_ps::<ROUNDING>(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2511,8 +2775,8 @@ pub unsafe fn _mm512_maskz_cvt_roundepu64_ps<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtepu64_ps(a: __m128i) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtepu64_ps(a: __m128i) -> __m128 {
     _mm_mask_cvtepu64_ps(_mm_undefined_ps(), 0xff, a)
 }
 
@@ -2524,9 +2788,9 @@ pub unsafe fn _mm_cvtepu64_ps(a: __m128i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m128 {
-    transmute(vcvtuqq2ps_128(a.as_u64x2(), src.as_f32x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m128 {
+    unsafe { transmute(vcvtuqq2ps_128(a.as_u64x2(), src.as_f32x4(), k)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2536,8 +2800,8 @@ pub unsafe fn _mm_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m128i) -> __m1
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtepu64_ps(k: __mmask8, a: __m128i) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtepu64_ps(k: __mmask8, a: __m128i) -> __m128 {
     _mm_mask_cvtepu64_ps(_mm_setzero_ps(), k, a)
 }
 
@@ -2548,9 +2812,9 @@ pub unsafe fn _mm_maskz_cvtepu64_ps(k: __mmask8, a: __m128i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtepu64_ps(a: __m256i) -> __m128 {
-    transmute(vcvtuqq2ps_256(a.as_u64x4(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtepu64_ps(a: __m256i) -> __m128 {
+    unsafe { transmute(vcvtuqq2ps_256(a.as_u64x4(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2561,10 +2825,12 @@ pub unsafe fn _mm256_cvtepu64_ps(a: __m256i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m256i) -> __m128 {
-    let b = _mm256_cvtepu64_ps(a).as_f32x4();
-    transmute(simd_select_bitmask(k, b, src.as_f32x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m256i) -> __m128 {
+    unsafe {
+        let b = _mm256_cvtepu64_ps(a).as_f32x4();
+        transmute(simd_select_bitmask(k, b, src.as_f32x4()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2574,10 +2840,12 @@ pub unsafe fn _mm256_mask_cvtepu64_ps(src: __m128, k: __mmask8, a: __m256i) -> _
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtepu64_ps(k: __mmask8, a: __m256i) -> __m128 {
-    let b = _mm256_cvtepu64_ps(a).as_f32x4();
-    transmute(simd_select_bitmask(k, b, f32x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtepu64_ps(k: __mmask8, a: __m256i) -> __m128 {
+    unsafe {
+        let b = _mm256_cvtepu64_ps(a).as_f32x4();
+        transmute(simd_select_bitmask(k, b, f32x4::ZERO))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2587,9 +2855,9 @@ pub unsafe fn _mm256_maskz_cvtepu64_ps(k: __mmask8, a: __m256i) -> __m128 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtepu64_ps(a: __m512i) -> __m256 {
-    transmute(vcvtuqq2ps_512(a.as_u64x8(), _MM_FROUND_CUR_DIRECTION))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtepu64_ps(a: __m512i) -> __m256 {
+    unsafe { transmute(vcvtuqq2ps_512(a.as_u64x8(), _MM_FROUND_CUR_DIRECTION)) }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2600,10 +2868,12 @@ pub unsafe fn _mm512_cvtepu64_ps(a: __m512i) -> __m256 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtepu64_ps(src: __m256, k: __mmask8, a: __m512i) -> __m256 {
-    let b = _mm512_cvtepu64_ps(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtepu64_ps(src: __m256, k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        let b = _mm512_cvtepu64_ps(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, src.as_f32x8()))
+    }
 }
 
 /// Convert packed unsigned 64-bit integers in a to packed single-precision (32-bit) floating-point elements,
@@ -2613,10 +2883,12 @@ pub unsafe fn _mm512_mask_cvtepu64_ps(src: __m256, k: __mmask8, a: __m512i) -> _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtuqq2ps))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtepu64_ps(k: __mmask8, a: __m512i) -> __m256 {
-    let b = _mm512_cvtepu64_ps(a).as_f32x8();
-    transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtepu64_ps(k: __mmask8, a: __m512i) -> __m256 {
+    unsafe {
+        let b = _mm512_cvtepu64_ps(a).as_f32x8();
+        transmute(simd_select_bitmask(k, b, f32x8::ZERO))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2633,8 +2905,8 @@ pub unsafe fn _mm512_maskz_cvtepu64_ps(k: __mmask8, a: __m512i) -> __m256 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundpd_epi64<const ROUNDING: i32>(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundpd_epi64<const ROUNDING: i32>(a: __m512d) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundpd_epi64::<ROUNDING>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -2654,14 +2926,16 @@ pub unsafe fn _mm512_cvt_roundpd_epi64<const ROUNDING: i32>(a: __m512d) -> __m51
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundpd_epi64<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundpd_epi64<const ROUNDING: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m512d,
 ) -> __m512i {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtpd2qq_512(a.as_f64x8(), src.as_i64x8(), k, ROUNDING))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtpd2qq_512(a.as_f64x8(), src.as_i64x8(), k, ROUNDING))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2679,11 +2953,8 @@ pub unsafe fn _mm512_mask_cvt_roundpd_epi64<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundpd_epi64<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512d,
-) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundpd_epi64<const ROUNDING: i32>(k: __mmask8, a: __m512d) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundpd_epi64::<ROUNDING>(_mm512_setzero_si512(), k, a)
 }
@@ -2695,8 +2966,8 @@ pub unsafe fn _mm512_maskz_cvt_roundpd_epi64<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtpd_epi64(a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtpd_epi64(a: __m128d) -> __m128i {
     _mm_mask_cvtpd_epi64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -2708,9 +2979,9 @@ pub unsafe fn _mm_cvtpd_epi64(a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
-    transmute(vcvtpd2qq_128(a.as_f64x2(), src.as_i64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
+    unsafe { transmute(vcvtpd2qq_128(a.as_f64x2(), src.as_i64x2(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2720,8 +2991,8 @@ pub unsafe fn _mm_mask_cvtpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
     _mm_mask_cvtpd_epi64(_mm_setzero_si128(), k, a)
 }
 
@@ -2732,8 +3003,8 @@ pub unsafe fn _mm_maskz_cvtpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtpd_epi64(a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtpd_epi64(a: __m256d) -> __m256i {
     _mm256_mask_cvtpd_epi64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -2745,9 +3016,9 @@ pub unsafe fn _mm256_cvtpd_epi64(a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtpd_epi64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
-    transmute(vcvtpd2qq_256(a.as_f64x4(), src.as_i64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtpd_epi64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
+    unsafe { transmute(vcvtpd2qq_256(a.as_f64x4(), src.as_i64x4(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2757,8 +3028,8 @@ pub unsafe fn _mm256_mask_cvtpd_epi64(src: __m256i, k: __mmask8, a: __m256d) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
     _mm256_mask_cvtpd_epi64(_mm256_setzero_si256(), k, a)
 }
 
@@ -2769,8 +3040,8 @@ pub unsafe fn _mm256_maskz_cvtpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtpd_epi64(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtpd_epi64(a: __m512d) -> __m512i {
     _mm512_mask_cvtpd_epi64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -2782,14 +3053,16 @@ pub unsafe fn _mm512_cvtpd_epi64(a: __m512d) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtpd_epi64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
-    transmute(vcvtpd2qq_512(
-        a.as_f64x8(),
-        src.as_i64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtpd_epi64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
+    unsafe {
+        transmute(vcvtpd2qq_512(
+            a.as_f64x8(),
+            src.as_i64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2799,8 +3072,8 @@ pub unsafe fn _mm512_mask_cvtpd_epi64(src: __m512i, k: __mmask8, a: __m512d) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
     _mm512_mask_cvtpd_epi64(_mm512_setzero_si512(), k, a)
 }
 
@@ -2818,8 +3091,8 @@ pub unsafe fn _mm512_maskz_cvtpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundps_epi64<const ROUNDING: i32>(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundps_epi64<const ROUNDING: i32>(a: __m256) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundps_epi64::<ROUNDING>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -2839,14 +3112,16 @@ pub unsafe fn _mm512_cvt_roundps_epi64<const ROUNDING: i32>(a: __m256) -> __m512
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundps_epi64<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundps_epi64<const ROUNDING: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m256,
 ) -> __m512i {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtps2qq_512(a.as_f32x8(), src.as_i64x8(), k, ROUNDING))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtps2qq_512(a.as_f32x8(), src.as_i64x8(), k, ROUNDING))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2864,11 +3139,8 @@ pub unsafe fn _mm512_mask_cvt_roundps_epi64<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundps_epi64<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m256,
-) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundps_epi64<const ROUNDING: i32>(k: __mmask8, a: __m256) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundps_epi64::<ROUNDING>(_mm512_setzero_si512(), k, a)
 }
@@ -2880,8 +3152,8 @@ pub unsafe fn _mm512_maskz_cvt_roundps_epi64<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtps_epi64(a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtps_epi64(a: __m128) -> __m128i {
     _mm_mask_cvtps_epi64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -2893,9 +3165,9 @@ pub unsafe fn _mm_cvtps_epi64(a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
-    transmute(vcvtps2qq_128(a.as_f32x4(), src.as_i64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
+    unsafe { transmute(vcvtps2qq_128(a.as_f32x4(), src.as_i64x2(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2905,8 +3177,8 @@ pub unsafe fn _mm_mask_cvtps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m1
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m128i {
     _mm_mask_cvtps_epi64(_mm_setzero_si128(), k, a)
 }
 
@@ -2917,8 +3189,8 @@ pub unsafe fn _mm_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtps_epi64(a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtps_epi64(a: __m128) -> __m256i {
     _mm256_mask_cvtps_epi64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -2930,9 +3202,9 @@ pub unsafe fn _mm256_cvtps_epi64(a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtps_epi64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
-    transmute(vcvtps2qq_256(a.as_f32x4(), src.as_i64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtps_epi64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
+    unsafe { transmute(vcvtps2qq_256(a.as_f32x4(), src.as_i64x4(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2942,8 +3214,8 @@ pub unsafe fn _mm256_mask_cvtps_epi64(src: __m256i, k: __mmask8, a: __m128) -> _
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m256i {
     _mm256_mask_cvtps_epi64(_mm256_setzero_si256(), k, a)
 }
 
@@ -2954,8 +3226,8 @@ pub unsafe fn _mm256_maskz_cvtps_epi64(k: __mmask8, a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtps_epi64(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtps_epi64(a: __m256) -> __m512i {
     _mm512_mask_cvtps_epi64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -2967,14 +3239,16 @@ pub unsafe fn _mm512_cvtps_epi64(a: __m256) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtps_epi64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
-    transmute(vcvtps2qq_512(
-        a.as_f32x8(),
-        src.as_i64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtps_epi64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
+    unsafe {
+        transmute(vcvtps2qq_512(
+            a.as_f32x8(),
+            src.as_i64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers,
@@ -2984,8 +3258,8 @@ pub unsafe fn _mm512_mask_cvtps_epi64(src: __m512i, k: __mmask8, a: __m256) -> _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtps_epi64(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtps_epi64(k: __mmask8, a: __m256) -> __m512i {
     _mm512_mask_cvtps_epi64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3003,8 +3277,8 @@ pub unsafe fn _mm512_maskz_cvtps_epi64(k: __mmask8, a: __m256) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundpd_epu64<const ROUNDING: i32>(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundpd_epu64<const ROUNDING: i32>(a: __m512d) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundpd_epu64::<ROUNDING>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3024,14 +3298,16 @@ pub unsafe fn _mm512_cvt_roundpd_epu64<const ROUNDING: i32>(a: __m512d) -> __m51
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundpd_epu64<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundpd_epu64<const ROUNDING: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m512d,
 ) -> __m512i {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtpd2uqq_512(a.as_f64x8(), src.as_u64x8(), k, ROUNDING))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtpd2uqq_512(a.as_f64x8(), src.as_u64x8(), k, ROUNDING))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3049,11 +3325,8 @@ pub unsafe fn _mm512_mask_cvt_roundpd_epu64<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundpd_epu64<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m512d,
-) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundpd_epu64<const ROUNDING: i32>(k: __mmask8, a: __m512d) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundpd_epu64::<ROUNDING>(_mm512_setzero_si512(), k, a)
 }
@@ -3065,8 +3338,8 @@ pub unsafe fn _mm512_maskz_cvt_roundpd_epu64<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtpd_epu64(a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtpd_epu64(a: __m128d) -> __m128i {
     _mm_mask_cvtpd_epu64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3078,9 +3351,9 @@ pub unsafe fn _mm_cvtpd_epu64(a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
-    transmute(vcvtpd2uqq_128(a.as_f64x2(), src.as_u64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
+    unsafe { transmute(vcvtpd2uqq_128(a.as_f64x2(), src.as_u64x2(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3090,8 +3363,8 @@ pub unsafe fn _mm_mask_cvtpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
     _mm_mask_cvtpd_epu64(_mm_setzero_si128(), k, a)
 }
 
@@ -3102,8 +3375,8 @@ pub unsafe fn _mm_maskz_cvtpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtpd_epu64(a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtpd_epu64(a: __m256d) -> __m256i {
     _mm256_mask_cvtpd_epu64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3115,9 +3388,9 @@ pub unsafe fn _mm256_cvtpd_epu64(a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtpd_epu64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
-    transmute(vcvtpd2uqq_256(a.as_f64x4(), src.as_u64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtpd_epu64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
+    unsafe { transmute(vcvtpd2uqq_256(a.as_f64x4(), src.as_u64x4(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3127,8 +3400,8 @@ pub unsafe fn _mm256_mask_cvtpd_epu64(src: __m256i, k: __mmask8, a: __m256d) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
     _mm256_mask_cvtpd_epu64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3139,8 +3412,8 @@ pub unsafe fn _mm256_maskz_cvtpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtpd_epu64(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtpd_epu64(a: __m512d) -> __m512i {
     _mm512_mask_cvtpd_epu64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -3152,14 +3425,16 @@ pub unsafe fn _mm512_cvtpd_epu64(a: __m512d) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtpd_epu64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
-    transmute(vcvtpd2uqq_512(
-        a.as_f64x8(),
-        src.as_u64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtpd_epu64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
+    unsafe {
+        transmute(vcvtpd2uqq_512(
+            a.as_f64x8(),
+            src.as_u64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3169,8 +3444,8 @@ pub unsafe fn _mm512_mask_cvtpd_epu64(src: __m512i, k: __mmask8, a: __m512d) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
     _mm512_mask_cvtpd_epu64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3188,8 +3463,8 @@ pub unsafe fn _mm512_maskz_cvtpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvt_roundps_epu64<const ROUNDING: i32>(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvt_roundps_epu64<const ROUNDING: i32>(a: __m256) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundps_epu64::<ROUNDING>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3209,14 +3484,16 @@ pub unsafe fn _mm512_cvt_roundps_epu64<const ROUNDING: i32>(a: __m256) -> __m512
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvt_roundps_epu64<const ROUNDING: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvt_roundps_epu64<const ROUNDING: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m256,
 ) -> __m512i {
-    static_assert_rounding!(ROUNDING);
-    transmute(vcvtps2uqq_512(a.as_f32x8(), src.as_u64x8(), k, ROUNDING))
+    unsafe {
+        static_assert_rounding!(ROUNDING);
+        transmute(vcvtps2uqq_512(a.as_f32x8(), src.as_u64x8(), k, ROUNDING))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3234,11 +3511,8 @@ pub unsafe fn _mm512_mask_cvt_roundps_epu64<const ROUNDING: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq, ROUNDING = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvt_roundps_epu64<const ROUNDING: i32>(
-    k: __mmask8,
-    a: __m256,
-) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvt_roundps_epu64<const ROUNDING: i32>(k: __mmask8, a: __m256) -> __m512i {
     static_assert_rounding!(ROUNDING);
     _mm512_mask_cvt_roundps_epu64::<ROUNDING>(_mm512_setzero_si512(), k, a)
 }
@@ -3250,8 +3524,8 @@ pub unsafe fn _mm512_maskz_cvt_roundps_epu64<const ROUNDING: i32>(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvtps_epu64(a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvtps_epu64(a: __m128) -> __m128i {
     _mm_mask_cvtps_epu64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3263,9 +3537,9 @@ pub unsafe fn _mm_cvtps_epu64(a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvtps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
-    transmute(vcvtps2uqq_128(a.as_f32x4(), src.as_u64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvtps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
+    unsafe { transmute(vcvtps2uqq_128(a.as_f32x4(), src.as_u64x2(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3275,8 +3549,8 @@ pub unsafe fn _mm_mask_cvtps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m1
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m128i {
     _mm_mask_cvtps_epu64(_mm_setzero_si128(), k, a)
 }
 
@@ -3287,8 +3561,8 @@ pub unsafe fn _mm_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvtps_epu64(a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvtps_epu64(a: __m128) -> __m256i {
     _mm256_mask_cvtps_epu64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3300,9 +3574,9 @@ pub unsafe fn _mm256_cvtps_epu64(a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvtps_epu64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
-    transmute(vcvtps2uqq_256(a.as_f32x4(), src.as_u64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvtps_epu64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
+    unsafe { transmute(vcvtps2uqq_256(a.as_f32x4(), src.as_u64x4(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3312,8 +3586,8 @@ pub unsafe fn _mm256_mask_cvtps_epu64(src: __m256i, k: __mmask8, a: __m128) -> _
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m256i {
     _mm256_mask_cvtps_epu64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3324,8 +3598,8 @@ pub unsafe fn _mm256_maskz_cvtps_epu64(k: __mmask8, a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtps_epu64(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtps_epu64(a: __m256) -> __m512i {
     _mm512_mask_cvtps_epu64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -3337,14 +3611,16 @@ pub unsafe fn _mm512_cvtps_epu64(a: __m256) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtps_epu64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
-    transmute(vcvtps2uqq_512(
-        a.as_f32x8(),
-        src.as_u64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtps_epu64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
+    unsafe {
+        transmute(vcvtps2uqq_512(
+            a.as_f32x8(),
+            src.as_u64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers,
@@ -3354,8 +3630,8 @@ pub unsafe fn _mm512_mask_cvtps_epu64(src: __m512i, k: __mmask8, a: __m256) -> _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvtps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtps_epu64(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtps_epu64(k: __mmask8, a: __m256) -> __m512i {
     _mm512_mask_cvtps_epu64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3368,8 +3644,8 @@ pub unsafe fn _mm512_maskz_cvtps_epu64(k: __mmask8, a: __m256) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtt_roundpd_epi64<const SAE: i32>(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtt_roundpd_epi64<const SAE: i32>(a: __m512d) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundpd_epi64::<SAE>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3383,14 +3659,16 @@ pub unsafe fn _mm512_cvtt_roundpd_epi64<const SAE: i32>(a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq, SAE = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtt_roundpd_epi64<const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtt_roundpd_epi64<const SAE: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m512d,
 ) -> __m512i {
-    static_assert_sae!(SAE);
-    transmute(vcvttpd2qq_512(a.as_f64x8(), src.as_i64x8(), k, SAE))
+    unsafe {
+        static_assert_sae!(SAE);
+        transmute(vcvttpd2qq_512(a.as_f64x8(), src.as_i64x8(), k, SAE))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3402,8 +3680,8 @@ pub unsafe fn _mm512_mask_cvtt_roundpd_epi64<const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq, SAE = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtt_roundpd_epi64<const SAE: i32>(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtt_roundpd_epi64<const SAE: i32>(k: __mmask8, a: __m512d) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundpd_epi64::<SAE>(_mm512_setzero_si512(), k, a)
 }
@@ -3415,8 +3693,8 @@ pub unsafe fn _mm512_maskz_cvtt_roundpd_epi64<const SAE: i32>(k: __mmask8, a: __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvttpd_epi64(a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvttpd_epi64(a: __m128d) -> __m128i {
     _mm_mask_cvttpd_epi64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3428,9 +3706,9 @@ pub unsafe fn _mm_cvttpd_epi64(a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvttpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
-    transmute(vcvttpd2qq_128(a.as_f64x2(), src.as_i64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvttpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
+    unsafe { transmute(vcvttpd2qq_128(a.as_f64x2(), src.as_i64x2(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3441,8 +3719,8 @@ pub unsafe fn _mm_mask_cvttpd_epi64(src: __m128i, k: __mmask8, a: __m128d) -> __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvttpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvttpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
     _mm_mask_cvttpd_epi64(_mm_setzero_si128(), k, a)
 }
 
@@ -3453,8 +3731,8 @@ pub unsafe fn _mm_maskz_cvttpd_epi64(k: __mmask8, a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvttpd_epi64(a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvttpd_epi64(a: __m256d) -> __m256i {
     _mm256_mask_cvttpd_epi64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3466,9 +3744,9 @@ pub unsafe fn _mm256_cvttpd_epi64(a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvttpd_epi64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
-    transmute(vcvttpd2qq_256(a.as_f64x4(), src.as_i64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvttpd_epi64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
+    unsafe { transmute(vcvttpd2qq_256(a.as_f64x4(), src.as_i64x4(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3479,8 +3757,8 @@ pub unsafe fn _mm256_mask_cvttpd_epi64(src: __m256i, k: __mmask8, a: __m256d) ->
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvttpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvttpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
     _mm256_mask_cvttpd_epi64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3491,8 +3769,8 @@ pub unsafe fn _mm256_maskz_cvttpd_epi64(k: __mmask8, a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvttpd_epi64(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvttpd_epi64(a: __m512d) -> __m512i {
     _mm512_mask_cvttpd_epi64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -3504,14 +3782,16 @@ pub unsafe fn _mm512_cvttpd_epi64(a: __m512d) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvttpd_epi64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
-    transmute(vcvttpd2qq_512(
-        a.as_f64x8(),
-        src.as_i64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvttpd_epi64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
+    unsafe {
+        transmute(vcvttpd2qq_512(
+            a.as_f64x8(),
+            src.as_i64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3522,8 +3802,8 @@ pub unsafe fn _mm512_mask_cvttpd_epi64(src: __m512i, k: __mmask8, a: __m512d) ->
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvttpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvttpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
     _mm512_mask_cvttpd_epi64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3536,8 +3816,8 @@ pub unsafe fn _mm512_maskz_cvttpd_epi64(k: __mmask8, a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtt_roundps_epi64<const SAE: i32>(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtt_roundps_epi64<const SAE: i32>(a: __m256) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundps_epi64::<SAE>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3551,14 +3831,16 @@ pub unsafe fn _mm512_cvtt_roundps_epi64<const SAE: i32>(a: __m256) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq, SAE = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtt_roundps_epi64<const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtt_roundps_epi64<const SAE: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m256,
 ) -> __m512i {
-    static_assert_sae!(SAE);
-    transmute(vcvttps2qq_512(a.as_f32x8(), src.as_i64x8(), k, SAE))
+    unsafe {
+        static_assert_sae!(SAE);
+        transmute(vcvttps2qq_512(a.as_f32x8(), src.as_i64x8(), k, SAE))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3570,8 +3852,8 @@ pub unsafe fn _mm512_mask_cvtt_roundps_epi64<const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq, SAE = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtt_roundps_epi64<const SAE: i32>(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtt_roundps_epi64<const SAE: i32>(k: __mmask8, a: __m256) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundps_epi64::<SAE>(_mm512_setzero_si512(), k, a)
 }
@@ -3583,8 +3865,8 @@ pub unsafe fn _mm512_maskz_cvtt_roundps_epi64<const SAE: i32>(k: __mmask8, a: __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvttps_epi64(a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvttps_epi64(a: __m128) -> __m128i {
     _mm_mask_cvttps_epi64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3596,9 +3878,9 @@ pub unsafe fn _mm_cvttps_epi64(a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvttps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
-    transmute(vcvttps2qq_128(a.as_f32x4(), src.as_i64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvttps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
+    unsafe { transmute(vcvttps2qq_128(a.as_f32x4(), src.as_i64x2(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3609,8 +3891,8 @@ pub unsafe fn _mm_mask_cvttps_epi64(src: __m128i, k: __mmask8, a: __m128) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m128i {
     _mm_mask_cvttps_epi64(_mm_setzero_si128(), k, a)
 }
 
@@ -3621,8 +3903,8 @@ pub unsafe fn _mm_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvttps_epi64(a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvttps_epi64(a: __m128) -> __m256i {
     _mm256_mask_cvttps_epi64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3634,9 +3916,9 @@ pub unsafe fn _mm256_cvttps_epi64(a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvttps_epi64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
-    transmute(vcvttps2qq_256(a.as_f32x4(), src.as_i64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvttps_epi64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
+    unsafe { transmute(vcvttps2qq_256(a.as_f32x4(), src.as_i64x4(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3647,8 +3929,8 @@ pub unsafe fn _mm256_mask_cvttps_epi64(src: __m256i, k: __mmask8, a: __m128) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m256i {
     _mm256_mask_cvttps_epi64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3659,8 +3941,8 @@ pub unsafe fn _mm256_maskz_cvttps_epi64(k: __mmask8, a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvttps_epi64(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvttps_epi64(a: __m256) -> __m512i {
     _mm512_mask_cvttps_epi64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -3672,14 +3954,16 @@ pub unsafe fn _mm512_cvttps_epi64(a: __m256) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvttps_epi64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
-    transmute(vcvttps2qq_512(
-        a.as_f32x8(),
-        src.as_i64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvttps_epi64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
+    unsafe {
+        transmute(vcvttps2qq_512(
+            a.as_f32x8(),
+            src.as_i64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed signed 64-bit integers
@@ -3690,8 +3974,8 @@ pub unsafe fn _mm512_mask_cvttps_epi64(src: __m512i, k: __mmask8, a: __m256) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2qq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvttps_epi64(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvttps_epi64(k: __mmask8, a: __m256) -> __m512i {
     _mm512_mask_cvttps_epi64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3704,8 +3988,8 @@ pub unsafe fn _mm512_maskz_cvttps_epi64(k: __mmask8, a: __m256) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtt_roundpd_epu64<const SAE: i32>(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtt_roundpd_epu64<const SAE: i32>(a: __m512d) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundpd_epu64::<SAE>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3719,14 +4003,16 @@ pub unsafe fn _mm512_cvtt_roundpd_epu64<const SAE: i32>(a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtt_roundpd_epu64<const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtt_roundpd_epu64<const SAE: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m512d,
 ) -> __m512i {
-    static_assert_sae!(SAE);
-    transmute(vcvttpd2uqq_512(a.as_f64x8(), src.as_u64x8(), k, SAE))
+    unsafe {
+        static_assert_sae!(SAE);
+        transmute(vcvttpd2uqq_512(a.as_f64x8(), src.as_u64x8(), k, SAE))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3738,8 +4024,8 @@ pub unsafe fn _mm512_mask_cvtt_roundpd_epu64<const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtt_roundpd_epu64<const SAE: i32>(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtt_roundpd_epu64<const SAE: i32>(k: __mmask8, a: __m512d) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundpd_epu64::<SAE>(_mm512_setzero_si512(), k, a)
 }
@@ -3751,8 +4037,8 @@ pub unsafe fn _mm512_maskz_cvtt_roundpd_epu64<const SAE: i32>(k: __mmask8, a: __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvttpd_epu64(a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvttpd_epu64(a: __m128d) -> __m128i {
     _mm_mask_cvttpd_epu64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3764,9 +4050,9 @@ pub unsafe fn _mm_cvttpd_epu64(a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvttpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
-    transmute(vcvttpd2uqq_128(a.as_f64x2(), src.as_u64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvttpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __m128i {
+    unsafe { transmute(vcvttpd2uqq_128(a.as_f64x2(), src.as_u64x2(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3777,8 +4063,8 @@ pub unsafe fn _mm_mask_cvttpd_epu64(src: __m128i, k: __mmask8, a: __m128d) -> __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvttpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvttpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
     _mm_mask_cvttpd_epu64(_mm_setzero_si128(), k, a)
 }
 
@@ -3789,8 +4075,8 @@ pub unsafe fn _mm_maskz_cvttpd_epu64(k: __mmask8, a: __m128d) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvttpd_epu64(a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvttpd_epu64(a: __m256d) -> __m256i {
     _mm256_mask_cvttpd_epu64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3802,9 +4088,9 @@ pub unsafe fn _mm256_cvttpd_epu64(a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvttpd_epu64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
-    transmute(vcvttpd2uqq_256(a.as_f64x4(), src.as_u64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvttpd_epu64(src: __m256i, k: __mmask8, a: __m256d) -> __m256i {
+    unsafe { transmute(vcvttpd2uqq_256(a.as_f64x4(), src.as_u64x4(), k)) }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3815,8 +4101,8 @@ pub unsafe fn _mm256_mask_cvttpd_epu64(src: __m256i, k: __mmask8, a: __m256d) ->
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvttpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvttpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
     _mm256_mask_cvttpd_epu64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3827,8 +4113,8 @@ pub unsafe fn _mm256_maskz_cvttpd_epu64(k: __mmask8, a: __m256d) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvttpd_epu64(a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvttpd_epu64(a: __m512d) -> __m512i {
     _mm512_mask_cvttpd_epu64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -3840,14 +4126,16 @@ pub unsafe fn _mm512_cvttpd_epu64(a: __m512d) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvttpd_epu64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
-    transmute(vcvttpd2uqq_512(
-        a.as_f64x8(),
-        src.as_u64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvttpd_epu64(src: __m512i, k: __mmask8, a: __m512d) -> __m512i {
+    unsafe {
+        transmute(vcvttpd2uqq_512(
+            a.as_f64x8(),
+            src.as_u64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed double-precision (64-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3858,8 +4146,8 @@ pub unsafe fn _mm512_mask_cvttpd_epu64(src: __m512i, k: __mmask8, a: __m512d) ->
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttpd2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvttpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvttpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
     _mm512_mask_cvttpd_epu64(_mm512_setzero_si512(), k, a)
 }
 
@@ -3872,8 +4160,8 @@ pub unsafe fn _mm512_maskz_cvttpd_epu64(k: __mmask8, a: __m512d) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvtt_roundps_epu64<const SAE: i32>(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvtt_roundps_epu64<const SAE: i32>(a: __m256) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundps_epu64::<SAE>(_mm512_undefined_epi32(), 0xff, a)
 }
@@ -3887,14 +4175,16 @@ pub unsafe fn _mm512_cvtt_roundps_epu64<const SAE: i32>(a: __m256) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvtt_roundps_epu64<const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvtt_roundps_epu64<const SAE: i32>(
     src: __m512i,
     k: __mmask8,
     a: __m256,
 ) -> __m512i {
-    static_assert_sae!(SAE);
-    transmute(vcvttps2uqq_512(a.as_f32x8(), src.as_u64x8(), k, SAE))
+    unsafe {
+        static_assert_sae!(SAE);
+        transmute(vcvttps2uqq_512(a.as_f32x8(), src.as_u64x8(), k, SAE))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3906,8 +4196,8 @@ pub unsafe fn _mm512_mask_cvtt_roundps_epu64<const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq, SAE = 8))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvtt_roundps_epu64<const SAE: i32>(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvtt_roundps_epu64<const SAE: i32>(k: __mmask8, a: __m256) -> __m512i {
     static_assert_sae!(SAE);
     _mm512_mask_cvtt_roundps_epu64::<SAE>(_mm512_setzero_si512(), k, a)
 }
@@ -3919,8 +4209,8 @@ pub unsafe fn _mm512_maskz_cvtt_roundps_epu64<const SAE: i32>(k: __mmask8, a: __
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_cvttps_epu64(a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_cvttps_epu64(a: __m128) -> __m128i {
     _mm_mask_cvttps_epu64(_mm_undefined_si128(), 0xff, a)
 }
 
@@ -3932,9 +4222,9 @@ pub unsafe fn _mm_cvttps_epu64(a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_cvttps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
-    transmute(vcvttps2uqq_128(a.as_f32x4(), src.as_u64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_cvttps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m128i {
+    unsafe { transmute(vcvttps2uqq_128(a.as_f32x4(), src.as_u64x2(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3945,8 +4235,8 @@ pub unsafe fn _mm_mask_cvttps_epu64(src: __m128i, k: __mmask8, a: __m128) -> __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m128i {
     _mm_mask_cvttps_epu64(_mm_setzero_si128(), k, a)
 }
 
@@ -3957,8 +4247,8 @@ pub unsafe fn _mm_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_cvttps_epu64(a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_cvttps_epu64(a: __m128) -> __m256i {
     _mm256_mask_cvttps_epu64(_mm256_undefined_si256(), 0xff, a)
 }
 
@@ -3970,9 +4260,9 @@ pub unsafe fn _mm256_cvttps_epu64(a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_cvttps_epu64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
-    transmute(vcvttps2uqq_256(a.as_f32x4(), src.as_u64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_cvttps_epu64(src: __m256i, k: __mmask8, a: __m128) -> __m256i {
+    unsafe { transmute(vcvttps2uqq_256(a.as_f32x4(), src.as_u64x4(), k)) }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -3983,8 +4273,8 @@ pub unsafe fn _mm256_mask_cvttps_epu64(src: __m256i, k: __mmask8, a: __m128) -> 
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m256i {
     _mm256_mask_cvttps_epu64(_mm256_setzero_si256(), k, a)
 }
 
@@ -3995,8 +4285,8 @@ pub unsafe fn _mm256_maskz_cvttps_epu64(k: __mmask8, a: __m128) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_cvttps_epu64(a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_cvttps_epu64(a: __m256) -> __m512i {
     _mm512_mask_cvttps_epu64(_mm512_undefined_epi32(), 0xff, a)
 }
 
@@ -4008,14 +4298,16 @@ pub unsafe fn _mm512_cvttps_epu64(a: __m256) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_cvttps_epu64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
-    transmute(vcvttps2uqq_512(
-        a.as_f32x8(),
-        src.as_u64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_cvttps_epu64(src: __m512i, k: __mmask8, a: __m256) -> __m512i {
+    unsafe {
+        transmute(vcvttps2uqq_512(
+            a.as_f32x8(),
+            src.as_u64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Convert packed single-precision (32-bit) floating-point elements in a to packed unsigned 64-bit integers
@@ -4026,8 +4318,8 @@ pub unsafe fn _mm512_mask_cvttps_epu64(src: __m512i, k: __mmask8, a: __m256) -> 
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vcvttps2uqq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_cvttps_epu64(k: __mmask8, a: __m256) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_cvttps_epu64(k: __mmask8, a: __m256) -> __m512i {
     _mm512_mask_cvttps_epu64(_mm512_setzero_si512(), k, a)
 }
 
@@ -4040,9 +4332,9 @@ pub unsafe fn _mm512_maskz_cvttps_epu64(k: __mmask8, a: __m256) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mullo_epi64(a: __m128i, b: __m128i) -> __m128i {
-    transmute(simd_mul(a.as_i64x2(), b.as_i64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mullo_epi64(a: __m128i, b: __m128i) -> __m128i {
+    unsafe { transmute(simd_mul(a.as_i64x2(), b.as_i64x2())) }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4053,10 +4345,12 @@ pub unsafe fn _mm_mullo_epi64(a: __m128i, b: __m128i) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_mullo_epi64(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    let b = _mm_mullo_epi64(a, b).as_i64x2();
-    transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_mullo_epi64(src: __m128i, k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
+    unsafe {
+        let b = _mm_mullo_epi64(a, b).as_i64x2();
+        transmute(simd_select_bitmask(k, b, src.as_i64x2()))
+    }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4067,10 +4361,12 @@ pub unsafe fn _mm_mask_mullo_epi64(src: __m128i, k: __mmask8, a: __m128i, b: __m
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_mullo_epi64(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
-    let b = _mm_mullo_epi64(a, b).as_i64x2();
-    transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_mullo_epi64(k: __mmask8, a: __m128i, b: __m128i) -> __m128i {
+    unsafe {
+        let b = _mm_mullo_epi64(a, b).as_i64x2();
+        transmute(simd_select_bitmask(k, b, i64x2::ZERO))
+    }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4080,9 +4376,9 @@ pub unsafe fn _mm_maskz_mullo_epi64(k: __mmask8, a: __m128i, b: __m128i) -> __m1
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mullo_epi64(a: __m256i, b: __m256i) -> __m256i {
-    transmute(simd_mul(a.as_i64x4(), b.as_i64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mullo_epi64(a: __m256i, b: __m256i) -> __m256i {
+    unsafe { transmute(simd_mul(a.as_i64x4(), b.as_i64x4())) }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4093,15 +4389,12 @@ pub unsafe fn _mm256_mullo_epi64(a: __m256i, b: __m256i) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_mullo_epi64(
-    src: __m256i,
-    k: __mmask8,
-    a: __m256i,
-    b: __m256i,
-) -> __m256i {
-    let b = _mm256_mullo_epi64(a, b).as_i64x4();
-    transmute(simd_select_bitmask(k, b, src.as_i64x4()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_mullo_epi64(src: __m256i, k: __mmask8, a: __m256i, b: __m256i) -> __m256i {
+    unsafe {
+        let b = _mm256_mullo_epi64(a, b).as_i64x4();
+        transmute(simd_select_bitmask(k, b, src.as_i64x4()))
+    }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4112,10 +4405,12 @@ pub unsafe fn _mm256_mask_mullo_epi64(
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_mullo_epi64(k: __mmask8, a: __m256i, b: __m256i) -> __m256i {
-    let b = _mm256_mullo_epi64(a, b).as_i64x4();
-    transmute(simd_select_bitmask(k, b, i64x4::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_mullo_epi64(k: __mmask8, a: __m256i, b: __m256i) -> __m256i {
+    unsafe {
+        let b = _mm256_mullo_epi64(a, b).as_i64x4();
+        transmute(simd_select_bitmask(k, b, i64x4::ZERO))
+    }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4125,9 +4420,9 @@ pub unsafe fn _mm256_maskz_mullo_epi64(k: __mmask8, a: __m256i, b: __m256i) -> _
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mullo_epi64(a: __m512i, b: __m512i) -> __m512i {
-    transmute(simd_mul(a.as_i64x8(), b.as_i64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mullo_epi64(a: __m512i, b: __m512i) -> __m512i {
+    unsafe { transmute(simd_mul(a.as_i64x8(), b.as_i64x8())) }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4138,15 +4433,12 @@ pub unsafe fn _mm512_mullo_epi64(a: __m512i, b: __m512i) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_mullo_epi64(
-    src: __m512i,
-    k: __mmask8,
-    a: __m512i,
-    b: __m512i,
-) -> __m512i {
-    let b = _mm512_mullo_epi64(a, b).as_i64x8();
-    transmute(simd_select_bitmask(k, b, src.as_i64x8()))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_mullo_epi64(src: __m512i, k: __mmask8, a: __m512i, b: __m512i) -> __m512i {
+    unsafe {
+        let b = _mm512_mullo_epi64(a, b).as_i64x8();
+        transmute(simd_select_bitmask(k, b, src.as_i64x8()))
+    }
 }
 
 /// Multiply packed 64-bit integers in `a` and `b`, producing intermediate 128-bit integers, and store
@@ -4157,10 +4449,12 @@ pub unsafe fn _mm512_mask_mullo_epi64(
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vpmullq))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_mullo_epi64(k: __mmask8, a: __m512i, b: __m512i) -> __m512i {
-    let b = _mm512_mullo_epi64(a, b).as_i64x8();
-    transmute(simd_select_bitmask(k, b, i64x8::ZERO))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_mullo_epi64(k: __mmask8, a: __m512i, b: __m512i) -> __m512i {
+    unsafe {
+        let b = _mm512_mullo_epi64(a, b).as_i64x8();
+        transmute(simd_select_bitmask(k, b, i64x8::ZERO))
+    }
 }
 
 // Mask Registers
@@ -4170,8 +4464,8 @@ pub unsafe fn _mm512_maskz_mullo_epi64(k: __mmask8, a: __m512i, b: __m512i) -> _
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_cvtmask8_u32&ig_expand=1891)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _cvtmask8_u32(a: __mmask8) -> u32 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _cvtmask8_u32(a: __mmask8) -> u32 {
     a as u32
 }
 
@@ -4180,8 +4474,8 @@ pub unsafe fn _cvtmask8_u32(a: __mmask8) -> u32 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_cvtu32_mask8&ig_expand=2467)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _cvtu32_mask8(a: u32) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _cvtu32_mask8(a: u32) -> __mmask8 {
     a as __mmask8
 }
 
@@ -4190,8 +4484,8 @@ pub unsafe fn _cvtu32_mask8(a: u32) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kadd_mask16&ig_expand=3903)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kadd_mask16(a: __mmask16, b: __mmask16) -> __mmask16 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kadd_mask16(a: __mmask16, b: __mmask16) -> __mmask16 {
     a + b
 }
 
@@ -4200,8 +4494,8 @@ pub unsafe fn _kadd_mask16(a: __mmask16, b: __mmask16) -> __mmask16 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kadd_mask8&ig_expand=3906)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kadd_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kadd_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     a + b
 }
 
@@ -4210,8 +4504,8 @@ pub unsafe fn _kadd_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kand_mask8&ig_expand=3911)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kand_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kand_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     a & b
 }
 
@@ -4220,8 +4514,8 @@ pub unsafe fn _kand_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kandn_mask8&ig_expand=3916)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kandn_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kandn_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     _knot_mask8(a) & b
 }
 
@@ -4230,8 +4524,8 @@ pub unsafe fn _kandn_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_knot_mask8&ig_expand=3922)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _knot_mask8(a: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _knot_mask8(a: __mmask8) -> __mmask8 {
     a ^ 0b11111111
 }
 
@@ -4240,8 +4534,8 @@ pub unsafe fn _knot_mask8(a: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kor_mask8&ig_expand=3927)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     a | b
 }
 
@@ -4250,8 +4544,8 @@ pub unsafe fn _kor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxnor_mask8&ig_expand=3969)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kxnor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kxnor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     _knot_mask8(_kxor_mask8(a, b))
 }
 
@@ -4260,8 +4554,8 @@ pub unsafe fn _kxnor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kxor_mask8&ig_expand=3974)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kxor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kxor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
     a ^ b
 }
 
@@ -4271,7 +4565,7 @@ pub unsafe fn _kxor_mask8(a: __mmask8, b: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortest_mask8_u8&ig_expand=3931)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 pub unsafe fn _kortest_mask8_u8(a: __mmask8, b: __mmask8, all_ones: *mut u8) -> u8 {
     let tmp = _kor_mask8(a, b);
     *all_ones = (tmp == 0xff) as u8;
@@ -4284,8 +4578,8 @@ pub unsafe fn _kortest_mask8_u8(a: __mmask8, b: __mmask8, all_ones: *mut u8) -> 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestc_mask8_u8&ig_expand=3936)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kortestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kortestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
     (_kor_mask8(a, b) == 0xff) as u8
 }
 
@@ -4295,8 +4589,8 @@ pub unsafe fn _kortestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_kortestz_mask8_u8&ig_expand=3941)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kortestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kortestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
     (_kor_mask8(a, b) == 0) as u8
 }
 
@@ -4306,8 +4600,8 @@ pub unsafe fn _kortestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kshiftli_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kshiftli_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
     a << COUNT
 }
 
@@ -4317,8 +4611,8 @@ pub unsafe fn _kshiftli_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _kshiftri_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _kshiftri_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
     a >> COUNT
 }
 
@@ -4329,7 +4623,7 @@ pub unsafe fn _kshiftri_mask8<const COUNT: u32>(a: __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktest_mask16_u8&ig_expand=3950)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 pub unsafe fn _ktest_mask16_u8(a: __mmask16, b: __mmask16, and_not: *mut u8) -> u8 {
     *and_not = (_kandn_mask16(a, b) == 0) as u8;
     (_kand_mask16(a, b) == 0) as u8
@@ -4342,7 +4636,7 @@ pub unsafe fn _ktest_mask16_u8(a: __mmask16, b: __mmask16, and_not: *mut u8) -> 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktest_mask8_u8&ig_expand=3953)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 pub unsafe fn _ktest_mask8_u8(a: __mmask8, b: __mmask8, and_not: *mut u8) -> u8 {
     *and_not = (_kandn_mask8(a, b) == 0) as u8;
     (_kand_mask8(a, b) == 0) as u8
@@ -4354,8 +4648,8 @@ pub unsafe fn _ktest_mask8_u8(a: __mmask8, b: __mmask8, and_not: *mut u8) -> u8 
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestc_mask16_u8&ig_expand=3954)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _ktestc_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _ktestc_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
     (_kandn_mask16(a, b) == 0) as u8
 }
 
@@ -4365,8 +4659,8 @@ pub unsafe fn _ktestc_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestc_mask8_u8&ig_expand=3957)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _ktestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _ktestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
     (_kandn_mask8(a, b) == 0) as u8
 }
 
@@ -4376,8 +4670,8 @@ pub unsafe fn _ktestc_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestz_mask16_u8&ig_expand=3958)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _ktestz_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _ktestz_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
     (_kand_mask16(a, b) == 0) as u8
 }
 
@@ -4387,8 +4681,8 @@ pub unsafe fn _ktestz_mask16_u8(a: __mmask16, b: __mmask16) -> u8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_ktestz_mask8_u8&ig_expand=3961)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _ktestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _ktestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
     (_kand_mask8(a, b) == 0) as u8
 }
 
@@ -4397,7 +4691,7 @@ pub unsafe fn _ktestz_mask8_u8(a: __mmask8, b: __mmask8) -> u8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_load_mask8&ig_expand=3999)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 pub unsafe fn _load_mask8(mem_addr: *const __mmask8) -> __mmask8 {
     *mem_addr
 }
@@ -4407,7 +4701,7 @@ pub unsafe fn _load_mask8(mem_addr: *const __mmask8) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_store_mask8&ig_expand=6468)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 pub unsafe fn _store_mask8(mem_addr: *mut __mmask8, a: __mmask8) {
     *mem_addr = a;
 }
@@ -4418,8 +4712,8 @@ pub unsafe fn _store_mask8(mem_addr: *mut __mmask8, a: __mmask8) {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movepi32_mask&ig_expand=4612)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_movepi32_mask(a: __m128i) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_movepi32_mask(a: __m128i) -> __mmask8 {
     let zero = _mm_setzero_si128();
     _mm_cmplt_epi32_mask(a, zero)
 }
@@ -4430,8 +4724,8 @@ pub unsafe fn _mm_movepi32_mask(a: __m128i) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movepi32_mask&ig_expand=4613)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_movepi32_mask(a: __m256i) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_movepi32_mask(a: __m256i) -> __mmask8 {
     let zero = _mm256_setzero_si256();
     _mm256_cmplt_epi32_mask(a, zero)
 }
@@ -4442,8 +4736,8 @@ pub unsafe fn _mm256_movepi32_mask(a: __m256i) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movepi32_mask&ig_expand=4614)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_movepi32_mask(a: __m512i) -> __mmask16 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_movepi32_mask(a: __m512i) -> __mmask16 {
     let zero = _mm512_setzero_si512();
     _mm512_cmplt_epi32_mask(a, zero)
 }
@@ -4454,8 +4748,8 @@ pub unsafe fn _mm512_movepi32_mask(a: __m512i) -> __mmask16 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_movepi64_mask&ig_expand=4615)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_movepi64_mask(a: __m128i) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_movepi64_mask(a: __m128i) -> __mmask8 {
     let zero = _mm_setzero_si128();
     _mm_cmplt_epi64_mask(a, zero)
 }
@@ -4466,8 +4760,8 @@ pub unsafe fn _mm_movepi64_mask(a: __m128i) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movepi64_mask&ig_expand=4616)
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_movepi64_mask(a: __m256i) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_movepi64_mask(a: __m256i) -> __mmask8 {
     let zero = _mm256_setzero_si256();
     _mm256_cmplt_epi64_mask(a, zero)
 }
@@ -4478,8 +4772,8 @@ pub unsafe fn _mm256_movepi64_mask(a: __m256i) -> __mmask8 {
 /// [Intel's Documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_movepi64_mask&ig_expand=4617)
 #[inline]
 #[target_feature(enable = "avx512dq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_movepi64_mask(a: __m512i) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_movepi64_mask(a: __m512i) -> __mmask8 {
     let zero = _mm512_setzero_si512();
     _mm512_cmplt_epi64_mask(a, zero)
 }
@@ -4491,8 +4785,8 @@ pub unsafe fn _mm512_movepi64_mask(a: __m512i) -> __mmask8 {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmovm2d))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_movm_epi32(k: __mmask8) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_movm_epi32(k: __mmask8) -> __m128i {
     let ones = _mm_set1_epi32(-1);
     _mm_maskz_mov_epi32(k, ones)
 }
@@ -4504,8 +4798,8 @@ pub unsafe fn _mm_movm_epi32(k: __mmask8) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmovm2d))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_movm_epi32(k: __mmask8) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_movm_epi32(k: __mmask8) -> __m256i {
     let ones = _mm256_set1_epi32(-1);
     _mm256_maskz_mov_epi32(k, ones)
 }
@@ -4517,8 +4811,8 @@ pub unsafe fn _mm256_movm_epi32(k: __mmask8) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vpmovm2d))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_movm_epi32(k: __mmask16) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_movm_epi32(k: __mmask16) -> __m512i {
     let ones = _mm512_set1_epi32(-1);
     _mm512_maskz_mov_epi32(k, ones)
 }
@@ -4530,8 +4824,8 @@ pub unsafe fn _mm512_movm_epi32(k: __mmask16) -> __m512i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmovm2q))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_movm_epi64(k: __mmask8) -> __m128i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_movm_epi64(k: __mmask8) -> __m128i {
     let ones = _mm_set1_epi64x(-1);
     _mm_maskz_mov_epi64(k, ones)
 }
@@ -4543,8 +4837,8 @@ pub unsafe fn _mm_movm_epi64(k: __mmask8) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vpmovm2q))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_movm_epi64(k: __mmask8) -> __m256i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_movm_epi64(k: __mmask8) -> __m256i {
     let ones = _mm256_set1_epi64x(-1);
     _mm256_maskz_mov_epi64(k, ones)
 }
@@ -4556,8 +4850,8 @@ pub unsafe fn _mm256_movm_epi64(k: __mmask8) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vpmovm2q))]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_movm_epi64(k: __mmask8) -> __m512i {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_movm_epi64(k: __mmask8) -> __m512i {
     let ones = _mm512_set1_epi64(-1);
     _mm512_maskz_mov_epi64(k, ones)
 }
@@ -4577,11 +4871,8 @@ pub unsafe fn _mm512_movm_epi64(k: __mmask8) -> __m512i {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_range_round_pd<const IMM8: i32, const SAE: i32>(
-    a: __m512d,
-    b: __m512d,
-) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_range_round_pd<const IMM8: i32, const SAE: i32>(a: __m512d, b: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 4);
     static_assert_sae!(SAE);
     _mm512_mask_range_round_pd::<IMM8, SAE>(_mm512_setzero_pd(), 0xff, a, b)
@@ -4601,23 +4892,25 @@ pub unsafe fn _mm512_range_round_pd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_range_round_pd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_range_round_pd<const IMM8: i32, const SAE: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512d,
     b: __m512d,
 ) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 4);
-    static_assert_sae!(SAE);
-    transmute(vrangepd_512(
-        a.as_f64x8(),
-        b.as_f64x8(),
-        IMM8,
-        src.as_f64x8(),
-        k,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        static_assert_sae!(SAE);
+        transmute(vrangepd_512(
+            a.as_f64x8(),
+            b.as_f64x8(),
+            IMM8,
+            src.as_f64x8(),
+            k,
+            SAE,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4634,8 +4927,8 @@ pub unsafe fn _mm512_mask_range_round_pd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_range_round_pd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_range_round_pd<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m512d,
     b: __m512d,
@@ -4657,8 +4950,8 @@ pub unsafe fn _mm512_maskz_range_round_pd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_range_pd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_range_pd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_pd::<IMM8>(_mm_setzero_pd(), 0xff, a, b)
 }
@@ -4676,21 +4969,23 @@ pub unsafe fn _mm_range_pd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_pd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_pd<const IMM8: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m128d,
     b: __m128d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangepd_128(
-        a.as_f64x2(),
-        b.as_f64x2(),
-        IMM8,
-        src.as_f64x2(),
-        k,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangepd_128(
+            a.as_f64x2(),
+            b.as_f64x2(),
+            IMM8,
+            src.as_f64x2(),
+            k,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4706,8 +5001,8 @@ pub unsafe fn _mm_mask_range_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_pd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_pd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_pd::<IMM8>(_mm_setzero_pd(), k, a, b)
 }
@@ -4724,8 +5019,8 @@ pub unsafe fn _mm_maskz_range_pd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_range_pd<const IMM8: i32>(a: __m256d, b: __m256d) -> __m256d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_range_pd<const IMM8: i32>(a: __m256d, b: __m256d) -> __m256d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm256_mask_range_pd::<IMM8>(_mm256_setzero_pd(), 0xff, a, b)
 }
@@ -4743,21 +5038,23 @@ pub unsafe fn _mm256_range_pd<const IMM8: i32>(a: __m256d, b: __m256d) -> __m256
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_range_pd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_range_pd<const IMM8: i32>(
     src: __m256d,
     k: __mmask8,
     a: __m256d,
     b: __m256d,
 ) -> __m256d {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangepd_256(
-        a.as_f64x4(),
-        b.as_f64x4(),
-        IMM8,
-        src.as_f64x4(),
-        k,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangepd_256(
+            a.as_f64x4(),
+            b.as_f64x4(),
+            IMM8,
+            src.as_f64x4(),
+            k,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4773,12 +5070,8 @@ pub unsafe fn _mm256_mask_range_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_range_pd<const IMM8: i32>(
-    k: __mmask8,
-    a: __m256d,
-    b: __m256d,
-) -> __m256d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_range_pd<const IMM8: i32>(k: __mmask8, a: __m256d, b: __m256d) -> __m256d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm256_mask_range_pd::<IMM8>(_mm256_setzero_pd(), k, a, b)
 }
@@ -4795,8 +5088,8 @@ pub unsafe fn _mm256_maskz_range_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_range_pd<const IMM8: i32>(a: __m512d, b: __m512d) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_range_pd<const IMM8: i32>(a: __m512d, b: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm512_mask_range_pd::<IMM8>(_mm512_setzero_pd(), 0xff, a, b)
 }
@@ -4814,22 +5107,24 @@ pub unsafe fn _mm512_range_pd<const IMM8: i32>(a: __m512d, b: __m512d) -> __m512
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_range_pd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_range_pd<const IMM8: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512d,
     b: __m512d,
 ) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangepd_512(
-        a.as_f64x8(),
-        b.as_f64x8(),
-        IMM8,
-        src.as_f64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangepd_512(
+            a.as_f64x8(),
+            b.as_f64x8(),
+            IMM8,
+            src.as_f64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4845,12 +5140,8 @@ pub unsafe fn _mm512_mask_range_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangepd, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_range_pd<const IMM8: i32>(
-    k: __mmask8,
-    a: __m512d,
-    b: __m512d,
-) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_range_pd<const IMM8: i32>(k: __mmask8, a: __m512d, b: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm512_mask_range_pd::<IMM8>(_mm512_setzero_pd(), k, a, b)
 }
@@ -4868,11 +5159,8 @@ pub unsafe fn _mm512_maskz_range_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_range_round_ps<const IMM8: i32, const SAE: i32>(
-    a: __m512,
-    b: __m512,
-) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_range_round_ps<const IMM8: i32, const SAE: i32>(a: __m512, b: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 4);
     static_assert_sae!(SAE);
     _mm512_mask_range_round_ps::<IMM8, SAE>(_mm512_setzero_ps(), 0xffff, a, b)
@@ -4891,23 +5179,25 @@ pub unsafe fn _mm512_range_round_ps<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_range_round_ps<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_range_round_ps<const IMM8: i32, const SAE: i32>(
     src: __m512,
     k: __mmask16,
     a: __m512,
     b: __m512,
 ) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 4);
-    static_assert_sae!(SAE);
-    transmute(vrangeps_512(
-        a.as_f32x16(),
-        b.as_f32x16(),
-        IMM8,
-        src.as_f32x16(),
-        k,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        static_assert_sae!(SAE);
+        transmute(vrangeps_512(
+            a.as_f32x16(),
+            b.as_f32x16(),
+            IMM8,
+            src.as_f32x16(),
+            k,
+            SAE,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4923,8 +5213,8 @@ pub unsafe fn _mm512_mask_range_round_ps<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_range_round_ps<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_range_round_ps<const IMM8: i32, const SAE: i32>(
     k: __mmask16,
     a: __m512,
     b: __m512,
@@ -4946,8 +5236,8 @@ pub unsafe fn _mm512_maskz_range_round_ps<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_range_ps<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_range_ps<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_ps::<IMM8>(_mm_setzero_ps(), 0xff, a, b)
 }
@@ -4965,21 +5255,23 @@ pub unsafe fn _mm_range_ps<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_ps<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_ps<const IMM8: i32>(
     src: __m128,
     k: __mmask8,
     a: __m128,
     b: __m128,
 ) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangeps_128(
-        a.as_f32x4(),
-        b.as_f32x4(),
-        IMM8,
-        src.as_f32x4(),
-        k,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangeps_128(
+            a.as_f32x4(),
+            b.as_f32x4(),
+            IMM8,
+            src.as_f32x4(),
+            k,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -4995,8 +5287,8 @@ pub unsafe fn _mm_mask_range_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_ps::<IMM8>(_mm_setzero_ps(), k, a, b)
 }
@@ -5013,8 +5305,8 @@ pub unsafe fn _mm_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m128, b: __m
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_range_ps<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_range_ps<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm256_mask_range_ps::<IMM8>(_mm256_setzero_ps(), 0xff, a, b)
 }
@@ -5032,21 +5324,23 @@ pub unsafe fn _mm256_range_ps<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_range_ps<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_range_ps<const IMM8: i32>(
     src: __m256,
     k: __mmask8,
     a: __m256,
     b: __m256,
 ) -> __m256 {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangeps_256(
-        a.as_f32x8(),
-        b.as_f32x8(),
-        IMM8,
-        src.as_f32x8(),
-        k,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangeps_256(
+            a.as_f32x8(),
+            b.as_f32x8(),
+            IMM8,
+            src.as_f32x8(),
+            k,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -5062,8 +5356,8 @@ pub unsafe fn _mm256_mask_range_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m256, b: __m256) -> __m256 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m256, b: __m256) -> __m256 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm256_mask_range_ps::<IMM8>(_mm256_setzero_ps(), k, a, b)
 }
@@ -5080,8 +5374,8 @@ pub unsafe fn _mm256_maskz_range_ps<const IMM8: i32>(k: __mmask8, a: __m256, b: 
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_range_ps<const IMM8: i32>(a: __m512, b: __m512) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_range_ps<const IMM8: i32>(a: __m512, b: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm512_mask_range_ps::<IMM8>(_mm512_setzero_ps(), 0xffff, a, b)
 }
@@ -5099,22 +5393,24 @@ pub unsafe fn _mm512_range_ps<const IMM8: i32>(a: __m512, b: __m512) -> __m512 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_range_ps<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_range_ps<const IMM8: i32>(
     src: __m512,
     k: __mmask16,
     a: __m512,
     b: __m512,
 ) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangeps_512(
-        a.as_f32x16(),
-        b.as_f32x16(),
-        IMM8,
-        src.as_f32x16(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangeps_512(
+            a.as_f32x16(),
+            b.as_f32x16(),
+            IMM8,
+            src.as_f32x16(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for packed
@@ -5130,8 +5426,8 @@ pub unsafe fn _mm512_mask_range_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangeps, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_range_ps<const IMM8: i32>(k: __mmask16, a: __m512, b: __m512) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_range_ps<const IMM8: i32>(k: __mmask16, a: __m512, b: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm512_mask_range_ps::<IMM8>(_mm512_setzero_ps(), k, a, b)
 }
@@ -5150,11 +5446,8 @@ pub unsafe fn _mm512_maskz_range_ps<const IMM8: i32>(k: __mmask16, a: __m512, b:
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangesd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_range_round_sd<const IMM8: i32, const SAE: i32>(
-    a: __m128d,
-    b: __m128d,
-) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_range_round_sd<const IMM8: i32, const SAE: i32>(a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 4);
     static_assert_sae!(SAE);
     _mm_mask_range_round_sd::<IMM8, SAE>(_mm_setzero_pd(), 0xff, a, b)
@@ -5175,23 +5468,25 @@ pub unsafe fn _mm_range_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangesd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_round_sd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_round_sd<const IMM8: i32, const SAE: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m128d,
     b: __m128d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 4);
-    static_assert_sae!(SAE);
-    transmute(vrangesd(
-        a.as_f64x2(),
-        b.as_f64x2(),
-        src.as_f64x2(),
-        k,
-        IMM8,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        static_assert_sae!(SAE);
+        transmute(vrangesd(
+            a.as_f64x2(),
+            b.as_f64x2(),
+            src.as_f64x2(),
+            k,
+            IMM8,
+            SAE,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for the lower
@@ -5209,8 +5504,8 @@ pub unsafe fn _mm_mask_range_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangesd, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_round_sd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_round_sd<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m128d,
     b: __m128d,
@@ -5234,22 +5529,24 @@ pub unsafe fn _mm_maskz_range_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangesd, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_sd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_sd<const IMM8: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m128d,
     b: __m128d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangesd(
-        a.as_f64x2(),
-        b.as_f64x2(),
-        src.as_f64x2(),
-        k,
-        IMM8,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangesd(
+            a.as_f64x2(),
+            b.as_f64x2(),
+            src.as_f64x2(),
+            k,
+            IMM8,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for the lower
@@ -5266,8 +5563,8 @@ pub unsafe fn _mm_mask_range_sd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangesd, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_sd::<IMM8>(_mm_setzero_pd(), k, a, b)
 }
@@ -5286,8 +5583,8 @@ pub unsafe fn _mm_maskz_range_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangess, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_range_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_range_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 4);
     static_assert_sae!(SAE);
     _mm_mask_range_round_ss::<IMM8, SAE>(_mm_setzero_ps(), 0xff, a, b)
@@ -5308,23 +5605,25 @@ pub unsafe fn _mm_range_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b: 
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangess, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_round_ss<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_round_ss<const IMM8: i32, const SAE: i32>(
     src: __m128,
     k: __mmask8,
     a: __m128,
     b: __m128,
 ) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 4);
-    static_assert_sae!(SAE);
-    transmute(vrangess(
-        a.as_f32x4(),
-        b.as_f32x4(),
-        src.as_f32x4(),
-        k,
-        IMM8,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        static_assert_sae!(SAE);
+        transmute(vrangess(
+            a.as_f32x4(),
+            b.as_f32x4(),
+            src.as_f32x4(),
+            k,
+            IMM8,
+            SAE,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for the lower
@@ -5342,8 +5641,8 @@ pub unsafe fn _mm_mask_range_round_ss<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangess, IMM8 = 5, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_round_ss<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_round_ss<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m128,
     b: __m128,
@@ -5367,22 +5666,24 @@ pub unsafe fn _mm_maskz_range_round_ss<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangess, IMM8 = 5))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_range_ss<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_range_ss<const IMM8: i32>(
     src: __m128,
     k: __mmask8,
     a: __m128,
     b: __m128,
 ) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 4);
-    transmute(vrangess(
-        a.as_f32x4(),
-        b.as_f32x4(),
-        src.as_f32x4(),
-        k,
-        IMM8,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 4);
+        transmute(vrangess(
+            a.as_f32x4(),
+            b.as_f32x4(),
+            src.as_f32x4(),
+            k,
+            IMM8,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Calculate the max, min, absolute max, or absolute min (depending on control in imm8) for the lower
@@ -5399,8 +5700,8 @@ pub unsafe fn _mm_mask_range_ss<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vrangess, IMM8 = 5))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_range_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_range_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 4);
     _mm_mask_range_ss::<IMM8>(_mm_setzero_ps(), k, a, b)
 }
@@ -5424,8 +5725,8 @@ pub unsafe fn _mm_maskz_range_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __m
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(1, 2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_reduce_round_pd<const IMM8: i32, const SAE: i32>(a: __m512d) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_reduce_round_pd<const IMM8: i32, const SAE: i32>(a: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 8);
     static_assert_sae!(SAE);
     _mm512_mask_reduce_round_pd::<IMM8, SAE>(_mm512_undefined_pd(), 0xff, a)
@@ -5449,15 +5750,17 @@ pub unsafe fn _mm512_reduce_round_pd<const IMM8: i32, const SAE: i32>(a: __m512d
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_reduce_round_pd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_reduce_round_pd<const IMM8: i32, const SAE: i32>(
     src: __m512d,
     k: __mmask8,
     a: __m512d,
 ) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 8);
-    static_assert_sae!(SAE);
-    transmute(vreducepd_512(a.as_f64x8(), IMM8, src.as_f64x8(), k, SAE))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        static_assert_sae!(SAE);
+        transmute(vreducepd_512(a.as_f64x8(), IMM8, src.as_f64x8(), k, SAE))
+    }
 }
 
 /// Extract the reduced argument of packed double-precision (64-bit) floating-point elements in a by
@@ -5478,8 +5781,8 @@ pub unsafe fn _mm512_mask_reduce_round_pd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_reduce_round_pd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_reduce_round_pd<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m512d,
 ) -> __m512d {
@@ -5503,8 +5806,8 @@ pub unsafe fn _mm512_maskz_reduce_round_pd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_pd<const IMM8: i32>(a: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_pd<const IMM8: i32>(a: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_pd::<IMM8>(_mm_undefined_pd(), 0xff, a)
 }
@@ -5525,14 +5828,12 @@ pub unsafe fn _mm_reduce_pd<const IMM8: i32>(a: __m128d) -> __m128d {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_pd<const IMM8: i32>(
-    src: __m128d,
-    k: __mmask8,
-    a: __m128d,
-) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreducepd_128(a.as_f64x2(), IMM8, src.as_f64x2(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_pd<const IMM8: i32>(src: __m128d, k: __mmask8, a: __m128d) -> __m128d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreducepd_128(a.as_f64x2(), IMM8, src.as_f64x2(), k))
+    }
 }
 
 /// Extract the reduced argument of packed double-precision (64-bit) floating-point elements in a by
@@ -5551,8 +5852,8 @@ pub unsafe fn _mm_mask_reduce_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_pd::<IMM8>(_mm_setzero_pd(), k, a)
 }
@@ -5572,8 +5873,8 @@ pub unsafe fn _mm_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m128d) -> _
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_reduce_pd<const IMM8: i32>(a: __m256d) -> __m256d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_reduce_pd<const IMM8: i32>(a: __m256d) -> __m256d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_reduce_pd::<IMM8>(_mm256_undefined_pd(), 0xff, a)
 }
@@ -5594,14 +5895,12 @@ pub unsafe fn _mm256_reduce_pd<const IMM8: i32>(a: __m256d) -> __m256d {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_reduce_pd<const IMM8: i32>(
-    src: __m256d,
-    k: __mmask8,
-    a: __m256d,
-) -> __m256d {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreducepd_256(a.as_f64x4(), IMM8, src.as_f64x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_reduce_pd<const IMM8: i32>(src: __m256d, k: __mmask8, a: __m256d) -> __m256d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreducepd_256(a.as_f64x4(), IMM8, src.as_f64x4(), k))
+    }
 }
 
 /// Extract the reduced argument of packed double-precision (64-bit) floating-point elements in a by
@@ -5620,8 +5919,8 @@ pub unsafe fn _mm256_mask_reduce_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m256d) -> __m256d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m256d) -> __m256d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_reduce_pd::<IMM8>(_mm256_setzero_pd(), k, a)
 }
@@ -5641,8 +5940,8 @@ pub unsafe fn _mm256_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m256d) -
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_reduce_pd<const IMM8: i32>(a: __m512d) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_reduce_pd<const IMM8: i32>(a: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_reduce_pd::<IMM8>(_mm512_undefined_pd(), 0xff, a)
 }
@@ -5663,20 +5962,18 @@ pub unsafe fn _mm512_reduce_pd<const IMM8: i32>(a: __m512d) -> __m512d {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_reduce_pd<const IMM8: i32>(
-    src: __m512d,
-    k: __mmask8,
-    a: __m512d,
-) -> __m512d {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreducepd_512(
-        a.as_f64x8(),
-        IMM8,
-        src.as_f64x8(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_reduce_pd<const IMM8: i32>(src: __m512d, k: __mmask8, a: __m512d) -> __m512d {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreducepd_512(
+            a.as_f64x8(),
+            IMM8,
+            src.as_f64x8(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Extract the reduced argument of packed double-precision (64-bit) floating-point elements in a by
@@ -5695,8 +5992,8 @@ pub unsafe fn _mm512_mask_reduce_pd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducepd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m512d) -> __m512d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m512d) -> __m512d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_reduce_pd::<IMM8>(_mm512_setzero_pd(), k, a)
 }
@@ -5718,8 +6015,8 @@ pub unsafe fn _mm512_maskz_reduce_pd<const IMM8: i32>(k: __mmask8, a: __m512d) -
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(1, 2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_reduce_round_ps<const IMM8: i32, const SAE: i32>(a: __m512) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_reduce_round_ps<const IMM8: i32, const SAE: i32>(a: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 8);
     static_assert_sae!(SAE);
     _mm512_mask_reduce_round_ps::<IMM8, SAE>(_mm512_undefined_ps(), 0xffff, a)
@@ -5743,15 +6040,17 @@ pub unsafe fn _mm512_reduce_round_ps<const IMM8: i32, const SAE: i32>(a: __m512)
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_reduce_round_ps<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_reduce_round_ps<const IMM8: i32, const SAE: i32>(
     src: __m512,
     k: __mmask16,
     a: __m512,
 ) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 8);
-    static_assert_sae!(SAE);
-    transmute(vreduceps_512(a.as_f32x16(), IMM8, src.as_f32x16(), k, SAE))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        static_assert_sae!(SAE);
+        transmute(vreduceps_512(a.as_f32x16(), IMM8, src.as_f32x16(), k, SAE))
+    }
 }
 
 /// Extract the reduced argument of packed single-precision (32-bit) floating-point elements in a by
@@ -5772,8 +6071,8 @@ pub unsafe fn _mm512_mask_reduce_round_ps<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_reduce_round_ps<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_reduce_round_ps<const IMM8: i32, const SAE: i32>(
     k: __mmask16,
     a: __m512,
 ) -> __m512 {
@@ -5797,8 +6096,8 @@ pub unsafe fn _mm512_maskz_reduce_round_ps<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_ps<const IMM8: i32>(a: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_ps<const IMM8: i32>(a: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_ps::<IMM8>(_mm_undefined_ps(), 0xff, a)
 }
@@ -5819,10 +6118,12 @@ pub unsafe fn _mm_reduce_ps<const IMM8: i32>(a: __m128) -> __m128 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_ps<const IMM8: i32>(src: __m128, k: __mmask8, a: __m128) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreduceps_128(a.as_f32x4(), IMM8, src.as_f32x4(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_ps<const IMM8: i32>(src: __m128, k: __mmask8, a: __m128) -> __m128 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreduceps_128(a.as_f32x4(), IMM8, src.as_f32x4(), k))
+    }
 }
 
 /// Extract the reduced argument of packed single-precision (32-bit) floating-point elements in a by
@@ -5841,8 +6142,8 @@ pub unsafe fn _mm_mask_reduce_ps<const IMM8: i32>(src: __m128, k: __mmask8, a: _
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_ps::<IMM8>(_mm_setzero_ps(), k, a)
 }
@@ -5862,8 +6163,8 @@ pub unsafe fn _mm_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m128) -> __
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_reduce_ps<const IMM8: i32>(a: __m256) -> __m256 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_reduce_ps<const IMM8: i32>(a: __m256) -> __m256 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_reduce_ps::<IMM8>(_mm256_undefined_ps(), 0xff, a)
 }
@@ -5884,14 +6185,12 @@ pub unsafe fn _mm256_reduce_ps<const IMM8: i32>(a: __m256) -> __m256 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_reduce_ps<const IMM8: i32>(
-    src: __m256,
-    k: __mmask8,
-    a: __m256,
-) -> __m256 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreduceps_256(a.as_f32x8(), IMM8, src.as_f32x8(), k))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_reduce_ps<const IMM8: i32>(src: __m256, k: __mmask8, a: __m256) -> __m256 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreduceps_256(a.as_f32x8(), IMM8, src.as_f32x8(), k))
+    }
 }
 
 /// Extract the reduced argument of packed single-precision (32-bit) floating-point elements in a by
@@ -5910,8 +6209,8 @@ pub unsafe fn _mm256_mask_reduce_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m256) -> __m256 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m256) -> __m256 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_reduce_ps::<IMM8>(_mm256_setzero_ps(), k, a)
 }
@@ -5931,8 +6230,8 @@ pub unsafe fn _mm256_maskz_reduce_ps<const IMM8: i32>(k: __mmask8, a: __m256) ->
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_reduce_ps<const IMM8: i32>(a: __m512) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_reduce_ps<const IMM8: i32>(a: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_reduce_ps::<IMM8>(_mm512_undefined_ps(), 0xffff, a)
 }
@@ -5953,20 +6252,18 @@ pub unsafe fn _mm512_reduce_ps<const IMM8: i32>(a: __m512) -> __m512 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_reduce_ps<const IMM8: i32>(
-    src: __m512,
-    k: __mmask16,
-    a: __m512,
-) -> __m512 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreduceps_512(
-        a.as_f32x16(),
-        IMM8,
-        src.as_f32x16(),
-        k,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_reduce_ps<const IMM8: i32>(src: __m512, k: __mmask16, a: __m512) -> __m512 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreduceps_512(
+            a.as_f32x16(),
+            IMM8,
+            src.as_f32x16(),
+            k,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Extract the reduced argument of packed single-precision (32-bit) floating-point elements in a by
@@ -5985,8 +6282,8 @@ pub unsafe fn _mm512_mask_reduce_ps<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreduceps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_maskz_reduce_ps<const IMM8: i32>(k: __mmask16, a: __m512) -> __m512 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_maskz_reduce_ps<const IMM8: i32>(k: __mmask16, a: __m512) -> __m512 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_reduce_ps::<IMM8>(_mm512_setzero_ps(), k, a)
 }
@@ -6009,11 +6306,8 @@ pub unsafe fn _mm512_maskz_reduce_ps<const IMM8: i32>(k: __mmask16, a: __m512) -
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_round_sd<const IMM8: i32, const SAE: i32>(
-    a: __m128d,
-    b: __m128d,
-) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_round_sd<const IMM8: i32, const SAE: i32>(a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 8);
     static_assert_sae!(SAE);
     _mm_mask_reduce_round_sd::<IMM8, SAE>(_mm_undefined_pd(), 0xff, a, b)
@@ -6038,23 +6332,25 @@ pub unsafe fn _mm_reduce_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_round_sd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_round_sd<const IMM8: i32, const SAE: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m128d,
     b: __m128d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 8);
-    static_assert_sae!(SAE);
-    transmute(vreducesd(
-        a.as_f64x2(),
-        b.as_f64x2(),
-        src.as_f64x2(),
-        k,
-        IMM8,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        static_assert_sae!(SAE);
+        transmute(vreducesd(
+            a.as_f64x2(),
+            b.as_f64x2(),
+            src.as_f64x2(),
+            k,
+            IMM8,
+            SAE,
+        ))
+    }
 }
 
 /// Extract the reduced argument of the lower double-precision (64-bit) floating-point element in b
@@ -6076,8 +6372,8 @@ pub unsafe fn _mm_mask_reduce_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_round_sd<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_round_sd<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m128d,
     b: __m128d,
@@ -6104,8 +6400,8 @@ pub unsafe fn _mm_maskz_reduce_round_sd<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_sd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_sd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_sd::<IMM8>(_mm_undefined_pd(), 0xff, a, b)
 }
@@ -6127,22 +6423,24 @@ pub unsafe fn _mm_reduce_sd<const IMM8: i32>(a: __m128d, b: __m128d) -> __m128d 
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_sd<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_sd<const IMM8: i32>(
     src: __m128d,
     k: __mmask8,
     a: __m128d,
     b: __m128d,
 ) -> __m128d {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreducesd(
-        a.as_f64x2(),
-        b.as_f64x2(),
-        src.as_f64x2(),
-        k,
-        IMM8,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreducesd(
+            a.as_f64x2(),
+            b.as_f64x2(),
+            src.as_f64x2(),
+            k,
+            IMM8,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Extract the reduced argument of the lower double-precision (64-bit) floating-point element in b
@@ -6162,8 +6460,8 @@ pub unsafe fn _mm_mask_reduce_sd<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducesd, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: __m128d) -> __m128d {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_sd::<IMM8>(_mm_setzero_pd(), k, a, b)
 }
@@ -6187,8 +6485,8 @@ pub unsafe fn _mm_maskz_reduce_sd<const IMM8: i32>(k: __mmask8, a: __m128d, b: _
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(2, 3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 8);
     static_assert_sae!(SAE);
     _mm_mask_reduce_round_ss::<IMM8, SAE>(_mm_undefined_ps(), 0xff, a, b)
@@ -6213,23 +6511,25 @@ pub unsafe fn _mm_reduce_round_ss<const IMM8: i32, const SAE: i32>(a: __m128, b:
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(4, 5)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_round_ss<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_round_ss<const IMM8: i32, const SAE: i32>(
     src: __m128,
     k: __mmask8,
     a: __m128,
     b: __m128,
 ) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 8);
-    static_assert_sae!(SAE);
-    transmute(vreducess(
-        a.as_f32x4(),
-        b.as_f32x4(),
-        src.as_f32x4(),
-        k,
-        IMM8,
-        SAE,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        static_assert_sae!(SAE);
+        transmute(vreducess(
+            a.as_f32x4(),
+            b.as_f32x4(),
+            src.as_f32x4(),
+            k,
+            IMM8,
+            SAE,
+        ))
+    }
 }
 
 /// Extract the reduced argument of the lower single-precision (32-bit) floating-point element in b
@@ -6251,8 +6551,8 @@ pub unsafe fn _mm_mask_reduce_round_ss<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0, SAE = 8))]
 #[rustc_legacy_const_generics(3, 4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_round_ss<const IMM8: i32, const SAE: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_round_ss<const IMM8: i32, const SAE: i32>(
     k: __mmask8,
     a: __m128,
     b: __m128,
@@ -6279,8 +6579,8 @@ pub unsafe fn _mm_maskz_reduce_round_ss<const IMM8: i32, const SAE: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_reduce_ss<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_reduce_ss<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_ss::<IMM8>(_mm_undefined_ps(), 0xff, a, b)
 }
@@ -6302,22 +6602,24 @@ pub unsafe fn _mm_reduce_ss<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0))]
 #[rustc_legacy_const_generics(4)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_reduce_ss<const IMM8: i32>(
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_reduce_ss<const IMM8: i32>(
     src: __m128,
     k: __mmask8,
     a: __m128,
     b: __m128,
 ) -> __m128 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vreducess(
-        a.as_f32x4(),
-        b.as_f32x4(),
-        src.as_f32x4(),
-        k,
-        IMM8,
-        _MM_FROUND_CUR_DIRECTION,
-    ))
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vreducess(
+            a.as_f32x4(),
+            b.as_f32x4(),
+            src.as_f32x4(),
+            k,
+            IMM8,
+            _MM_FROUND_CUR_DIRECTION,
+        ))
+    }
 }
 
 /// Extract the reduced argument of the lower single-precision (32-bit) floating-point element in b
@@ -6337,8 +6639,8 @@ pub unsafe fn _mm_mask_reduce_ss<const IMM8: i32>(
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vreducess, IMM8 = 0))]
 #[rustc_legacy_const_generics(3)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_maskz_reduce_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_maskz_reduce_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __m128) -> __m128 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_reduce_ss::<IMM8>(_mm_setzero_ps(), k, a, b)
 }
@@ -6363,8 +6665,8 @@ pub unsafe fn _mm_maskz_reduce_ss<const IMM8: i32>(k: __mmask8, a: __m128, b: __
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_fpclass_pd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_fpclass_pd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_fpclass_pd_mask::<IMM8>(0xff, a)
 }
@@ -6388,10 +6690,12 @@ pub unsafe fn _mm_fpclass_pd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclasspd_128(a.as_f64x2(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclasspd_128(a.as_f64x2(), IMM8, k1))
+    }
 }
 
 /// Test packed double-precision (64-bit) floating-point elements in a for special categories specified
@@ -6412,8 +6716,8 @@ pub unsafe fn _mm_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_fpclass_pd_mask<const IMM8: i32>(a: __m256d) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_fpclass_pd_mask<const IMM8: i32>(a: __m256d) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_fpclass_pd_mask::<IMM8>(0xff, a)
 }
@@ -6437,10 +6741,12 @@ pub unsafe fn _mm256_fpclass_pd_mask<const IMM8: i32>(a: __m256d) -> __mmask8 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m256d) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclasspd_256(a.as_f64x4(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m256d) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclasspd_256(a.as_f64x4(), IMM8, k1))
+    }
 }
 
 /// Test packed double-precision (64-bit) floating-point elements in a for special categories specified
@@ -6461,8 +6767,8 @@ pub unsafe fn _mm256_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m2
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_fpclass_pd_mask<const IMM8: i32>(a: __m512d) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_fpclass_pd_mask<const IMM8: i32>(a: __m512d) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_fpclass_pd_mask::<IMM8>(0xff, a)
 }
@@ -6486,10 +6792,12 @@ pub unsafe fn _mm512_fpclass_pd_mask<const IMM8: i32>(a: __m512d) -> __mmask8 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclasspd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m512d) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclasspd_512(a.as_f64x8(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m512d) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclasspd_512(a.as_f64x8(), IMM8, k1))
+    }
 }
 
 /// Test packed single-precision (32-bit) floating-point elements in a for special categories specified
@@ -6510,8 +6818,8 @@ pub unsafe fn _mm512_mask_fpclass_pd_mask<const IMM8: i32>(k1: __mmask8, a: __m5
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_fpclass_ps_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_fpclass_ps_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_fpclass_ps_mask::<IMM8>(0xff, a)
 }
@@ -6535,10 +6843,12 @@ pub unsafe fn _mm_fpclass_ps_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m128) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclassps_128(a.as_f32x4(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m128) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclassps_128(a.as_f32x4(), IMM8, k1))
+    }
 }
 
 /// Test packed single-precision (32-bit) floating-point elements in a for special categories specified
@@ -6559,8 +6869,8 @@ pub unsafe fn _mm_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m128)
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_fpclass_ps_mask<const IMM8: i32>(a: __m256) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_fpclass_ps_mask<const IMM8: i32>(a: __m256) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm256_mask_fpclass_ps_mask::<IMM8>(0xff, a)
 }
@@ -6584,10 +6894,12 @@ pub unsafe fn _mm256_fpclass_ps_mask<const IMM8: i32>(a: __m256) -> __mmask8 {
 #[target_feature(enable = "avx512dq,avx512vl")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm256_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m256) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclassps_256(a.as_f32x8(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm256_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m256) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclassps_256(a.as_f32x8(), IMM8, k1))
+    }
 }
 
 /// Test packed single-precision (32-bit) floating-point elements in a for special categories specified
@@ -6608,8 +6920,8 @@ pub unsafe fn _mm256_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask8, a: __m2
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_fpclass_ps_mask<const IMM8: i32>(a: __m512) -> __mmask16 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_fpclass_ps_mask<const IMM8: i32>(a: __m512) -> __mmask16 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm512_mask_fpclass_ps_mask::<IMM8>(0xffff, a)
 }
@@ -6633,10 +6945,12 @@ pub unsafe fn _mm512_fpclass_ps_mask<const IMM8: i32>(a: __m512) -> __mmask16 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclassps, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm512_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask16, a: __m512) -> __mmask16 {
-    static_assert_uimm_bits!(IMM8, 8);
-    transmute(vfpclassps_512(a.as_f32x16(), IMM8, k1))
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm512_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask16, a: __m512) -> __mmask16 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        transmute(vfpclassps_512(a.as_f32x16(), IMM8, k1))
+    }
 }
 
 /// Test the lower double-precision (64-bit) floating-point element in a for special categories specified
@@ -6657,8 +6971,8 @@ pub unsafe fn _mm512_mask_fpclass_ps_mask<const IMM8: i32>(k1: __mmask16, a: __m
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclasssd, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_fpclass_sd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_fpclass_sd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_fpclass_sd_mask::<IMM8>(0xff, a)
 }
@@ -6682,10 +6996,12 @@ pub unsafe fn _mm_fpclass_sd_mask<const IMM8: i32>(a: __m128d) -> __mmask8 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclasssd, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_fpclass_sd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    vfpclasssd(a.as_f64x2(), IMM8, k1)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_fpclass_sd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        vfpclasssd(a.as_f64x2(), IMM8, k1)
+    }
 }
 
 /// Test the lower single-precision (32-bit) floating-point element in a for special categories specified
@@ -6706,8 +7022,8 @@ pub unsafe fn _mm_mask_fpclass_sd_mask<const IMM8: i32>(k1: __mmask8, a: __m128d
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclassss, IMM8 = 0))]
 #[rustc_legacy_const_generics(1)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_fpclass_ss_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_fpclass_ss_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
     static_assert_uimm_bits!(IMM8, 8);
     _mm_mask_fpclass_ss_mask::<IMM8>(0xff, a)
 }
@@ -6731,14 +7047,16 @@ pub unsafe fn _mm_fpclass_ss_mask<const IMM8: i32>(a: __m128) -> __mmask8 {
 #[target_feature(enable = "avx512dq")]
 #[cfg_attr(test, assert_instr(vfpclassss, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
-pub unsafe fn _mm_mask_fpclass_ss_mask<const IMM8: i32>(k1: __mmask8, a: __m128) -> __mmask8 {
-    static_assert_uimm_bits!(IMM8, 8);
-    vfpclassss(a.as_f32x4(), IMM8, k1)
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
+pub fn _mm_mask_fpclass_ss_mask<const IMM8: i32>(k1: __mmask8, a: __m128) -> __mmask8 {
+    unsafe {
+        static_assert_uimm_bits!(IMM8, 8);
+        vfpclassss(a.as_f32x4(), IMM8, k1)
+    }
 }
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.avx512.sitofp.round.v2f64.v2i64"]
     fn vcvtqq2pd_128(a: i64x2, rounding: i32) -> f64x2;
     #[link_name = "llvm.x86.avx512.sitofp.round.v4f64.v4i64"]
@@ -6753,18 +7071,18 @@ extern "C" {
     #[link_name = "llvm.x86.avx512.sitofp.round.v8f32.v8i64"]
     fn vcvtqq2ps_512(a: i64x8, rounding: i32) -> f32x8;
 
-    #[link_name = "llvm.x86.avx512.uitofp.round.v2f64.v2u64"]
+    #[link_name = "llvm.x86.avx512.uitofp.round.v2f64.v2i64"]
     fn vcvtuqq2pd_128(a: u64x2, rounding: i32) -> f64x2;
-    #[link_name = "llvm.x86.avx512.uitofp.round.v4f64.v4u64"]
+    #[link_name = "llvm.x86.avx512.uitofp.round.v4f64.v4i64"]
     fn vcvtuqq2pd_256(a: u64x4, rounding: i32) -> f64x4;
-    #[link_name = "llvm.x86.avx512.uitofp.round.v8f64.v8u64"]
+    #[link_name = "llvm.x86.avx512.uitofp.round.v8f64.v8i64"]
     fn vcvtuqq2pd_512(a: u64x8, rounding: i32) -> f64x8;
 
     #[link_name = "llvm.x86.avx512.mask.cvtuqq2ps.128"]
     fn vcvtuqq2ps_128(a: u64x2, src: f32x4, k: __mmask8) -> f32x4;
-    #[link_name = "llvm.x86.avx512.uitofp.round.v4f32.v4u64"]
+    #[link_name = "llvm.x86.avx512.uitofp.round.v4f32.v4i64"]
     fn vcvtuqq2ps_256(a: u64x4, rounding: i32) -> f32x4;
-    #[link_name = "llvm.x86.avx512.uitofp.round.v8f32.v8u64"]
+    #[link_name = "llvm.x86.avx512.uitofp.round.v8f32.v8i64"]
     fn vcvtuqq2ps_512(a: u64x8, rounding: i32) -> f32x8;
 
     #[link_name = "llvm.x86.avx512.mask.cvtpd2qq.128"]
@@ -6836,7 +7154,7 @@ extern "C" {
     fn vrangeps_256(a: f32x8, b: f32x8, imm8: i32, src: f32x8, k: __mmask8) -> f32x8;
     #[link_name = "llvm.x86.avx512.mask.range.ps.512"]
     fn vrangeps_512(a: f32x16, b: f32x16, imm8: i32, src: f32x16, k: __mmask16, sae: i32)
-        -> f32x16;
+    -> f32x16;
 
     #[link_name = "llvm.x86.avx512.mask.range.sd"]
     fn vrangesd(a: f64x2, b: f64x2, src: f64x2, k: __mmask8, imm8: i32, sae: i32) -> f64x2;

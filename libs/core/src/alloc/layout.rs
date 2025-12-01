@@ -17,7 +17,7 @@ use crate::{assert_unsafe_precondition, fmt, mem};
 // * https://github.com/rust-lang/rust/pull/72189
 // * https://github.com/rust-lang/rust/pull/79827
 const fn size_align<T>() -> (usize, usize) {
-    (mem::size_of::<T>(), mem::align_of::<T>())
+    (size_of::<T>(), align_of::<T>())
 }
 
 /// Layout of a block of memory.
@@ -61,8 +61,8 @@ impl Layout {
     /// * `align` must be a power of two,
     ///
     /// * `size`, when rounded up to the nearest multiple of `align`,
-    ///    must not overflow `isize` (i.e., the rounded value must be
-    ///    less than or equal to `isize::MAX`).
+    ///   must not overflow `isize` (i.e., the rounded value must be
+    ///   less than or equal to `isize::MAX`).
     #[stable(feature = "alloc_layout", since = "1.28.0")]
     #[rustc_const_stable(feature = "const_alloc_layout_size_align", since = "1.50.0")]
     #[inline]
@@ -126,6 +126,7 @@ impl Layout {
     #[rustc_const_stable(feature = "const_alloc_layout_unchecked", since = "1.36.0")]
     #[must_use]
     #[inline]
+    #[track_caller]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Self {
         assert_unsafe_precondition!(
             check_library_ub,
@@ -182,7 +183,7 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const fn for_value<T: ?Sized>(t: &T) -> Self {
-        let (size, align) = (mem::size_of_val(t), mem::align_of_val(t));
+        let (size, align) = (size_of_val(t), align_of_val(t));
         // SAFETY: see rationale in `new` for why this is using the unsafe variant
         unsafe { Layout::from_size_align_unchecked(size, align) }
     }
@@ -225,10 +226,10 @@ impl Layout {
 
     /// Creates a `NonNull` that is dangling, but well-aligned for this Layout.
     ///
-    /// Note that the pointer value may potentially represent a valid pointer,
-    /// which means this must not be used as a "not yet initialized"
-    /// sentinel value. Types that lazily allocate must track initialization by
-    /// some other means.
+    /// Note that the address of the returned pointer may potentially
+    /// be that of a valid pointer, which means this must not be used
+    /// as a "not yet initialized" sentinel value.
+    /// Types that lazily allocate must track initialization by some other means.
     #[unstable(feature = "alloc_layout_extra", issue = "55724")]
     #[must_use]
     #[inline]
@@ -519,6 +520,14 @@ impl Layout {
             // And `Alignment` guarantees it's a power of two.
             unsafe { Ok(Layout::from_size_align_unchecked(array_size, align.as_usize())) }
         }
+    }
+
+    /// Perma-unstable access to `align` as `Alignment` type.
+    #[unstable(issue = "none", feature = "std_internals")]
+    #[doc(hidden)]
+    #[inline]
+    pub const fn alignment(&self) -> Alignment {
+        self.align
     }
 }
 

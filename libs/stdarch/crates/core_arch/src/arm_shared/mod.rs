@@ -20,10 +20,10 @@
 //! Section 10.1 of ACLE says:
 //!
 //! - "In the sequence of Arm architectures { v5, v5TE, v6, v6T2, v7 } each architecture includes
-//! its predecessor instruction set."
+//!   its predecessor's instruction set."
 //!
 //! - "In the sequence of Thumb-only architectures { v6-M, v7-M, v7E-M } each architecture includes
-//! its predecessor instruction set."
+//!   its predecessor's instruction set."
 //!
 //! From that info and from looking at how LLVM features work (using custom targets) we can identify
 //! features that are subsets of others:
@@ -38,7 +38,7 @@
 //! *NOTE*: Section 5.4.7 of ACLE says:
 //!
 //! - "__ARM_FEATURE_DSP is defined to 1 if the DSP (v5E) instructions are supported and the
-//! intrinsics defined in Saturating intrinsics are available."
+//!   intrinsics defined in Saturating intrinsics are available."
 //!
 //! This does *not* match how LLVM uses the '+dsp' feature; this feature is not set for v5te
 //! targets so we have to work around this difference.
@@ -47,6 +47,12 @@
 //!
 //! - [ACLE Q2 2018](https://developer.arm.com/docs/101028/latest)
 
+#![cfg_attr(
+    all(target_arch = "aarch64", target_abi = "softfloat"),
+    // Just allow the warning: anyone soundly using the intrinsics has to enable
+    // the target feature, and that will generate a warning for them.
+    allow(aarch64_softfloat_neon)
+)]
 // Only for 'neon' submodule
 #![allow(non_camel_case_types)]
 
@@ -60,46 +66,6 @@ mod hints;
 #[unstable(feature = "stdarch_arm_hints", issue = "117218")]
 pub use self::hints::*;
 
-mod crc;
-#[cfg_attr(
-    target_arch = "arm",
-    unstable(feature = "stdarch_aarch32_crc32", issue = "125085")
-)]
-#[cfg_attr(
-    not(target_arch = "arm"),
-    stable(feature = "stdarch_aarch64_crc32", since = "1.80.0")
-)]
-pub use crc::*;
-
-// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
-#[cfg(target_endian = "little")]
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "arm64ec",
-    target_feature = "v7",
-    doc
-))]
-mod crypto;
-// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
-#[cfg(target_endian = "little")]
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "arm64ec",
-    target_feature = "v7",
-    doc
-))]
-#[cfg_attr(
-    target_arch = "arm",
-    unstable(feature = "stdarch_arm_neon_intrinsics", issue = "111800")
-)]
-#[cfg_attr(
-    not(target_arch = "arm"),
-    stable(feature = "aarch64_neon_crypto_intrinsics", since = "1.72.0")
-)]
-pub use self::crypto::*;
-
-// NEON intrinsics are currently broken on big-endian, so don't expose them. (#1484)
-#[cfg(target_endian = "little")]
 #[cfg(any(
     target_arch = "aarch64",
     target_arch = "arm64ec",
@@ -107,7 +73,7 @@ pub use self::crypto::*;
     doc
 ))]
 pub(crate) mod neon;
-#[cfg(target_endian = "little")]
+
 #[cfg(any(
     target_arch = "aarch64",
     target_arch = "arm64ec",

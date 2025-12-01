@@ -1,5 +1,6 @@
 use rustc_abi::ExternAbi;
-use rustc_data_structures::stable_hasher::{Hash64, HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_hashes::Hash64;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
@@ -160,21 +161,19 @@ impl<'tcx> TraitInst<'tcx> {
         let mut projs = Vec::new();
         for super_trait_def_id in all_super_traits {
             for ai in tcx.associated_items(super_trait_def_id).in_definition_order() {
-                match ai.kind {
-                    ty::AssocKind::Type => {},
-                    _ => continue,
+                if let ty::AssocKind::Type {..} = ai.kind {
+                    let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
+                    let actual_ty = tcx.normalize_erasing_regions(
+                        ty::TypingEnv::fully_monomorphized(),
+                        proj_ty,
+                    );
+                    projs.push(ty::ExistentialProjection::new(
+                        tcx,
+                        ai.def_id,
+                        ex_trait_ref.args,
+                        actual_ty.into(),
+                    ));
                 }
-                let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
-                let actual_ty = tcx.normalize_erasing_regions(
-                    ty::TypingEnv::fully_monomorphized(),
-                    proj_ty,
-                );
-                projs.push(ty::ExistentialProjection::new(
-                    tcx,
-                    ai.def_id,
-                    ex_trait_ref.args,
-                    actual_ty.into(),
-                ));
             }
         }
         projs.sort_by_key(|p| tcx.def_path_hash(p.def_id));
@@ -193,7 +192,6 @@ impl<'tcx> TraitInst<'tcx> {
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
         let preds = tcx.mk_poly_existential_predicates(&preds);
-        // Always emit `DynKind::Dyn`.  We don't support `dyn*` (`DynKind::DynStar`) yet.
         Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased, DynKind::Dyn))
     }
 
@@ -487,7 +485,7 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         let mut s = String::new();
         // Based on the implementation of fmt_assert_args (see
-        // https://github.com/rust-lang/rust/blob/553600e0f5f5a7d492de6d95ccb2f057005f5651/compiler/rustc_middle/src/mir/terminator.rs#L224-L301 ).
+        // https://github.com/rust-lang/rust/blob/02c7b1a7ac1d739663878030510508372e46f254/compiler/rustc_middle/src/mir/terminator.rs#L235-L328 ).
         // Sadly, we cannot call that function directly here, as it formats the
         // AssertMessage just differently enough to where it would look out of
         // place in error messages.
@@ -540,6 +538,9 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
                     )
                 }
                 AssertKind::NullPointerDereference => write!(s, "null pointer dereference occurred"),
+                AssertKind::InvalidEnumConstruction(source) => {
+                    write!(s, "trying to construct an enum from an invalid value {source:?}")
+                }
                 AssertKind::ResumedAfterReturn(CoroutineKind::Coroutine(_)) => {
                     write!(s, "coroutine resumed after completion")
                 }
@@ -563,6 +564,18 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
                 }
                 AssertKind::ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
                     write!(s, "`gen fn` should just keep returning `None` after panicking")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Coroutine(_)) => {
+                    write!(s, "coroutine resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::Async, _)) => {
+                    write!(s, "`async fn` resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
+                    write!(s, "`async gen fn` resumed after async drop")
+                }
+                AssertKind::ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
+                    write!(s, "`gen fn` resumed after drop")
                 }
             };
         write_res.unwrap();
@@ -645,18 +658,19 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::EfiApi => json!({ "kind": "EfiApi" }),
             ExternAbi::AvrInterrupt => json!({ "kind": "AvrInterrupt" }),
             ExternAbi::AvrNonBlockingInterrupt => json!({ "kind": "AvrNonBlockingInterrupt" }),
-            ExternAbi::CCmseNonSecureCall => json!({ "kind": "CCmseNonSecureCall" }),
-            ExternAbi::CCmseNonSecureEntry => json!({ "kind": "CCmseNonSecureEntry" }),
+            ExternAbi::CmseNonSecureCall => json!({ "kind": "CmseNonSecureCall" }),
+            ExternAbi::CmseNonSecureEntry => json!({ "kind": "CmseNonSecureEntry" }),
             ExternAbi::System { unwind } => {
                 json!({
                     "kind": "System",
                     "unwind": unwind,
                 })
             },
-            ExternAbi::RustIntrinsic => json!({ "kind": "RustIntrinsic" }),
             ExternAbi::RustCall => json!({ "kind": "RustCall" }),
             ExternAbi::Unadjusted => json!({ "kind": "Unadjusted" }),
             ExternAbi::RustCold => json!({ "kind": "RustCold" }),
+            ExternAbi::RustInvalid => json!({ "kind": "RustInvalid" }),
+            ExternAbi::Custom => json!({ "kind": "Custom" }),
             ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
             ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
         }
@@ -719,7 +733,6 @@ impl ToJson<'_> for PointerCoercion {
             PointerCoercion::MutToConstPointer => json!({ "kind": "MutToConstPointer" }),
             PointerCoercion::ArrayToPointer => json!({ "kind": "ArrayToPointer" }),
             PointerCoercion::Unsize => json!({ "kind": "Unsize" }),
-            PointerCoercion::DynStar => json!({ "kind": "DynStar" }),
         }
     }
 }

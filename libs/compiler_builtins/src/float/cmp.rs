@@ -2,6 +2,23 @@
 
 use crate::float::Float;
 use crate::int::MinInt;
+use crate::support::cfg_if;
+
+// Taken from LLVM config:
+// https://github.com/llvm/llvm-project/blob/0cf3c437c18ed27d9663d87804a9a15ff6874af2/compiler-rt/lib/builtins/fp_compare_impl.inc#L11-L27
+cfg_if! {
+    if #[cfg(any(target_arch = "aarch64", target_arch = "arm64ec"))] {
+        // Aarch64 uses `int` rather than a pointer-sized value.
+        pub type CmpResult = i32;
+    } else if #[cfg(target_arch = "avr")] {
+        // AVR uses a single byte.
+        pub type CmpResult = i8;
+    } else {
+        // In compiler-rt, LLP64 ABIs use `long long` and everything else uses `long`. In effect,
+        // this means the return value is always pointer-sized.
+        pub type CmpResult = isize;
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Result {
@@ -12,7 +29,7 @@ enum Result {
 }
 
 impl Result {
-    fn to_le_abi(self) -> i32 {
+    fn to_le_abi(self) -> CmpResult {
         match self {
             Result::Less => -1,
             Result::Equal => 0,
@@ -21,7 +38,7 @@ impl Result {
         }
     }
 
-    fn to_ge_abi(self) -> i32 {
+    fn to_ge_abi(self) -> CmpResult {
         match self {
             Result::Less => -1,
             Result::Equal => 0,
@@ -98,121 +115,131 @@ fn unord<F: Float>(a: F, b: F) -> bool {
     a_abs > inf_rep || b_abs > inf_rep
 }
 
+#[cfg(f16_enabled)]
 intrinsics! {
-    #[avr_skip]
-    pub extern "C" fn __lesf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __lehf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __gesf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __gehf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 
-    #[avr_skip]
+    pub extern "C" fn __unordhf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
+        unord(a, b) as crate::float::cmp::CmpResult
+    }
+
+    pub extern "C" fn __eqhf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_le_abi()
+    }
+
+    pub extern "C" fn __lthf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_le_abi()
+    }
+
+    pub extern "C" fn __nehf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_le_abi()
+    }
+
+    pub extern "C" fn __gthf2(a: f16, b: f16) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_ge_abi()
+    }
+}
+
+intrinsics! {
+    pub extern "C" fn __lesf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_le_abi()
+    }
+
+    pub extern "C" fn __gesf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
+        cmp(a, b).to_ge_abi()
+    }
+
     #[arm_aeabi_alias = __aeabi_fcmpun]
-    pub extern "C" fn __unordsf2(a: f32, b: f32) -> i32 {
-        unord(a, b) as i32
+    pub extern "C" fn __unordsf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
+        unord(a, b) as crate::float::cmp::CmpResult
     }
 
-    #[avr_skip]
-    pub extern "C" fn __eqsf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __eqsf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __ltsf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __ltsf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __nesf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __nesf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __gtsf2(a: f32, b: f32) -> i32 {
+    pub extern "C" fn __gtsf2(a: f32, b: f32) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __ledf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __ledf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __gedf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __gedf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 
-    #[avr_skip]
     #[arm_aeabi_alias = __aeabi_dcmpun]
-    pub extern "C" fn __unorddf2(a: f64, b: f64) -> i32 {
-        unord(a, b) as i32
+    pub extern "C" fn __unorddf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
+        unord(a, b) as crate::float::cmp::CmpResult
     }
 
-    #[avr_skip]
-    pub extern "C" fn __eqdf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __eqdf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __ltdf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __ltdf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __nedf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __nedf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
-    pub extern "C" fn __gtdf2(a: f64, b: f64) -> i32 {
+    pub extern "C" fn __gtdf2(a: f64, b: f64) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 }
 
 #[cfg(f128_enabled)]
 intrinsics! {
-    #[avr_skip]
     #[ppc_alias = __lekf2]
-    pub extern "C" fn __letf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __letf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
     #[ppc_alias = __gekf2]
-    pub extern "C" fn __getf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __getf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 
-    #[avr_skip]
     #[ppc_alias = __unordkf2]
-    pub extern "C" fn __unordtf2(a: f128, b: f128) -> i32 {
-        unord(a, b) as i32
+    pub extern "C" fn __unordtf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
+        unord(a, b) as crate::float::cmp::CmpResult
     }
 
-    #[avr_skip]
     #[ppc_alias = __eqkf2]
-    pub extern "C" fn __eqtf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __eqtf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
     #[ppc_alias = __ltkf2]
-    pub extern "C" fn __lttf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __lttf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
     #[ppc_alias = __nekf2]
-    pub extern "C" fn __netf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __netf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_le_abi()
     }
 
-    #[avr_skip]
     #[ppc_alias = __gtkf2]
-    pub extern "C" fn __gttf2(a: f128, b: f128) -> i32 {
+    pub extern "C" fn __gttf2(a: f128, b: f128) -> crate::float::cmp::CmpResult {
         cmp(a, b).to_ge_abi()
     }
 }

@@ -2,18 +2,15 @@
 
 use core::intrinsics;
 
-// NOTE These functions are implemented using assembly because they using a custom
+// NOTE These functions are implemented using assembly because they use a custom
 // calling convention which can't be implemented using a normal Rust function
 
 // NOTE These functions are never mangled as they are not tested against compiler-rt
 
 intrinsics! {
-    #[naked]
-    #[cfg(all(
-        any(all(windows, target_env = "gnu"), target_os = "uefi"),
-        not(feature = "no-asm")
-    ))]
-    pub unsafe extern "C" fn ___chkstk_ms() {
+    #[unsafe(naked)]
+    #[cfg(any(all(windows, target_env = "gnu"), target_os = "cygwin", target_os = "uefi"))]
+    pub unsafe extern "custom" fn ___chkstk_ms() {
         core::arch::naked_asm!(
             "push   %rcx",
             "push   %rax",
@@ -40,7 +37,7 @@ intrinsics! {
 // HACK(https://github.com/rust-lang/rust/issues/62785): x86_64-unknown-uefi needs special LLVM
 // support unless we emit the _fltused
 mod _fltused {
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     #[used]
     #[cfg(target_os = "uefi")]
     static _fltused: i32 = 0;

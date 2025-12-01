@@ -13,16 +13,10 @@
 //! [`OsString`]: crate::ffi::OsString
 #![forbid(unsafe_op_in_unsafe_fn)]
 
-pub mod args;
-pub mod env;
-pub mod fs;
 pub mod helpers;
 pub mod os;
 #[path = "../unsupported/pipe.rs"]
 pub mod pipe;
-pub mod process;
-pub mod stdio;
-pub mod thread;
 pub mod time;
 
 #[cfg(test)]
@@ -33,9 +27,9 @@ pub type RawOsError = usize;
 use crate::io as std_io;
 use crate::os::uefi;
 use crate::ptr::NonNull;
-use crate::sync::atomic::{AtomicPtr, Ordering};
+use crate::sync::atomic::{Atomic, AtomicPtr, Ordering};
 
-static EXIT_BOOT_SERVICE_EVENT: AtomicPtr<crate::ffi::c_void> =
+static EXIT_BOOT_SERVICE_EVENT: Atomic<*mut crate::ffi::c_void> =
     AtomicPtr::new(crate::ptr::null_mut());
 
 /// # SAFETY
@@ -49,17 +43,17 @@ pub(crate) unsafe fn init(argc: isize, argv: *const *const u8, _sigpipe: u8) {
     unsafe { uefi::env::init_globals(image_handle, system_table) };
 
     // Register exit boot services handler
-    match helpers::create_event(
+    match helpers::OwnedEvent::new(
         r_efi::efi::EVT_SIGNAL_EXIT_BOOT_SERVICES,
         r_efi::efi::TPL_NOTIFY,
         Some(exit_boot_service_handler),
-        crate::ptr::null_mut(),
+        None,
     ) {
         Ok(x) => {
             if EXIT_BOOT_SERVICE_EVENT
                 .compare_exchange(
                     crate::ptr::null_mut(),
-                    x.as_ptr(),
+                    x.into_raw(),
                     Ordering::Release,
                     Ordering::Acquire,
                 )
@@ -79,7 +73,7 @@ pub unsafe fn cleanup() {
     if let Some(exit_boot_service_event) =
         NonNull::new(EXIT_BOOT_SERVICE_EVENT.swap(crate::ptr::null_mut(), Ordering::Acquire))
     {
-        let _ = unsafe { helpers::close_event(exit_boot_service_event) };
+        let _ = unsafe { helpers::OwnedEvent::from_raw(exit_boot_service_event.as_ptr()) };
     }
 }
 
@@ -90,7 +84,7 @@ pub const fn unsupported<T>() -> std_io::Result<T> {
 
 #[inline]
 pub const fn unsupported_err() -> std_io::Error {
-    std_io::const_error!(std_io::ErrorKind::Unsupported, "operation not supported on UEFI",)
+    std_io::const_error!(std_io::ErrorKind::Unsupported, "operation not supported on UEFI")
 }
 
 pub fn decode_error_kind(code: RawOsError) -> crate::io::ErrorKind {
@@ -145,7 +139,7 @@ pub fn abort_internal() -> ! {
     if let Some(exit_boot_service_event) =
         NonNull::new(EXIT_BOOT_SERVICE_EVENT.load(Ordering::Acquire))
     {
-        let _ = unsafe { helpers::close_event(exit_boot_service_event) };
+        let _ = unsafe { helpers::OwnedEvent::from_raw(exit_boot_service_event.as_ptr()) };
     }
 
     if let (Some(boot_services), Some(handle)) =
@@ -164,14 +158,6 @@ pub fn abort_internal() -> ! {
 
     // In case SystemTable and ImageHandle cannot be reached, use `core::intrinsics::abort`
     core::intrinsics::abort();
-}
-
-// This function is needed by the panic runtime. The symbol is named in
-// pre-link args for the target specification, so keep that in sync.
-#[cfg(not(test))]
-#[unsafe(no_mangle)]
-pub extern "C" fn __rust_abort() {
-    abort_internal();
 }
 
 /// Disable access to BootServices if `EVT_SIGNAL_EXIT_BOOT_SERVICES` is signaled

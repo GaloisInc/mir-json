@@ -1,5 +1,5 @@
 use super::sealed::Sealed;
-use crate::simd::{cmp::SimdOrd, LaneCount, Simd, SimdCast, SimdElement, SupportedLaneCount};
+use crate::simd::{LaneCount, Simd, SimdCast, SimdElement, SupportedLaneCount, cmp::SimdOrd};
 
 /// Operations on SIMD vectors of unsigned integers.
 pub trait SimdUint: Copy + Sealed {
@@ -55,6 +55,7 @@ pub trait SimdUint: Copy + Sealed {
     /// let sat = x.saturating_sub(max);
     /// assert_eq!(unsat, Simd::from_array([3, 2, 1, 0]));
     /// assert_eq!(sat, Simd::splat(0));
+    /// ```
     fn saturating_sub(self, second: Self) -> Self;
 
     /// Lanewise absolute difference.

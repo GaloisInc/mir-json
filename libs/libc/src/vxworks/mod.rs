@@ -1,6 +1,5 @@
 //! Interface to VxWorks C library
 
-use core::mem::size_of;
 use core::ptr::null_mut;
 
 use crate::prelude::*;
@@ -14,16 +13,6 @@ impl Clone for DIR {
     }
 }
 
-pub type c_schar = i8;
-pub type c_uchar = u8;
-pub type c_short = i16;
-pub type c_ushort = u16;
-pub type c_int = i32;
-pub type c_uint = u32;
-pub type c_float = f32;
-pub type c_double = f64;
-pub type c_longlong = i64;
-pub type c_ulonglong = u64;
 pub type intmax_t = i64;
 pub type uintmax_t = u64;
 
@@ -44,7 +33,7 @@ pub type ino_t = c_ulong;
 
 pub type rlim_t = c_ulong;
 pub type suseconds_t = c_long;
-pub type time_t = c_long;
+pub type time_t = c_longlong;
 
 pub type errno_t = c_int;
 
@@ -230,7 +219,7 @@ s! {
     pub struct stat {
         pub st_dev: crate::dev_t,
         pub st_ino: crate::ino_t,
-        pub st_mode: crate::mode_t,
+        pub st_mode: mode_t,
         pub st_nlink: crate::nlink_t,
         pub st_uid: crate::uid_t,
         pub st_gid: crate::gid_t,
@@ -420,6 +409,7 @@ s_no_extra_traits! {
     pub struct dirent {
         pub d_ino: crate::ino_t,
         pub d_name: [c_char; _PARM_NAME_MAX as usize + 1],
+        pub d_type: c_uchar,
     }
 
     pub struct sockaddr_un {
@@ -463,52 +453,6 @@ s_no_extra_traits! {
 
 cfg_if! {
     if #[cfg(feature = "extra_traits")] {
-        impl fmt::Debug for dirent {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("dirent")
-                    .field("d_ino", &self.d_ino)
-                    .field("d_name", &&self.d_name[..])
-                    .finish()
-            }
-        }
-
-        impl fmt::Debug for sockaddr_un {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sockaddr_un")
-                    .field("sun_len", &self.sun_len)
-                    .field("sun_family", &self.sun_family)
-                    .field("sun_path", &&self.sun_path[..])
-                    .finish()
-            }
-        }
-
-        impl fmt::Debug for RTP_DESC {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("RTP_DESC")
-                    .field("status", &self.status)
-                    .field("options", &self.options)
-                    .field("entrAddr", &self.entrAddr)
-                    .field("initTaskId", &self.initTaskId)
-                    .field("parentId", &self.parentId)
-                    .field("pathName", &&self.pathName[..])
-                    .field("taskCnt", &self.taskCnt)
-                    .field("textStart", &self.textStart)
-                    .field("textEnd", &self.textEnd)
-                    .finish()
-            }
-        }
-        impl fmt::Debug for sockaddr_storage {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.debug_struct("sockaddr_storage")
-                    .field("ss_len", &self.ss_len)
-                    .field("ss_family", &self.ss_family)
-                    .field("__ss_pad1", &&self.__ss_pad1[..])
-                    .field("__ss_align", &self.__ss_align)
-                    .field("__ss_pad2", &&self.__ss_pad2[..])
-                    .finish()
-            }
-        }
-
         impl PartialEq for sa_u_t {
             fn eq(&self, other: &sa_u_t) -> bool {
                 unsafe {
@@ -562,7 +506,7 @@ pub const EAI_SERVICE: c_int = 9;
 pub const EAI_SOCKTYPE: c_int = 10;
 pub const EAI_SYSTEM: c_int = 11;
 
-// FIXME: This is not defined in vxWorks, but we have to define it here
+// FIXME(vxworks): This is not defined in vxWorks, but we have to define it here
 // to make the building pass for getrandom and std
 pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
 
@@ -630,6 +574,9 @@ pub const ENODEV: c_int = 19;
 pub const ENOTDIR: c_int = 20;
 pub const EISDIR: c_int = 21;
 pub const EINVAL: c_int = 22;
+pub const ENFILE: c_int = 23;
+pub const EMFILE: c_int = 24;
+pub const ENOTTY: c_int = 25;
 pub const ENAMETOOLONG: c_int = 26;
 pub const EFBIG: c_int = 27;
 pub const ENOSPC: c_int = 28;
@@ -638,7 +585,12 @@ pub const EROFS: c_int = 30;
 pub const EMLINK: c_int = 31;
 pub const EPIPE: c_int = 32;
 pub const EDEADLK: c_int = 33;
+pub const ENOLCK: c_int = 34;
+pub const ENOTSUP: c_int = 35;
+pub const EMSGSIZE: c_int = 36;
+pub const EDOM: c_int = 37;
 pub const ERANGE: c_int = 38;
+pub const EDOOM: c_int = 39;
 pub const EDESTADDRREQ: c_int = 40;
 pub const EPROTOTYPE: c_int = 41;
 pub const ENOPROTOOPT: c_int = 42;
@@ -665,12 +617,30 @@ pub const ENETDOWN: c_int = 62;
 pub const ETXTBSY: c_int = 63;
 pub const ELOOP: c_int = 64;
 pub const EHOSTUNREACH: c_int = 65;
+pub const ENOTBLK: c_int = 66;
+pub const EHOSTDOWN: c_int = 67;
 pub const EINPROGRESS: c_int = 68;
 pub const EALREADY: c_int = 69;
 pub const EWOULDBLOCK: c_int = 70;
 pub const ENOSYS: c_int = 71;
+pub const ECANCELED: c_int = 72;
+pub const ENOSR: c_int = 74;
+pub const ENOSTR: c_int = 75;
+pub const EPROTO: c_int = 76;
+pub const EBADMSG: c_int = 77;
+pub const ENODATA: c_int = 78;
+pub const ETIME: c_int = 79;
+pub const ENOMSG: c_int = 80;
+pub const EFPOS: c_int = 81;
+pub const EILSEQ: c_int = 82;
 pub const EDQUOT: c_int = 83;
+pub const EIDRM: c_int = 84;
+pub const EOVERFLOW: c_int = 85;
+pub const EMULTIHOP: c_int = 86;
+pub const ENOLINK: c_int = 87;
 pub const ESTALE: c_int = 88;
+pub const EOWNERDEAD: c_int = 89;
+pub const ENOTRECOVERABLE: c_int = 90;
 
 // NFS errnos: Refer to pkgs_v2/storage/fs/nfs/h/nfs/nfsCommon.h
 const M_nfsStat: c_int = 48 << 16;
@@ -725,8 +695,9 @@ pub const S_taskLib_TASK_HOOK_TABLE_FULL: c_int = taskErrorBase + 0x0066;
 pub const S_taskLib_TASK_HOOK_NOT_FOUND: c_int = taskErrorBase + 0x0067;
 pub const S_taskLib_ILLEGAL_PRIORITY: c_int = taskErrorBase + 0x0068;
 
-// FIXME: could also be useful for TASK_DESC type
+// FIXME(vxworks): could also be useful for TASK_DESC type
 pub const VX_TASK_NAME_LENGTH: c_int = 31;
+pub const VX_TASK_RENAME_LENGTH: c_int = 16;
 
 // semLibCommon.h
 pub const S_semLib_INVALID_STATE: c_int = semErrorBase + 0x0065;
@@ -787,6 +758,9 @@ pub const S_IROTH: c_int = 0o0004;
 pub const S_IWOTH: c_int = 0o0002;
 pub const S_IXOTH: c_int = 0o0001;
 pub const S_IRWXO: c_int = 0o0007;
+
+pub const UTIME_OMIT: c_long = 0x3ffffffe;
+pub const UTIME_NOW: c_long = 0x3fffffff;
 
 // socket.h
 pub const SOL_SOCKET: c_int = 0xffff;
@@ -951,10 +925,33 @@ pub const SIGCONT: c_int = 19;
 pub const SIGCHLD: c_int = 20;
 pub const SIGTTIN: c_int = 21;
 pub const SIGTTOU: c_int = 22;
+pub const SIGUSR1: c_int = 30;
+pub const SIGUSR2: c_int = 31;
+pub const SIGPOLL: c_int = 32;
+pub const SIGPROF: c_int = 33;
+pub const SIGSYS: c_int = 34;
+pub const SIGURG: c_int = 35;
+pub const SIGVTALRM: c_int = 36;
+pub const SIGXCPU: c_int = 37;
+pub const SIGXFSZ: c_int = 38;
+pub const SIGRTMIN: c_int = 48;
+
+pub const SIGIO: c_int = SIGRTMIN;
+pub const SIGWINCH: c_int = SIGRTMIN + 5;
+pub const SIGLOST: c_int = SIGRTMIN + 6;
 
 pub const SIG_BLOCK: c_int = 1;
 pub const SIG_UNBLOCK: c_int = 2;
 pub const SIG_SETMASK: c_int = 3;
+
+pub const SA_NOCLDSTOP: c_int = 0x0001;
+pub const SA_SIGINFO: c_int = 0x0002;
+pub const SA_ONSTACK: c_int = 0x0004;
+pub const SA_INTERRUPT: c_int = 0x0008;
+pub const SA_RESETHAND: c_int = 0x0010;
+pub const SA_RESTART: c_int = 0x0020;
+pub const SA_NODEFER: c_int = 0x0040;
+pub const SA_NOCLDWAIT: c_int = 0x0080;
 
 pub const SI_SYNC: c_int = 0;
 pub const SI_USER: c_int = -1;
@@ -1066,7 +1063,7 @@ impl Clone for FILE {
     }
 }
 #[cfg_attr(feature = "extra_traits", derive(Debug))]
-pub enum fpos_t {} // FIXME: fill this out with a struct
+pub enum fpos_t {} // FIXME(vxworks): fill this out with a struct
 impl Copy for fpos_t {}
 impl Clone for fpos_t {
     fn clone(&self) -> fpos_t {
@@ -1076,18 +1073,18 @@ impl Clone for fpos_t {
 
 f! {
     pub {const} fn CMSG_ALIGN(len: usize) -> usize {
-        len + mem::size_of::<usize>() - 1 & !(mem::size_of::<usize>() - 1)
+        len + size_of::<usize>() - 1 & !(size_of::<usize>() - 1)
     }
 
     pub fn CMSG_NXTHDR(mhdr: *const msghdr, cmsg: *const cmsghdr) -> *mut cmsghdr {
         let next = cmsg as usize
             + CMSG_ALIGN((*cmsg).cmsg_len as usize)
-            + CMSG_ALIGN(mem::size_of::<cmsghdr>());
+            + CMSG_ALIGN(size_of::<cmsghdr>());
         let max = (*mhdr).msg_control as usize + (*mhdr).msg_controllen as usize;
         if next <= max {
             (cmsg as usize + CMSG_ALIGN((*cmsg).cmsg_len as usize)) as *mut cmsghdr
         } else {
-            0 as *mut cmsghdr
+            core::ptr::null_mut::<cmsghdr>()
         }
     }
 
@@ -1095,20 +1092,20 @@ f! {
         if (*mhdr).msg_controllen as usize > 0 {
             (*mhdr).msg_control as *mut cmsghdr
         } else {
-            0 as *mut cmsghdr
+            core::ptr::null_mut::<cmsghdr>()
         }
     }
 
     pub fn CMSG_DATA(cmsg: *const cmsghdr) -> *mut c_uchar {
-        (cmsg as *mut c_uchar).offset(CMSG_ALIGN(mem::size_of::<cmsghdr>()) as isize)
+        (cmsg as *mut c_uchar).offset(CMSG_ALIGN(size_of::<cmsghdr>()) as isize)
     }
 
     pub {const} fn CMSG_SPACE(length: c_uint) -> c_uint {
-        (CMSG_ALIGN(length as usize) + CMSG_ALIGN(mem::size_of::<cmsghdr>())) as c_uint
+        (CMSG_ALIGN(length as usize) + CMSG_ALIGN(size_of::<cmsghdr>())) as c_uint
     }
 
     pub {const} fn CMSG_LEN(length: c_uint) -> c_uint {
-        CMSG_ALIGN(mem::size_of::<cmsghdr>()) as c_uint + length
+        CMSG_ALIGN(size_of::<cmsghdr>()) as c_uint + length
     }
 }
 
@@ -1241,6 +1238,7 @@ extern "C" {
     pub fn umask(mask: mode_t) -> mode_t;
     pub fn mlock(addr: *const c_void, len: size_t) -> c_int;
     pub fn mlockall(flags: c_int) -> c_int;
+    pub fn munlock(addr: *const c_void, len: size_t) -> c_int;
     pub fn munlockall() -> c_int;
 
     pub fn mmap(
@@ -1252,8 +1250,12 @@ extern "C" {
         offset: off_t,
     ) -> *mut c_void;
     pub fn munmap(addr: *mut c_void, len: size_t) -> c_int;
+
+    pub fn mprotect(addr: *mut c_void, len: size_t, prot: c_int) -> c_int;
+    pub fn msync(addr: *mut c_void, len: size_t, flags: c_int) -> c_int;
+
     pub fn truncate(path: *const c_char, length: off_t) -> c_int;
-    pub fn shm_open(name: *const c_char, oflag: c_int, mode: crate::mode_t) -> c_int;
+    pub fn shm_open(name: *const c_char, oflag: c_int, mode: mode_t) -> c_int;
     pub fn shm_unlink(name: *const c_char) -> c_int;
 
     pub fn gettimeofday(tp: *mut crate::timeval, tz: *mut c_void) -> c_int;
@@ -1267,6 +1269,8 @@ extern "C" {
     pub fn sigaction(signum: c_int, act: *const sigaction, oldact: *mut sigaction) -> c_int;
 
     pub fn utimes(filename: *const c_char, times: *const crate::timeval) -> c_int;
+
+    pub fn futimens(fd: c_int, times: *const crate::timespec) -> c_int;
 
     #[link_name = "_rtld_dlopen"]
     pub fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
@@ -1724,7 +1728,7 @@ extern "C" {
     pub fn getppid() -> pid_t;
 
     // wait.h
-    pub fn waitpid(pid: pid_t, status: *mut c_int, optons: c_int) -> pid_t;
+    pub fn waitpid(pid: pid_t, status: *mut c_int, options: c_int) -> pid_t;
 
     // unistd.h
     pub fn sysconf(attr: c_int) -> c_long;
@@ -1762,13 +1766,13 @@ extern "C" {
     pub fn rmdir(path: *const c_char) -> c_int;
 
     // stat.h
-    pub fn mkdir(dirName: *const c_char, mode: crate::mode_t) -> c_int;
+    pub fn mkdir(dirName: *const c_char, mode: mode_t) -> c_int;
 
     // stat.h
-    pub fn chmod(path: *const c_char, mode: crate::mode_t) -> c_int;
+    pub fn chmod(path: *const c_char, mode: mode_t) -> c_int;
 
     // stat.h
-    pub fn fchmod(attr1: c_int, attr2: crate::mode_t) -> c_int;
+    pub fn fchmod(attr1: c_int, attr2: mode_t) -> c_int;
 
     // unistd.h
     pub fn fsync(fd: c_int) -> c_int;

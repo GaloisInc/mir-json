@@ -135,6 +135,8 @@ use crate::ops::Index;
 /// ]);
 /// ```
 ///
+/// ## `Entry` API
+///
 /// `HashMap` implements an [`Entry` API](#method.entry), which allows
 /// for complex methods of getting, setting, updating and removing keys and
 /// their values:
@@ -166,6 +168,8 @@ use crate::ops::Index;
 /// // modify an entry before an insert with in-place mutation
 /// player_stats.entry("mana").and_modify(|mana| *mana += 200).or_insert(100);
 /// ```
+///
+/// ## Usage with custom key types
 ///
 /// The easiest way to use `HashMap` with a custom key type is to derive [`Eq`] and [`Hash`].
 /// We must also derive [`PartialEq`].
@@ -208,20 +212,32 @@ use crate::ops::Index;
 /// # Usage in `const` and `static`
 ///
 /// As explained above, `HashMap` is randomly seeded: each `HashMap` instance uses a different seed,
-/// which means that `HashMap::new` cannot be used in const context. To construct a `HashMap` in the
-/// initializer of a `const` or `static` item, you will have to use a different hasher that does not
-/// involve a random seed, as demonstrated in the following example. **A `HashMap` constructed this
-/// way is not resistant against HashDoS!**
+/// which means that `HashMap::new` normally cannot be used in a `const` or `static` initializer.
 ///
+/// However, if you need to use a `HashMap` in a `const` or `static` initializer while retaining
+/// random seed generation, you can wrap the `HashMap` in [`LazyLock`].
+///
+/// Alternatively, you can construct a `HashMap` in a `const` or `static` initializer using a different
+/// hasher that does not rely on a random seed. **Be aware that a `HashMap` created this way is not
+/// resistant to HashDoS attacks!**
+///
+/// [`LazyLock`]: crate::sync::LazyLock
 /// ```rust
 /// use std::collections::HashMap;
 /// use std::hash::{BuildHasherDefault, DefaultHasher};
-/// use std::sync::Mutex;
+/// use std::sync::{LazyLock, Mutex};
 ///
-/// const EMPTY_MAP: HashMap<String, Vec<i32>, BuildHasherDefault<DefaultHasher>> =
+/// // HashMaps with a fixed, non-random hasher
+/// const NONRANDOM_EMPTY_MAP: HashMap<String, Vec<i32>, BuildHasherDefault<DefaultHasher>> =
 ///     HashMap::with_hasher(BuildHasherDefault::new());
-/// static MAP: Mutex<HashMap<String, Vec<i32>, BuildHasherDefault<DefaultHasher>>> =
+/// static NONRANDOM_MAP: Mutex<HashMap<String, Vec<i32>, BuildHasherDefault<DefaultHasher>>> =
 ///     Mutex::new(HashMap::with_hasher(BuildHasherDefault::new()));
+///
+/// // HashMaps using LazyLock to retain random seeding
+/// const RANDOM_EMPTY_MAP: LazyLock<HashMap<String, Vec<i32>>> =
+///     LazyLock::new(HashMap::new);
+/// static RANDOM_MAP: LazyLock<Mutex<HashMap<String, Vec<i32>>>> =
+///     LazyLock::new(|| Mutex::new(HashMap::new()));
 /// ```
 
 #[cfg_attr(not(test), rustc_diagnostic_item = "HashMap")]
@@ -636,6 +652,49 @@ impl<K, V, S> HashMap<K, V, S> {
         Drain { base: self.base.drain() }
     }
 
+    /// Creates an iterator which uses a closure to determine if an element (key-value pair) should be removed.
+    ///
+    /// If the closure returns `true`, the element is removed from the map and
+    /// yielded. If the closure returns `false`, or panics, the element remains
+    /// in the map and will not be yielded.
+    ///
+    /// The iterator also lets you mutate the value of each element in the
+    /// closure, regardless of whether you choose to keep or remove it.
+    ///
+    /// If the returned `ExtractIf` is not exhausted, e.g. because it is dropped without iterating
+    /// or the iteration short-circuits, then the remaining elements will be retained.
+    /// Use [`retain`] with a negated predicate if you do not need the returned iterator.
+    ///
+    /// [`retain`]: HashMap::retain
+    ///
+    /// # Examples
+    ///
+    /// Splitting a map into even and odd keys, reusing the original map:
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    ///
+    /// let mut map: HashMap<i32, i32> = (0..8).map(|x| (x, x)).collect();
+    /// let extracted: HashMap<i32, i32> = map.extract_if(|k, _v| k % 2 == 0).collect();
+    ///
+    /// let mut evens = extracted.keys().copied().collect::<Vec<_>>();
+    /// let mut odds = map.keys().copied().collect::<Vec<_>>();
+    /// evens.sort();
+    /// odds.sort();
+    ///
+    /// assert_eq!(evens, vec![0, 2, 4, 6]);
+    /// assert_eq!(odds, vec![1, 3, 5, 7]);
+    /// ```
+    #[inline]
+    #[rustc_lint_query_instability]
+    #[stable(feature = "hash_extract_if", since = "1.88.0")]
+    pub fn extract_if<F>(&mut self, pred: F) -> ExtractIf<'_, K, V, F>
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        ExtractIf { base: self.base.extract_if(pred) }
+    }
+
     /// Retains only the elements specified by the predicate.
     ///
     /// In other words, remove all pairs `(k, v)` for which `f(&k, &mut v)` returns `false`.
@@ -918,6 +977,9 @@ where
     /// Returns an array of length `N` with the results of each query. For soundness, at most one
     /// mutable reference will be returned to any value. `None` will be used if the key is missing.
     ///
+    /// This method performs a check to ensure there are no duplicate keys, which currently has a time-complexity of O(n^2),
+    /// so be careful when passing many keys.
+    ///
     /// # Panics
     ///
     /// Panics if any keys are overlapping.
@@ -980,7 +1042,7 @@ where
     /// ```
     #[inline]
     #[doc(alias = "get_many_mut")]
-    #[stable(feature = "map_many_mut", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "map_many_mut", since = "1.86.0")]
     pub fn get_disjoint_mut<Q: ?Sized, const N: usize>(
         &mut self,
         ks: [&Q; N],
@@ -1047,7 +1109,7 @@ where
     /// ```
     #[inline]
     #[doc(alias = "get_many_unchecked_mut")]
-    #[stable(feature = "map_many_mut", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "map_many_mut", since = "1.86.0")]
     pub unsafe fn get_disjoint_unchecked_mut<Q: ?Sized, const N: usize>(
         &mut self,
         ks: [&Q; N],
@@ -1606,6 +1668,28 @@ impl<'a, K, V> Drain<'a, K, V> {
     }
 }
 
+/// A draining, filtering iterator over the entries of a `HashMap`.
+///
+/// This `struct` is created by the [`extract_if`] method on [`HashMap`].
+///
+/// [`extract_if`]: HashMap::extract_if
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+///
+/// let mut map = HashMap::from([
+///     ("a", 1),
+/// ]);
+/// let iter = map.extract_if(|_k, v| *v % 2 == 0);
+/// ```
+#[stable(feature = "hash_extract_if", since = "1.88.0")]
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct ExtractIf<'a, K, V, F> {
+    base: base::ExtractIf<'a, K, V, F>,
+}
+
 /// A mutable iterator over the values of a `HashMap`.
 ///
 /// This `struct` is created by the [`values_mut`] method on [`HashMap`]. See its
@@ -1791,12 +1875,7 @@ impl<'a, K: Debug, V: Debug> fmt::Display for OccupiedError<'a, K, V> {
 }
 
 #[unstable(feature = "map_try_insert", issue = "82766")]
-impl<'a, K: fmt::Debug, V: fmt::Debug> Error for OccupiedError<'a, K, V> {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        "key already exists"
-    }
-}
+impl<'a, K: Debug, V: Debug> Error for OccupiedError<'a, K, V> {}
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
@@ -2211,6 +2290,37 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+#[stable(feature = "hash_extract_if", since = "1.88.0")]
+impl<K, V, F> Iterator for ExtractIf<'_, K, V, F>
+where
+    F: FnMut(&K, &mut V) -> bool,
+{
+    type Item = (K, V);
+
+    #[inline]
+    fn next(&mut self) -> Option<(K, V)> {
+        self.base.next()
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.base.size_hint()
+    }
+}
+
+#[stable(feature = "hash_extract_if", since = "1.88.0")]
+impl<K, V, F> FusedIterator for ExtractIf<'_, K, V, F> where F: FnMut(&K, &mut V) -> bool {}
+
+#[stable(feature = "hash_extract_if", since = "1.88.0")]
+impl<K, V, F> fmt::Debug for ExtractIf<'_, K, V, F>
+where
+    K: fmt::Debug,
+    V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExtractIf").finish_non_exhaustive()
     }
 }
 

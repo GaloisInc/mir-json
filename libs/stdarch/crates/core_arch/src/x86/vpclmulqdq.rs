@@ -12,7 +12,7 @@ use crate::core_arch::x86::__m512i;
 use stdarch_test::assert_instr;
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "llvm.x86.pclmulqdq.256"]
     fn pclmulqdq_256(a: __m256i, round_key: __m256i, imm8: u8) -> __m256i;
     #[link_name = "llvm.x86.pclmulqdq.512"]
@@ -33,13 +33,13 @@ extern "C" {
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm512_clmulepi64_epi128)
 #[inline]
 #[target_feature(enable = "vpclmulqdq,avx512f")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 // technically according to Intel's documentation we don't need avx512f here, however LLVM gets confused otherwise
 #[cfg_attr(test, assert_instr(vpclmul, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm512_clmulepi64_epi128<const IMM8: i32>(a: __m512i, b: __m512i) -> __m512i {
+pub fn _mm512_clmulepi64_epi128<const IMM8: i32>(a: __m512i, b: __m512i) -> __m512i {
     static_assert_uimm_bits!(IMM8, 8);
-    pclmulqdq_512(a, b, IMM8 as u8)
+    unsafe { pclmulqdq_512(a, b, IMM8 as u8) }
 }
 
 /// Performs a carry-less multiplication of two 64-bit polynomials over the
@@ -52,12 +52,12 @@ pub unsafe fn _mm512_clmulepi64_epi128<const IMM8: i32>(a: __m512i, b: __m512i) 
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_clmulepi64_epi128)
 #[inline]
 #[target_feature(enable = "vpclmulqdq")]
-#[unstable(feature = "stdarch_x86_avx512", issue = "111137")]
+#[stable(feature = "stdarch_x86_avx512", since = "1.89")]
 #[cfg_attr(test, assert_instr(vpclmul, IMM8 = 0))]
 #[rustc_legacy_const_generics(2)]
-pub unsafe fn _mm256_clmulepi64_epi128<const IMM8: i32>(a: __m256i, b: __m256i) -> __m256i {
+pub fn _mm256_clmulepi64_epi128<const IMM8: i32>(a: __m256i, b: __m256i) -> __m256i {
     static_assert_uimm_bits!(IMM8, 8);
-    pclmulqdq_256(a, b, IMM8 as u8)
+    unsafe { pclmulqdq_256(a, b, IMM8 as u8) }
 }
 
 #[cfg(test)]

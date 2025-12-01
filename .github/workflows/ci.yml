@@ -12,7 +12,7 @@ env:
   # sometimes happen when (for example) the OS version is changed but older .so
   # files are cached, which can have various unintended effects.
   CACHE_VERSION: 1
-  RUST_TOOLCHAIN: "nightly-2025-02-16"
+  RUST_TOOLCHAIN: "nightly-2025-09-14"
 
 jobs:
   lint:

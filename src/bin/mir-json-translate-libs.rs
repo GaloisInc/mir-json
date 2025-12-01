@@ -16,14 +16,14 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     env, fmt, fs,
-    io::BufReader,
+    io::{BufReader, ErrorKind},
     os::unix,
     process::{Command, Stdio},
 };
 
 use cargo_metadata::{
     camino::{Utf8Path, Utf8PathBuf},
-    Artifact, Edition, Message, Target,
+    Artifact, Edition, Message, PackageId, Target,
 };
 use serde::Deserialize;
 use shell_escape::escape;
@@ -56,12 +56,7 @@ struct UnitGraph {
 
 #[derive(Debug, Deserialize)]
 struct UnitGraphUnit {
-    /// This is not `PackageId` since its format is incompatible with the one
-    /// from cargo metadata. This has been fixed in
-    /// https://github.com/rust-lang/cargo/pull/15447, so the next time we
-    /// upgrade the Rust version we can change this back to `PackageId` and key
-    /// `artifact_outputs` with it instead of `src_path`.
-    pkg_id: String,
+    pkg_id: PackageId,
     target: Target,
     #[serde(default)]
     is_std: bool,
@@ -220,13 +215,12 @@ impl UnitGraphUnit {
     /// artifact output map and custom sources directory.
     fn get_pkg_path_info<'a>(
         &self,
-        artifact_outputs: &'a HashMap<Utf8PathBuf, Artifact>,
+        artifact_outputs: &'a HashMap<PackageId, Artifact>,
         sources_dir: &Utf8Path,
     ) -> CustomTarget<LibPathInfo<'a>> {
         custom_kind_of_target(&self.target).map_lib(|()| {
-            let artifact = artifact_outputs
-                .get(&self.target.src_path)
-                .unwrap_or_else(|| {
+            let artifact =
+                artifact_outputs.get(&self.pkg_id).unwrap_or_else(|| {
                     panic!(
                         "library {} (src_path {}) \
                         should have a compiler artifact",
@@ -504,7 +498,7 @@ fn main() {
         let prefix = EMPTY_PROJECT_NAME.to_owned() + "-";
         builder.prefix(&prefix);
         if keep_temp_build {
-            builder.keep(true);
+            builder.disable_cleanup(true);
             fs::create_dir_all(out_dir)
                 .expect("creating out_dir should succeed");
             builder.tempdir_in(out_dir)
@@ -535,7 +529,8 @@ fn main() {
     eprintln!("Running cargo test...");
     let mut cargo_test_child = {
         let mut cmd = cargo_test_cmd(&empty_project_dir, target_triple);
-        cmd.arg("--message-format").arg("json")
+        cmd.arg("--message-format")
+            .arg("json")
             .arg("--no-run")
             // Hack: When cross-compiling, cargo test will fail without an
             // appropriate linker installed. But we only care about compiling
@@ -570,7 +565,7 @@ fn main() {
                 if let CustomTarget::TargetLib(()) =
                     custom_kind_of_target(&art.target)
                 {
-                    artifact_outputs.insert(art.target.src_path.clone(), art);
+                    artifact_outputs.insert(art.package_id.clone(), art);
                 }
             }
             Message::BuildScriptExecuted(bs) => {
@@ -625,34 +620,47 @@ fn main() {
             } else {
                 eprintln!("Copying {} to {}", orig_dir, custom_dir);
                 copy_dir(orig_dir, custom_dir);
+                // We don't need the .github directories
+                let custom_dot_github_dir = custom_dir.join(".github");
+                if let Err(err) = fs::remove_dir_all(&custom_dot_github_dir) {
+                    if err.kind() != ErrorKind::NotFound {
+                        eprintln!(
+                            "Error removing {}: {}",
+                            custom_dot_github_dir, err
+                        );
+                    }
+                }
             }
+        }
+        fn copy_adjacent(path_info: &LibPathInfo, name: &'static str) {
+            copy(
+                &path_info.orig_pkg_dir.with_file_name(name),
+                &path_info.custom_pkg_dir.with_file_name(name),
+            );
         }
         for unit in &unit_graph.units {
             if let CustomTarget::TargetLib(path_info) =
                 unit.get_pkg_path_info(&artifact_outputs, &new_sources_dir)
             {
                 copy(path_info.orig_pkg_dir, &path_info.custom_pkg_dir);
-                // These modules are located outside of the `core`/`std` source
-                // tree but compiled together with `core`/`std` using #[path],
+                // These modules are located outside of the
+                // `core`/`compiler_builtins`/`std` source tree but compiled
+                // together with `core`/`compiler_builtins`/`std` using #[path],
                 // so they don't show up in the unit graph and we have to add
-                // them manually. `core`/`std` expects them to be located
-                // alongside `core`/`std`.
-                if unit.target.name == "core" {
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("stdarch"),
-                        &path_info.custom_pkg_dir.with_file_name("stdarch"),
-                    );
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("portable-simd"),
-                        &path_info
-                            .custom_pkg_dir
-                            .with_file_name("portable-simd"),
-                    );
-                } else if unit.target.name == "std" {
-                    copy(
-                        &path_info.orig_pkg_dir.with_file_name("backtrace"),
-                        &path_info.custom_pkg_dir.with_file_name("backtrace"),
-                    );
+                // them manually. `core`/`compiler_builtins`/`std` expects them
+                // to be located alongside `core`/`compiler_builtins`/`std`.
+                match &*unit.target.name {
+                    "core" => {
+                        copy_adjacent(&path_info, "stdarch");
+                        copy_adjacent(&path_info, "portable-simd");
+                    }
+                    "compiler_builtins" => {
+                        copy_adjacent(&path_info, "libm");
+                    }
+                    "std" => {
+                        copy_adjacent(&path_info, "backtrace");
+                    }
+                    _ => {}
                 }
             }
         }
@@ -679,9 +687,7 @@ fn main() {
                         "source file should be inside directory of Cargo.toml",
                     );
                 let (linked_libs, linked_paths, cfgs, env) =
-                    match build_script_outputs
-                        .remove(&path_info.artifact.package_id)
-                    {
+                    match build_script_outputs.remove(&unit.pkg_id) {
                         Some(bs) => {
                             // Certain packages rely on `cargo` defining the
                             // `OUT_DIR` environment variable (e.g.,
@@ -847,95 +853,101 @@ fn main() {
             .expect("creating rlibs symlink should succeed");
     }
 
-    let mir_json_invocations =
-        custom_graph
-            .sequence_libs()
-            .into_iter()
-            .map(|lib| CmdInvocation {
-                program: "mir-json".into(),
-                args: {
-                    let mut args = vec![
-                        lib.target.src_path.into(),
-                        "--edition".into(),
-                        lib.target.edition.to_string(),
-                        "--crate-name".into(),
-                        lib.target.crate_name.into(),
-                    ];
-                    for cfg in lib.target.cfgs {
-                        args.push("--cfg".into());
-                        args.push(cfg);
-                    }
-                    for (extern_name, real_name) in lib.dependencies {
-                        args.push("--extern".into());
-                        args.push(format!(
-                            "{}={}",
-                            extern_name,
-                            rlibs_dir.join(format!("lib{}.rlib", real_name))
-                        ));
-                    }
-                    args.push("--target".into());
-                    args.push(target_triple.into());
-                    args.push("-L".into());
-                    args.push(rlibs_dir.to_string());
-                    args.push("--out-dir".into());
-                    args.push(rlibs_dir.to_string());
-                    args.push("--crate-type".into());
-                    args.push("rlib".into());
-                    args.push("--remap-path-prefix".into());
-                    args.push(format!("{}=.", cwd));
-                    // Stdlib crates need `-Z force-unstable-if-unmarked` to
-                    // make stability attributes work properly.  But the extra
-                    // libs must not be built with this flag, since the flag
-                    // makes everything unstable by default, requiring users to
-                    // use `#[feature(rustc_private)]`.
-                    if lib.target.is_stdlib {
-                        args.push("-Z".into());
-                        args.push("force-unstable-if-unmarked".into());
-                    }
-                    // `-Z ub-checks` generates code that uses unsupported
-                    // casts, such as pointer-to-integer casts in alignment
-                    // checks.
+    let mir_json_invocations = custom_graph
+        .sequence_libs()
+        .into_iter()
+        .map(|lib| CmdInvocation {
+            program: "mir-json".into(),
+            args: {
+                let mut args = vec![
+                    lib.target.src_path.into(),
+                    "--edition".into(),
+                    lib.target.edition.to_string(),
+                    "--crate-name".into(),
+                    lib.target.crate_name.into(),
+                ];
+                for cfg in lib.target.cfgs {
+                    args.push("--cfg".into());
+                    args.push(cfg);
+                }
+                for (extern_name, real_name) in lib.dependencies {
+                    args.push("--extern".into());
+                    args.push(format!(
+                        "{}={}",
+                        extern_name,
+                        rlibs_dir.join(format!("lib{}.rlib", real_name))
+                    ));
+                }
+                args.push("--target".into());
+                args.push(target_triple.into());
+                args.push("-L".into());
+                args.push(rlibs_dir.to_string());
+                args.push("--out-dir".into());
+                args.push(rlibs_dir.to_string());
+                args.push("--crate-type".into());
+                args.push("rlib".into());
+                args.push("--remap-path-prefix".into());
+                args.push(format!("{}=.", cwd));
+                // Stdlib crates need `-Z force-unstable-if-unmarked` to make
+                // stability attributes work properly.  But the extra libs must
+                // not be built with this flag, since the flag makes everything
+                // unstable by default, requiring users to use
+                // `#[feature(rustc_private)]`.
+                if lib.target.is_stdlib {
                     args.push("-Z".into());
-                    args.push("ub-checks=false".into());
-                    for linked_path in lib.target.linked_paths {
-                        args.push("-L".into());
-                        args.push(linked_path.into());
-                    }
-                    for linked_lib in lib.target.linked_libs {
-                        args.push("-l".into());
-                        args.push(linked_lib.into());
-                    }
-                    args
-                },
-                env: lib.target.env,
-            })
-            // Special case: crucible_proc_macros is a proc-macro crate that we build with cargo
-            // and copy into place.  This saves us from having to handle its syn/quote dependencies
-            // ourselves.
-            .chain([
-                CmdInvocation {
-                    program: "cargo".into(),
-                    args: vec![
-                        "build".into(),
-                        "--release".into(),
-                        "--manifest-path".into(),
-                        custom_sources_dir.join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
-                            .join("Cargo.toml").into(),
-                    ],
-                    env: vec![],
-                },
-                CmdInvocation {
-                    program: "cp".into(),
-                    args: vec![
-                        custom_sources_dir.join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
-                            .join("target").join("release")
-                            .join(format!("lib{}", EXTRA_LIB_CRUCIBLE_PROC_MACROS))
-                            .with_extension(PROC_MACRO_EXTENSION).into(),
-                        rlibs_dir.to_string(),
-                    ],
-                    env: vec![],
-                },
-            ]);
+                    args.push("force-unstable-if-unmarked".into());
+                }
+                // `-Z ub-checks` generates code that uses unsupported casts,
+                // such as pointer-to-integer casts in alignment checks.
+                args.push("-Z".into());
+                args.push("ub-checks=false".into());
+                for linked_path in lib.target.linked_paths {
+                    args.push("-L".into());
+                    args.push(linked_path.into());
+                }
+                for linked_lib in lib.target.linked_libs {
+                    args.push("-l".into());
+                    args.push(linked_lib.into());
+                }
+                // Don't let deny lints cause builds to fail
+                args.push("--cap-lints".into());
+                args.push("warn".into());
+                args
+            },
+            env: lib.target.env,
+        })
+        // Special case: crucible_proc_macros is a proc-macro crate that we
+        // build with cargo and copy into place.  This saves us from having to
+        // handle its syn/quote dependencies ourselves.
+        .chain([
+            CmdInvocation {
+                program: "cargo".into(),
+                args: vec![
+                    "build".into(),
+                    "--release".into(),
+                    "--manifest-path".into(),
+                    custom_sources_dir
+                        .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                        .join("Cargo.toml")
+                        .into(),
+                ],
+                env: vec![],
+            },
+            CmdInvocation {
+                program: "cp".into(),
+                args: vec![
+                    custom_sources_dir
+                        .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                        .join("target")
+                        .join("release")
+                        .join(format!("lib{}", EXTRA_LIB_CRUCIBLE_PROC_MACROS))
+                        .with_extension(PROC_MACRO_EXTENSION)
+                        .into(),
+                    rlibs_dir.to_string(),
+                ],
+                env: vec![],
+            },
+        ]);
 
     // Run mir-json.
     if generate_only {

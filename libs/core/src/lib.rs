@@ -39,22 +39,10 @@
 //!   return. You should mark your implementation using `#[panic_handler]`.
 //!
 //! * `rust_eh_personality` - is used by the failure mechanisms of the
-//!    compiler. This is often mapped to GCC's personality function, but crates
-//!    which do not trigger a panic can be assured that this function is never
-//!    called. The `lang` attribute is called `eh_personality`.
+//!   compiler. This is often mapped to GCC's personality function, but crates
+//!   which do not trigger a panic can be assured that this function is never
+//!   called. The `lang` attribute is called `eh_personality`.
 
-// Since core defines many fundamental lang items, all tests live in a
-// separate crate, coretests (library/coretests), to avoid bizarre issues.
-//
-// Here we explicitly #[cfg]-out this whole crate when testing. If we don't do
-// this, both the generated test artifact and the linked libtest (which
-// transitively includes core) will both define the same set of lang items,
-// and this will cause the E0152 "found duplicate lang item" error. See
-// discussion in #50466 for details.
-//
-// This cfg won't affect doc tests.
-#![cfg(not(test))]
-//
 #![stable(feature = "core", since = "1.6.0")]
 #![doc(
     html_playground_url = "https://play.rust-lang.org/",
@@ -64,7 +52,6 @@
 )]
 #![doc(rust_logo)]
 #![doc(cfg_hide(
-    not(test),
     no_fp_fmt_parse,
     target_pointer_width = "16",
     target_pointer_width = "32",
@@ -102,7 +89,7 @@
 #![allow(internal_features)]
 #![deny(ffi_unwind_calls)]
 #![warn(unreachable_pub)]
-// Do not check link redundancy on bootstraping phase
+// Do not check link redundancy on bootstrapping phase
 #![allow(rustdoc::redundant_explicit_links)]
 #![warn(rustdoc::unescaped_backticks)]
 //
@@ -113,26 +100,26 @@
 #![feature(bigint_helper_methods)]
 #![feature(bstr)]
 #![feature(bstr_internals)]
-#![feature(closure_track_caller)]
+#![feature(cfg_select)]
+#![feature(cfg_target_has_reliable_f16_f128)]
 #![feature(const_carrying_mul_add)]
+#![feature(const_cmp)]
+#![feature(const_destruct)]
 #![feature(const_eval_select)]
 #![feature(core_intrinsics)]
 #![feature(coverage_attribute)]
 #![feature(disjoint_bitor)]
-#![feature(inline_const_pat)]
 #![feature(internal_impls_macro)]
 #![feature(ip)]
 #![feature(is_ascii_octdigit)]
 #![feature(lazy_get)]
 #![feature(link_cfg)]
-#![feature(non_null_from_ref)]
 #![feature(offset_of_enum)]
 #![feature(panic_internals)]
 #![feature(ptr_alignment_type)]
 #![feature(ptr_metadata)]
 #![feature(set_ptr_value)]
 #![feature(slice_as_array)]
-#![feature(slice_as_chunks)]
 #![feature(slice_ptr_get)]
 #![feature(str_internals)]
 #![feature(str_split_inclusive_remainder)]
@@ -140,6 +127,7 @@
 #![feature(ub_checks)]
 #![feature(unchecked_neg)]
 #![feature(unchecked_shifts)]
+#![feature(unsafe_pinned)]
 #![feature(utf16_extra)]
 #![feature(variant_count)]
 // tidy-alphabetical-end
@@ -159,22 +147,23 @@
 #![feature(const_trait_impl)]
 #![feature(decl_macro)]
 #![feature(deprecated_suggestion)]
+#![feature(derive_const)]
 #![feature(doc_cfg)]
 #![feature(doc_cfg_hide)]
 #![feature(doc_notable_trait)]
 #![feature(extern_types)]
-#![feature(f128)]
 #![feature(f16)]
+#![feature(f128)]
 #![feature(freeze_impls)]
 #![feature(fundamental)]
-#![feature(generic_arg_infer)]
+#![feature(funnel_shifts)]
 #![feature(if_let_guard)]
 #![feature(intra_doc_pointers)]
 #![feature(intrinsics)]
 #![feature(lang_items)]
-#![feature(let_chains)]
 #![feature(link_llvm_intrinsics)]
 #![feature(macro_metavar_expr)]
+#![feature(macro_metavar_expr_concat)]
 #![feature(marker_trait_attr)]
 #![feature(min_specialization)]
 #![feature(multiple_supertrait_upcastable)]
@@ -182,9 +171,9 @@
 #![feature(negative_impls)]
 #![feature(never_type)]
 #![feature(no_core)]
-#![feature(no_sanitize)]
 #![feature(optimize_attribute)]
 #![feature(prelude_import)]
+#![feature(reborrow)]
 #![feature(repr_simd)]
 #![feature(rustc_allow_const_fn_unstable)]
 #![feature(rustc_attrs)]
@@ -203,17 +192,16 @@
 //
 // Target features:
 // tidy-alphabetical-start
+#![feature(aarch64_unstable_target_feature)]
 #![feature(arm_target_feature)]
-#![feature(avx512_target_feature)]
 #![feature(hexagon_target_feature)]
 #![feature(loongarch_target_feature)]
 #![feature(mips_target_feature)]
+#![feature(nvptx_target_feature)]
 #![feature(powerpc_target_feature)]
 #![feature(riscv_target_feature)]
 #![feature(rtm_target_feature)]
-#![feature(sha512_sm_x86)]
-#![feature(sse4a_target_feature)]
-#![feature(tbm_target_feature)]
+#![feature(s390x_target_feature)]
 #![feature(wasm_target_feature)]
 #![feature(x86_amx_intrinsics)]
 // tidy-alphabetical-end
@@ -222,17 +210,17 @@
 #[allow(unused_extern_crates)]
 extern crate self as core;
 
+/* The core prelude, not as all-encompassing as the std prelude */
+// The compiler expects the prelude definition to be defined before it's use statement.
+pub mod prelude;
+
 #[prelude_import]
 #[allow(unused)]
-use prelude::rust_2021::*;
+use prelude::rust_2024::*;
 
-#[cfg(not(test))] // See #65860
 #[macro_use]
 mod macros;
 
-// We don't export this through #[macro_export] for now, to avoid breakage.
-// See https://github.com/rust-lang/rust/issues/82913
-#[cfg(not(test))]
 #[unstable(feature = "assert_matches", issue = "82775")]
 /// Unstable module containing the unstable `assert_matches` macro.
 pub mod assert_matches {
@@ -240,65 +228,40 @@ pub mod assert_matches {
     pub use crate::macros::{assert_matches, debug_assert_matches};
 }
 
+#[unstable(feature = "derive_from", issue = "144889")]
+/// Unstable module containing the unstable `From` derive macro.
+pub mod from {
+    #[unstable(feature = "derive_from", issue = "144889")]
+    pub use crate::macros::builtin::From;
+}
+
 // We don't export this through #[macro_export] for now, to avoid breakage.
 #[unstable(feature = "autodiff", issue = "124509")]
 /// Unstable module containing the unstable `autodiff` macro.
 pub mod autodiff {
     #[unstable(feature = "autodiff", issue = "124509")]
-    pub use crate::macros::builtin::autodiff;
+    pub use crate::macros::builtin::{autodiff_forward, autodiff_reverse};
 }
 
-#[cfg(not(bootstrap))]
 #[unstable(feature = "contracts", issue = "128044")]
 pub mod contracts;
 
-#[unstable(feature = "cfg_match", issue = "115585")]
-pub use crate::macros::cfg_match;
+#[unstable(feature = "cfg_select", issue = "115585")]
+pub use crate::macros::cfg_select;
 
 #[macro_use]
 mod internal_macros;
 
-#[path = "num/shells/int_macros.rs"]
-#[macro_use]
-mod int_macros;
-
-#[rustc_diagnostic_item = "i128_legacy_mod"]
-#[path = "num/shells/i128.rs"]
-pub mod i128;
-#[rustc_diagnostic_item = "i16_legacy_mod"]
-#[path = "num/shells/i16.rs"]
-pub mod i16;
-#[rustc_diagnostic_item = "i32_legacy_mod"]
-#[path = "num/shells/i32.rs"]
-pub mod i32;
-#[rustc_diagnostic_item = "i64_legacy_mod"]
-#[path = "num/shells/i64.rs"]
-pub mod i64;
-#[rustc_diagnostic_item = "i8_legacy_mod"]
-#[path = "num/shells/i8.rs"]
-pub mod i8;
-#[rustc_diagnostic_item = "isize_legacy_mod"]
-#[path = "num/shells/isize.rs"]
-pub mod isize;
-
-#[rustc_diagnostic_item = "u128_legacy_mod"]
-#[path = "num/shells/u128.rs"]
-pub mod u128;
-#[rustc_diagnostic_item = "u16_legacy_mod"]
-#[path = "num/shells/u16.rs"]
-pub mod u16;
-#[rustc_diagnostic_item = "u32_legacy_mod"]
-#[path = "num/shells/u32.rs"]
-pub mod u32;
-#[rustc_diagnostic_item = "u64_legacy_mod"]
-#[path = "num/shells/u64.rs"]
-pub mod u64;
-#[rustc_diagnostic_item = "u8_legacy_mod"]
-#[path = "num/shells/u8.rs"]
-pub mod u8;
-#[rustc_diagnostic_item = "usize_legacy_mod"]
-#[path = "num/shells/usize.rs"]
-pub mod usize;
+#[path = "num/shells/legacy_int_modules.rs"]
+mod legacy_int_modules;
+#[stable(feature = "rust1", since = "1.0.0")]
+#[allow(clippy::useless_attribute)] // FIXME false positive (https://github.com/rust-lang/rust-clippy/issues/15636)
+#[allow(deprecated_in_future)]
+pub use legacy_int_modules::{i8, i16, i32, i64, isize, u8, u16, u32, u64, usize};
+#[stable(feature = "i128", since = "1.26.0")]
+#[allow(clippy::useless_attribute)] // FIXME false positive (https://github.com/rust-lang/rust-clippy/issues/15636)
+#[allow(deprecated_in_future)]
+pub use legacy_int_modules::{i128, u128};
 
 #[path = "num/f128.rs"]
 pub mod f128;
@@ -311,10 +274,6 @@ pub mod f64;
 
 #[macro_use]
 pub mod num;
-
-/* The core prelude, not as all-encompassing as the std prelude */
-
-pub mod prelude;
 
 /* Core modules for ownership management */
 
@@ -373,6 +332,8 @@ pub mod hash;
 pub mod slice;
 pub mod str;
 pub mod time;
+
+pub mod wtf8;
 
 pub mod unicode;
 

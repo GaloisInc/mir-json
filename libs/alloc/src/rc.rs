@@ -245,6 +245,7 @@ use core::any::Any;
 use core::cell::Cell;
 #[cfg(not(no_global_oom_handling))]
 use core::clone::CloneToUninit;
+use core::clone::UseCloned;
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::intrinsics::abort;
@@ -262,22 +263,16 @@ use core::ptr::{self, NonNull, drop_in_place};
 #[cfg(not(no_global_oom_handling))]
 use core::slice::from_raw_parts_mut;
 use core::{borrow, fmt, hint};
-#[cfg(test)]
-use std::boxed::Box;
 
 #[cfg(not(no_global_oom_handling))]
 use crate::alloc::handle_alloc_error;
 use crate::alloc::{AllocError, Allocator, Global, Layout};
 use crate::borrow::{Cow, ToOwned};
-#[cfg(not(test))]
 use crate::boxed::Box;
 #[cfg(not(no_global_oom_handling))]
 use crate::string::String;
 #[cfg(not(no_global_oom_handling))]
 use crate::vec::Vec;
-
-#[cfg(test)]
-mod tests;
 
 // This is repr(C) to future-proof against possible field-reordering, which
 // would interfere with otherwise safe [into|from]_raw() of transmutable
@@ -309,7 +304,7 @@ fn rc_inner_layout_for_value_layout(layout: Layout) -> Layout {
 ///
 /// [get_mut]: Rc::get_mut
 #[doc(search_unbox)]
-#[cfg_attr(not(test), rustc_diagnostic_item = "Rc")]
+#[rustc_diagnostic_item = "Rc"]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_insignificant_dtor]
 pub struct Rc<
@@ -1327,15 +1322,42 @@ impl<T: ?Sized> Rc<T> {
         unsafe { Self::from_raw_in(ptr, Global) }
     }
 
+    /// Consumes the `Rc`, returning the wrapped pointer.
+    ///
+    /// To avoid a memory leak the pointer must be converted back to an `Rc` using
+    /// [`Rc::from_raw`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::rc::Rc;
+    ///
+    /// let x = Rc::new("hello".to_owned());
+    /// let x_ptr = Rc::into_raw(x);
+    /// assert_eq!(unsafe { &*x_ptr }, "hello");
+    /// # // Prevent leaks for Miri.
+    /// # drop(unsafe { Rc::from_raw(x_ptr) });
+    /// ```
+    #[must_use = "losing the pointer will leak memory"]
+    #[stable(feature = "rc_raw", since = "1.17.0")]
+    #[rustc_never_returns_null_ptr]
+    pub fn into_raw(this: Self) -> *const T {
+        let this = ManuallyDrop::new(this);
+        Self::as_ptr(&*this)
+    }
+
     /// Increments the strong reference count on the `Rc<T>` associated with the
     /// provided pointer by one.
     ///
     /// # Safety
     ///
-    /// The pointer must have been obtained through `Rc::into_raw`, the
-    /// associated `Rc` instance must be valid (i.e. the strong count must be at
+    /// The pointer must have been obtained through `Rc::into_raw` and must satisfy the
+    /// same layout requirements specified in [`Rc::from_raw_in`][from_raw_in].
+    /// The associated `Rc` instance must be valid (i.e. the strong count must be at
     /// least 1) for the duration of this method, and `ptr` must point to a block of memory
     /// allocated by the global allocator.
+    ///
+    /// [from_raw_in]: Rc::from_raw_in
     ///
     /// # Examples
     ///
@@ -1365,11 +1387,14 @@ impl<T: ?Sized> Rc<T> {
     ///
     /// # Safety
     ///
-    /// The pointer must have been obtained through `Rc::into_raw`, the
-    /// associated `Rc` instance must be valid (i.e. the strong count must be at
+    /// The pointer must have been obtained through `Rc::into_raw`and must satisfy the
+    /// same layout requirements specified in [`Rc::from_raw_in`][from_raw_in].
+    /// The associated `Rc` instance must be valid (i.e. the strong count must be at
     /// least 1) when invoking this method, and `ptr` must point to a block of memory
     /// allocated by the global allocator. This method can be used to release the final `Rc` and
     /// backing storage, but **should not** be called after the final `Rc` has been released.
+    ///
+    /// [from_raw_in]: Rc::from_raw_in
     ///
     /// # Examples
     ///
@@ -1405,30 +1430,6 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     pub fn allocator(this: &Self) -> &A {
         &this.alloc
-    }
-
-    /// Consumes the `Rc`, returning the wrapped pointer.
-    ///
-    /// To avoid a memory leak the pointer must be converted back to an `Rc` using
-    /// [`Rc::from_raw`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::rc::Rc;
-    ///
-    /// let x = Rc::new("hello".to_owned());
-    /// let x_ptr = Rc::into_raw(x);
-    /// assert_eq!(unsafe { &*x_ptr }, "hello");
-    /// # // Prevent leaks for Miri.
-    /// # drop(unsafe { Rc::from_raw(x_ptr) });
-    /// ```
-    #[must_use = "losing the pointer will leak memory"]
-    #[stable(feature = "rc_raw", since = "1.17.0")]
-    #[rustc_never_returns_null_ptr]
-    pub fn into_raw(this: Self) -> *const T {
-        let this = ManuallyDrop::new(this);
-        Self::as_ptr(&*this)
     }
 
     /// Consumes the `Rc`, returning the wrapped pointer and allocator.
@@ -1524,7 +1525,7 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     /// use std::alloc::System;
     ///
     /// let x = Rc::new_in("hello".to_owned(), System);
-    /// let x_ptr = Rc::into_raw(x);
+    /// let (x_ptr, _alloc) = Rc::into_raw_with_allocator(x);
     ///
     /// unsafe {
     ///     // Convert back to an `Rc` to prevent leak.
@@ -1546,7 +1547,7 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     /// use std::alloc::System;
     ///
     /// let x: Rc<[u32], _> = Rc::new_in([1, 2, 3], System);
-    /// let x_ptr: *const [u32] = Rc::into_raw(x);
+    /// let x_ptr: *const [u32] = Rc::into_raw_with_allocator(x).0;
     ///
     /// unsafe {
     ///     let x: Rc<[u32; 3], _> = Rc::from_raw_in(x_ptr.cast::<[u32; 3]>(), System);
@@ -1628,10 +1629,13 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     ///
     /// # Safety
     ///
-    /// The pointer must have been obtained through `Rc::into_raw`, the
-    /// associated `Rc` instance must be valid (i.e. the strong count must be at
+    /// The pointer must have been obtained through `Rc::into_raw` and must satisfy the
+    /// same layout requirements specified in [`Rc::from_raw_in`][from_raw_in].
+    /// The associated `Rc` instance must be valid (i.e. the strong count must be at
     /// least 1) for the duration of this method, and `ptr` must point to a block of memory
-    /// allocated by `alloc`
+    /// allocated by `alloc`.
+    ///
+    /// [from_raw_in]: Rc::from_raw_in
     ///
     /// # Examples
     ///
@@ -1644,7 +1648,7 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     /// let five = Rc::new_in(5, System);
     ///
     /// unsafe {
-    ///     let ptr = Rc::into_raw(five);
+    ///     let (ptr, _alloc) = Rc::into_raw_with_allocator(five);
     ///     Rc::increment_strong_count_in(ptr, System);
     ///
     ///     let five = Rc::from_raw_in(ptr, System);
@@ -1670,11 +1674,14 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     ///
     /// # Safety
     ///
-    /// The pointer must have been obtained through `Rc::into_raw`, the
-    /// associated `Rc` instance must be valid (i.e. the strong count must be at
+    /// The pointer must have been obtained through `Rc::into_raw`and must satisfy the
+    /// same layout requirements specified in [`Rc::from_raw_in`][from_raw_in].
+    /// The associated `Rc` instance must be valid (i.e. the strong count must be at
     /// least 1) when invoking this method, and `ptr` must point to a block of memory
-    /// allocated by `alloc`. This method can be used to release the final `Rc` and backing storage,
-    /// but **should not** be called after the final `Rc` has been released.
+    /// allocated by `alloc`. This method can be used to release the final `Rc` and
+    /// backing storage, but **should not** be called after the final `Rc` has been released.
+    ///
+    /// [from_raw_in]: Rc::from_raw_in
     ///
     /// # Examples
     ///
@@ -1687,7 +1694,7 @@ impl<T: ?Sized, A: Allocator> Rc<T, A> {
     /// let five = Rc::new_in(5, System);
     ///
     /// unsafe {
-    ///     let ptr = Rc::into_raw(five);
+    ///     let (ptr, _alloc) = Rc::into_raw_with_allocator(five);
     ///     Rc::increment_strong_count_in(ptr, System);
     ///
     ///     let five = Rc::from_raw_in(ptr, System);
@@ -2333,6 +2340,9 @@ impl<T: ?Sized, A: Allocator + Clone> Clone for Rc<T, A> {
     }
 }
 
+#[unstable(feature = "ergonomic_clones", issue = "132290")]
+impl<T: ?Sized, A: Allocator + Clone> UseCloned for Rc<T, A> {}
+
 #[cfg(not(no_global_oom_handling))]
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Default> Default for Rc<T> {
@@ -2347,7 +2357,7 @@ impl<T: Default> Default for Rc<T> {
     /// assert_eq!(*x, 0);
     /// ```
     #[inline]
-    fn default() -> Rc<T> {
+    fn default() -> Self {
         unsafe {
             Self::from_inner(
                 Box::leak(Box::write(
@@ -2363,7 +2373,7 @@ impl<T: Default> Default for Rc<T> {
 #[cfg(not(no_global_oom_handling))]
 #[stable(feature = "more_rc_default_impls", since = "1.80.0")]
 impl Default for Rc<str> {
-    /// Creates an empty str inside an Rc
+    /// Creates an empty `str` inside an `Rc`.
     ///
     /// This may or may not share an allocation with other Rcs on the same thread.
     #[inline]
@@ -2377,13 +2387,26 @@ impl Default for Rc<str> {
 #[cfg(not(no_global_oom_handling))]
 #[stable(feature = "more_rc_default_impls", since = "1.80.0")]
 impl<T> Default for Rc<[T]> {
-    /// Creates an empty `[T]` inside an Rc
+    /// Creates an empty `[T]` inside an `Rc`.
     ///
     /// This may or may not share an allocation with other Rcs on the same thread.
     #[inline]
     fn default() -> Self {
         let arr: [T; 0] = [];
         Rc::from(arr)
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "pin_default_impls", since = "CURRENT_RUSTC_VERSION")]
+impl<T> Default for Pin<Rc<T>>
+where
+    T: ?Sized,
+    Rc<T>: Default,
+{
+    #[inline]
+    fn default() -> Self {
+        unsafe { Pin::new_unchecked(Rc::<T>::default()) }
     }
 }
 
@@ -2984,7 +3007,7 @@ impl<T, I: iter::TrustedLen<Item = T>> ToRcSlice<T> for I {
 ///
 /// [`upgrade`]: Weak::upgrade
 #[stable(feature = "rc_weak", since = "1.4.0")]
-#[cfg_attr(not(test), rustc_diagnostic_item = "RcWeak")]
+#[rustc_diagnostic_item = "RcWeak"]
 pub struct Weak<
     T: ?Sized,
     #[unstable(feature = "allocator_api", issue = "32838")] A: Allocator = Global,
@@ -2994,7 +3017,6 @@ pub struct Weak<
     // `Weak::new` sets this to `usize::MAX` so that it doesn’t need
     // to allocate space on the heap. That's not a value a real pointer
     // will ever have because RcInner has alignment at least 2.
-    // This is only possible when `T: Sized`; unsized `T` never dangle.
     ptr: NonNull<RcInner<T>>,
     alloc: A,
 }
@@ -3114,6 +3136,39 @@ impl<T: ?Sized> Weak<T> {
     pub unsafe fn from_raw(ptr: *const T) -> Self {
         unsafe { Self::from_raw_in(ptr, Global) }
     }
+
+    /// Consumes the `Weak<T>` and turns it into a raw pointer.
+    ///
+    /// This converts the weak pointer into a raw pointer, while still preserving the ownership of
+    /// one weak reference (the weak count is not modified by this operation). It can be turned
+    /// back into the `Weak<T>` with [`from_raw`].
+    ///
+    /// The same restrictions of accessing the target of the pointer as with
+    /// [`as_ptr`] apply.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::rc::{Rc, Weak};
+    ///
+    /// let strong = Rc::new("hello".to_owned());
+    /// let weak = Rc::downgrade(&strong);
+    /// let raw = weak.into_raw();
+    ///
+    /// assert_eq!(1, Rc::weak_count(&strong));
+    /// assert_eq!("hello", unsafe { &*raw });
+    ///
+    /// drop(unsafe { Weak::from_raw(raw) });
+    /// assert_eq!(0, Rc::weak_count(&strong));
+    /// ```
+    ///
+    /// [`from_raw`]: Weak::from_raw
+    /// [`as_ptr`]: Weak::as_ptr
+    #[must_use = "losing the pointer will leak memory"]
+    #[stable(feature = "weak_into_raw", since = "1.45.0")]
+    pub fn into_raw(self) -> *const T {
+        mem::ManuallyDrop::new(self).as_ptr()
+    }
 }
 
 impl<T: ?Sized, A: Allocator> Weak<T, A> {
@@ -3164,39 +3219,6 @@ impl<T: ?Sized, A: Allocator> Weak<T, A> {
             // so use raw pointer manipulation.
             unsafe { &raw mut (*ptr).value }
         }
-    }
-
-    /// Consumes the `Weak<T>` and turns it into a raw pointer.
-    ///
-    /// This converts the weak pointer into a raw pointer, while still preserving the ownership of
-    /// one weak reference (the weak count is not modified by this operation). It can be turned
-    /// back into the `Weak<T>` with [`from_raw`].
-    ///
-    /// The same restrictions of accessing the target of the pointer as with
-    /// [`as_ptr`] apply.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::rc::{Rc, Weak};
-    ///
-    /// let strong = Rc::new("hello".to_owned());
-    /// let weak = Rc::downgrade(&strong);
-    /// let raw = weak.into_raw();
-    ///
-    /// assert_eq!(1, Rc::weak_count(&strong));
-    /// assert_eq!("hello", unsafe { &*raw });
-    ///
-    /// drop(unsafe { Weak::from_raw(raw) });
-    /// assert_eq!(0, Rc::weak_count(&strong));
-    /// ```
-    ///
-    /// [`from_raw`]: Weak::from_raw
-    /// [`as_ptr`]: Weak::as_ptr
-    #[must_use = "losing the pointer will leak memory"]
-    #[stable(feature = "weak_into_raw", since = "1.45.0")]
-    pub fn into_raw(self) -> *const T {
-        mem::ManuallyDrop::new(self).as_ptr()
     }
 
     /// Consumes the `Weak<T>`, returning the wrapped pointer and allocator.
@@ -3496,6 +3518,9 @@ impl<T: ?Sized, A: Allocator + Clone> Clone for Weak<T, A> {
     }
 }
 
+#[unstable(feature = "ergonomic_clones", issue = "132290")]
+impl<T: ?Sized, A: Allocator + Clone> UseCloned for Weak<T, A> {}
+
 #[stable(feature = "rc_weak", since = "1.4.0")]
 impl<T: ?Sized, A: Allocator> fmt::Debug for Weak<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3523,11 +3548,11 @@ impl<T> Default for Weak<T> {
     }
 }
 
-// NOTE: We checked_add here to deal with mem::forget safely. In particular
-// if you mem::forget Rcs (or Weaks), the ref-count can overflow, and then
-// you can free the allocation while outstanding Rcs (or Weaks) exist.
-// We abort because this is such a degenerate scenario that we don't care about
-// what happens -- no real program should ever experience this.
+// NOTE: If you mem::forget Rcs (or Weaks), drop is skipped and the ref-count
+// is not decremented, meaning the ref-count can overflow, and then you can
+// free the allocation while outstanding Rcs (or Weaks) exist, which would be
+// unsound. We abort because this is such a degenerate scenario that we don't
+// care about what happens -- no real program should ever experience this.
 //
 // This should have negligible overhead since you don't actually need to
 // clone these much in Rust thanks to ownership and move-semantics.

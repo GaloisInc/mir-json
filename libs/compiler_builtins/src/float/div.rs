@@ -79,11 +79,12 @@
 //!
 //! [Newton-Raphson method]: https://en.wikipedia.org/wiki/Newton%27s_method
 
+use core::mem::size_of;
+use core::ops;
+
 use super::HalfRep;
 use crate::float::Float;
 use crate::int::{CastFrom, CastInto, DInt, HInt, Int, MinInt};
-use core::mem::size_of;
-use core::ops;
 
 fn div<F: Float>(a: F, b: F) -> F
 where
@@ -369,7 +370,7 @@ where
         let hi_corr: F::Int = corr_uq1 >> hw;
 
         // x_UQ0 * corr_UQ1 = (x_UQ0_hw * 2^HW) * (hi_corr * 2^HW + lo_corr) - corr_UQ1
-        let mut x_uq0: F::Int = ((F::Int::from(x_uq0_hw) * hi_corr) << 1)
+        let mut x_uq0: F::Int = ((F::Int::from(x_uq0_hw) * hi_corr) << 1u32)
             .wrapping_add((F::Int::from(x_uq0_hw) * lo_corr) >> (hw - 1))
             // 1 to account for the highest bit of corr_UQ1 can be 1
             // 1 to account for possible carry
@@ -481,13 +482,13 @@ where
 
         let ret = quotient.wrapping_shr(u32::cast_from(res_exponent.wrapping_neg()) + 1);
         residual_lo = a_significand
-            .wrapping_shl(significand_bits.wrapping_add(CastInto::<u32>::cast(res_exponent)))
+            .wrapping_shl(significand_bits.wrapping_add(CastInto::<u32>::cast_lossy(res_exponent)))
             .wrapping_sub(ret.wrapping_mul(b_significand) << 1);
         ret
     };
 
     residual_lo += abs_result & one; // tie to even
-                                     // conditionally turns the below LT comparison into LTE
+    // conditionally turns the below LT comparison into LTE
     abs_result += u8::from(residual_lo > b_significand).into();
 
     if F::BITS == 128 || (F::BITS == 32 && half_iterations > 0) {
@@ -606,19 +607,16 @@ where
 }
 
 intrinsics! {
-    #[avr_skip]
     #[arm_aeabi_alias = __aeabi_fdiv]
     pub extern "C" fn __divsf3(a: f32, b: f32) -> f32 {
         div(a, b)
     }
 
-    #[avr_skip]
     #[arm_aeabi_alias = __aeabi_ddiv]
     pub extern "C" fn __divdf3(a: f64, b: f64) -> f64 {
         div(a, b)
     }
 
-    #[avr_skip]
     #[ppc_alias = __divkf3]
     #[cfg(f128_enabled)]
     pub extern "C" fn __divtf3(a: f128, b: f128) -> f128 {

@@ -3,6 +3,7 @@ use crate::collections::TryReserveError;
 use crate::hash::Hash;
 use crate::marker::PhantomData;
 use crate::mem;
+use crate::ops::Range;
 use crate::slice;
 use crate::vec;
 
@@ -75,6 +76,15 @@ impl<K, V, S> HashMap<K, V, S> {
             }
         }
     }
+
+    pub fn extract_if<F>(&mut self, f: F) -> ExtractIf<'_, K, V, F>
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        ExtractIf {
+            it: self.items.extract_if(.., ExtractIfFnAdapter(f))
+        }
+    }
 }
 
 impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
@@ -122,7 +132,7 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         Q: Hash + Eq,
     {
         self.items.iter()
-            .find(|&(ref k2, _)| k2.borrow() == k)
+            .find(|&&(ref k2, _)| k2.borrow() == k)
             .map(|&(ref k, ref v)| (k, v))
     }
 
@@ -140,7 +150,7 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         Q: Hash + Eq,
     {
         self.items.iter_mut()
-            .find(|&(ref k2, _)| k2.borrow() == k)
+            .find(|&&mut (ref k2, _)| k2.borrow() == k)
             .map(|&mut (_, ref mut v)| v)
     }
 
@@ -176,6 +186,24 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         Q: Hash + Eq,
     {
         self.get_many_mut(ks)
+    }
+
+    fn get_many_indices<Q: ?Sized, const N: usize>(
+        &self,
+        ks: [&Q; N],
+    ) -> [Range<usize>; N]
+    where
+        K: Borrow<Q>,
+        Q: Eq,
+    {
+        ks.map(|k| {
+            let pos = self.items.iter()
+                .position(|&(ref k2, _)| k2.borrow() == k);
+            match pos {
+                None => 0..0,
+                Some(i) => i..(i+1),
+            }
+        })
     }
 
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
@@ -357,6 +385,47 @@ impl<'a, K, V> Iterator for Drain<'a, K, V> {
 impl<'a, K, V> ExactSizeIterator for Drain<'a, K, V> {
     fn len(&self) -> usize {
         self.it.len()
+    }
+}
+
+
+pub struct ExtractIf<'a, K, V, F> {
+    it: vec::ExtractIf<'a, (K, V), ExtractIfFnAdapter<F>>,
+}
+
+// Our extract_if is passed a (&K, &mut V) -> bool closure, but Vec's extract_if
+// expects a (&mut (K, V)) -> bool closure. This lets Vec's extract_if call the
+// (&K, &mut V) -> bool closure as if it were a (&mut (K, V)) -> bool closure.
+struct ExtractIfFnAdapter<F>(F);
+
+impl<'a, K, V, F: FnOnce(&'a K, &'a mut V) -> bool> FnOnce<(&'a mut (K, V),)> for ExtractIfFnAdapter<F> {
+    type Output = bool;
+    extern "rust-call" fn call_once(self, args: (&'a mut (K, V),)) -> bool {
+        let (&mut (ref k, ref mut v),) = args;
+        (self.0)(k, v)
+    }
+}
+
+impl<'a, K, V, F: FnMut(&'a K, &'a mut V) -> bool> FnMut<(&'a mut (K, V),)> for ExtractIfFnAdapter<F> {
+    extern "rust-call" fn call_mut(&mut self, args: (&'a mut (K, V),)) -> bool {
+        let (&mut (ref k, ref mut v),) = args;
+        (self.0)(k, v)
+    }
+}
+
+
+impl<'a, K, V, F> Iterator for ExtractIf<'a, K, V, F>
+where
+    F: FnMut(&K, &mut V) -> bool,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
     }
 }
 
