@@ -1985,7 +1985,12 @@ mod impls {
             impl const PartialOrd for $t {
                 #[inline]
                 fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                    Some(crate::intrinsics::three_way_compare(*self, *other))
+                    match (*self <= *other, *self >= *other) {
+                        (false, false) => None,
+                        (false, true) => Some(Greater),
+                        (true, false) => Some(Less),
+                        (true, true) => Some(Equal),
+                    }
                 }
 
                 partial_ord_methods_primitive_impl!();
@@ -1996,7 +2001,11 @@ mod impls {
             impl const Ord for $t {
                 #[inline]
                 fn cmp(&self, other: &Self) -> Ordering {
-                    crate::intrinsics::three_way_compare(*self, *other)
+                    match (*self <= *other, *self >= *other) {
+                        (false, true) => Greater,
+                        (true, false) => Less,
+                        _ => Equal,
+                    }
                 }
             }
         )*)

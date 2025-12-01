@@ -107,7 +107,7 @@ identify all of the code that was changed in each patch.
   `exchange_malloc`, which is an untyped allocation function and thus
   unsupported by crucible-mir.
 
-* Remove calls to `three_way_compare` intrinsic (last applied: April 28, 2025)
+* Remove calls to `three_way_compare` intrinsic (last applied: December 1, 2025)
 
   The `PartialOrd` and `Ord` impls for integers are implemented with the
   `three_way_compare` intrinsic, which compiles down to `BinOp::Cmp`.  This
