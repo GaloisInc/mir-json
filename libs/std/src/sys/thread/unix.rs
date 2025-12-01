@@ -603,39 +603,11 @@ pub fn sleep(dur: Duration) {
 pub fn sleep_until(deadline: crate::time::Instant) {
     use crate::time::Instant;
 
-    let Some(ts) = deadline.into_inner().into_timespec().to_timespec() else {
-        // The deadline is further in the future then can be passed to
-        // clock_nanosleep. We have to use Self::sleep instead. This might
-        // happen on 32 bit platforms, especially closer to 2038.
-        let now = Instant::now();
-        if let Some(delay) = deadline.checked_duration_since(now) {
-            sleep(delay);
-        }
-        return;
-    };
-
-    unsafe {
-        // When we get interrupted (res = EINTR) call clock_nanosleep again
-        loop {
-            let res = libc::clock_nanosleep(
-                crate::sys::time::Instant::CLOCK_ID,
-                libc::TIMER_ABSTIME,
-                &ts,
-                core::ptr::null_mut(), // not required with TIMER_ABSTIME
-            );
-
-            if res == 0 {
-                break;
-            } else {
-                assert_eq!(
-                    res,
-                    libc::EINTR,
-                    "timespec is in range,
-                         clockid is valid and kernel should support it"
-                );
-            }
-        }
+    let now = Instant::now();
+    if let Some(delay) = deadline.checked_duration_since(now) {
+        sleep(delay);
     }
+
 }
 
 pub fn yield_now() {

@@ -161,6 +161,13 @@ identify all of the code that was changed in each patch.
   time to a fixed date), but it does simulate much more easily than the actual
   implementation.
 
+* Always use regular `sleep` in `std::sys::thread::unix::sleep_until` (last applied: December 2, 2025)
+
+  The `sleep_until` implementation on unix tries to use `clock_nanosleep` when
+  applicable, by getting a `Timespec` out of the passed-in `time::Instant`. Our
+  Crux-specific time implementation does not have a `Timespec` in it, so we
+  instead always use the regular `sleep` function just like on other platforms.
+
 * Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: December 1, 2025)
 
   Crucible does not currently support pointer casts from single elements to
