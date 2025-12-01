@@ -5,7 +5,7 @@
 
 /// The MIR JSON format
 type MIR = {
-  version: 5,
+  version: 6,
   fns: Fn[],
   adts: Adt[],
   statics: Static[],
