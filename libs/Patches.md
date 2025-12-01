@@ -44,6 +44,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `SpecArrayEq`/`SlicePartialEq` instances that are slower (but easier to
   translate).
 
+* Use `crucible_cell_swap_is_nonoverlapping_hook` in `Cell::swap` (last applied: September 17, 2026)
+
+  The actual implementation of `cell::swap` checks for overlapping `Cell`
+  references before performing the swap and panics if there is overlap. The
+  overlap check relies pointer-to-integer casts that `crucible-mir` does not
+  currently support. As such, we use a Crucible override for the overlap check.
+
 
 # Notes
 
