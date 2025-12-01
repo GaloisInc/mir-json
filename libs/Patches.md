@@ -159,7 +159,7 @@ identify all of the code that was changed in each patch.
   time to a fixed date), but it does simulate much more easily than the actual
   implementation.
 
-* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: May 23, 2025)
+* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: December 1, 2025)
 
   Crucible does not currently support pointer casts from single elements to
   arrays, so we implement this function by explicitly creating a
