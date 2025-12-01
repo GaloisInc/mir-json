@@ -1506,17 +1506,20 @@ fn try_render_ref_opty<'tcx>(
 ) -> Option<serde_json::Value> {
     let tcx = mir.tcx;
 
+    fn raw_ptr(offset: Size) -> Option<serde_json::Value> {
+        Some(json!({
+            "kind": "raw_ptr",
+            "val": offset.bytes().to_string(),
+        }))
+    }
+
     // Special case for nullptr
     let val = icx.read_immediate(op_ty).unwrap();
     let mplace = icx.ref_to_mplace(&val).unwrap();
     let (prov, offset) = mplace.ptr().into_raw_parts();
     if prov.is_none() {
         assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
-
-        return Some(json!({
-            "kind": "raw_ptr",
-            "val": offset.bytes().to_string(),
-        }));
+        return raw_ptr(offset);
     }
 
     let d = icx.deref_pointer(op_ty).unwrap();
@@ -1541,10 +1544,7 @@ fn try_render_ref_opty<'tcx>(
             def_id_str.to_json(mir)
         }
         interpret::GlobalAlloc::TypeId {..} => {
-            return Some(json!({
-                "kind": "raw_ptr",
-                "val": offset.bytes().to_string(),
-            }))
+            return raw_ptr(offset);
         }
         _ =>
             // Give up
