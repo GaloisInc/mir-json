@@ -176,6 +176,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   that we don't support. It makes one big allocation and uses the first N bytes
   as flags and the remaining M bytes as key-value pairs.
 
+* Remove calls to `three_way_compare` intrinsic (last applied: June 10, 2026)
+
+  The `PartialOrd` and `Ord` impls for integers are implemented with the
+  `three_way_compare` intrinsic, which compiles down to `BinOp::Cmp`.  This
+  operation is not supported in crucible-mir, so this patch replaces the
+  intrinsic calls with some ordinary two-way comparisons.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
