@@ -21,7 +21,7 @@ use std::{
 
 use cargo_metadata::{
     camino::{Utf8Path, Utf8PathBuf},
-    Artifact, Edition, Message, Target,
+    Artifact, Edition, Message, PackageId, Target,
 };
 use serde::Deserialize;
 use shell_escape::escape;
@@ -53,12 +53,7 @@ struct UnitGraph {
 
 #[derive(Debug, Deserialize)]
 struct UnitGraphUnit {
-    /// This is not `PackageId` since its format is incompatible with the one
-    /// from cargo metadata. This has been fixed in
-    /// https://github.com/rust-lang/cargo/pull/15447, so the next time we
-    /// upgrade the Rust version we can change this back to `PackageId` and key
-    /// `artifact_outputs` with it instead of `src_path`.
-    pkg_id: String,
+    pkg_id: PackageId,
     target: Target,
     #[serde(default)]
     is_std: bool,
@@ -217,13 +212,12 @@ impl UnitGraphUnit {
     /// artifact output map and custom sources directory.
     fn get_pkg_path_info<'a>(
         &self,
-        artifact_outputs: &'a HashMap<Utf8PathBuf, Artifact>,
+        artifact_outputs: &'a HashMap<PackageId, Artifact>,
         sources_dir: &Utf8Path,
     ) -> CustomTarget<LibPathInfo<'a>> {
         custom_kind_of_target(&self.target).map_lib(|()| {
-            let artifact = artifact_outputs
-                .get(&self.target.src_path)
-                .unwrap_or_else(|| {
+            let artifact =
+                artifact_outputs.get(&self.pkg_id).unwrap_or_else(|| {
                     panic!(
                         "library {} (src_path {}) \
                         should have a compiler artifact",
@@ -567,7 +561,7 @@ fn main() {
                 if let CustomTarget::TargetLib(()) =
                     custom_kind_of_target(&art.target)
                 {
-                    artifact_outputs.insert(art.target.src_path.clone(), art);
+                    artifact_outputs.insert(art.package_id.clone(), art);
                 }
             }
             Message::BuildScriptExecuted(bs) => {
@@ -689,9 +683,7 @@ fn main() {
                         "source file should be inside directory of Cargo.toml",
                     );
                 let (linked_libs, linked_paths, cfgs, env) =
-                    match build_script_outputs
-                        .remove(&path_info.artifact.package_id)
-                    {
+                    match build_script_outputs.remove(&unit.pkg_id) {
                         Some(bs) => {
                             // Certain packages rely on `cargo` defining the
                             // `OUT_DIR` environment variable (e.g.,
