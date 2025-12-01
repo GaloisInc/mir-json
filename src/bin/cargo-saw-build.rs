@@ -27,5 +27,8 @@ fn main() {
     cargo_test_common("saw-build",
                       "Build a MIR JSON file for SAW verification purposes",
                       &vec!["--no-run".to_owned()],
-                      &vec![("EXPORT_ALL".to_owned(), "true".to_owned())]);
+                      &vec![
+                          ("EXPORT_ALL".to_owned(), "true".to_owned()),
+                          ("MIR_JSON_BUILD_TARGET".to_owned(), "saw".to_owned())
+                      ]);
 }

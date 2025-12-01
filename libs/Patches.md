@@ -37,7 +37,9 @@ identify all of the code that was changed in each patch.
 
 * Disable bytewise equality comparisons for `[T]` (last applied: November 19, 2025)
 
-  These require the `size_of_val` intrinsic, which isn't current supported.
+  These require the `compare_bytes` intrinsic, which Crucible doesn't currently
+  support. These also require pointer casts to `*const u8` that Crucible can't
+  support.
 
 * Remove the use of `ptr::from_raw_parts` from `ptr::null` (last applied: November 20, 2025)
 
@@ -198,3 +200,8 @@ identify all of the code that was changed in each patch.
 
   Crucible doesn't support transmuting a struct into a `u128`. We always use the
   `type_id_eq` fallback instead.
+
+* Remove the dynamic CPU support detection in `memchr` package (last applied: November 24, 2025)
+
+  This feature was using an `AtomicPtr<()>` with a cast from function
+  pointer to `*mut ()` that we don't support in its initializer.

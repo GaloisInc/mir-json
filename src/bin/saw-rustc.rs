@@ -35,6 +35,7 @@ fn main() {
     let e = Command::new(&wrapper_path)
         .args(&args)
         .env("EXPORT_ALL", "true")
+        .env("MIR_JSON_BUILD_TARGET", "saw")
         .exec();
     unreachable!("exec failed: {:?}", e);
 }

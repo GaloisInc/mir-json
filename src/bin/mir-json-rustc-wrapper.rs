@@ -19,6 +19,7 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::link;
+use mir_json::version;
 use rustc_ast::Crate;
 use rustc_middle::ty::TyCtxt;
 use rustc_driver::Compilation;
@@ -89,7 +90,7 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     }
 }
 
-fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> PathBuf {
+fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Option<PathBuf> {
     let mut callbacks = GetOutputPathCallbacks {
         crate_name: None,
         outputs: None,
@@ -97,7 +98,7 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Pa
         use_override_crates: use_override_crates.clone(),
     };
     rustc_driver::run_compiler(&args, &mut callbacks);
-    callbacks.output_path.unwrap()
+    callbacks.output_path
 }
 
 fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
@@ -164,6 +165,10 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
 fn go() -> ExitCode {
     // First arg is the name of the `rustc` binary that cargo means to invoke, which we ignore.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+    }
 
     // XXX big hack: We need to use normal rustc (with its normal libs) for `build.rs` scripts,
     // since our custom libs aren't actually functional.  To distinguish `build.rs` and `build.rs`
@@ -263,7 +268,13 @@ fn go() -> ExitCode {
     // We're still using the original args (with only a few modifications), so the output path
     // should be the path of the test binary.
     eprintln!("test build - extract output path - {:?}", args);
-    let test_path = get_output_path(&args, &use_override_crates);
+    let test_path = match get_output_path(&args, &use_override_crates) {
+        Some(path) => path,
+        None => {
+            // rustc exited early (e.g., --version, --help, --print, etc.)
+            return ExitCode::SUCCESS;
+        }
+    };
 
     args.remove(test_idx);
 
@@ -297,8 +308,15 @@ fn go() -> ExitCode {
     );
     link_mirs(data.mir_path, &data.extern_mir_paths, &json_path);
 
-    write_test_script(&test_path, &json_path).unwrap();
-    eprintln!("generated test script {}", test_path.display());
+    // Only generate test script for Crux builds, not SAW builds.
+    let is_saw_build = env::var("MIR_JSON_BUILD_TARGET")
+        .map(|v| v == "saw")
+        .unwrap_or(false);
+    if !is_saw_build {
+        write_test_script(&test_path, &json_path).unwrap();
+        eprintln!("generated test script {}", test_path.display());
+    }
+
     ExitCode::SUCCESS
 }
 

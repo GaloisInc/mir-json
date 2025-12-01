@@ -33,3 +33,18 @@ expect_json_contains() {
     exit 1
   fi
 }
+
+expect_output_does_not_contain() {
+  set +e
+  output=$("${@:2}" 2>&1)
+  status=$?
+  set -e
+
+  if echo "$output" | grep -q "$1"; then
+    echo "Output contains '$1'"
+    echo "$output"
+    return 1
+  fi
+
+  echo "Output does not contain '$1'"
+}

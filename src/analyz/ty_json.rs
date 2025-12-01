@@ -393,12 +393,21 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "ty": ty.to_json(mir),
             }),
             ty::InstanceKind::CloneShim(did, ty) => {
+                // We try to keep the cases in this `match` expression in sync
+                // with the cases in rustc's `build_clone_shim` function (see
+                // https://doc.rust-lang.org/1.86.0/nightly-rustc/src/rustc_mir_transform/shim.rs.html#432-455).
+                //
+                // TODO(#196): We are currently missing two cases for
+                // TyKind::Coroutine and TyKind::CoroutineClosure. We should
+                // add these cases, taking inspiration from how
+                // `build_clone_shim` handles them and making sure that we
+                // encode enough information for crucible-mir to use.
                 let sub_tys = match *ty.kind() {
-                    ty::TyKind::Array(t, _) => vec![t],
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(_closure_did, args) =>
                         args.as_closure().upvar_tys()[..].to_owned(),
                     ty::TyKind::FnPtr(..) => vec![],
+                    ty::TyKind::FnDef(..) => vec![],
                     _ => {
                         eprintln!("warning: don't know how to build clone shim for {:?}", ty);
                         vec![]

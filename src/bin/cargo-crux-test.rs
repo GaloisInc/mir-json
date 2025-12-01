@@ -27,5 +27,7 @@ fn main() {
     cargo_test_common("crux-test",
                       "Execute all symbolic unit tests of a local package",
                       &Vec::new(),
-                      &Vec::new());
+                      &vec![
+                          ("MIR_JSON_BUILD_TARGET".to_owned(), "crux".to_owned())
+                      ]);
 }

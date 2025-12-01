@@ -69,34 +69,6 @@ macro_rules! unsafe_ifunc {
 
         use core::sync::atomic::{AtomicPtr, Ordering};
 
-        type Fn = *mut ();
-        type RealFn = $fnty;
-        static FN: AtomicPtr<()> = AtomicPtr::new(detect as Fn);
-
-        #[cfg(target_feature = "sse2")]
-        #[target_feature(enable = "sse2", enable = "avx2")]
-        unsafe fn find_avx2(
-            $($needle: u8),+,
-            $hay_start: *const u8,
-            $hay_end: *const u8,
-        ) -> $retty {
-            use crate::arch::x86_64::avx2::memchr::$memchrty;
-            $memchrty::new_unchecked($($needle),+)
-                .$memchrfind($hay_start, $hay_end)
-        }
-
-        #[cfg(target_feature = "sse2")]
-        #[target_feature(enable = "sse2")]
-        unsafe fn find_sse2(
-            $($needle: u8),+,
-            $hay_start: *const u8,
-            $hay_end: *const u8,
-        ) -> $retty {
-            use crate::arch::x86_64::sse2::memchr::$memchrty;
-            $memchrty::new_unchecked($($needle),+)
-                .$memchrfind($hay_start, $hay_end)
-        }
-
         unsafe fn find_fallback(
             $($needle: u8),+,
             $hay_start: *const u8,
@@ -106,51 +78,12 @@ macro_rules! unsafe_ifunc {
             $memchrty::new($($needle),+).$memchrfind($hay_start, $hay_end)
         }
 
-        unsafe fn detect(
-            $($needle: u8),+,
-            $hay_start: *const u8,
-            $hay_end: *const u8,
-        ) -> $retty {
-            let fun = {
-                #[cfg(not(target_feature = "sse2"))]
-                {
-                    debug!(
-                        "no sse2 feature available, using fallback for {}",
-                        stringify!($memchrty),
-                    );
-                    find_fallback as RealFn
-                }
-                #[cfg(target_feature = "sse2")]
-                {
-                    use crate::arch::x86_64::{sse2, avx2};
-                    if avx2::memchr::$memchrty::is_available() {
-                        debug!("chose AVX2 for {}", stringify!($memchrty));
-                        find_avx2 as RealFn
-                    } else if sse2::memchr::$memchrty::is_available() {
-                        debug!("chose SSE2 for {}", stringify!($memchrty));
-                        find_sse2 as RealFn
-                    } else {
-                        debug!("chose fallback for {}", stringify!($memchrty));
-                        find_fallback as RealFn
-                    }
-                }
-            };
-            FN.store(fun as Fn, Ordering::Relaxed);
-            // SAFETY: The only thing we need to uphold here is the
-            // `#[target_feature]` requirements. Since we check is_available
-            // above before using the corresponding implementation, we are
-            // guaranteed to only call code that is supported on the current
-            // CPU.
-            fun($($needle),+, $hay_start, $hay_end)
-        }
-
         // SAFETY: By virtue of the caller contract, RealFn is a function
         // pointer, which is always safe to transmute with a *mut (). Also,
         // since we use $memchrty::is_available, it is guaranteed to be safe
         // to call $memchrty::$memchrfind.
         unsafe {
-            let fun = FN.load(Ordering::Relaxed);
-            core::mem::transmute::<Fn, RealFn>(fun)(
+            find_fallback(
                 $($needle),+,
                 $hay_start,
                 $hay_end,
