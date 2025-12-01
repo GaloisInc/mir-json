@@ -200,6 +200,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   The actual implementations use pointer casts that Crucible can't handle.
 
+* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: June 10, 2026)
+
+  Crucible does not currently support pointer casts from single elements to
+  arrays, so we implement this function by explicitly creating a
+  `MaybeUninit<[T; N]>` and copying into it.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
