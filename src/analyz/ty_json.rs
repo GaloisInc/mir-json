@@ -1514,7 +1514,6 @@ fn try_render_ref_opty<'tcx>(
     let is_mut = mutability == hir::Mutability::Mut;
 
     let (prov, d_offset) = d.ptr().into_raw_parts();
-    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
     let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
 
     let def_id_json = match alloc {
@@ -1532,10 +1531,18 @@ fn try_render_ref_opty<'tcx>(
             };
             def_id_str.to_json(mir)
         }
+        interpret::GlobalAlloc::TypeId {..} => {
+            return Some(json!({
+                "kind": "raw_ptr",
+                "val": offset.bytes().to_string(),
+            }))
+        }
         _ =>
             // Give up
             return None
     };
+
+    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
 
     if !is_mut {
         // Special cases for &str, &CStr, and &[T]
