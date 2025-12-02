@@ -1355,13 +1355,7 @@ pub fn try_render_opty<'tcx>(
 
         ty::TyKind::Closure(_defid, args) => {
             let upvars_count = args.as_closure().upvar_tys().len();
-            let mut upvar_vals = Vec::with_capacity(upvars_count);
-            for idx in 0 .. upvars_count {
-                let upvar_opty =
-                    icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
-                upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
-            }
-
+            let upvar_vals = try_render_opty_upvars(mir, icx, op_ty, upvars_count)?;
             json!({
                 "kind": "closure",
                 "upvars": upvar_vals,
@@ -1402,6 +1396,21 @@ pub fn try_render_opty<'tcx>(
             json!({"kind": "unsupported"})
         },
     })
+}
+
+fn try_render_opty_upvars<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+    upvars_count: usize,
+) -> Option<Vec<serde_json::Value>> {
+    let mut upvar_vals = Vec::with_capacity(upvars_count);
+    for idx in 0 .. upvars_count {
+        let upvar_opty =
+            icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
+        upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
+    }
+    Some(upvar_vals)
 }
 
 fn make_allocation_body<'tcx>(
