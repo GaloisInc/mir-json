@@ -22,7 +22,7 @@ use mir_json::link;
 use mir_json::version;
 use rustc_ast::Crate;
 use rustc_middle::ty::TyCtxt;
-use rustc_driver::Compilation;
+use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::{Compiler, Config};
 use rustc_session::config::{Externs, ExternLocation, OutFileName, OutputFilenames};
 use rustc_span::Symbol;
@@ -97,8 +97,22 @@ fn get_output_path(args: &[String], use_override_crates: &HashSet<String>) -> Op
         output_path: None,
         use_override_crates: use_override_crates.clone(),
     };
-    rustc_driver::run_compiler(&args, &mut callbacks);
+    run_compiler(&args, &mut callbacks);
     callbacks.output_path
+}
+
+/// A wrapper around [`rustc_driver::run_compiler`] that also prints
+/// `mir-json`-specific version information.
+fn run_compiler(at_args: &[String], callbacks: &mut (dyn Callbacks + Send)) {
+    rustc_driver::run_compiler(at_args, callbacks);
+
+    // Show mir-json version information *after* `run_compiler`. The rustc
+    // version is printed as a part of `run_compiler`, and certain crates
+    // (e.g., libc's custom build script) expect the rustc version to be
+    // printed on the first line of the --version output. See #201.
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+    }
 }
 
 fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
@@ -165,10 +179,6 @@ fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
 fn go() -> ExitCode {
     // First arg is the name of the `rustc` binary that cargo means to invoke, which we ignore.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-
-    if version::has_flag(&mut std::env::args()) {
-        version::show();
-    }
 
     // XXX big hack: We need to use normal rustc (with its normal libs) for `build.rs` scripts,
     // since our custom libs aren't actually functional.  To distinguish `build.rs` and `build.rs`
@@ -248,7 +258,7 @@ fn go() -> ExitCode {
             eprintln!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
-            rustc_driver::run_compiler(
+            run_compiler(
                 &args,
                 &mut MirJsonCallbacks {
                     analysis_data: None,
@@ -295,7 +305,7 @@ fn go() -> ExitCode {
         use_override_crates: use_override_crates.clone(),
         export_style,
     };
-    rustc_driver::run_compiler(&args, &mut callbacks);
+    run_compiler(&args, &mut callbacks);
     let data = callbacks.analysis_data
         .expect("failed to find main MIR path");
 

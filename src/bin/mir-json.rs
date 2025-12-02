@@ -50,10 +50,6 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
 fn go() {
     let args: Vec<String> = std::env::args().collect();
 
-    if version::has_flag(&mut std::env::args()) {
-        version::show();
-    }
-
     let export_style = if env::var("EXPORT_ALL").is_ok() {
         analyz::ExportStyle::ExportAll
     } else {
@@ -61,6 +57,14 @@ fn go() {
     };
 
     rustc_driver::run_compiler(&args, &mut MirJsonCallbacks { export_style });
+
+    // Show mir-json version information *after* `run_compiler`. The rustc
+    // version is printed as a part of `run_compiler`, and certain crates
+    // (e.g., libc's custom build script) expect the rustc version to be
+    // printed on the first line of the --version output. See #201.
+    if version::has_flag(&mut std::env::args()) {
+        version::show();
+    }
 }
 
 fn main() {

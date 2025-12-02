@@ -44,7 +44,7 @@ expect_version \
   mir-json-dce --version
 
 expect_version \
-  mir-json-rustc-wrapper --version
+  mir-json-rustc-wrapper rustc --target "$(rustc --print host-tuple)" --version
 
 expect_version \
   mir-json-translate-libs --version
