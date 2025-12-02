@@ -831,6 +831,7 @@ pub unsafe fn drop_in_place<T: PointeeSized>(to_drop: *mut T) {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null"]
 pub const fn null<T: PointeeSized + Thin>() -> *const T {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *const T {
         from_raw_parts(without_provenance::<()>(0), ())
     }
@@ -859,6 +860,7 @@ pub const fn null<T: PointeeSized + Thin>() -> *const T {
 #[rustc_const_stable(feature = "const_ptr_null", since = "1.24.0")]
 #[rustc_diagnostic_item = "ptr_null_mut"]
 pub const fn null_mut<T: PointeeSized + Thin>() -> *mut T {
+    #[inline(never)] // Keep the hook around even with optimizations applied
     const fn crucible_null_hook<T: ?Sized + Thin>() -> *mut T {
         from_raw_parts_mut(without_provenance_mut::<()>(0), ())
     }

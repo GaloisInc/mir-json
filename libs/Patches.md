@@ -52,6 +52,8 @@ identify all of the code that was changed in each patch.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
+
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
@@ -68,6 +70,8 @@ identify all of the code that was changed in each patch.
   `Option<NonZero<u32>>` in a const context.  Removing this transmute is
   difficult due to limited ability to use generics in a const context.
   Instead, we wrap it in a hook that we can override in crucible-mir.
+
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
 
 * Use crucible's allocator in `Box` constructors (last applied: November 17, 2025)
 
@@ -148,6 +152,8 @@ identify all of the code that was changed in each patch.
   overlap check relies pointer-to-integer casts that `crucible-mir` does not
   currently support. As such, we use a Crucible override for the overlap check.
 
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
+
 * Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: November 27, 2025)
 
   Because Crucible is effectively single-threaded, we can use `std`'s
@@ -185,6 +191,8 @@ identify all of the code that was changed in each patch.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
+
 * Replace `NonNull::cast` with `transmute` in `TypedAllocator` allocation (last applied: July 25, 2025)
 
   Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
@@ -194,9 +202,13 @@ identify all of the code that was changed in each patch.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
+
 * Use `crucible_slice_from_ref_hook` in `core::slice::from_ref` (last applied: November 25, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
+
+  See also the "Mark hook functions as `#[inline(never)]`" note below.
 
 * Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: November 27, 2025)
 
@@ -212,3 +224,26 @@ identify all of the code that was changed in each patch.
 
   This feature was using an `AtomicPtr<()>` with a cast from function
   pointer to `*mut ()` that we don't support in its initializer.
+
+# Notes
+
+This section contains more detailed notes about why certain patches are written
+the way they are. If you plan to reapply a patch that references one of these
+notes, please make sure that the spirit of the note is still upheld in the new
+patch. Alternatively, if you choose to deviate from the note, make sure to do
+so after carefully considering why deviating is the right choice, and consider
+updating the note in the process.
+
+## Mark hook functions as `#[inline(never)]`
+
+We want to ensure that custom hook functions (e.g.,
+`crucible_array_from_slice_hook`) are always present in generated MIR code,
+regardless of whether or not optimizations are applied. In some cases, it may
+not suffice to compile the code containing the hook functions without
+optimizations (as `mir-json-translate-libs` currently does), as `rustc` can
+still inline code that is contained in a different compilation unit. (See
+[#153](https://github.com/GaloisInc/mir-json/issues/153) for an example where
+this actually happened.)
+
+As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
+ensure that they persist when optimizations are applied.
