@@ -61,13 +61,16 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
+            &mir::AggregateKind::CoroutineClosure(_, _,) => {
+                json!({
+                    "kind": "CoroutineClosure",
+                    // crucible-mir uses the same representation for closures as it does for
+                    // tuples, so no additional information is needed.
+                })
+            }
             &mir::AggregateKind::Coroutine(_, _,) => {
                 // TODO
                 json!({"kind": "Coroutine"})
-            }
-            &mir::AggregateKind::CoroutineClosure(_, _,) => {
-                // TODO
-                json!({"kind": "CoroutineClosure"})
             }
             &mir::AggregateKind::RawPtr(ty, mutbl) => {
                 json!({

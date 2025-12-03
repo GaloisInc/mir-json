@@ -397,15 +397,17 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 // with the cases in rustc's `build_clone_shim` function (see
                 // https://doc.rust-lang.org/1.86.0/nightly-rustc/src/rustc_mir_transform/shim.rs.html#432-455).
                 //
-                // TODO(#196): We are currently missing two cases for
-                // TyKind::Coroutine and TyKind::CoroutineClosure. We should
-                // add these cases, taking inspiration from how
+                // TODO(#196): We are currently missing a case for
+                // TyKind::Coroutine. We should
+                // add this case, taking inspiration from how
                 // `build_clone_shim` handles them and making sure that we
                 // encode enough information for crucible-mir to use.
                 let sub_tys = match *ty.kind() {
                     ty::TyKind::Tuple(ts) => ts[..].to_owned(),
                     ty::TyKind::Closure(_closure_did, args) =>
                         args.as_closure().upvar_tys()[..].to_owned(),
+                    ty::TyKind::CoroutineClosure(_coroutine_closure_did, args) =>
+                        args.as_coroutine_closure().upvar_tys()[..].to_owned(),
                     ty::TyKind::FnPtr(..) => vec![],
                     ty::TyKind::FnDef(..) => vec![],
                     _ => {
@@ -550,6 +552,14 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
+            &ty::TyKind::CoroutineClosure(_defid, ref args) => {
+                json!({
+                    "kind": "CoroutineClosure",
+                    "upvar_tys": args.as_coroutine_closure().upvar_tys().to_json(mir),
+                    // crucible-mir uses the same representation for coroutine closures as it does
+                    // for tuples, so no additional information is needed.
+                })
+            }
             &ty::TyKind::Dynamic(preds, _region, dynkind) => {
                 match dynkind {
                     DynKind::Dyn => {
@@ -611,9 +621,6 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({"kind": "Unsupported"})
             },
             &ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
-                json!({"kind": "Unsupported"})
-            },
-            &ty::TyKind::CoroutineClosure(_, _) => {
                 json!({"kind": "Unsupported"})
             },
             &ty::TyKind::Alias(_alias_ty_kind, _alias_ty) => {
@@ -1355,15 +1362,17 @@ pub fn try_render_opty<'tcx>(
 
         ty::TyKind::Closure(_defid, args) => {
             let upvars_count = args.as_closure().upvar_tys().len();
-            let mut upvar_vals = Vec::with_capacity(upvars_count);
-            for idx in 0 .. upvars_count {
-                let upvar_opty =
-                    icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
-                upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
-            }
-
+            let upvar_vals = try_render_opty_upvars(mir, icx, op_ty, upvars_count)?;
             json!({
                 "kind": "closure",
+                "upvars": upvar_vals,
+            })
+        }
+        ty::TyKind::CoroutineClosure(_defid, args) => {
+            let upvars_count = args.as_coroutine_closure().upvar_tys().len();
+            let upvar_vals = try_render_opty_upvars(mir, icx, op_ty, upvars_count)?;
+            json!({
+                "kind": "coroutine_closure",
                 "upvars": upvar_vals,
             })
         }
@@ -1398,10 +1407,22 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
             json!({"kind": "unsupported"})
         },
-        ty::TyKind::CoroutineClosure(_, _) => {
-            json!({"kind": "unsupported"})
-        },
     })
+}
+
+fn try_render_opty_upvars<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    op_ty: &interpret::OpTy<'tcx>,
+    upvars_count: usize,
+) -> Option<Vec<serde_json::Value>> {
+    let mut upvar_vals = Vec::with_capacity(upvars_count);
+    for idx in 0 .. upvars_count {
+        let upvar_opty =
+            icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
+        upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
+    }
+    Some(upvar_vals)
 }
 
 fn make_allocation_body<'tcx>(

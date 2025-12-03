@@ -5,7 +5,7 @@
 
 /// The MIR JSON format
 type MIR = {
-  version: 6,
+  version: 7,
   fns: Fn[],
   adts: Adt[],
   statics: Static[],
@@ -151,6 +151,7 @@ type InlineType =
   | { kind: "FnDef", defid: DefId }
   | { kind: "Adt", name: DefId, orig_def_id: DefId, args: Ty[] }
   | { kind: "Closure", upvar_tys: Ty[] }
+  | { kind: "CoroutineClosure", upvar_tys: Ty[] }
   | { kind: "FnPtr", signature: FnSig }
   | { kind: "Dynamic", trait_id: DefId, predicates: any[] }
   | { kind: "RawPtr", ty: Ty, mutability: Mutability }
@@ -282,6 +283,7 @@ type ConstVal =
   | { kind: "array", len: number, elements: ConstVal[] }
   | { kind: "tuple", elements: ConstVal[] }
   | { kind: "closure", upvars: ConstVal[] }
+  | { kind: "coroutine_closure", upvars: ConstVal[] }
   | { kind: "fn_ptr", "def_id": DefId }
 
 
@@ -357,7 +359,7 @@ type Operand =
   
 type AggregateKind = 
     { kind: "Array", ty: Ty }
-  | { kind: "Tuple" | "Closure" | "Coroutine" }
+  | { kind: "Tuple" | "Closure" | "CoroutineClosure" | "Coroutine" }
   | { kind: "RawPtr", ty: Ty, mutbl: Mutability }
 
 type BorrowKind = "Shared" | "Unique" | "Mut"

@@ -259,7 +259,7 @@ fn ty_desc(ty: ty::Ty) -> (String, bool) {
         ty::TyKind::UnsafeBinder(..) => "UnsafeBinder",
         ty::TyKind::Dynamic(..) => "Dynamic",
         ty::TyKind::Closure(..) => "Closure",
-        ty::TyKind::CoroutineClosure(..) => "Coroutine",
+        ty::TyKind::CoroutineClosure(..) => "CoroutineClosure",
         ty::TyKind::Coroutine(..) => "Coroutine",
         ty::TyKind::CoroutineWitness(..) => "CoroutineWitness",
         ty::TyKind::Never => "Never",
