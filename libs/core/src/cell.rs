@@ -457,6 +457,7 @@ impl<T> Cell<T> {
     #[inline]
     #[stable(feature = "move_cell", since = "1.17.0")]
     pub fn swap(&self, other: &Self) {
+        #[inline(never)] // Keep the hook around even with optimizations applied
         fn crucible_cell_swap_is_nonoverlapping_hook<T>(src: *const T, dst: *const T) -> bool {
             let src_usize = src.addr();
             let dst_usize = dst.addr();

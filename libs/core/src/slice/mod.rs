@@ -845,6 +845,7 @@ impl<T> [T] {
     #[inline]
     #[must_use]
     pub const fn as_array<const N: usize>(&self) -> Option<&[T; N]> {
+        #[inline(never)] // Keep the hook around even with optimizations applied
         const fn crucible_array_from_slice_hook<T, const N: usize>(slice: &[T]) -> Option<&[T; N]> {
             if slice.len() == N {
                 let ptr = slice.as_ptr().cast_array();
