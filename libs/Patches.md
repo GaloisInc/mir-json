@@ -8,9 +8,16 @@ between Rust versions, so applying the patches is rarely as straightforward as
 running `git apply`.
 
 As a compromise, this document contains high-level descriptions of each type of
-patch that we apply, along with rationale for why the patch is necessary. The
-intent is that this document can be used in conjunction with `git blame` to
-identify all of the code that was changed in each patch.
+patch that we apply, along with the date in which it was last applied and the
+rationale for why the patch is necessary. The intent is that this document can
+be used in conjunction with `git blame` to identify all of the code that was
+changed in each patch. If the rationale for a patch is particularly in-depth,
+consider splitting it out into a section in the "Notes" section below.
+
+If you need to update the implementation of a patch later, make sure to include
+an *Update* line (along with a date) describing what the patch does. That way,
+when the next Rust toolchain upgrade is performed, the update can be folded
+into the main commit for that patch, and then the *Update* line can be removed.
 
 * Add reference to `core::crucible` module (last applied: November 18, 2025)
 
@@ -50,9 +57,10 @@ identify all of the code that was changed in each patch.
 
 * Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: November 19, 2025)
 
-  The actual implementation uses a pointer cast that Crucible can't handle.
+  The actual implementation uses a pointer cast that Crucible can't handle. See
+  also the "Mark hook functions as `#[inline(never)]`" note below.
 
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
 
@@ -68,10 +76,11 @@ identify all of the code that was changed in each patch.
 
   The new generic `NonZero::new` relies on transmute to convert `u32` to
   `Option<NonZero<u32>>` in a const context.  Removing this transmute is
-  difficult due to limited ability to use generics in a const context.
-  Instead, we wrap it in a hook that we can override in crucible-mir.
+  difficult due to limited ability to use generics in a const context. Instead,
+  we wrap it in a hook that we can override in crucible-mir. See also the "Mark
+  hook functions as `#[inline(never)]`" note below.
 
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Use crucible's allocator in `Box` constructors (last applied: November 17, 2025)
 
@@ -151,8 +160,9 @@ identify all of the code that was changed in each patch.
   references before performing the swap and panics if there is overlap. The
   overlap check relies pointer-to-integer casts that `crucible-mir` does not
   currently support. As such, we use a Crucible override for the overlap check.
-
   See also the "Mark hook functions as `#[inline(never)]`" note below.
+
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: November 27, 2025)
 
@@ -189,9 +199,10 @@ identify all of the code that was changed in each patch.
 
 * Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: November 25, 2025)
 
-  The actual implementation uses a pointer cast that Crucible can't handle.
+  The actual implementation uses a pointer cast that Crucible can't handle. See
+  also the "Mark hook functions as `#[inline(never)]`" note below.
 
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Replace `NonNull::cast` with `transmute` in `TypedAllocator` allocation (last applied: July 25, 2025)
 
@@ -200,15 +211,17 @@ identify all of the code that was changed in each patch.
 
 * Use `crucible_slice_from_mut_hook` in `core::slice::from_mut` (last applied: November 25, 2025)
 
-  The actual implementation uses a pointer cast that Crucible can't handle.
+  The actual implementation uses a pointer cast that Crucible can't handle. See
+  also the "Mark hook functions as `#[inline(never)]`" note below.
 
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Use `crucible_slice_from_ref_hook` in `core::slice::from_ref` (last applied: November 25, 2025)
 
-  The actual implementation uses a pointer cast that Crucible can't handle.
+  The actual implementation uses a pointer cast that Crucible can't handle. See
+  also the "Mark hook functions as `#[inline(never)]`" note below.
 
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
+  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
 * Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: November 27, 2025)
 
