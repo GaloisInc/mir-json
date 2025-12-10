@@ -17,7 +17,7 @@ pub trait Symbolic: Sized {
 }
 
 
-macro_rules! uint_impls {
+macro_rules! core_impls {
     ($($ty:ty, $func:ident;)*) => {
         $(
             /// Hook for a crucible override that creates a symbolic instance of $ty.
@@ -31,7 +31,8 @@ macro_rules! uint_impls {
     };
 }
 
-uint_impls! {
+core_impls! {
+    bool, symbolic_bool;
     u8, symbolic_u8;
     u16, symbolic_u16;
     u32, symbolic_u32;
@@ -77,13 +78,6 @@ int_impls! {
     i64, u64;
     i128, u128;
     isize, usize;
-}
-
-impl Symbolic for bool {
-    fn symbolic(desc: &str) -> bool {
-        let val = u8::symbolic_where(desc, |&x| x < 2);
-        val == 1
-    }
 }
 
 
