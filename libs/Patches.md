@@ -197,6 +197,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   difficult because we don't have a good way to detect which union variant is
   active.
 
+* Remove raw pointer cast in `MaybeUninit::assume_init()` (last applied: December 11, 2025)
+
+  The implementation of `assume_init()` uses a raw pointer cast that Crucible
+  does not support in all cases. This is needed in particular to support
+  calling `array::from_fn()` to construct a length-0 array, as this would
+  otherwise require a cast from a `UnitRepr` (due to the use of a zero-sized
+  type) to a `MirAggregateRepr`, which Crucible does not support.
+
 * Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: November 25, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle. See
