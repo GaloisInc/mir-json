@@ -5,6 +5,7 @@ use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
+use rustc_middle::ty::CoroutineArgsExt;
 use rustc_const_eval::interpret::{
     self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable,
 };
@@ -605,9 +606,24 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Foreign"})
             }
-            &ty::TyKind::Coroutine(_, _) => {
-                // TODO
-                json!({"kind": "Coroutine"})
+            &ty::TyKind::Coroutine(defid, args) => {
+                let co_args = args.as_coroutine();
+                let co_layout = tcx.coroutine_layout(defid, args).unwrap();
+                json!({
+                    "kind": "Coroutine",
+                    // Discriminant, upvar, and saved-local types
+                    "discr_ty": co_args.discr_ty(tcx).to_json(mir),
+                    "upvar_tys": co_args.upvar_tys().to_json(mir),
+                    "saved_tys": co_layout.field_tys.iter().map(|cst| {
+                        cst.ty.to_json(mir)
+                    }).collect::<Vec<_>>(),
+                    // Mapping of variant and field index to `saved_tys` index.
+                    "field_map": co_layout.variant_fields.iter().map(|fields| {
+                        fields.iter().map(|csl| {
+                            csl.as_usize()
+                        }).collect::<Vec<_>>()
+                    }).collect::<Vec<_>>(),
+                })
             }
             &ty::TyKind::CoroutineWitness(_, _) => {
                 // TODO

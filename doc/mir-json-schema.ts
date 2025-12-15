@@ -142,7 +142,7 @@ type NamedTy = {
 }
 
 type InlineType =
-    { kind: "Bool" | "Char" | "Str" | "Never" | "Foreign" | "Coroutine" | "CoroutineWitness" }
+    { kind: "Bool" | "Char" | "Str" | "Never" | "Foreign" | "CoroutineWitness" }
   | { kind: "Int", intkind: BaseSize }
   | { kind: "Uint", uintkind: BaseSize }
   | { kind: "Tuple", tys: Ty[] }
@@ -151,6 +151,7 @@ type InlineType =
   | { kind: "FnDef", defid: DefId }
   | { kind: "Adt", name: DefId, orig_def_id: DefId, args: Ty[] }
   | { kind: "Closure", upvar_tys: Ty[] }
+  | { kind: "Coroutine", discr_ty: Ty, upvar_tys: Ty[], saved_tys: Ty[], field_map: number[][] }
   | { kind: "CoroutineClosure", upvar_tys: Ty[] }
   | { kind: "FnPtr", signature: FnSig }
   | { kind: "Dynamic", trait_id: DefId, predicates: any[] }
