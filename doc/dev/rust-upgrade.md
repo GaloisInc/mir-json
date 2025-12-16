@@ -240,13 +240,14 @@
 
     After applying all the existing patches, there may still be some `crux-mir`
     test failures. This may mean that new patches are needed. Add new patches to
-    the bottom of `Patches.md` following the existing format. For each new
-    patch, make sure there is a `crux-mir` test that tests the feature it's
-    patching for. If the need for the new patch was only incidentally revealed
-    by the failure of a `crux-mir` test case that was mainly testing a different
-    thing, it's best to make a new `crux-mir` test for the patched feature
-    specifically, so that even if in the future the patch becomes unnecessary
-    for the original test case to work, the patch is still tested.
+    the bottom of `Patches.md`, or next to a related patch if one exists,
+    following the existing format. For each new patch, make sure there is a
+    `crux-mir` test that tests the feature it's patching for. If the need for
+    the new patch was only incidentally revealed by the failure of a `crux-mir`
+    test case that was mainly testing a different thing, it's best to make a new
+    `crux-mir` test for the patched feature specifically, so that even if in the
+    future the patch becomes unnecessary for the original test case to work, the
+    patch is still tested.
 
     Creating new patches, or re-doing existing patches, might require changes on
     the `crucible-mir` side. Commit on your `crucible` branch as you make those
