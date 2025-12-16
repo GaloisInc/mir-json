@@ -266,11 +266,11 @@
 
     After all the `crux-mir` tests pass, it's worth checking that the
     `crux-mir-comp` tests pass as well. If there were any `crucible`-side
-    changes, point `saw-script`'s `crucible` dependency to your `crucible`
-    branch (e.g. by temporarily modifying `cabal.project`), then build and run
-    the `crux-mir-comp` tests. Make and commit necessary changes in `mir-json`,
-    `crucible`, and/or `saw-script` for the `crux-mir-comp` tests to pass
-    (except the `cabal.project` changes).
+    changes, update `saw-script`'s `deps/crucible` submodule to your `crucible`
+    branch, and commit the results (if the submodule change isn't committed,
+    `saw-script`'s `build.sh` will reset it). Build and run the `crux-mir-comp`
+    tests. Make and commit necessary changes in `mir-json`, `crucible`, and/or
+    `saw-script` for the `crux-mir-comp` tests to pass.
 
 11. Check `mir-json-translate-libs` for other targets.
 
@@ -289,7 +289,7 @@
     upgrade to a certain Rust version. If there are any of these, check if they
     can be safely removed, and if so, remove and commit.
 
-13. Bump schema version and update changelogs.
+13. Bump schema version, update changelogs, and update submodules.
 
     In `mir-json`, bump the schema version in `src/schema_ver.rs` and
     `doc/mir-json-schema.ts`. Make changes to `doc/mir-json-schema.ts` to
@@ -307,30 +307,39 @@
     `crucible-mir/src/Mir/ParseTranslate.hs`, `crucible-mir/CHANGELOG.md`,
     `crux-mir/CHANGELOG.md`, and `crux-mir/README.md`. Mention the new supported
     Rust version in `crucible-mir/CHANGELOG.md` and `crux-mir/CHANGELOG.md`.
-    Commit the changes.
+    Update the `dependencies/mir-json` submodule to the latest commit on your
+    `mir-json` branch. Commit the changes.
 
     In `saw-script`, bump the schema version in `CHANGES.md` and `README.md`.
-    Mention the new supported Rust version in `CHANGES.md`. Commit the changes.
+    Mention the new supported Rust version in `CHANGES.md`. Update the
+    `deps/mir-json` and `deps/crucible` submodules to your latest `mir-json` and
+    `crucible` commits respectively. Commit the changes. (If you already updated
+    the `crucible` submodule earlier, consider amending that commit instead to
+    avoid having a bunch of submodule bump commits.)
 
-14. Merge and update submodules.
+14. Update `saw-script` test cases for the new schema version.
 
-    Make a PR for `mir-json` and a draft PR for `crucible`. Once the `mir-json`
-    PR is merged, update the `mir-json` submodule in `crucible` to point to the
-    `mir-json` merge commit and then mark the `crucible` PR as ready for review.
-    Once the `crucible` PR is merged, update the `mir-json` submodule in
-    `saw-script` to point to the `mir-json` merge commit and the `crucible`
-    submodule in `saw-script` to point to the `crucible` merge commit.
+    Make sure you've installed the most updated version of `mir-json` from your
+    branch. In the `saw-script` repo, run `make regen-mir-blobs` in `intTests/`
+    and in `saw-python/tests/saw/test-files/` to re-run `mir-json` and produce
+    JSON files with the new schema version. Also update the alphanumeric
+    identifier disambiguators in
+    [`intTests/test_mir_verify_basic/test.saw`](https://github.com/GaloisInc/saw-script/blob/c49bd9b64c701663bdaab87b42b8bb8e51eec3cc/intTests/test_mir_verify_basic/test.saw#L75-L77)
+    and
+    [`intTests/test2122_typecheck_gap/mir.log.good`](https://github.com/GaloisInc/saw-script/blob/909178acf05c9dd38e643a36cf640670b0ba2ea7/intTests/test2122_typecheck_gap/mir.log.good#L2-L3),
+    which will likely have changed (see
+    [saw-script#2614](https://github.com/GaloisInc/saw-script/issues/2614)).
 
-15. Regenerate MIR blobs in `saw-script`.
+15. Create pull requests.
 
-    Make sure you've installed the final version of `mir-json` that was merged
-    into `master`. Run `make regen-mir-blobs` in `intTests/` and in
-    `saw-python/tests/saw/test-files/` to re-run `mir-json` and produce JSON
-    files with the new schema version.
-
-16. Merge `saw-script` changes.
-
-    Make a PR for `saw-script` and get it merged.
+    Create pull requests for the `mir-json`, `crucible`, and `saw-script`
+    branches. If you make further changes to `mir-json`, make sure to update the
+    `mir-json` submodule in `crucible`. Then update the `mir-json` and
+    `crucible` submodules in `saw-script`, and redo step 14. If you make further
+    changes to `crucible`, make sure to update the `crucible` submodule in
+    `saw-script`. When updating submodules, you can amend and force-push your
+    previous submodule update commits from step 13. When redoing step 14, you
+    can amend and force-push your previous commit from step 14.
 
 # While working on `mir-json` and `crucible-mir` in between toolchain upgrades
 
