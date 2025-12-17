@@ -345,7 +345,11 @@
 
 - If you make *any* changes to anything under `mir-json/libs`, there must be an
   accompanying change in `libs/Patches.md`, in the form of either a new patch or
-  an "*Update*" line under an existing patch.
+  an "*Update*" line under an existing patch. The exception to this is changes
+  to our custom libraries (`crucible`, `crucible_proc_macros`, `int512.rs`,
+  `bytes.rs`, `byteorder`, and `core/src/crucible`), which aren't considered
+  patches to the standard libraries and are directly copied across toolchain
+  upgrades.
 - If you make changes to `crucible-mir` that makes an existing `mir-json`
   standard library patch partially or fully obsolete, update the `mir-json` side
   to reflect that. For a fully obsolete patch, you can just undo the patch and
