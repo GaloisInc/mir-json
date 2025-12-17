@@ -1330,7 +1330,8 @@ fn inst_abi<'tcx>(
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
                     ty.fn_sig(tcx).skip_binder().abi,
-                ty::TyKind::Closure(_, _) => ExternAbi::RustCall,
+                ty::TyKind::Closure(_, _) |
+                ty::TyKind::CoroutineClosure(_, _) => ExternAbi::RustCall,
                 _ => ExternAbi::Rust,
             }
         },
