@@ -5,7 +5,8 @@ versioned separately.)
 
 ## 8
 
-Add new `InlineType` case for `TyKind::Coroutine`.
+Add details to the `InlineType` case for `TyKind::Coroutine` and to the
+`AggregateKind` case for `AggregateKind::Coroutine`.
 
 ## 7
 

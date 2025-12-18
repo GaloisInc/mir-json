@@ -360,7 +360,8 @@ type Operand =
   
 type AggregateKind = 
     { kind: "Array", ty: Ty }
-  | { kind: "Tuple" | "Closure" | "CoroutineClosure" | "Coroutine" }
+  | { kind: "Tuple" | "Closure" | "CoroutineClosure" }
+  | { kind: "Coroutine", discr_ty: Ty, upvar_tys: Ty[], saved_tys: Ty[], field_map: number[][] }
   | { kind: "RawPtr", ty: Ty, mutbl: Mutability }
 
 type BorrowKind = "Shared" | "Unique" | "Mut"
