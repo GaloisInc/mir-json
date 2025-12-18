@@ -83,6 +83,27 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
     }
 }
 
+pub fn merge(mut a: serde_json::Value, b: serde_json::Value) -> serde_json::Value {
+    assert!(a.is_object());
+    assert!(b.is_object());
+    let am = a.as_object_mut().unwrap();
+    let bm = match b {
+        serde_json::Value::Object(m) => m,
+        _ => unreachable!(),
+    };
+    for (k, v) in bm {
+        match am.entry(k) {
+            serde_json::map::Entry::Vacant(e) => {
+                e.insert(v);
+            },
+            serde_json::map::Entry::Occupied(e) => {
+                panic!("duplicate entry for key {:?}", e.key());
+            },
+        }
+    }
+    a
+}
+
 /// Compute the "vtable descriptor" for a given cast, if applicable.  We identify vtables by their
 /// `PolyTraitRef`s, which uniquely determine the trait and self type, and which can be used by
 /// downstream code such as `build_vtable`.
