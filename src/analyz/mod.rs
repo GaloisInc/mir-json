@@ -68,9 +68,8 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &mir::AggregateKind::Coroutine(_, _,) => {
-                // TODO
-                json!({"kind": "Coroutine"})
+            &mir::AggregateKind::Coroutine(defid, args) => {
+                merge(json!({"kind": "Coroutine"}), coroutine_args(mir, defid, args))
             }
             &mir::AggregateKind::RawPtr(ty, mutbl) => {
                 json!({
