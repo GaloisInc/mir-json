@@ -68,9 +68,8 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
                     // tuples, so no additional information is needed.
                 })
             }
-            &mir::AggregateKind::Coroutine(_, _,) => {
-                // TODO
-                json!({"kind": "Coroutine"})
+            &mir::AggregateKind::Coroutine(defid, args) => {
+                merge(json!({"kind": "Coroutine"}), coroutine_args(mir, defid, args))
             }
             &mir::AggregateKind::RawPtr(ty, mutbl) => {
                 json!({
@@ -81,6 +80,29 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
             }
         }
     }
+}
+
+/// Merge the key/value pairs of two JSON objects.  `a` and `b` must both be objects, and their
+/// keys must be disjoint.
+pub fn merge(mut a: serde_json::Value, b: serde_json::Value) -> serde_json::Value {
+    assert!(a.is_object());
+    assert!(b.is_object());
+    let am = a.as_object_mut().unwrap();
+    let bm = match b {
+        serde_json::Value::Object(m) => m,
+        _ => unreachable!(),
+    };
+    for (k, v) in bm {
+        match am.entry(k) {
+            serde_json::map::Entry::Vacant(e) => {
+                e.insert(v);
+            },
+            serde_json::map::Entry::Occupied(e) => {
+                panic!("duplicate entry for key {:?}", e.key());
+            },
+        }
+    }
+    a
 }
 
 /// Compute the "vtable descriptor" for a given cast, if applicable.  We identify vtables by their
@@ -1330,7 +1352,8 @@ fn inst_abi<'tcx>(
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
                     ty.fn_sig(tcx).skip_binder().abi,
-                ty::TyKind::Closure(_, _) => ExternAbi::RustCall,
+                ty::TyKind::Closure(_, _) |
+                ty::TyKind::CoroutineClosure(_, _) => ExternAbi::RustCall,
                 _ => ExternAbi::Rust,
             }
         },

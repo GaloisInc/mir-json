@@ -5,6 +5,7 @@ use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
+use rustc_middle::ty::CoroutineArgsExt;
 use rustc_const_eval::interpret::{
     self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable,
 };
@@ -17,6 +18,7 @@ use rustc_span::DUMMY_SP;
 use serde_json;
 use std::usize;
 
+use analyz::merge;
 use analyz::to_json::*;
 
 impl<'tcx, T> ToJson<'tcx> for ty::List<T>
@@ -605,9 +607,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Foreign"})
             }
-            &ty::TyKind::Coroutine(_, _) => {
-                // TODO
-                json!({"kind": "Coroutine"})
+            &ty::TyKind::Coroutine(defid, args) => {
+                merge(json!({"kind": "Coroutine"}), coroutine_args(mir, defid, args))
             }
             &ty::TyKind::CoroutineWitness(_, _) => {
                 // TODO
@@ -660,6 +661,31 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
         let id = mir.tys.ty_insert(tcx, *self, ty_j, layout_j, needs_drop);
         json!(id)
     }
+}
+
+pub fn coroutine_args<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    defid: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+) -> serde_json::Value {
+    let tcx = mir.tcx;
+    let co_args = args.as_coroutine();
+    let co_layout = tcx.coroutine_layout(defid, args).unwrap();
+    let co_layout = ty::EarlyBinder::bind(co_layout.clone()).instantiate(tcx, args);
+    json!({
+        // Discriminant, upvar, and saved-local types
+        "discr_ty": co_args.discr_ty(tcx).to_json(mir),
+        "upvar_tys": co_args.upvar_tys().to_json(mir),
+        "saved_tys": co_layout.field_tys.iter().map(|cst| {
+            cst.ty.to_json(mir)
+        }).collect::<Vec<_>>(),
+        // Mapping of variant and field index to `saved_tys` index.
+        "field_map": co_layout.variant_fields.iter().map(|fields| {
+            fields.iter().map(|csl| {
+                csl.as_usize()
+            }).collect::<Vec<_>>()
+        }).collect::<Vec<_>>(),
+    })
 }
 
 impl ToJson<'_> for ty::ParamTy {

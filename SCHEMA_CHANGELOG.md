@@ -3,6 +3,11 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 8
+
+Add details to the `InlineType` case for `TyKind::Coroutine` and to the
+`AggregateKind` case for `AggregateKind::Coroutine`.
+
 ## 7
 
 Add new `InlineType`, `ConstVal`, and `AggregateKind` cases for

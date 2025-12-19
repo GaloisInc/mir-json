@@ -6,4 +6,4 @@
 /// Each version of the schema is assumed to be backwards-incompatible with
 /// previous versions of the schema. As such, any time this version number is
 /// bumped, it should be treated as a major version bump.
-pub const SCHEMA_VER: u64 = 7;
+pub const SCHEMA_VER: u64 = 8;
