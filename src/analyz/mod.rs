@@ -82,6 +82,8 @@ impl<'tcx> ToJson<'tcx> for mir::AggregateKind<'tcx> {
     }
 }
 
+/// Merge the key/value pairs of two JSON objects.  `a` and `b` must both be objects, and their
+/// keys must be disjoint.
 pub fn merge(mut a: serde_json::Value, b: serde_json::Value) -> serde_json::Value {
     assert!(a.is_object());
     assert!(b.is_object());
