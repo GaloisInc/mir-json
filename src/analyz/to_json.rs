@@ -6,7 +6,7 @@ use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, NullOp, UnOp};
-use rustc_middle::ty::{self, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
+use rustc_middle::ty::{self, Binder, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
 use rustc_span::source_map::Spanned;
@@ -128,14 +128,18 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         trait_ref: ty::TraitRef<'tcx>,
     ) -> TraitInst<'tcx> {
-        let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
-
         let mut all_super_traits = HashSet::new();
         let mut pending = vec![trait_ref.def_id];
-        all_super_traits.insert(trait_ref.def_id);
+        all_super_traits.insert(trait_ref);
         while let Some(def_id) = pending.pop() {
             let super_preds = tcx.explicit_super_predicates_of(def_id);
             for &(ref pred, _) in super_preds.skip_binder() {
+                // The use of `Binder::dummy` here is inspired by the following
+                // code in rustc:
+                // https://github.com/rust-lang/rust/blob/08de25c4ea16d7ecc3ceeb093d4f343a2be30df5/compiler/rustc_trait_selection/src/traits/vtable.rs#L127
+                // This works because `trait_ref` should contain no bound
+                // variables.
+                let pred = pred.instantiate_supertrait(tcx, Binder::dummy(trait_ref));
                 let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
                     // Corresponds to `where Foo: Bar`. Get the `Bar` trait.
                     ty::ClauseKind::Trait(x) => x,
@@ -150,27 +154,31 @@ impl<'tcx> TraitInst<'tcx> {
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
                 assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
-                if all_super_traits.insert(tpred.trait_ref.def_id) {
+                if all_super_traits.insert(tpred.trait_ref) {
                     pending.push(tpred.trait_ref.def_id);
                 }
             }
         }
         let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
-        all_super_traits.sort_by_key(|def_id| (def_id.krate, def_id.index));
+        all_super_traits.sort_by_key(|super_trait_ref| {
+            let def_id = super_trait_ref.def_id;
+            (def_id.krate, def_id.index)
+        });
 
         let mut projs = Vec::new();
-        for super_trait_def_id in all_super_traits {
-            for ai in tcx.associated_items(super_trait_def_id).in_definition_order() {
+        for super_trait_ref in all_super_traits {
+            for ai in tcx.associated_items(super_trait_ref.def_id).in_definition_order() {
                 if let ty::AssocKind::Type {..} = ai.kind {
-                    let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, trait_ref.args);
+                    let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, super_trait_ref.args);
                     let actual_ty = tcx.normalize_erasing_regions(
                         ty::TypingEnv::fully_monomorphized(),
                         proj_ty,
                     );
+                    let ex_super_trait_ref_args = ty::ExistentialTraitRef::erase_self_ty(tcx, super_trait_ref).args;
                     projs.push(ty::ExistentialProjection::new(
                         tcx,
                         ai.def_id,
-                        ex_trait_ref.args,
+                        ex_super_trait_ref_args,
                         actual_ty.into(),
                     ));
                 }
@@ -178,6 +186,7 @@ impl<'tcx> TraitInst<'tcx> {
         }
         projs.sort_by_key(|p| tcx.def_path_hash(p.def_id));
 
+        let ex_trait_ref = ty::ExistentialTraitRef::erase_self_ty(tcx, trait_ref);
         TraitInst {
             trait_ref: Some(ex_trait_ref),
             projs,
