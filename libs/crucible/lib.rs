@@ -1,6 +1,7 @@
 #![feature(allocator_api)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
+#![feature(nonzero_internals)]
 #![feature(unboxed_closures)]
 #![feature(tuple_trait)]
 #![no_std]

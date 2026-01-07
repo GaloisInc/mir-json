@@ -1,5 +1,6 @@
 use core::array;
-use core::num::Wrapping;
+use core::num::{NonZero, Saturating, Wrapping, ZeroablePrimitive};
+use crate::crucible_assume_unreachable;
 
 
 pub trait Symbolic: Sized {
@@ -119,6 +120,11 @@ tuple_impls! {
     A B C D E F G H I J K L;
 }
 
+impl<T: Symbolic> Symbolic for Saturating<T> {
+    fn symbolic(desc: &str) -> Saturating<T> {
+        Saturating(T::symbolic(desc))
+    }
+}
 
 impl<T: Symbolic> Symbolic for Wrapping<T> {
     fn symbolic(desc: &str) -> Wrapping<T> {
@@ -126,6 +132,14 @@ impl<T: Symbolic> Symbolic for Wrapping<T> {
     }
 }
 
+impl<T: Symbolic + ZeroablePrimitive> Symbolic for NonZero<T> {
+    fn symbolic(desc: &str) -> NonZero<T> {
+        match NonZero::new(T::symbolic(desc)) {
+            Some(x) => x,
+            None => crucible_assume_unreachable!(),
+        }
+    }
+}
 
 /// Take a symbolic-length prefix of `xs`.  The length of the returned slice can be anywhere in the
 /// range `0 ..= xs.len()`.
