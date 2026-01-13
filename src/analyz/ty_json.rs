@@ -1,3 +1,4 @@
+use rustc_abi::FieldsShape;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hashes::Hash64;
 use rustc_hir as hir;
@@ -647,12 +648,31 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 let layout = tcx
                     .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(*self))
                     .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", self, e));
+                let field_offsets = match layout.fields {
+                    // `FieldsShape::Primitive` has no fields.
+                    FieldsShape::Primitive => None,
+                    // `FieldsShape::Union` puts all fields at offset zero.
+                    FieldsShape::Union(_) => None,
+                    // `FieldsShape::Array` is used only for array-like types, for which offsets
+                    // are easy to compute if needed.
+                    FieldsShape::Array { .. } => {
+                        assert!(matches!(self.kind(),
+                                ty::TyKind::Array(..) | ty::TyKind::Slice(..) | ty::TyKind::Str),
+                            "unexpected TyKind {:?} for FieldsShape::Array", self.kind());
+                        None
+                    },
+                    FieldsShape::Arbitrary { ref offsets, .. } => {
+                        Some(offsets.iter().map(|&off| off.bytes()).collect::<Vec<_>>())
+                    },
+                };
                 if layout.is_sized() {
                     Some(json!({
                         "align": layout.align.abi.bytes(),
-                        "size": layout.size.bytes()
+                        "size": layout.size.bytes(),
+                        "field_offsets": field_offsets
                     }))
                 } else {
+                    // TODO: provide field offsets even for unsized types
                     None
                 }
             }
