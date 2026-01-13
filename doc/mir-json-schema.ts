@@ -169,7 +169,8 @@ type FloatKind = { kind: "F32" | "F64" }
 
 type Layout = {
   align: number,
-  size: number
+  size: number,
+  field_offsets?: number[]
 }
 
 
