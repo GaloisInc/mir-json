@@ -90,13 +90,23 @@ into the main commit for that patch, and then the *Update* line can be removed.
   functions to call built-in Crucible allocation functions instead (e.g.
   `crucible::alloc::allocate`).
 
+* Define `Arc`/`Rc` constructors in terms of `{Arc,Rc}::new` (last applied: January 20, 2026)
+
+  This ensures that all `Arc`/`Rc` constructors are defined in terms of
+  `Box::new`, which uses Crucible's typed allocator instead of Rust's untyped
+  allocator. (See the `` Use crucible's allocator in `Box` constructors ``
+  patch above.)
+
 * Don't deallocate in `Box::drop` (last applied: November 17, 2025)
 
   Crucible doesn't support a `deallocate` operation.
 
-* Don't deallocate in `Arc::drop` and related functions (last applied: November 17, 2025)
+* Don't deallocate in `Arc::drop`, `Rc::drop`, and related functions (last applied: November 17, 2025)
 
   Crucible doesn't support a `deallocate` operation.
+
+  *Update* (January 20, 2026): Also patch out `Rc`-related functions (e.g.,
+  `Rc::drop`).
 
 * Skip `addr_eq` debug asserts in `Arc::drop` (last applied: November 20, 2025)
 
