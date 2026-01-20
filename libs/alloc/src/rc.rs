@@ -497,13 +497,7 @@ impl<T> Rc<T> {
     #[stable(feature = "new_uninit", since = "1.82.0")]
     #[must_use]
     pub fn new_uninit() -> Rc<mem::MaybeUninit<T>> {
-        unsafe {
-            Rc::from_ptr(Rc::allocate_for_layout(
-                Layout::new::<T>(),
-                |layout| Global.allocate(layout),
-                <*mut u8>::cast,
-            ))
-        }
+        Rc::new(mem::MaybeUninit::uninit())
     }
 
     /// Constructs a new `Rc` with uninitialized contents, with the memory
@@ -530,13 +524,7 @@ impl<T> Rc<T> {
     #[unstable(feature = "new_zeroed_alloc", issue = "129396")]
     #[must_use]
     pub fn new_zeroed() -> Rc<mem::MaybeUninit<T>> {
-        unsafe {
-            Rc::from_ptr(Rc::allocate_for_layout(
-                Layout::new::<T>(),
-                |layout| Global.allocate_zeroed(layout),
-                <*mut u8>::cast,
-            ))
-        }
+        Rc::new(mem::MaybeUninit::zeroed())
     }
 
     /// Constructs a new `Rc<T>`, returning an error if the allocation fails
@@ -591,13 +579,7 @@ impl<T> Rc<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     // #[unstable(feature = "new_uninit", issue = "63291")]
     pub fn try_new_uninit() -> Result<Rc<mem::MaybeUninit<T>>, AllocError> {
-        unsafe {
-            Ok(Rc::from_ptr(Rc::try_allocate_for_layout(
-                Layout::new::<T>(),
-                |layout| Global.allocate(layout),
-                <*mut u8>::cast,
-            )?))
-        }
+        Rc::try_new(mem::MaybeUninit::uninit())
     }
 
     /// Constructs a new `Rc` with uninitialized contents, with the memory
@@ -624,13 +606,7 @@ impl<T> Rc<T> {
     #[unstable(feature = "allocator_api", issue = "32838")]
     //#[unstable(feature = "new_uninit", issue = "63291")]
     pub fn try_new_zeroed() -> Result<Rc<mem::MaybeUninit<T>>, AllocError> {
-        unsafe {
-            Ok(Rc::from_ptr(Rc::try_allocate_for_layout(
-                Layout::new::<T>(),
-                |layout| Global.allocate_zeroed(layout),
-                <*mut u8>::cast,
-            )?))
-        }
+        Rc::try_new(mem::MaybeUninit::zeroed())
     }
     /// Constructs a new `Pin<Rc<T>>`. If `T` does not implement `Unpin`, then
     /// `value` will be pinned in memory and unable to be moved.
