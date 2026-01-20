@@ -241,6 +241,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   casting `MirReference_Integer` pointers back to an integer, which would allow
   for the `pointer -> integer -> pointer` casts that are used in the iterator.
 
+* Define `Arc`/`Rc` constructors in terms of `{Arc,Rc}::new` (last applied: October 1, 2026)
+
+  This ensures that all `Arc`/`Rc` constructors are defined in terms of
+  `Box::new`, which uses Crucible's typed allocator instead of Rust's untyped
+  allocator. (See the `` Use crucible's allocator in `Box` constructors ``
+  patch above.)
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
