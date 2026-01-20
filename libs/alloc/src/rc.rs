@@ -2181,7 +2181,10 @@ impl<T> Rc<[T]> {
                     let slice = from_raw_parts_mut(self.elems, self.n_elems);
                     ptr::drop_in_place(slice);
 
+                    // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+                    /*
                     Global.deallocate(self.mem, self.layout);
+                    */
                 }
             }
         }
@@ -3489,9 +3492,12 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for Weak<T, A> {
         // the weak count starts at 1, and will only go to zero if all
         // the strong pointers have disappeared.
         if inner.weak() == 0 {
+            // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+            /*
             unsafe {
                 self.alloc.deallocate(self.ptr.cast(), Layout::for_value_raw(self.ptr.as_ptr()));
             }
+            */
         }
     }
 }
@@ -4101,7 +4107,10 @@ unsafe impl<#[may_dangle] T: ?Sized, A: Allocator> Drop for UniqueRc<T, A> {
             self.ptr.as_ref().dec_weak();
 
             if self.ptr.as_ref().weak() == 0 {
+                // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+                /*
                 self.alloc.deallocate(self.ptr.cast(), Layout::for_value_raw(self.ptr.as_ptr()));
+                */
             }
         }
     }
@@ -4160,6 +4169,8 @@ impl<T: ?Sized, A: Allocator> UniqueRcUninit<T, A> {
 #[cfg(not(no_global_oom_handling))]
 impl<T: ?Sized, A: Allocator> Drop for UniqueRcUninit<T, A> {
     fn drop(&mut self) {
+        // Crucible: skip deallocation, which is currently unimplemented in crucible-mir.
+        /*
         // SAFETY:
         // * new() produced a pointer safe to deallocate.
         // * We own the pointer unless into_rc() was called, which forgets us.
@@ -4169,5 +4180,6 @@ impl<T: ?Sized, A: Allocator> Drop for UniqueRcUninit<T, A> {
                 rc_inner_layout_for_value_layout(self.layout_for_value),
             );
         }
+        */
     }
 }
