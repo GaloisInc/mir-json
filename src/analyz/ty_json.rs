@@ -671,7 +671,11 @@ pub fn coroutine_args<'tcx>(
     let tcx = mir.tcx;
     let co_args = args.as_coroutine();
     let co_layout = tcx.coroutine_layout(defid, args).unwrap();
-    let co_layout = ty::EarlyBinder::bind(co_layout.clone()).instantiate(tcx, args);
+    let co_layout = tcx.instantiate_and_normalize_erasing_regions(
+        args,
+        ty::TypingEnv::fully_monomorphized(),
+        ty::EarlyBinder::bind(co_layout.clone()),
+    );
     json!({
         // Discriminant, upvar, and saved-local types
         "discr_ty": co_args.discr_ty(tcx).to_json(mir),
