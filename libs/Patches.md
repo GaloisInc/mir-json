@@ -309,6 +309,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   transmuting load.  The naive version is equivalent (according to comments in
   that file) and should be much simpler to simulate.
 
+* Replace raw pointer cast in `std::hash` (last applied: June 15, 2026)
+
+  Crucible doesn't currently support casting a `*mut u32` pointer to a `*mut
+  u8` and then trying to write `u8` values into it. We instead rewrite the code
+  slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
+  u8`, thereby avoiding the need for `u32` altogether.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
