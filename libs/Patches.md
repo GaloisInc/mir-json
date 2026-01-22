@@ -200,6 +200,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   architectures (e.g., x86-64 and AArch64), which `crucible-mir` does not
   support. We instead fall back to a generic `memchr` implementation that works
   on all architectures.
+
+* Replace raw pointer cast in `std::hash` (last applied: September 21, 2026)
+
+  Crucible doesn't currently support casting a `*mut u32` pointer to a `*mut
+  u8` and then trying to write `u8` values into it. We instead rewrite the code
+  slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
+  u8`, thereby avoiding the need for `u32` altogether.
 # Notes
 
 This section contains more detailed notes about why certain patches are written
