@@ -334,6 +334,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   casting `MirReference_Integer` pointers back to an integer, which would allow
   for the `pointer -> integer -> pointer` casts that are used in the iterator.
 
+* Simplify implementations of thread parking (last applied: July 17, 2026)
+
+  The real implementations of thread parking uses low-level, OS-specific
+  primitives (e.g., system calls) that Crucible cannot support. We replace it
+  with the `unsupported` configuration, where all parking-related functions are
+  treated as no-ops.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
