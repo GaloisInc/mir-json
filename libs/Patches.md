@@ -296,6 +296,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   currently support this usage of `union`s. This patch replaces the `union`
   with an equivalent `enum`.
 
+* Return dummy location in `Location::caller` (last applied: June 15, 2026)
+
+  `crucible-mir` does not currently support the `intrinsics::caller_location()`
+  intrinsic. To prevent this function from throwing translation errors, we have
+  it return a constant dummy location.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
