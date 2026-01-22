@@ -238,6 +238,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   This feature was using an `AtomicPtr<()>` with a cast from function
   pointer to `*mut ()` that we don't support in its initializer.
 
+* Return dummy location in `Location::caller` (last applied: January 22, 2026)
+
+  `crucible-mir` does not currently support the `intrinsics::caller_location()`
+  intrinsic. To prevent this function from throwing translation errors, we have
+  it return a constant dummy location.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
