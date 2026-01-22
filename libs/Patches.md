@@ -257,6 +257,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Crucible-friendly `new_uninit` function. (See also the `` Use crucible's
   allocator in `Box` constructors `` patch above.)
 
+* Simplify implementations of thread parking (last applied: October 5, 2026)
+
+  The real implementations of thread parking uses low-level, OS-specific
+  primitives (e.g., system calls) that Crucible cannot support. We replace it
+  with the `unsupported` configuration, where all parking-related functions are
+  treated as no-ops.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
