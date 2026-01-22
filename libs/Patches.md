@@ -255,6 +255,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
   u8`, thereby avoiding the need for `u32` altogether.
 
+* Return dummy location in `Location::caller` (last applied: January 22, 2026)
+
+  `crucible-mir` does not currently support the `intrinsics::caller_location()`
+  intrinsic. To prevent this function from throwing translation errors, we have
+  it return a constant dummy location.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
