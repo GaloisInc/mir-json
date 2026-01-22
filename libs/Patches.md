@@ -136,6 +136,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   transmuting load.  The naive version is equivalent (according to comments in
   that file) and should be much simpler to simulate.
 
+* Avoid raw pointer comparisons in `std::thread` (last applied: September 21, 2026)
+
+  `std::thread` reserves raw pointers with the addresses 0-2 as sentinel
+  values. Instead of checking if a thread's pointer is not a sentinel value by
+  seeing if it is larger than the sentinel with the largest address, we instead
+  check if the pointer is not equal to each of the individual sentinel values.
+  See also the "Avoid raw pointer comparisons" note below.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
