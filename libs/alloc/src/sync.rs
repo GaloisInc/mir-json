@@ -367,7 +367,8 @@ impl<T: ?Sized, A: Allocator> fmt::Debug for Weak<T, A> {
 // would interfere with otherwise safe [into|from]_raw() of transmutable
 // inner types.
 #[repr(C)]
-struct ArcInner<T: ?Sized> {
+#[stable(feature = "rc_raw", since = "1.17.0")]
+pub struct ArcInner<T: ?Sized> {
     strong: Atomic<usize>,
 
     // the value usize::MAX acts as a sentinel for temporarily "locking" the
@@ -387,7 +388,9 @@ fn arcinner_layout_for_value_layout(layout: Layout) -> Layout {
     Layout::new::<ArcInner<()>>().extend(layout).unwrap().0.pad_to_align()
 }
 
+#[stable(feature = "rc_raw", since = "1.17.0")]
 unsafe impl<T: ?Sized + Sync + Send> Send for ArcInner<T> {}
+#[stable(feature = "rc_raw", since = "1.17.0")]
 unsafe impl<T: ?Sized + Sync + Send> Sync for ArcInner<T> {}
 
 impl<T> Arc<T> {
@@ -1443,6 +1446,16 @@ impl<T: ?Sized> Arc<T> {
         unsafe { Arc::from_raw_in(ptr, Global) }
     }
 
+    /// Like [`from_raw`], except that this function accepts an `ArcInner<T>`
+    /// pointer instead of a `T` pointer. This is meant to serve as a
+    /// replacement for [`from_raw`] (to be used in conjunction with
+    /// [`into_inner_raw`]) that is feasible for `crucible-mir` to simulate.
+    #[inline]
+    #[stable(feature = "rc_raw", since = "1.17.0")]
+    pub unsafe fn from_inner_raw(ptr: *const ArcInner<T>) -> Self {
+        unsafe { Arc::from_ptr(ptr as *mut ArcInner<T>) }
+    }
+
     /// Consumes the `Arc`, returning the wrapped pointer.
     ///
     /// To avoid a memory leak the pointer must be converted back to an `Arc` using
@@ -1465,6 +1478,18 @@ impl<T: ?Sized> Arc<T> {
     pub fn into_raw(this: Self) -> *const T {
         let this = ManuallyDrop::new(this);
         Self::as_ptr(&*this)
+    }
+
+    /// Like [`into_raw`], except that this function returns an `ArcInner<T>`
+    /// pointer instead of a `T` pointer. This is meant to serve as a
+    /// replacement for [`into_raw`] (to be used in conjunction with
+    /// [`from_inner_raw`]) that is feasible for `crucible-mir` to simulate.
+    #[must_use = "losing the pointer will leak memory"]
+    #[stable(feature = "rc_raw", since = "1.17.0")]
+    #[rustc_never_returns_null_ptr]
+    pub fn into_inner_raw(this: Self) -> *const ArcInner<T> {
+        let this = ManuallyDrop::new(this);
+        this.ptr.as_ptr() as *const ArcInner<T>
     }
 
     /// Increments the strong reference count on the `Arc<T>` associated with the

@@ -165,7 +165,7 @@ use crate::marker::PhantomData;
 use crate::mem::{self, ManuallyDrop, forget};
 use crate::num::NonZero;
 use crate::pin::Pin;
-use crate::sync::Arc;
+use crate::sync::{Arc, ArcInner};
 use crate::sync::atomic::{Atomic, AtomicUsize, Ordering};
 use crate::sys::sync::Parker;
 use crate::sys::thread as imp;
@@ -1647,7 +1647,7 @@ impl Thread {
     pub fn into_raw(self) -> *const () {
         // Safety: We only expose an opaque pointer, which maintains the `Pin` invariant.
         let inner = unsafe { Pin::into_inner_unchecked(self.inner) };
-        Arc::into_raw(inner) as *const ()
+        unsafe { Arc::into_inner_raw(inner) as *const () }
     }
 
     /// Constructs a `Thread` from a raw pointer.
@@ -1669,7 +1669,7 @@ impl Thread {
     #[unstable(feature = "thread_raw", issue = "97523")]
     pub unsafe fn from_raw(ptr: *const ()) -> Thread {
         // Safety: Upheld by caller.
-        unsafe { Thread { inner: Pin::new_unchecked(Arc::from_raw(ptr as *const Inner)) } }
+        unsafe { Thread { inner: Pin::new_unchecked(Arc::from_inner_raw(ptr as *const ArcInner<Inner>)) } }
     }
 
     fn cname(&self) -> Option<&CStr> {
