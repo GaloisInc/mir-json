@@ -238,6 +238,17 @@ into the main commit for that patch, and then the *Update* line can be removed.
   This feature was using an `AtomicPtr<()>` with a cast from function
   pointer to `*mut ()` that we don't support in its initializer.
 
+* Simplify implementations of thread parking and `guard::enable` (last applied: January 22, 2025)
+
+  The real implementations of these parts of the code use low-level,
+  OS-specific primitives (e.g., system calls) that Crucible cannot support. We
+  uniformly replace these parts of the code with simpler implementations:
+
+  * We use the `unsupported` configuration for thread parking, where all
+    parking-related functions are treated as no-ops.
+  * We use the Wasm configuration for the internal `guard::enable` function,
+    which simply leaks everything.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
