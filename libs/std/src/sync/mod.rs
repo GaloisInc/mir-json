@@ -180,6 +180,8 @@ pub use core::sync::atomic;
 pub use alloc_crate::sync::UniqueArc;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use alloc_crate::sync::{Arc, Weak};
+#[stable(feature = "rc_raw", since = "1.17.0")]
+pub use alloc_crate::sync::ArcInner;
 
 // FIXME(sync_nonpoison,sync_poison_mod): remove all `#[doc(inline)]` once the modules are stabilized.
 
