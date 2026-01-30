@@ -1628,6 +1628,7 @@ fn try_render_ref_opty<'tcx>(
             return None
     };
 
+    // TODO(#241): Lift this restriction.
     assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
 
     if !is_mut {
