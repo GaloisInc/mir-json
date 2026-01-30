@@ -3,6 +3,20 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 9
+
+Add `trait_object`, which represents constant trait objects such as `const X:
+&dyn Trait = &0u32`. These include three fields:
+
+* `def_id`: the `DefId` for the constant reference backing the trait object.
+  This is the same as in `"static_ref"` and `"slice"` constant values.
+
+* `trait_id`: the `DefId` for the principal trait bound in the trait object.
+  This plays a similar role as the `trait_id` field in `Dynamic` types.
+
+* `vtable`: the `DefId` for the trait object's vtable. This plays a similar
+  role as the `vtable` field in `UnsizeVtable` cast kinds.
+
 ## 8
 
 Add details to the `InlineType` case for `TyKind::Coroutine` and to the

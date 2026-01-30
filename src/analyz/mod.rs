@@ -1195,13 +1195,6 @@ fn emit_vtable<'tcx>(
     emit_new_defs(ms, out)
 }
 
-fn vtable_name<'tcx>(
-    mir: &mut MirState<'_, 'tcx>,
-    trait_ref: ty::PolyTraitRef<'tcx>,
-) -> String {
-    ext_def_id_str(mir.tcx, trait_ref.def_id(), "_vtbl", trait_ref)
-}
-
 fn build_vtable_items<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     trait_ref: ty::PolyTraitRef<'tcx>,
