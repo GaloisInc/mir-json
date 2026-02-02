@@ -280,6 +280,17 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   See also the "`{Arc,Rc}::{from,inner}_into_raw`" below.
 
+* Simplify implementations of thread parking and `guard::enable` (last applied: January 22, 2025)
+
+  The real implementations of these parts of the code use low-level,
+  OS-specific primitives (e.g., system calls) that Crucible cannot support. We
+  uniformly replace these parts of the code with simpler implementations:
+
+  * We use the `unsupported` configuration for thread parking, where all
+    parking-related functions are treated as no-ops.
+  * We use the Wasm configuration for the internal `guard::enable` function,
+    which simply leaks everything.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
