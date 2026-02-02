@@ -100,13 +100,13 @@ macro_rules! compress {
 macro_rules! load_int_le {
     ($buf:expr, $i:expr, $int_ty:ident) => {{
         debug_assert!($i + size_of::<$int_ty>() <= $buf.len());
-        let mut data = 0 as $int_ty;
+        let mut data = [0u8; size_of::<$int_ty>()];
         ptr::copy_nonoverlapping(
             $buf.as_ptr().add($i),
-            &mut data as *mut _ as *mut u8,
+            data.as_mut_slice().as_mut_ptr(),
             size_of::<$int_ty>(),
         );
-        data.to_le()
+        <$int_ty>::from_ne_bytes(data).to_le()
     }};
 }
 
