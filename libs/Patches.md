@@ -261,6 +261,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   intrinsic. To prevent this function from throwing translation errors, we have
   it return a constant dummy location.
 
+* Avoid raw pointer comparisons in `std::thread` (last applied: January 22, 2026)
+
+  `std::thread` reserves raw pointers with the addresses 0-2 as sentinel
+  values. Instead of checking if a thread's pointer is not a sentinel value by
+  seeing if it is larger than the sentinel with the largest address, we instead
+  check if the pointer is not equal to each of the individual sentinel values.
+  See also the "Avoid raw pointer comparisons" note below.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
@@ -283,3 +291,37 @@ this actually happened.)
 
 As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
 ensure that they persist when optimizations are applied.
+
+## Avoid raw pointer comparisons
+
+We avoid using `PartialOrd`-based comparisons with raw pointers values, e.g.,
+
+```rs
+fn f(p: *const ()) {
+    if (p > ptr::null()) {
+        ...
+    }
+}
+```
+
+Instead, we prefer using `PartialEq`-based equality checks, e.g.,
+
+```rs
+    if (p != ptr::null()) {
+        ...
+    }
+
+```
+
+The reason for this is because the `PartialOrd` impl for raw pointers compares
+their underlying addresses, but `crucible-mir` pointers do not always have
+addresses. `MirReference_Integer` pointers can treat their underlying integer
+as an address (e.g., `ptr::null()` has the address 0), but other forms of
+`MirReference`s (i.e., _valid_ `MirReference`s) do not have a tangible address,
+so it is not currently possible to compare `MirReference_Integer`s against
+valid `MirReference`s. Attempting to do so will raise a simulation error.
+
+Using the `PartialEq` impl for raw pointers works better in a `crucible-mir`
+context. Instead of raising a simulation error, `crucible-mir` will simply
+return `False` when checking if a `MirReference_Integer` is equal to a valid
+`MirReference`.
