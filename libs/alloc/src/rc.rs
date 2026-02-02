@@ -278,7 +278,8 @@ use crate::vec::Vec;
 // would interfere with otherwise safe [into|from]_raw() of transmutable
 // inner types.
 #[repr(C)]
-struct RcInner<T: ?Sized> {
+#[stable(feature = "rc_raw", since = "1.17.0")]
+pub struct RcInner<T: ?Sized> {
     strong: Cell<usize>,
     weak: Cell<usize>,
     value: T,
@@ -1298,6 +1299,16 @@ impl<T: ?Sized> Rc<T> {
         unsafe { Self::from_raw_in(ptr, Global) }
     }
 
+    /// Like [`from_raw`], except that this function accepts an `RcInner<T>`
+    /// pointer instead of a `T` pointer. This is meant to serve as a
+    /// replacement for [`from_raw`] (to be used in conjunction with
+    /// [`into_inner_raw`]) that is feasible for `crucible-mir` to simulate.
+    #[inline]
+    #[stable(feature = "rc_raw", since = "1.17.0")]
+    pub unsafe fn from_inner_raw(ptr: *const RcInner<T>) -> Self {
+        unsafe { Rc::from_ptr(ptr as *mut RcInner<T>) }
+    }
+
     /// Consumes the `Rc`, returning the wrapped pointer.
     ///
     /// To avoid a memory leak the pointer must be converted back to an `Rc` using
@@ -1320,6 +1331,18 @@ impl<T: ?Sized> Rc<T> {
     pub fn into_raw(this: Self) -> *const T {
         let this = ManuallyDrop::new(this);
         Self::as_ptr(&*this)
+    }
+
+    /// Like [`into_raw`], except that this function returns an `RcInner<T>`
+    /// pointer instead of a `T` pointer. This is meant to serve as a
+    /// replacement for [`into_raw`] (to be used in conjunction with
+    /// [`from_inner_raw`]) that is feasible for `crucible-mir` to simulate.
+    #[must_use = "losing the pointer will leak memory"]
+    #[stable(feature = "rc_raw", since = "1.17.0")]
+    #[rustc_never_returns_null_ptr]
+    pub fn into_inner_raw(this: Self) -> *const RcInner<T> {
+        let this = ManuallyDrop::new(this);
+        this.ptr.as_ptr() as *const RcInner<T>
     }
 
     /// Increments the strong reference count on the `Rc<T>` associated with the

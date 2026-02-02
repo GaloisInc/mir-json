@@ -269,6 +269,17 @@ into the main commit for that patch, and then the *Update* line can be removed.
   check if the pointer is not equal to each of the individual sentinel values.
   See also the "Avoid raw pointer comparisons" note below.
 
+* Add `{Arc,Rc}::{from,inner}_into_raw` API functions (last applied: January 22, 2026)
+
+  `crucible-mir` is not currently able to simulate the
+  `{Arc,Rc}::{from,inner}_raw` functions, as they rely on non-trivial pointer
+  offsets plus read from type-casted pointers.
+  `{Arc,Rc}::{from,inner}_into_raw` offer alternatives with very similar types,
+  but which are implemented in a Crucible-friendly way. We use these functions
+  in the internals of `std::thread`.
+
+  See also the "`{Arc,Rc}::{from,inner}_into_raw`" below.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
@@ -325,3 +336,54 @@ Using the `PartialEq` impl for raw pointers works better in a `crucible-mir`
 context. Instead of raising a simulation error, `crucible-mir` will simply
 return `False` when checking if a `MirReference_Integer` is equal to a valid
 `MirReference`.
+
+## `{Arc,Rc}::{from,into}_inner_raw`
+
+`crucible-mir` is not currently able to simulate the
+`{Arc,Rc}::{from,into}_raw` functions. This is because they subtract a constant
+offset from a `*T` pointer in order to obtain a pointer of type
+`*ArcInner<T>`/`*RcInner<T>`. This sort of pointer arithmetic is permitted in
+Rust, but `crucible-mir`'s memory model is not yet sophisticated enough to
+support this.
+
+As a workaround, we offer `{Arc,Rc}::{from,into}_inner_raw` API functions,
+which work directly on `*ArcInner<T>`/`*RcInner<T>` pointers instead of `*T`
+pointers, thereby avoiding the need for problematic pointer casts. This is not
+a perfect solution, as these functions will not work as drop-in replacements
+for `{Arc,Rc}::{from,into}_raw` in all situations due to the differences in
+types. Where they _do_ work as drop-in replacements are situations where a call
+to `{Arc,Rc}::into_raw` is followed by another call to `{Arc,Rc}::from_raw`,
+without reading the intermediate raw pointer in between. For instance, in the
+following example (taken from the [documentation for
+`Arc::from_raw`](https://doc.rust-lang.org/1.91.0/std/sync/struct.Arc.html#method.from_raw)):
+
+```rs
+use std::sync::Arc;
+
+let x = Arc::new("hello".to_owned());
+let x_ptr = Arc::into_raw(x);
+
+unsafe {
+    // Convert back to an `Arc` to prevent leak.
+    let x = Arc::from_raw(x_ptr);
+    assert_eq!(&*x, "hello");
+
+    // Further calls to `Arc::from_raw(x_ptr)` would be memory-unsafe.
+}
+```
+
+The calls to `Arc::{from,into}_raw` can be replaced with
+`Arc::{from,into}_inner_raw` with no change in functionality. This sort of
+pattern occurs fairly often in practice, so it is worth having at least some
+support for it. For example, the internals of `std::thread` also construct
+`Arc` values in a very similar fashion, so we also patch `std::thread` to use
+`Arc::{from,into}_inner_raw`.
+
+(An API design note: because `{Arc,Rc}::{from,into}_inner_raw` are exposed as
+part of the public API, we must also expose the (previously internal)
+`ArcInner` and `RcInner` types as a consequence.)
+
+Once `crucible-mir` finishes migrating to use `MirAggregate` (see
+https://github.com/GaloisInc/crucible/issues/1499), it should be able to
+simulate `{Arc,Rc}::{from,into}_raw` properly, which would allow us to remove
+`{Arc,Rc}::{from,into}_inner_raw`.
