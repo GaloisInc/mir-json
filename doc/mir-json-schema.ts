@@ -164,7 +164,7 @@ type BaseSize = {
   kind: "Usize" | "U8" | "U16" | "U32" | "U64" | "U128" |
         "Isize" | "I8" | "I16" | "I32" | "I64" | "I128"
 }
-            
+
 type FloatKind = { kind: "F32" | "F64" }
 
 type Layout = {
@@ -286,6 +286,7 @@ type ConstVal =
   | { kind: "closure", upvars: ConstVal[] }
   | { kind: "coroutine_closure", upvars: ConstVal[] }
   | { kind: "fn_ptr", "def_id": DefId }
+  | { kind: "trait_object", def_id: DefId, trait_id: DefId, vtable: DefId }
 
 
 
@@ -302,7 +303,7 @@ type Lvalue = {
 type PlaceElem =
     { kind: "Deref" }
   | { kind: "Field", field: number, ty: Ty }
-  | { kind: "Index", op: Var } 
+  | { kind: "Index", op: Var }
   | { kind: "ConstantIndex", offset: number, min_length: number, from_end: boolean }
   | { kind: "Subslice", from: number, to: number, from_end: boolean }
   | { kind: "Downcast", variant: number }
@@ -357,8 +358,8 @@ type Operand =
     { kind: "Move", data: Lvalue }
   | { kind: "Constant", data: Constant }
   | { kind: "Copy", data: Lvalue }
-  
-type AggregateKind = 
+
+type AggregateKind =
     { kind: "Array", ty: Ty }
   | { kind: "Tuple" | "Closure" | "CoroutineClosure" }
   | { kind: "Coroutine", discr_ty: Ty, upvar_tys: Ty[], saved_tys: Ty[], field_map: number[][] }

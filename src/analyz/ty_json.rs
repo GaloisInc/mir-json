@@ -7,7 +7,8 @@ use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_middle::ty::CoroutineArgsExt;
 use rustc_const_eval::interpret::{
-    self, InterpCx, InterpResult, MPlaceTy, OffsetMode, Projectable,
+    self, InterpCx, InterpResult, MemPlaceMeta, MPlaceTy, OffsetMode,
+    Projectable,
 };
 use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
@@ -242,6 +243,13 @@ pub fn trait_inst_id_str<'tcx>(
     } else {
         "trait/0::empty[0]".to_owned()
     }
+}
+
+pub fn vtable_name<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    trait_ref: ty::PolyTraitRef<'tcx>,
+) -> String {
+    ext_def_id_str(mir.tcx, trait_ref.def_id(), "_vtbl", trait_ref)
 }
 
 /// Get the mangled name of a monomorphic function.  As a side effect, this marks the function as
@@ -1464,6 +1472,24 @@ fn make_allocation_body<'tcx>(
 ) -> serde_json::Value {
     let tcx = mir.tcx;
 
+    fn do_default<'tcx>(
+        mir: &mut MirState<'_, 'tcx>,
+        icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+        rty: ty::Ty<'tcx>,
+        d: &MPlaceTy<'tcx>,
+    ) -> serde_json::Value {
+        let rlayout = mir.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
+        let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
+        let rendered = try_render_opty(mir, icx, &mpty.into());
+
+        json!({
+            "kind": "constant",
+            "mutable": false,
+            "ty": rty.to_json(mir),
+            "rendered": rendered,
+        })
+    }
+
     if !is_mut {
         /// Common logic for emitting `"kind": "strbody"` constants, shared by the `str` and `CStr`
         /// cases.
@@ -1494,10 +1520,15 @@ fn make_allocation_body<'tcx>(
         }
 
         match *rty.kind() {
-            // Special cases for &str, &CStr, and &[T]
+            // Special cases for references to unsized types. Currently, the
+            // following are supported:
             //
-            // These and the ones in try_render_ref_opty below should be
-            // kept in sync.
+            // * String slices (&str and &CStr)
+            // * Array slices (&[T])
+            // * Trait objects (&dyn Trait)
+            //
+            // These special cases and the ones in try_render_ref_opty below
+            // should be kept in sync.
             ty::TyKind::Str => {
                 let len = d.len(icx).unwrap();
                 return do_strbody(mir, icx, d, len);
@@ -1531,21 +1562,16 @@ fn make_allocation_body<'tcx>(
                     "rendered": rendered,
                 });
             },
+            ty::TyKind::Dynamic(ref preds, _, _) => {
+                let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
+                return do_default(mir, icx, unpacked_d.layout.ty, &unpacked_d);
+            },
             _ => ()
         }
     }
 
     // Default case
-    let rlayout = tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
-    let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
-    let rendered = try_render_opty(mir, icx, &mpty.into());
-
-    return json!({
-        "kind": "constant",
-        "mutable": false,
-        "ty": rty.to_json(mir),
-        "rendered": rendered,
-    });
+    return do_default(mir, icx, rty, d);
 }
 
 fn try_render_ref_opty<'tcx>(
@@ -1602,27 +1628,64 @@ fn try_render_ref_opty<'tcx>(
             return None
     };
 
+    // TODO(#241): Lift this restriction.
     assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
 
     if !is_mut {
-        // Special cases for &str, &CStr, and &[T]
-        //
-        // These and the ones in make_allocation_body above should be kept in sync.
-        let do_slice_special_case = match *rty.kind() {
-            ty::TyKind::Str | ty::TyKind::Slice(_) => true,
-            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => true,
-            _ => false,
-        };
-        if do_slice_special_case {
+        fn do_slice<'tcx>(
+            icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+            d: &MPlaceTy<'tcx>,
+            def_id_json: serde_json::Value,
+        ) -> serde_json::Value {
             // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
             // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
             // copy-paste the code here.
             let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
-            return Some(json!({
+            json!({
                 "kind": "slice",
                 "def_id": def_id_json,
                 "len": len
-            }))
+            })
+        }
+
+        // Special cases for references to unsized types. Currently, the
+        // following are supported:
+        //
+        // * String slices (&str and &CStr)
+        // * Array slices (&[T])
+        // * Trait objects (&dyn Trait)
+        //
+        // These special cases and the ones in make_allocation_body above should be kept in sync.
+        match *rty.kind() {
+            ty::TyKind::Str | ty::TyKind::Slice(_) =>
+                return Some(do_slice(icx, &d, def_id_json)),
+            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
+                return Some(do_slice(icx, &d, def_id_json)),
+            ty::TyKind::Dynamic(ref preds, _, _) => {
+                let self_ty = unpack_dyn_ty(icx, &d, preds).unwrap();
+                let vtable_desc = preds.principal().map(|pred| pred.with_self_ty(tcx, self_ty));
+                match vtable_desc {
+                    Some(vtable_desc) => {
+                        mir.used.vtables.insert(vtable_desc);
+                        let ti = TraitInst::from_dynamic_predicates(tcx, preds);
+                        return Some(json!({
+                            "kind": "trait_object",
+                            "def_id": def_id_json,
+                            "trait_id": trait_inst_id_str(tcx, &ti),
+                            "vtable": vtable_name(mir, vtable_desc),
+                        }))
+                    },
+                    None =>
+                        // If there is no principal trait bound, then all of
+                        // the trait bounds are auto traits. We do not
+                        // currently support computing vtables for these sorts
+                        // of trait objects (see #239).
+                        return Some(json!({
+                            "kind": "unsupported",
+                        }))
+                }
+            },
+            _ => (),
         }
     }
 
@@ -1855,4 +1918,43 @@ pub fn eval_mir_constant<'tcx>(
     constant.const_
         .eval(tcx, ty::TypingEnv::fully_monomorphized(), constant.span)
         .unwrap()
+}
+
+// Turn a place with a `dyn Trait` type into the actual dynamic type.
+//
+// This is based on the internals of
+// `rustc_const_eval::interpret::InterpCx::unpack_dyn_trait`.
+fn unpack_dyn_ty<'tcx>(
+    icx: &InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    mplace: &MPlaceTy<'tcx>,
+    expected_trait: &'tcx ty::List<ty::PolyExistentialPredicate<'tcx>>,
+) -> InterpResult<'tcx, ty::Ty<'tcx>> {
+    assert!(
+        matches!(mplace.layout.ty.kind(), ty::Dynamic(_, _, ty::Dyn)),
+        "`unpack_dyn_ty` only makes sense on `dyn*` types"
+    );
+    let vtable = mplace.meta().unwrap_meta().to_pointer(icx)?;
+    icx.get_ptr_vtable_ty(vtable, Some(expected_trait))
+}
+
+// Turn a place with a `dyn Trait` type into a place with the actual dynamic
+// type.
+//
+// This is based on `rustc_const_eval::interpret::InterpCx::unpack_dyn_trait`.
+fn unpack_dyn_place<'tcx>(
+    icx: &InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    mplace: &MPlaceTy<'tcx>,
+    expected_trait: &'tcx ty::List<ty::PolyExistentialPredicate<'tcx>>,
+) -> InterpResult<'tcx, MPlaceTy<'tcx>> {
+    let ty = unpack_dyn_ty(icx, mplace, expected_trait)?;
+    // This is a kind of transmute, from a place with unsized type and metadata to
+    // a place with sized type and no metadata.
+    let layout = icx.layout_of(ty)?;
+    mplace.offset_with_meta(
+        Size::ZERO,
+        OffsetMode::Wrapping,
+        MemPlaceMeta::None,
+        layout,
+        icx,
+    )
 }
