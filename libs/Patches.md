@@ -248,6 +248,15 @@ into the main commit for that patch, and then the *Update* line can be removed.
   allocator. (See the `` Use crucible's allocator in `Box` constructors ``
   patch above.)
 
+* Specialize `Clone` impl for `Box` to use Crucible's allocator (last applied: October 2, 2026)
+
+  The default `Clone` impl for `Box` is parameterized over an arbitrary
+  allocator, and as a result, it has to call the `new_uninit_in` function,
+  which `crucible-mir` cannot easily support. We add a specialized version of
+  the `Clone` impl for the `Global` allocator that instead calls the more
+  Crucible-friendly `new_uninit` function. (See also the `` Use crucible's
+  allocator in `Box` constructors `` patch above.)
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
