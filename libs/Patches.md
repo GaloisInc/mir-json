@@ -291,6 +291,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   * We use the Wasm configuration for the internal `guard::enable` function,
     which simply leaks everything.
 
+* Avoid unsupported pointer-cast in `std::slice::as_chunks_unchecked` (last applied Feb 26, 2026)
+
+  Due to limitations of the current memory model we need to allocate a new
+  array of arrays and then shallow-copy the original elements of the slice
+  into those arrays. We note that this is unsound in the face of interior
+  mutability and it leaks memory.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
