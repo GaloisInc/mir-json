@@ -90,6 +90,15 @@ into the main commit for that patch, and then the *Update* line can be removed.
   functions to call built-in Crucible allocation functions instead (e.g.
   `crucible::alloc::allocate`).
 
+* Specialize `Clone` impl for `Box` to use Crucible's allocator (last applied: Feburary 26, 2026)
+
+  The default `Clone` impl for `Box` is parameterized over an arbitrary
+  allocator, and as a result, it has to call the `new_uninit_in` function,
+  which `crucible-mir` cannot easily support. We add a specialized version of
+  the `Clone` impl for the `Global` allocator that instead calls the more
+  Crucible-friendly `new_uninit` function. (See also the `` Use crucible's
+  allocator in `Box` constructors `` patch above.)
+
 * Define `Arc`/`Rc` constructors in terms of `{Arc,Rc}::new` (last applied: January 20, 2026)
 
   This ensures that all `Arc`/`Rc` constructors are defined in terms of
