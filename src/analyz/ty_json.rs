@@ -1511,6 +1511,8 @@ fn make_allocation_body<'tcx>(
         // * String slices (&str and &CStr)
         // * Array slices (&[T])
         // * Trait objects (&dyn Trait)
+        // * Custom dynamically sized types, i.e., structs where the last field
+        //   is an unsized type
         //
         // These special cases and the ones in try_render_ref_opty below should
         // be kept in sync.
@@ -1520,8 +1522,9 @@ fn make_allocation_body<'tcx>(
             d: &MPlaceTy<'tcx>,
         ) -> (ty::Ty<'tcx>, Option<serde_json::Value>) {
             let tcx = mir.tcx;
+            let dty = d.layout.ty;
 
-            match d.layout.ty.kind() {
+            match dty.kind() {
                 ty::TyKind::Str => {
                     let len = d.len(icx).unwrap();
                     do_strbody(mir, icx, d, len)
@@ -1553,6 +1556,33 @@ fn make_allocation_body<'tcx>(
                 ty::TyKind::Dynamic(ref preds, _, _) => {
                     let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
                     do_default(mir, icx, &unpacked_d)
+                },
+                ty::TyKind::Adt(adt_def, _) if adt_def.is_struct() && !d.layout.is_sized() => {
+                    let variant = adt_def.non_enum_variant();
+                    let mut field_indices = variant.fields.indices().peekable();
+                    let mut field_vals = Vec::new();
+
+                    while let Some(field_idx) = field_indices.next() {
+                        let field = icx.project_field(d, field_idx).unwrap();
+                        if field_indices.peek().is_none() {
+                            let (_ty, rendered) = do_unsized(mir, icx, &field);
+                            field_vals.push(rendered);
+                        } else {
+                            let rendered = try_render_opty(mir, icx, &field.into());
+                            field_vals.push(rendered);
+                        }
+                    }
+
+                    let val: serde_json::Value = field_vals.into();
+
+                    let rendered = json!({
+                        "kind": "struct",
+                        "fields": val,
+                    });
+                    // TODO RGS: Using `dty` below is wrong. This will report a
+                    // type like S<[u8]>, but we actually want the type of the
+                    // backing allocation, which is something like S<[u8; 4]>.
+                    (dty, Some(rendered))
                 },
                 _ => do_default(mir, icx, d)
             }
@@ -1651,6 +1681,8 @@ fn try_render_ref_opty<'tcx>(
         // * String slices (&str and &CStr)
         // * Array slices (&[T])
         // * Trait objects (&dyn Trait)
+        // * Custom dynamically sized types, i.e., structs where the last field
+        //   is an unsized type
         //
         // These special cases and the ones in make_allocation_body above
         // should be kept in sync. If the type isn't one of the ones above,
@@ -1691,6 +1723,12 @@ fn try_render_ref_opty<'tcx>(
                                 "kind": "unsupported",
                             }))
                     }
+                }
+                ty::TyKind::Adt(adt_def, _) if adt_def.is_struct() && !d.layout.is_sized() => {
+                    let fields = &adt_def.non_enum_variant().fields;
+                    let last_field_idx = fields.last_index()?;
+                    let last_field_mpty = &icx.project_field(d, last_field_idx).unwrap();
+                    do_unsized(mir, icx, last_field_mpty, def_id_json)
                 },
                 _ => None,
             }
