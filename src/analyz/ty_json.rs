@@ -1469,9 +1469,6 @@ fn make_allocation_body<'tcx>(
     d: &MPlaceTy<'tcx>,
     is_mut: bool,
 ) -> serde_json::Value {
-    let tcx = mir.tcx;
-    let dty = d.layout.ty;
-
     fn do_default<'tcx>(
         mir: &mut MirState<'_, 'tcx>,
         icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
@@ -1508,50 +1505,60 @@ fn make_allocation_body<'tcx>(
             (aty, Some(rendered))
         }
 
-        match *dty.kind() {
-            // Special cases for references to unsized types. Currently, the
-            // following are supported:
-            //
-            // * String slices (&str and &CStr)
-            // * Array slices (&[T])
-            // * Trait objects (&dyn Trait)
-            //
-            // These special cases and the ones in try_render_ref_opty below
-            // should be kept in sync.
-            ty::TyKind::Str => {
-                let len = d.len(icx).unwrap();
-                do_strbody(mir, icx, d, len)
-            },
-            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => {
-                // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
-                // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
-                // copy-paste the code here.
-                let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
-                do_strbody(mir, icx, d, len)
-            },
-            ty::TyKind::Slice(slice_ty) => {
-                let slice_len = d.len(icx).unwrap();
-                let mut elt_values = Vec::with_capacity(slice_len as usize);
-                for idx in 0..slice_len {
-                    let elt = icx.project_index(&d.clone().into(), idx).unwrap();
-                    elt_values.push(try_render_opty(mir, icx, &elt));
-                }
-                // corresponding array type for contents
-                let aty = ty::Ty::new_array(tcx, slice_ty, slice_len);
-                let rendered = json!({
-                    // this can now be the same as an ordinary array
-                    "kind": "array",
-                    "elements": elt_values,
-                    "len": slice_len
-                });
-                (aty, Some(rendered))
-            },
-            ty::TyKind::Dynamic(ref preds, _, _) => {
-                let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
-                do_default(mir, icx, &unpacked_d)
-            },
-            _ => do_default(mir, icx, d)
+        // Special cases for references to unsized types. Currently, the
+        // following are supported:
+        //
+        // * String slices (&str and &CStr)
+        // * Array slices (&[T])
+        // * Trait objects (&dyn Trait)
+        //
+        // These special cases and the ones in try_render_ref_opty below should
+        // be kept in sync.
+        fn do_unsized<'tcx>(
+            mir: &mut MirState<'_, 'tcx>,
+            icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+            d: &MPlaceTy<'tcx>,
+        ) -> (ty::Ty<'tcx>, Option<serde_json::Value>) {
+            let tcx = mir.tcx;
+
+            match d.layout.ty.kind() {
+                ty::TyKind::Str => {
+                    let len = d.len(icx).unwrap();
+                    do_strbody(mir, icx, d, len)
+                },
+                ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => {
+                    // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
+                    // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
+                    // copy-paste the code here.
+                    let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
+                    do_strbody(mir, icx, d, len)
+                },
+                ty::TyKind::Slice(slice_ty) => {
+                    let slice_len = d.len(icx).unwrap();
+                    let mut elt_values = Vec::with_capacity(slice_len as usize);
+                    for idx in 0..slice_len {
+                        let elt = icx.project_index(&d.clone().into(), idx).unwrap();
+                        elt_values.push(try_render_opty(mir, icx, &elt));
+                    }
+                    // corresponding array type for contents
+                    let aty = ty::Ty::new_array(tcx, *slice_ty, slice_len);
+                    let rendered = json!({
+                        // this can now be the same as an ordinary array
+                        "kind": "array",
+                        "elements": elt_values,
+                        "len": slice_len
+                    });
+                    (aty, Some(rendered))
+                },
+                ty::TyKind::Dynamic(ref preds, _, _) => {
+                    let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
+                    do_default(mir, icx, &unpacked_d)
+                },
+                _ => do_default(mir, icx, d)
+            }
         }
+
+        do_unsized(mir, icx, d)
     } else {
         do_default(mir, icx, d)
     };
@@ -1625,7 +1632,7 @@ fn try_render_ref_opty<'tcx>(
         fn do_slice<'tcx>(
             icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
             d: &MPlaceTy<'tcx>,
-            def_id_json: serde_json::Value,
+            def_id_json: &serde_json::Value,
         ) -> serde_json::Value {
             // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
             // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
@@ -1645,37 +1652,53 @@ fn try_render_ref_opty<'tcx>(
         // * Array slices (&[T])
         // * Trait objects (&dyn Trait)
         //
-        // These special cases and the ones in make_allocation_body above should be kept in sync.
-        match d.layout.ty.kind() {
-            ty::TyKind::Str | ty::TyKind::Slice(_) =>
-                return Some(do_slice(icx, &d, def_id_json)),
-            ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
-                return Some(do_slice(icx, &d, def_id_json)),
-            ty::TyKind::Dynamic(ref preds, _, _) => {
-                let self_ty = unpack_dyn_ty(icx, &d, preds).unwrap();
-                let vtable_desc = preds.principal().map(|pred| pred.with_self_ty(tcx, self_ty));
-                match vtable_desc {
-                    Some(vtable_desc) => {
-                        mir.used.vtables.insert(vtable_desc);
-                        let ti = TraitInst::from_dynamic_predicates(tcx, preds);
-                        return Some(json!({
-                            "kind": "trait_object",
-                            "def_id": def_id_json,
-                            "trait_id": trait_inst_id_str(tcx, &ti),
-                            "vtable": vtable_name(mir, vtable_desc),
-                        }))
-                    },
-                    None =>
-                        // If there is no principal trait bound, then all of
-                        // the trait bounds are auto traits. We do not
-                        // currently support computing vtables for these sorts
-                        // of trait objects (see #239).
-                        return Some(json!({
-                            "kind": "unsupported",
-                        }))
-                }
-            },
-            _ => (),
+        // These special cases and the ones in make_allocation_body above
+        // should be kept in sync. If the type isn't one of the ones above,
+        // this function will return None.
+        fn do_unsized<'tcx>(
+            mir: &mut MirState<'_, 'tcx>,
+            icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+            d: &MPlaceTy<'tcx>,
+            def_id_json: &serde_json::Value,
+        ) -> Option<serde_json::Value> {
+            let tcx = mir.tcx;
+
+            match d.layout.ty.kind() {
+                ty::TyKind::Str | ty::TyKind::Slice(_) =>
+                    Some(do_slice(icx, d, def_id_json)),
+                ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
+                    Some(do_slice(icx, d, def_id_json)),
+                ty::TyKind::Dynamic(ref preds, _, _) => {
+                    let self_ty = unpack_dyn_ty(icx, d, preds).unwrap();
+                    let vtable_desc = preds.principal().map(|pred| pred.with_self_ty(tcx, self_ty));
+                    match vtable_desc {
+                        Some(vtable_desc) => {
+                            mir.used.vtables.insert(vtable_desc);
+                            let ti = TraitInst::from_dynamic_predicates(tcx, preds);
+                            Some(json!({
+                                "kind": "trait_object",
+                                "def_id": def_id_json,
+                                "trait_id": trait_inst_id_str(tcx, &ti),
+                                "vtable": vtable_name(mir, vtable_desc),
+                            }))
+                        },
+                        None =>
+                            // If there is no principal trait bound, then all of
+                            // the trait bounds are auto traits. We do not
+                            // currently support computing vtables for these sorts
+                            // of trait objects (see #239).
+                            Some(json!({
+                                "kind": "unsupported",
+                            }))
+                    }
+                },
+                _ => None,
+            }
+        }
+
+        match do_unsized(mir, icx, &d, &def_id_json) {
+            Some(j) => return Some(j),
+            None => (),
         }
     }
 
