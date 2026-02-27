@@ -1755,7 +1755,7 @@ impl<T: Clone, A: Allocator + Clone> Clone for Box<T, A> {
     /// assert_ne!(&*x as *const i32, &*y as *const i32);
     /// ```
     #[inline]
-    fn clone(&self) -> Self {
+    default fn clone(&self) -> Self {
         // Pre-allocate memory to allow writing the cloned value directly.
         let mut boxed = Self::new_uninit_in(self.1.clone());
         unsafe {
@@ -1782,8 +1782,24 @@ impl<T: Clone, A: Allocator + Clone> Clone for Box<T, A> {
     /// assert_eq!(yp, &*y);
     /// ```
     #[inline]
-    fn clone_from(&mut self, source: &Self) {
+    default fn clone_from(&mut self, source: &Self) {
         (**self).clone_from(&(**source));
+    }
+}
+
+// A specialized version of the Clone impl that uses new_uninit() instead of
+// new_uninit_in(), as the former is more Crucible-friendly.
+#[cfg(not(no_global_oom_handling))]
+#[stable(feature = "rust1", since = "1.0.0")]
+impl<T: Clone> Clone for Box<T, Global> {
+    #[inline]
+    fn clone(&self) -> Self {
+        // Pre-allocate memory to allow writing the cloned value directly.
+        let mut boxed = Self::new_uninit();
+        unsafe {
+            (**self).clone_to_uninit(boxed.as_mut_ptr().cast());
+            boxed.assume_init()
+        }
     }
 }
 
