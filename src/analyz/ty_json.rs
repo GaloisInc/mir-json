@@ -1476,21 +1476,15 @@ fn make_allocation_body<'tcx>(
         mir: &mut MirState<'_, 'tcx>,
         icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
         d: &MPlaceTy<'tcx>,
-    ) -> serde_json::Value {
+    ) -> (ty::Ty<'tcx>, Option<serde_json::Value>) {
         let dty = d.layout.ty;
         let rlayout = mir.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(dty)).unwrap();
         let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
         let rendered = try_render_opty(mir, icx, &mpty.into());
-
-        json!({
-            "kind": "constant",
-            "mutable": false,
-            "ty": dty.to_json(mir),
-            "rendered": rendered,
-        })
+        (dty, rendered)
     }
 
-    if !is_mut {
+    let (ty, rendered) = if !is_mut {
         /// Common logic for emitting `"kind": "strbody"` constants, shared by the `str` and `CStr`
         /// cases.
         fn do_strbody<'tcx>(
@@ -1498,7 +1492,7 @@ fn make_allocation_body<'tcx>(
             icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
             d: &MPlaceTy<'tcx>,
             len: u64,
-        ) -> serde_json::Value {
+        ) -> (ty::Ty<'tcx>, Option<serde_json::Value>) {
             let tcx = mir.tcx;
             let mem = icx
                 .read_bytes_ptr_strip_provenance(d.ptr(), Size::from_bytes(len))
@@ -1511,12 +1505,7 @@ fn make_allocation_body<'tcx>(
                 "elements": mem,
                 "len": len
             });
-            json!({
-                "kind": "constant",
-                "mutable": false,
-                "ty": aty.to_json(mir),
-                "rendered": rendered,
-            })
+            (aty, Some(rendered))
         }
 
         match *dty.kind() {
@@ -1531,14 +1520,14 @@ fn make_allocation_body<'tcx>(
             // should be kept in sync.
             ty::TyKind::Str => {
                 let len = d.len(icx).unwrap();
-                return do_strbody(mir, icx, d, len);
+                do_strbody(mir, icx, d, len)
             },
             ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) => {
                 // `<MPlaceTy as Projectable>::len` asserts that the input must have `Slice` or
                 // `Str` type.  However, the implementation it uses works fine on `CStr` too, so we
                 // copy-paste the code here.
                 let len = d.meta().unwrap_meta().to_target_usize(icx).unwrap();
-                return do_strbody(mir, icx, d, len);
+                do_strbody(mir, icx, d, len)
             },
             ty::TyKind::Slice(slice_ty) => {
                 let slice_len = d.len(icx).unwrap();
@@ -1555,23 +1544,25 @@ fn make_allocation_body<'tcx>(
                     "elements": elt_values,
                     "len": slice_len
                 });
-                return json!({
-                    "kind": "constant",
-                    "mutable": false,
-                    "ty": aty.to_json(mir),
-                    "rendered": rendered,
-                });
+                (aty, Some(rendered))
             },
             ty::TyKind::Dynamic(ref preds, _, _) => {
                 let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
-                return do_default(mir, icx, &unpacked_d);
+                do_default(mir, icx, &unpacked_d)
             },
-            _ => ()
+            _ => do_default(mir, icx, d)
         }
-    }
+    } else {
+        do_default(mir, icx, d)
+    };
 
     // Default case
-    return do_default(mir, icx, d);
+    return json!({
+        "kind": "constant",
+        "mutable": false,
+        "ty": ty.to_json(mir),
+        "rendered": rendered,
+    });
 }
 
 fn try_render_ref_opty<'tcx>(
