@@ -7,7 +7,7 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 use crate::cmp::Ordering::{self, Equal, Greater, Less};
-use crate::intrinsics::{exact_div, unchecked_sub};
+use crate::intrinsics::{const_eval_select, exact_div, unchecked_sub};
 use crate::mem::{self, MaybeUninit, SizedTypeProperties};
 use crate::num::NonZero;
 use crate::ops::{OneSidedRange, OneSidedRangeBound, Range, RangeBounds, RangeInclusive};
@@ -1332,6 +1332,7 @@ impl<T> [T] {
     /// ```
     #[stable(feature = "slice_as_chunks", since = "1.88.0")]
     #[rustc_const_stable(feature = "slice_as_chunks", since = "1.88.0")]
+    #[rustc_allow_const_fn_unstable(const_eval_select)]
     #[inline]
     #[must_use]
     #[track_caller]
@@ -1341,11 +1342,31 @@ impl<T> [T] {
             "slice::as_chunks_unchecked requires `N != 0` and the slice to split exactly into `N`-element chunks",
             (n: usize = N, len: usize = self.len()) => n != 0 && len.is_multiple_of(n),
         );
-        // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
-        let new_len = unsafe { exact_div(self.len(), N) };
-        // SAFETY: We cast a slice of `new_len * N` elements into
-        // a slice of `new_len` many `N` elements chunks.
-        unsafe { from_raw_parts(self.as_ptr().cast(), new_len) }
+        
+        const fn const_case<T, const N: usize>(xs: &[T]) -> &[[T; N]] {
+            // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
+            let new_len = unsafe { exact_div(xs.len(), N) };
+
+            // SAFETY: We cast a slice of `new_len * N` elements into
+            // a slice of `new_len` many `N` elements chunks.
+            unsafe { from_raw_parts(xs.as_ptr().cast(), new_len) }
+        }
+
+        // The non-const case needs to be able to call allocate which is not const fn
+        fn mut_case<T, const N: usize>(xs: &[T]) -> &[[T; N]] {
+            // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
+            let new_len = unsafe { exact_div(xs.len(), N) };
+
+            let ptr = crate::crucible::alloc::allocate::<[T; N]>(new_len);
+            for i in 0..new_len {
+                unsafe {
+                    ptr.add(i).write(crate::array::from_fn(|j| xs.as_ptr().add(N*i+j).read()));
+                }
+            }
+            unsafe { from_raw_parts(ptr, new_len) }
+        }
+
+        const_eval_select((self,), const_case, mut_case)
     }
 
     /// Splits the slice into a slice of `N`-element arrays,

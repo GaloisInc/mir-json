@@ -8,3 +8,6 @@ pub mod ptr;
 
 #[unstable(feature = "crucible_intrinsics", issue = "none")]
 pub mod concurrency;
+
+#[unstable(feature = "crucible_intrinsics", issue = "none")]
+pub mod alloc;
