@@ -384,26 +384,6 @@ where
     }
 }
 
-impl SliceContains for u8 {
-    #[inline]
-    fn slice_contains(&self, x: &[Self]) -> bool {
-        memchr::memchr(*self, x).is_some()
-    }
-}
-
-impl SliceContains for i8 {
-    #[inline]
-    fn slice_contains(&self, x: &[Self]) -> bool {
-        let byte = *self as u8;
-        // SAFETY: `i8` and `u8` have the same memory layout, thus casting `x.as_ptr()`
-        // as `*const u8` is safe. The `x.as_ptr()` comes from a reference and is thus guaranteed
-        // to be valid for reads for the length of the slice `x.len()`, which cannot be larger
-        // than `isize::MAX`. The returned slice is never mutated.
-        let bytes: &[u8] = unsafe { from_raw_parts(x.as_ptr() as *const u8, x.len()) };
-        memchr::memchr(byte, bytes).is_some()
-    }
-}
-
 macro_rules! impl_slice_contains {
     ($($t:ty),*) => {
         $(
