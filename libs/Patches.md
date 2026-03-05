@@ -307,6 +307,11 @@ into the main commit for that patch, and then the *Update* line can be removed.
   into those arrays. We note that this is unsound in the face of interior
   mutability and it leaks memory.
 
+* Remove `i8` and `u8` specializations for `SliceContains` (last applied Mar 4, 2026)
+
+  These specializations used `memchr` and we don't support that. The generic
+  implementations are sufficient for `u8` and `i8`.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
