@@ -7,7 +7,7 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 use crate::cmp::Ordering::{self, Equal, Greater, Less};
-use crate::intrinsics::{exact_div, unchecked_sub};
+use crate::intrinsics::{const_eval_select, exact_div, unchecked_sub};
 use crate::mem::{self, MaybeUninit, SizedTypeProperties};
 use crate::num::NonZero;
 use crate::ops::{OneSidedRange, OneSidedRangeBound, Range, RangeBounds, RangeInclusive};
@@ -328,7 +328,7 @@ impl<T> [T] {
         } else {
             // SAFETY: We explicitly check for the correct number of elements,
             //   and do not let the reference outlive the slice.
-            Some(unsafe { &*(self.as_ptr().cast_array()) })
+            Some(self.split_at(N).0.as_array().unwrap())
         }
     }
 
@@ -359,7 +359,7 @@ impl<T> [T] {
             // SAFETY: We explicitly check for the correct number of elements,
             //   do not let the reference outlive the slice,
             //   and require exclusive access to the entire slice to mutate the chunk.
-            Some(unsafe { &mut *(self.as_mut_ptr().cast_array()) })
+            Some(self.split_at_mut(N).0.as_mut_array().unwrap())
         }
     }
 
@@ -387,7 +387,7 @@ impl<T> [T] {
 
         // SAFETY: We explicitly check for the correct number of elements,
         //   and do not let the references outlive the slice.
-        Some((unsafe { &*(first.as_ptr().cast_array()) }, tail))
+        Some((first.as_array().unwrap(), tail))
     }
 
     /// Returns a mutable array reference to the first `N` items in the slice and the remaining
@@ -420,7 +420,7 @@ impl<T> [T] {
         // SAFETY: We explicitly check for the correct number of elements,
         //   do not let the reference outlive the slice,
         //   and enforce exclusive mutability of the chunk by the split.
-        Some((unsafe { &mut *(first.as_mut_ptr().cast_array()) }, tail))
+        Some((first.as_mut_array().unwrap(), tail))
     }
 
     /// Returns an array reference to the last `N` items in the slice and the remaining slice.
@@ -448,7 +448,7 @@ impl<T> [T] {
 
         // SAFETY: We explicitly check for the correct number of elements,
         //   and do not let the references outlive the slice.
-        Some((init, unsafe { &*(last.as_ptr().cast_array()) }))
+        Some((init, last.as_array().unwrap()))
     }
 
     /// Returns a mutable array reference to the last `N` items in the slice and the remaining
@@ -482,7 +482,7 @@ impl<T> [T] {
         // SAFETY: We explicitly check for the correct number of elements,
         //   do not let the reference outlive the slice,
         //   and enforce exclusive mutability of the chunk by the split.
-        Some((init, unsafe { &mut *(last.as_mut_ptr().cast_array()) }))
+        Some((init, last.as_mut_array().unwrap()))
     }
 
     /// Returns an array reference to the last `N` items in the slice.
@@ -511,7 +511,7 @@ impl<T> [T] {
 
         // SAFETY: We explicitly check for the correct number of elements,
         //   and do not let the references outlive the slice.
-        Some(unsafe { &*(last.as_ptr().cast_array()) })
+        Some(last.as_array().unwrap())
     }
 
     /// Returns a mutable array reference to the last `N` items in the slice.
@@ -542,7 +542,7 @@ impl<T> [T] {
         // SAFETY: We explicitly check for the correct number of elements,
         //   do not let the reference outlive the slice,
         //   and require exclusive access to the entire slice to mutate the chunk.
-        Some(unsafe { &mut *(last.as_mut_ptr().cast_array()) })
+        Some(last.as_mut_array().unwrap())
     }
 
     /// Returns a reference to an element or subslice depending on the type of
@@ -846,11 +846,7 @@ impl<T> [T] {
     #[must_use]
     pub const fn as_array<const N: usize>(&self) -> Option<&[T; N]> {
         if self.len() == N {
-            let ptr = self.as_ptr().cast_array();
-
-            // SAFETY: The underlying array of a slice can be reinterpreted as an actual array `[T; N]` if `N` is not greater than the slice's length.
-            let me = unsafe { &*ptr };
-            Some(me)
+            unsafe { Some(&self.as_chunks_unchecked()[0]) }
         } else {
             None
         }
@@ -864,11 +860,7 @@ impl<T> [T] {
     #[must_use]
     pub const fn as_mut_array<const N: usize>(&mut self) -> Option<&mut [T; N]> {
         if self.len() == N {
-            let ptr = self.as_mut_ptr().cast_array();
-
-            // SAFETY: The underlying array of a slice can be reinterpreted as an actual array `[T; N]` if `N` is not greater than the slice's length.
-            let me = unsafe { &mut *ptr };
-            Some(me)
+            unsafe { Some(&mut self.as_chunks_unchecked_mut()[0]) }
         } else {
             None
         }
@@ -1339,9 +1331,19 @@ impl<T> [T] {
         );
         // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
         let new_len = unsafe { exact_div(self.len(), N) };
+
+        /// Given a pointer to the first of `new_len * N` elements, view the elements as `new_len`
+        /// arrays of `N` elements each, and return a pointer to the first of the arrays.
+        #[inline(never)] // Keep the hook around even with optimizations applied
+        const fn crucible_cast_hook<T, const N: usize>(ptr: *const T, new_len: usize) -> *const [T; N] {
+            ptr.cast()
+        }
+
+        let new_ptr = crucible_cast_hook::<T, N>(self.as_ptr(), new_len);
+
         // SAFETY: We cast a slice of `new_len * N` elements into
         // a slice of `new_len` many `N` elements chunks.
-        unsafe { from_raw_parts(self.as_ptr().cast(), new_len) }
+        unsafe { from_raw_parts(new_ptr, new_len) }
     }
 
     /// Splits the slice into a slice of `N`-element arrays,
@@ -1499,9 +1501,19 @@ impl<T> [T] {
         );
         // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
         let new_len = unsafe { exact_div(self.len(), N) };
+
+        /// Given a pointer to the first of `new_len * N` elements, view the elements as `new_len`
+        /// arrays of `N` elements each, and return a pointer to the first of the arrays.
+        #[inline(never)] // Keep the hook around even with optimizations applied
+        const fn crucible_cast_hook<T, const N: usize>(ptr: *mut T, new_len: usize) -> *mut [T; N] {
+            ptr.cast()
+        }
+
+        let new_ptr = crucible_cast_hook::<T, N>(self.as_mut_ptr(), new_len);
+
         // SAFETY: We cast a slice of `new_len * N` elements into
         // a slice of `new_len` many `N` elements chunks.
-        unsafe { from_raw_parts_mut(self.as_mut_ptr().cast(), new_len) }
+        unsafe { from_raw_parts_mut(new_ptr, new_len) }
     }
 
     /// Splits the slice into a slice of `N`-element arrays,
