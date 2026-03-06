@@ -20,7 +20,6 @@ pub fn reallocate<T>(ptr: *mut T, new_len: usize) {
     unimplemented!("reallocate")
 }
 
-
 pub struct TypedAllocator<T>(pub PhantomData<T>);
 
 impl<T> TypedAllocator<T> {

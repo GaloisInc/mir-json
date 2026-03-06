@@ -305,6 +305,18 @@ into the main commit for that patch, and then the *Update* line can be removed.
   These specializations used `memchr` and we don't support that. The generic
   implementations are sufficient for `u8` and `i8`.
 
+* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied March 6, 2026)
+
+  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
+  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
+  model doesn't support in general.  This patch adds a hook for the cast so we
+  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
+  which is a special case designed specifically for `<[_]>::as_chunks`.
+
+  Given this capability the following functions are then rewritten in terms of
+  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
+  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
