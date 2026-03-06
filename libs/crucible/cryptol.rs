@@ -73,7 +73,7 @@ macro_rules! cryptol {
 
         $(#[$attr:meta])*
         $pub_:vis fn $name:ident
-                < $(const $N:ident: usize),* >
+                < $(const $N:ident: $N_ty:ty),* >
                 ( $($arg_name:ident : $arg_ty:ty),* )
                 $( -> $ret_ty:ty )?
                 = $cryptol_name:expr ;
@@ -81,7 +81,7 @@ macro_rules! cryptol {
     ) => {
         $(#[$attr])*
         #[allow(unconditional_recursion)]
-        $pub_ fn $name< $(const $N: usize),* >($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
+        $pub_ fn $name< $(const $N: $N_ty),* >($($arg_name: $arg_ty),*) $(-> $ret_ty)? {
             $crate::cryptol::override_(
                 $name::< $($N),* >,
                 $path,
