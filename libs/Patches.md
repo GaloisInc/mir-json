@@ -42,3 +42,71 @@ into the main commit for that patch, and then the *Update* line can be removed.
 * Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: June 9, 2026)
 
   The actual implementation uses a pointer cast that Crucible can't handle.
+
+* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied June 9, 2026)
+
+  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
+  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
+  model doesn't support in general.  This patch adds a hook for the cast so we
+  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
+  which is a special case designed specifically for `<[_]>::as_chunks`.
+
+  Given this capability the following functions are then rewritten in terms of
+  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
+  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
+
+  See also the "Limitations of zero-length arrays and
+  `slice::as_chunks_unchecked(_mut)`" note below.
+
+# Notes
+
+This section contains more detailed notes about why certain patches are written
+the way they are. If you plan to reapply a patch that references one of these
+notes, please make sure that the spirit of the note is still upheld in the new
+patch. Alternatively, if you choose to deviate from the note, make sure to do
+so after carefully considering why deviating is the right choice, and consider
+updating the note in the process.
+
+## Mark hook functions as `#[inline(never)]`
+
+We want to ensure that custom hook functions (e.g.,
+`crucible_null_hook`) are always present in generated MIR code,
+regardless of whether or not optimizations are applied. In some cases, it may
+not suffice to compile the code containing the hook functions without
+optimizations (as `mir-json-translate-libs` currently does), as `rustc` can
+still inline code that is contained in a different compilation unit. (See
+[#153](https://github.com/GaloisInc/mir-json/issues/153) for an example where
+this actually happened.)
+
+As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
+ensure that they persist when optimizations are applied.
+
+## Limitations of zero-length arrays and `slice::as_chunks_unchecked(_mut)`
+
+One of the reasons why we override `slice::as_chunks_unchecked(_mut)` is so
+that we can guarantee that the input reference aliases the output reference.
+Currently, this requires custom overrides in `crucible-mir` to accomplish.
+Moreover, we can define many similar-looking functions in terms of
+`slice::as_chunks_unchecked(_mut)`, which allows us to get away with only
+defining two custom overrides.
+
+Unfortunately, this approach has a notable drawback. We define functions such
+as `slice::as(_mut)_array` in terms of `slice::as_chunks_unchecked(_mut)`, but
+while the former functions work for arrays of any length, the latter functions
+have a precondition that the array length is non-zero. This means that if we
+call `slice::as(_mut)_array` with an array length of zero, then we cannot call
+`slice::as_chunks_unchecked(_mut)` and must use a different approach.
+
+One possible way to go about this would be to give `slice::as(_mut)_array` and
+friends additional custom overrides to handle the length-0 cases. This is
+doable, but it would be annoying to maintain, given that we would need to add a
+significant amount of additional special-casing. What's more, we are planning
+to remove these special cases later once the migration to `MirAggregate` is
+finished (see https://github.com/GaloisInc/crucible/issues/1499), so it feels
+wasteful to invest in this kind of solution.
+
+We instead adopt a less correct but much cheaper solution: when the array
+length is zero, simply return `&[]` or `&mut []`. This sort of output reference
+will _not_ alias the input reference, but since the output has no actual
+elements, the lack of aliasing is hard to observe. As such, this compromise is
+likely fine for most use cases.
