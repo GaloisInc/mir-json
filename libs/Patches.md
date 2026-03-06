@@ -55,7 +55,7 @@ into the main commit for that patch, and then the *Update* line can be removed.
   non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
   `ptr::null` and `ptr::null_mut`.
 
-* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: November 19, 2025)
+* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: April 22, 2025)
 
   The actual implementation uses a pointer cast that Crucible can't handle. See
   also the "Mark hook functions as `#[inline(never)]`" note below.
