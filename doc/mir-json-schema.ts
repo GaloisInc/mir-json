@@ -159,6 +159,7 @@ type InlineType =
   | { kind: "Float", size: FloatKind }
   | { kind: "Slice", ty: Ty }
   | { kind: "Const", constant: ConstVal }
+  | { kind: "Unsupported" }
 
 type BaseSize = {
   kind: "Usize" | "U8" | "U16" | "U32" | "U64" | "U128" |
@@ -249,6 +250,7 @@ type Instance =
  | { kind: "DropGlue", ty: Ty?, def_id: DefId, args: Ty?[] }
  | { kind: "ClosureShim", ty: Ty, callees: DefId[], def_id: DefId, args: Ty[] }
  | { kind: "ClosureFnPointerShim", call_mut: DefId }
+ | { kind: "Unsupported" }
 
 
 // -----------------------------------------------------------------------------
@@ -287,6 +289,7 @@ type ConstVal =
   | { kind: "coroutine_closure", upvars: ConstVal[] }
   | { kind: "fn_ptr", "def_id": DefId }
   | { kind: "trait_object", def_id: DefId, trait_id: DefId, vtable: DefId }
+  | { kind: "unsupported" }
 
 
 
@@ -412,6 +415,7 @@ type Terminator =
   | { kind: "Drop", location: Lvalue, target: BasicBlockInfo, drop_fn: string?, pos: string }
   | { kind: "Call", func: Operand, args: Operand[], destination: [Lvalue,BasicBlockInfo]?, pos: string }
   | { kind: "Assert", cond: Operand, expected: boolean, msg: string, target: BasicBlockInfo, pos: string }
+  | { kind: "Unsupported" }
 
 
 
