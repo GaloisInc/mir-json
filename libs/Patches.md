@@ -55,13 +55,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
   `ptr::null` and `ptr::null_mut`.
 
-* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: April 22, 2025)
-
-  The actual implementation uses a pointer cast that Crucible can't handle. See
-  also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
@@ -329,7 +322,7 @@ updating the note in the process.
 ## Mark hook functions as `#[inline(never)]`
 
 We want to ensure that custom hook functions (e.g.,
-`crucible_array_from_slice_hook`) are always present in generated MIR code,
+`crucible_null_hook`) are always present in generated MIR code,
 regardless of whether or not optimizations are applied. In some cases, it may
 not suffice to compile the code containing the hook functions without
 optimizations (as `mir-json-translate-libs` currently does), as `rustc` can
