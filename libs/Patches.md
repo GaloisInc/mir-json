@@ -55,13 +55,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
   `ptr::null` and `ptr::null_mut`.
 
-* Use `crucible_array_from_slice_hook` in `<[T]>::as_slice` (last applied: November 19, 2025)
-
-  The actual implementation uses a pointer cast that Crucible can't handle. See
-  also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
@@ -300,17 +293,22 @@ into the main commit for that patch, and then the *Update* line can be removed.
   * We use the Wasm configuration for the internal `guard::enable` function,
     which simply leaks everything.
 
-* Avoid unsupported pointer-cast in `std::slice::as_chunks_unchecked` (last applied Feb 26, 2026)
-
-  Due to limitations of the current memory model we need to allocate a new
-  array of arrays and then shallow-copy the original elements of the slice
-  into those arrays. We note that this is unsound in the face of interior
-  mutability and it leaks memory.
-
 * Remove `i8` and `u8` specializations for `SliceContains` (last applied Mar 4, 2026)
 
   These specializations used `memchr` and we don't support that. The generic
   implementations are sufficient for `u8` and `i8`.
+
+* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied March 6, 2026)
+
+  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
+  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
+  model doesn't support in general.  This patch adds a hook for the cast so we
+  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
+  which is a special case designed specifically for `<[_]>::as_chunks`.
+
+  Given this capability the following functions are then rewritten in terms of
+  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
+  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
 
 # Notes
 
@@ -324,7 +322,7 @@ updating the note in the process.
 ## Mark hook functions as `#[inline(never)]`
 
 We want to ensure that custom hook functions (e.g.,
-`crucible_array_from_slice_hook`) are always present in generated MIR code,
+`crucible_null_hook`) are always present in generated MIR code,
 regardless of whether or not optimizations are applied. In some cases, it may
 not suffice to compile the code containing the hook functions without
 optimizations (as `mir-json-translate-libs` currently does), as `rustc` can
