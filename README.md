@@ -113,16 +113,9 @@ The documentation for the `crucible` crate can be built locally, as described be
 * build `mir-json` as described in the [Building from source](https://github.com/GaloisInc/mir-json?tab=readme-ov-file#building-from-source) section
 * build the docs with:
   ```
-  rustdoc libs/crucible/lib.rs \
-    --edition 2021 \
-    --crate-name crucible \
-    --extern compiler_builtins=rlibs/libcompiler_builtins.rlib \
-    --extern core=rlibs/libcore.rlib \
-    -L rlibs \
-    --out-dir rustdocs \
-    --crate-type rlib
+  mir-json-translate-libs --docs --out-dir rustdocs
   ```
-* open `rustdocs/crucible/index.html` in your browser!
+* open `rustdocs/rslibs/docs/crucible/index.html` in your browser!
 
 [crux-mir-repo]: https://github.com/GaloisInc/crucible/tree/master/crux-mir
 [saw-rust-tutorial]: https://github.com/GaloisInc/saw-script/blob/master/doc/pdfs/rust-verification-with-saw.pdf
