@@ -176,12 +176,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
 
-* Use `no_threads` version of `condvar`, `mutex`, and `rwlock` (last applied: November 27, 2025)
+* Use `no_threads` version of `condvar`, `mutex`, `once`, and `rwlock` (last applied: November 27, 2025)
 
   Because Crucible is effectively single-threaded, we can use `std`'s
   `no_threads` implementations of locks which are much simpler than the real
   ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
   concurrent crucible support.
+
+  *Update* (March 17, 2026): Also include `once`.
 
 * Replace `sys::time` with Crux-specific implementation (last applied: November 25, 2025)
 
