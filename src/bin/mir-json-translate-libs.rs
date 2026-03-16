@@ -970,23 +970,7 @@ fn main() {
             ],
             env: vec![],
         });
-    if make_docs {
-        tool_invocations.push(
-        CmdInvocation {
-            program: "cargo".into(),
-            args: vec![
-                "doc".into(),
-                "--target-dir".into(),
-                rlibs_symlink.into_string(),
-                "--manifest-path".into(),
-                custom_sources_dir
-                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
-                    .join("Cargo.toml")
-                    .into(),
-            ],
-            env: vec![],
-        });
-    }
+    
     tool_invocations.push(
         CmdInvocation {
             program: "cp".into(),
@@ -1004,6 +988,24 @@ fn main() {
         },
         );
 
+    if make_docs {
+        tool_invocations.push(
+        CmdInvocation {
+            program: "cargo".into(),
+            args: vec![
+                "doc".into(),
+                "--target-dir".into(),
+                rlibs_symlink.into_string(),
+                "--manifest-path".into(),
+                custom_sources_dir
+                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                    .join("Cargo.toml")
+                    .into(),
+            ],
+            env: vec![],
+        });
+    }
+
     // Run mir-json.
     if generate_only {
         eprintln!("Generating translation steps...");
@@ -1014,7 +1016,7 @@ fn main() {
         for inv in tool_invocations {
             eprintln!("Executing: {}", inv);
             let status =
-                inv.as_command().status().expect("mir-json should run");
+                inv.as_command().status().expect(&format!("{} should run", inv.program));
             if !status.success() {
                 panic!("{} exited with {}", inv.program, status);
             }
