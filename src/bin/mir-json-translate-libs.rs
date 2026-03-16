@@ -431,7 +431,7 @@ fn main() {
                 "Print a shell script instead of actually running the build",
             ),
             clap::Arg::new("docs").long("docs").help(
-                "Generate documentation for the libraries related to crucible",
+                "Generate documentation for Crucible-related libraries"
             ),
             clap::Arg::new("debug")
                 .long("debug")
