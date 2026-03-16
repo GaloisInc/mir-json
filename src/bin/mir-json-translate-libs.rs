@@ -431,7 +431,7 @@ fn main() {
                 "Print a shell script instead of actually running the build",
             ),
             clap::Arg::new("docs").long("docs").help(
-                "Generate documentation for the libraries",
+                "Generate documentation for the libraries related to crucible",
             ),
             clap::Arg::new("debug")
                 .long("debug")
@@ -846,14 +846,14 @@ fn main() {
         .strip_prefix(out_dir)
         .expect("out_dir should be prefix of rlibs_dir");
     if generate_only {
-        let rlibs_symlink = escape(rlibs_symlink.into_string().into());
+        let rlibs_symlink = escape(rlibs_symlink.clone().into_string().into());
         let rel_rlibs_dir = escape(rel_rlibs_dir.as_str().into());
         println!(
             "if [ ! -d {} ]; then ln -s {} {}; fi",
             rlibs_symlink, rel_rlibs_dir, rlibs_symlink
         );
     } else if !rlibs_symlink.is_dir() {
-        unix::fs::symlink(rel_rlibs_dir, rlibs_symlink)
+        unix::fs::symlink(rel_rlibs_dir, &rlibs_symlink)
             .expect("creating rlibs symlink should succeed");
     }
 
@@ -924,11 +924,12 @@ fn main() {
                     env: lib.target.env.clone(),
                 }
             );
-            if lib.target.crate_name == "crucible".into() {
+            
+            if lib.target.crate_name == EXTRA_LIB_CRUCIBLE.into() {
                 args.push("-Z".into());
                 args.push("unstable-options".into());
                 if let Some(i) = args.iter().position(|arg| arg == "--out-dir") {
-                    args[i+1] = format!("{}/docs", args[i+1]);
+                    args[i+1] = format!("{}/doc", args[i+1]);
                 }
                 tool_invocations.push(
                     CmdInvocation {
@@ -969,6 +970,23 @@ fn main() {
             ],
             env: vec![],
         });
+    if make_docs {
+        tool_invocations.push(
+        CmdInvocation {
+            program: "cargo".into(),
+            args: vec![
+                "doc".into(),
+                "--target-dir".into(),
+                rlibs_symlink.into_string(),
+                "--manifest-path".into(),
+                custom_sources_dir
+                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                    .join("Cargo.toml")
+                    .into(),
+            ],
+            env: vec![],
+        });
+    }
     tool_invocations.push(
         CmdInvocation {
             program: "cp".into(),
@@ -998,7 +1016,7 @@ fn main() {
             let status =
                 inv.as_command().status().expect("mir-json should run");
             if !status.success() {
-                panic!("mir-json/docs exited with {}", status);
+                panic!("{} exited with {}", inv.program, status);
             }
         }
     }
