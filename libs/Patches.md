@@ -166,6 +166,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   too high-level to model this. We remove the optimization in favor of a slower
   (but still correct) implementation.
 
+* Don't use a `union` in `LazyLock`'s internals (last applied: September 21, 2026)
+
+  The internals of `std::sync::LazyLock` use a `union` value to distinguish
+  between uninitialized and initialized values, but `crucible-mir` cannot
+  currently support this usage of `union`s. This patch replaces the `union`
+  with an equivalent `enum`.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
