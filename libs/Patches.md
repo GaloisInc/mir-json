@@ -312,6 +312,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
   `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
 
+* Don't use a `union` in `LazyLock`'s internals (last applied March 17, 2026)
+
+  The internals of `std::sync::LazyLock` use a `union` value to distinguish
+  between uninitialized and initialized values, but `crucible-mir` cannot
+  currently support this usage of `union`s. This patch replaces the `union`
+  with an equivalent `enum`.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
