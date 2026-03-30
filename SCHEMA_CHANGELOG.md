@@ -3,6 +3,12 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 10
+
+Add field offsets to the layout information for struct-like types.  This is
+omitted for primitives, unions, and arrays, for which the field offsets are
+easy to compute if needed.
+
 ## 9
 
 Add `trait_object`, which represents constant trait objects such as `const X:
