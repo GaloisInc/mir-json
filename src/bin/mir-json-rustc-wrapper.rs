@@ -16,7 +16,9 @@ extern crate rustc_session;
 extern crate rustc_span;
 
 extern crate mir_json;
+extern crate log;
 
+use log::debug;
 use mir_json::analyz;
 use mir_json::link;
 use mir_json::version;
@@ -190,7 +192,7 @@ fn go() -> ExitCode {
     if args.iter().position(|s| s == "--target").is_none() {
         let rustc = &args[0];
         let args = &args[1..];
-        eprintln!("this is a host build - exec {:?} {:?}", rustc, args);
+        debug!("this is a host build - exec {:?} {:?}", rustc, args);
         let e = Command::new(rustc)
             .args(args)
             .exec();
@@ -255,7 +257,7 @@ fn go() -> ExitCode {
 
     let test_idx = match args.iter().position(|s| s == "--test") {
         None => {
-            eprintln!("normal build - {:?}", args);
+            debug!("normal build - {:?}", args);
             // This is a normal, non-test build.  Just run the build, generating a `.mir` file
             // alongside the normal output.
             run_compiler(
@@ -277,7 +279,7 @@ fn go() -> ExitCode {
 
     // We're still using the original args (with only a few modifications), so the output path
     // should be the path of the test binary.
-    eprintln!("test build - extract output path - {:?}", args);
+    debug!("test build - extract output path - {:?}", args);
     let test_path = match get_output_path(&args, &use_override_crates) {
         Some(path) => path,
         None => {
@@ -295,7 +297,7 @@ fn go() -> ExitCode {
     args.push("--crate-type".into());
     args.push("rlib".into());
 
-    eprintln!("test build - {:?}", args);
+    debug!("test build - {:?}", args);
 
     // Now run the compiler.  Note we rely on cargo providing different metadata and extra-filename
     // strings to prevent collisions between this build's `.mir` output and other builds of the
@@ -310,8 +312,8 @@ fn go() -> ExitCode {
         .expect("failed to find main MIR path");
 
     let json_path = test_path.with_extension("linked-mir.json");
-    eprintln!("linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
-    eprintln!(
+    eprintln!("Linking {} mir files into {}", 1 + data.extern_mir_paths.len(), json_path.display());
+    debug!(
         "  inputs: {}{}",
         data.mir_path.display(),
         data.extern_mir_paths.iter().map(|x| format!(" {}", x.display())).collect::<String>(),
@@ -324,7 +326,7 @@ fn go() -> ExitCode {
         .unwrap_or(false);
     if !is_saw_build {
         write_test_script(&test_path, &json_path).unwrap();
-        eprintln!("generated test script {}", test_path.display());
+        debug!("generated test script {}", test_path.display());
     }
 
     ExitCode::SUCCESS
