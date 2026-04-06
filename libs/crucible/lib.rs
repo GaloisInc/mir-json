@@ -7,6 +7,7 @@
 #![no_std]
 
 pub mod bitvector;
+pub mod coroutine;
 pub mod cryptol;
 pub mod method_spec;
 pub mod sym_bytes;
