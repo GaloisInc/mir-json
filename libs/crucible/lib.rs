@@ -1,9 +1,11 @@
 #![feature(allocator_api)]
+#![feature(allow_internal_unstable)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
 #![feature(nonzero_internals)]
-#![feature(unboxed_closures)]
 #![feature(tuple_trait)]
+#![feature(type_alias_impl_trait)]
+#![feature(unboxed_closures)]
 #![no_std]
 
 pub mod bitvector;
