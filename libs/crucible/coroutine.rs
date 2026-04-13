@@ -151,6 +151,8 @@ macro_rules! set_async_override {
 
             pub type __TargetFuture = impl core::future::Future<Output = $retTy>;
 
+            // This function exists solely so that its type can be used to define
+            // the actual type behind __TargetFuture
             #[define_opaque(__TargetFuture)]
             fn __define_target_future() -> __TargetFuture {
                 $target( $(__undef(stringify!($UpvarTy))),* )
@@ -177,6 +179,16 @@ macro_rules! set_async_override {
 
 /// Trivial async executor for use during symbolic execution.
 /// All poll operations must immediately succeed when using this.
+/// 
+/// # Example
+/// 
+/// ```ignore
+/// #[crux::test]
+/// fn example_test() {
+///     override_get_random();
+///     let result = trivial_block_on(async_fn_using_get_random());
+///     crucible_assert!(property of thing_using_get_random);
+/// }
 pub fn trivial_block_on<F: Future>(mut fut: F) -> F::Output {
     let mut cx = Context::from_waker(Waker::noop());
     let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
