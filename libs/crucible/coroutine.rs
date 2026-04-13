@@ -189,6 +189,7 @@ macro_rules! set_async_override {
 ///     let result = trivial_block_on(async_fn_using_get_random());
 ///     crucible_assert!(property of thing_using_get_random);
 /// }
+/// ```
 pub fn trivial_block_on<F: Future>(mut fut: F) -> F::Output {
     let mut cx = Context::from_waker(Waker::noop());
     let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
