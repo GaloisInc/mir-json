@@ -332,12 +332,12 @@ fn add_symbolic_trait_bounds(mut generics: Generics) -> Generics {
 }
 
 /// Adds support for `#[cfg_attr(crux, derive(Symbolic))]`
-/// 
+///
 /// This generates an implementation of the Symbolic trait that
 /// is completely symbolic. All fields will be generated using
 /// their symbolic instances. In the case of enumerations, all
 /// variants can be returned. Unions are not supported.
-/// 
+///
 /// When used on a type with generics the generated implementation
 /// will automatically add Symbolic constraints on all generic
 /// type parameters.
@@ -419,7 +419,7 @@ pub fn symbolic_derive(input: TokenStream) -> TokenStream {
             }
         }
     };
-    
+
     eprintln!("output = {}", tokens);
     tokens.into()
 }
