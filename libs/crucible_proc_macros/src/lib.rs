@@ -1,3 +1,4 @@
+use log::debug;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -246,6 +247,9 @@ impl Fold for Folder {
 /// ```
 #[proc_macro_attribute]
 pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
+    // See Note [Logger initialization]
+    let _ = env_logger::try_init();
+
     let args = parse_macro_input!(args as Path);
     let func = parse_macro_input!(input as ItemFn);
     let func_span = func.span();
@@ -318,7 +322,7 @@ pub fn crux_spec_for(args: TokenStream, input: TokenStream) -> TokenStream {
         #test_func
         #spec_func
     };
-    eprintln!("output = {}", tokens);
+    debug!("output = {}", tokens);
     tokens.into()
 }
 
@@ -332,17 +336,20 @@ fn add_symbolic_trait_bounds(mut generics: Generics) -> Generics {
 }
 
 /// Adds support for `#[cfg_attr(crux, derive(Symbolic))]`
-/// 
+///
 /// This generates an implementation of the Symbolic trait that
 /// is completely symbolic. All fields will be generated using
 /// their symbolic instances. In the case of enumerations, all
 /// variants can be returned. Unions are not supported.
-/// 
+///
 /// When used on a type with generics the generated implementation
 /// will automatically add Symbolic constraints on all generic
 /// type parameters.
 #[proc_macro_derive(Symbolic)]
 pub fn symbolic_derive(input: TokenStream) -> TokenStream {
+    // See Note [Logger initialization]
+    let _ = env_logger::try_init();
+
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
@@ -419,7 +426,18 @@ pub fn symbolic_derive(input: TokenStream) -> TokenStream {
             }
         }
     };
-    
-    eprintln!("output = {}", tokens);
+
+    debug!("output = {}", tokens);
     tokens.into()
 }
+
+/*
+Note [Logger initialization]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Use env_logger::try_init (and not env_logger::init) when initializing the
+logging in this crate. This is because logger initialization will persist
+across a single invocation of mir-json, but within that invocation, multiple
+proc macros may be called. The first call to env_logger::try_init will perform
+the initialization, while subsequent calls will silently fail in a non-fatal
+way.
+*/
