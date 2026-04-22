@@ -8,7 +8,7 @@
 
 use crate::cmp::Ordering::{self, Equal, Greater, Less};
 use crate::intrinsics::{const_eval_select, exact_div, unchecked_sub};
-use crate::mem::{self, MaybeUninit, SizedTypeProperties};
+use crate::mem::{self, MaybeUninit, SizedTypeProperties, transmute};
 use crate::num::NonZero;
 use crate::ops::{OneSidedRange, OneSidedRangeBound, Range, RangeBounds, RangeInclusive};
 use crate::panic::const_panic;
@@ -846,7 +846,17 @@ impl<T> [T] {
     #[must_use]
     pub const fn as_array<const N: usize>(&self) -> Option<&[T; N]> {
         if self.len() == N {
-            unsafe { Some(&self.as_chunks_unchecked()[0]) }
+            if N == 0 {
+                // `as_chunks_unchecked` only works for non-zero array lengths,
+                // so we employ a special case here. Note that the `N == 0`
+                // check is performed at runtime, not compile time, so the
+                // types [T; 0] and [T; N] do not match. As such, we must use
+                // `transmute` to convince the typechecker.
+                let a: &[T; 0] = &[];
+                unsafe { Some(transmute(a)) }
+            } else {
+                unsafe { Some(&self.as_chunks_unchecked()[0]) }
+            }
         } else {
             None
         }
@@ -860,7 +870,17 @@ impl<T> [T] {
     #[must_use]
     pub const fn as_mut_array<const N: usize>(&mut self) -> Option<&mut [T; N]> {
         if self.len() == N {
-            unsafe { Some(&mut self.as_chunks_unchecked_mut()[0]) }
+            if N == 0 {
+                // `as_chunks_unchecked_mut` only works for non-zero array lengths,
+                // so we employ a special case here. Note that the `N == 0`
+                // check is performed at runtime, not compile time, so the
+                // types [T; 0] and [T; N] do not match. As such, we must use
+                // `transmute` to convince the typechecker.
+                let a: &mut [T; 0] = &mut [];
+                unsafe { Some(transmute(a)) }
+            } else {
+                unsafe { Some(&mut self.as_chunks_unchecked_mut()[0]) }
+            }
         } else {
             None
         }
