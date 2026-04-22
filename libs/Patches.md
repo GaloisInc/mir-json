@@ -312,6 +312,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
   `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
 
+  See also the "Limitations of zero-length arrays and
+  `slice::as_chunks_unchecked(_mut)`" note below.
+
+  *Update* (April 22, 2026): Add special cases for length-zero arrays in
+  `slice::as(_mut)_array`.
+
 * Don't use a `union` in `LazyLock`'s internals (last applied March 17, 2026)
 
   The internals of `std::sync::LazyLock` use a `union` value to distinguish
@@ -426,3 +432,33 @@ Once `crucible-mir` finishes migrating to use `MirAggregate` (see
 https://github.com/GaloisInc/crucible/issues/1499), it should be able to
 simulate `{Arc,Rc}::{from,into}_raw` properly, which would allow us to remove
 `{Arc,Rc}::{from,into}_inner_raw`.
+
+## Limitations of zero-length arrays and `slice::as_chunks_unchecked(_mut)`
+
+One of the reasons why we override `slice::as_chunks_unchecked(_mut)` is so
+that we can guarantee that the input reference aliases the output reference.
+Currently, this requires custom overrides in `crucible-mir` to accomplish.
+Moreover, we can define many similar-looking functions in terms of
+`slice::as_chunks_unchecked(_mut)`, which allows us to get away with only
+defining two custom overrides.
+
+Unfortunately, this approach has a notable drawback. We define functions such
+as `slice::as(_mut)_array` in terms of `slice::as_chunks_unchecked(_mut)`, but
+while the former functions work for arrays of any length, the latter functions
+have a precondition that the array length is non-zero. This means that if we
+call `slice::as(_mut)_array` with an array length of zero, then we cannot call
+`slice::as_chunks_unchecked(_mut)` and must use a different approach.
+
+One possible way to go about this would be to give `slice::as(_mut)_array` and
+friends additional custom overrides to handle the length-0 cases. This is
+doable, but it would be annoying to maintain, given that we would need to add a
+significant amount of additional special-casing. What's more, we are planning
+to remove these special cases later once the migration to `MirAggregate` is
+finished (see https://github.com/GaloisInc/crucible/issues/1499), so it feels
+wasteful to invest in this kind of solution.
+
+We instead adopt a less correct but much cheaper solution: when the array
+length is zero, simply return `&[]` or `&mut []`. This sort of output reference
+will _not_ alias the input reference, but since the output has no actual
+elements, the lack of aliasing is hard to observe. As such, this compromise is
+likely fine for most use cases.
