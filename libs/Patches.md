@@ -129,6 +129,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
   unsupported by crucible-mir (though it probably wouldn't be too hard to add).
 
+* Use `memchr_naive` for all `memchr` variants (last applied September 21, 2026)
+
+  The optimized implementation tries to load an entire `usize` at a time
+  instead of going byte by byte, but crucible-mir doesn't support this sort of
+  transmuting load.  The naive version is equivalent (according to comments in
+  that file) and should be much simpler to simulate.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
