@@ -69,76 +69,28 @@ cfg_select! {
     not(all(target_family = "wasm", not(target_feature = "atomics"), not(target_env = "p3")))
 ))]
 pub(crate) mod destructors {
-    cfg_select! {
-        any(
-            target_os = "linux",
-            target_os = "android",
-            target_os = "fuchsia",
-            target_os = "redox",
-            target_os = "hurd",
-            target_os = "netbsd",
-            target_os = "dragonfly"
-        ) => {
-            mod linux_like;
-            mod list;
-            pub(super) use linux_like::register;
-            pub(super) use list::run;
-        }
-        _ => {
-            mod list;
-            pub(super) use list::register;
-            pub(crate) use list::run;
-        }
-    }
+    mod list;
+    pub(super) use list::register;
+    pub(crate) use list::run;
 }
 
 /// This module provides a way to schedule the execution of the destructor list
 /// and the [runtime cleanup](crate::rt::thread_cleanup) function. Calling `enable`
 /// sets up the current thread to ensure that these functions are called at the right times.
 pub(crate) mod guard {
-    cfg_select! {
-        all(target_thread_local, target_vendor = "apple") => {
-            mod apple;
-            pub(crate) use apple::enable;
-        }
-        target_os = "windows" => {
-            mod windows;
-            pub(crate) use windows::enable;
-        }
-        any(
-            all(target_family = "wasm", not(target_env = "p3")),
-            target_os = "uefi",
-            target_os = "zkvm",
-            target_os = "trusty",
-            target_os = "vexos",
-        ) => {
-            pub(crate) fn enable() {
-                // FIXME: Right now there is no concept of "thread exit" on
-                // wasm, but this is likely going to show up at some point in
-                // the form of an exported symbol that the wasm runtime is going
-                // to be expected to call. For now we just leak everything, but
-                // if such a function starts to exist it will probably need to
-                // iterate the destructor list with these functions:
-                #[cfg(all(target_family = "wasm", target_feature = "atomics"))]
-                #[allow(unused)]
-                use super::destructors::run;
-                #[allow(unused)]
-                use crate::rt::thread_cleanup;
-            }
-        }
-        any(target_os = "hermit", target_os = "xous") => {
-            // `std` is the only runtime, so it just calls the destructor functions
-            // itself when the time comes.
-            pub(crate) fn enable() {}
-        }
-        target_os = "solid_asp3" => {
-            mod solid;
-            pub(crate) use solid::enable;
-        }
-        _ => {
-            mod key;
-            pub(crate) use key::enable;
-        }
+    // Crucible: always use the WASM implementation, which is a no-op.
+    pub(crate) fn enable() {
+        // FIXME: Right now there is no concept of "thread exit" on
+        // wasm, but this is likely going to show up at some point in
+        // the form of an exported symbol that the wasm runtime is going
+        // to be expected to call. For now we just leak everything, but
+        // if such a function starts to exist it will probably need to
+        // iterate the destructor list with these functions:
+        #[cfg(all(target_family = "wasm", target_feature = "atomics"))]
+        #[allow(unused)]
+        use super::destructors::run;
+        #[allow(unused)]
+        use crate::rt::thread_cleanup;
     }
 }
 
