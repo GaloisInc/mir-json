@@ -325,6 +325,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   currently support this usage of `union`s. This patch replaces the `union`
   with an equivalent `enum`.
 
+* Use `list` TLS destructors instead of `linux_like` (last applied April 22, 2026)
+
+  The `std::sys::thread_local::destructors::linux_like` module calls into some
+  low-level extern symbols like `__cxa_thread_atexit_impl`, which we don't
+  support.  This causes errors when initializing a `thread_local!` variable in
+  some cases.  The alternative `destructors::list` implementation is simpler
+  and is defined in terms of things we already support (`Vec` and `RefCell`).
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
