@@ -242,6 +242,21 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Crux-specific time implementation does not have a `Timespec` in it, so we
   instead always use the regular `sleep` function just like on other platforms.
 
+* Simplify implementations of TLS destructors and guards (last applied June 10, 2026)
+
+  The `std::sys::thread_local::destructors::linux_like` module calls into some
+  low-level extern symbols like `__cxa_thread_atexit_impl`, which we don't
+  support.  This causes errors when initializing a `thread_local!` variable in
+  some cases.  The alternative `destructors::list` implementation is simpler
+  and is defined in terms of things we already support (`Vec` and `RefCell`).
+
+  Similarly, `std::sys::thread_local::guard::key::enable` calls into
+  `pthread_key_create`, which we don't support.  This patch switches to the
+  WASM implementation of `guard::enable`, which is a no-op.
+
+  Together, these changes allow using `thread_local!` for types that have a
+  destructor.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
