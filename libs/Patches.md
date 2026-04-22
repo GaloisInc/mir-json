@@ -333,6 +333,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   some cases.  The alternative `destructors::list` implementation is simpler
   and is defined in terms of things we already support (`Vec` and `RefCell`).
 
+* Use `memchr_naive` for all `memchr` variants (last applied April 22, 2026)
+
+  The optimized implementation tries to load an entire `usize` at a time
+  instead of going byte by byte, but crucible-mir doesn't support this sort of
+  transmuting load.  The naive version is equivalent (according to comments in
+  that file) and should be much simpler to simulate.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
