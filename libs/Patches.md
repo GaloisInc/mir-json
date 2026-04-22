@@ -302,6 +302,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   intrinsic. To prevent this function from throwing translation errors, we have
   it return a constant dummy location.
 
+* Use `memchr_naive` for all `memchr` variants (last applied June 15, 2026)
+
+  The optimized implementation tries to load an entire `usize` at a time
+  instead of going byte by byte, but crucible-mir doesn't support this sort of
+  transmuting load.  The naive version is equivalent (according to comments in
+  that file) and should be much simpler to simulate.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
