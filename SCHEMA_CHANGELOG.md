@@ -3,6 +3,10 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 11
+
+Add `size` and `align` fields to `dyn Trait` vtables.
+
 ## 10
 
 Add field offsets to the layout information for struct-like types.  This is
