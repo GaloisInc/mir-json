@@ -1187,10 +1187,22 @@ fn emit_vtable<'tcx>(
 ) -> io::Result<()> {
     let trait_ref = ms.tcx.instantiate_bound_regions_with_erased(poly_trait_ref);
     let ti = TraitInst::from_trait_ref(ms.tcx, trait_ref);
+
+    // Get size and align of the `Self` type.  The `size` stored in the vtable is used for
+    // `size_of_val`.  The `align` is used for `align_of_val`, and also determines the offset when
+    // this `dyn` type appears as the unsized tail (last field) of a custom DST.
+    let ty = trait_ref.self_ty();
+    let layout = ms.tcx
+        .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty))
+        .unwrap_or_else(|e| panic!("failed to get layout of {:?}: {}", ty, e));
+    assert!(layout.is_sized(), "casting an unsized type to `dyn` should be forbidden by rustc");
+
     out.emit(EntryKind::Vtable, json!({
         "trait_id": trait_inst_id_str(ms.tcx, &ti),
         "name": vtable_name(ms, poly_trait_ref),
         "items": build_vtable_items(ms, poly_trait_ref),
+        "size": layout.size.bytes(),
+        "align": layout.align.abi.bytes(),
     }))?;
     emit_new_defs(ms, out)
 }

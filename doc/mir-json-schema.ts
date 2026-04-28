@@ -198,7 +198,9 @@ type Static = {
 type Vtable = {
   name : DefId,
   items: VtableItem[],
-  trait_id: DefId
+  trait_id: DefId,
+  size: number,
+  align: number
 }
 
 type VtableItem = {
