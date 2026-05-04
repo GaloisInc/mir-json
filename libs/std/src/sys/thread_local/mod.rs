@@ -29,6 +29,7 @@ cfg_select! {
         target_os = "uefi",
         target_os = "zkvm",
         target_os = "trusty",
+        target_os = "vexos",
     ) => {
         mod no_threads;
         pub use no_threads::{EagerStorage, LazyStorage, thread_local_inner};
@@ -41,7 +42,7 @@ cfg_select! {
     }
     _ => {
         mod os;
-        pub use os::{Storage, thread_local_inner};
+        pub use os::{Storage, thread_local_inner, value_align};
         pub(crate) use os::{LocalPointer, local_pointer};
     }
 }
@@ -83,13 +84,13 @@ pub(crate) mod destructors {
 /// should ensure that these functions are called at the right times.
 pub(crate) mod guard {
     pub(crate) fn enable() {
-        // FIXME: Right now there is no concept of "thread exit" on
+        // FIXME: Right now there is no concept of \"thread exit\" on
         // wasm, but this is likely going to show up at some point in
         // the form of an exported symbol that the wasm runtime is going
         // to be expected to call. For now we just leak everything, but
         // if such a function starts to exist it will probably need to
         // iterate the destructor list with these functions:
-        #[cfg(all(target_family = "wasm", target_feature = "atomics"))]
+        #[cfg(all(target_family = \"wasm\", target_feature = \"atomics\"))]
         #[allow(unused)]
         use super::destructors::run;
         #[allow(unused)]
@@ -149,6 +150,14 @@ pub(crate) mod key {
             pub(crate) use xous::destroy_tls;
             pub(super) use xous::{Key, get, set};
             use xous::{create, destroy};
+        }
+        target_os = "motor" => {
+            mod racy;
+            #[cfg(test)]
+            mod tests;
+            pub(super) use racy::LazyKey;
+            pub(super) use moto_rt::tls::{Key, get, set};
+            use moto_rt::tls::{create, destroy};
         }
         _ => {}
     }

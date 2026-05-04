@@ -607,6 +607,29 @@ impl<T> Sender<T> {
     pub fn send(&self, t: T) -> Result<(), SendError<T>> {
         self.inner.send(t)
     }
+
+    /// Returns `true` if the channel is disconnected.
+    ///
+    /// Note that a return value of `false` does not guarantee the channel will
+    /// remain connected. The channel may be disconnected immediately after this method
+    /// returns, so a subsequent [`Sender::send`] may still fail with [`SendError`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(mpsc_is_disconnected)]
+    ///
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (tx, rx) = channel::<i32>();
+    /// assert!(!tx.is_disconnected());
+    /// drop(rx);
+    /// assert!(tx.is_disconnected());
+    /// ```
+    #[unstable(feature = "mpsc_is_disconnected", issue = "153668")]
+    pub fn is_disconnected(&self) -> bool {
+        self.inner.is_disconnected()
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -1038,6 +1061,29 @@ impl<T> Receiver<T> {
     pub fn try_iter(&self) -> TryIter<'_, T> {
         TryIter { rx: self }
     }
+
+    /// Returns `true` if the channel is disconnected.
+    ///
+    /// Note that a return value of `false` does not guarantee the channel will
+    /// remain connected. The channel may be disconnected immediately after this method
+    /// returns, so a subsequent [`Receiver::recv`] may still fail with [`RecvError`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(mpsc_is_disconnected)]
+    ///
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (tx, rx) = channel::<i32>();
+    /// assert!(!rx.is_disconnected());
+    /// drop(tx);
+    /// assert!(rx.is_disconnected());
+    /// ```
+    #[unstable(feature = "mpsc_is_disconnected", issue = "153668")]
+    pub fn is_disconnected(&self) -> bool {
+        self.inner.is_disconnected()
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -1114,8 +1160,10 @@ impl<T> error::Error for SendError<T> {}
 impl<T> fmt::Debug for TrySendError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            TrySendError::Full(..) => "Full(..)".fmt(f),
-            TrySendError::Disconnected(..) => "Disconnected(..)".fmt(f),
+            TrySendError::Full(..) => f.debug_tuple("TrySendError::Full").finish_non_exhaustive(),
+            TrySendError::Disconnected(..) => {
+                f.debug_tuple("TrySendError::Disconnected").finish_non_exhaustive()
+            }
         }
     }
 }
