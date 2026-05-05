@@ -161,119 +161,119 @@ impl Alignment {
         );
 
         match align {
-            1 => Alignment(AlignmentEnum::_Align1Shl0),
-            2 => Alignment(AlignmentEnum::_Align1Shl1),
-            4 => Alignment(AlignmentEnum::_Align1Shl2),
-            8 => Alignment(AlignmentEnum::_Align1Shl3),
-            16 => Alignment(AlignmentEnum::_Align1Shl4),
-            32 => Alignment(AlignmentEnum::_Align1Shl5),
-            64 => Alignment(AlignmentEnum::_Align1Shl6),
-            128 => Alignment(AlignmentEnum::_Align1Shl7),
-            256 => Alignment(AlignmentEnum::_Align1Shl8),
-            512 => Alignment(AlignmentEnum::_Align1Shl9),
-            1024 => Alignment(AlignmentEnum::_Align1Shl10),
-            2048 => Alignment(AlignmentEnum::_Align1Shl11),
-            4096 => Alignment(AlignmentEnum::_Align1Shl12),
-            8192 => Alignment(AlignmentEnum::_Align1Shl13),
-            16384 => Alignment(AlignmentEnum::_Align1Shl14),
-            32768 => Alignment(AlignmentEnum::_Align1Shl15),
+            1 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl0 },
+            2 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl1 },
+            4 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl2 },
+            8 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl3 },
+            16 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl4 },
+            32 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl5 },
+            64 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl6 },
+            128 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl7 },
+            256 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl8 },
+            512 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl9 },
+            1024 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl10 },
+            2048 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl11 },
+            4096 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl12 },
+            8192 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl13 },
+            16384 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl14 },
+            32768 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl15 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            65536 => Alignment(AlignmentEnum::_Align1Shl16),
+            65536 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl16 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            131072 => Alignment(AlignmentEnum::_Align1Shl17),
+            131072 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl17 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            262144 => Alignment(AlignmentEnum::_Align1Shl18),
+            262144 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl18 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            524288 => Alignment(AlignmentEnum::_Align1Shl19),
+            524288 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl19 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            1048576 => Alignment(AlignmentEnum::_Align1Shl20),
+            1048576 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl20 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            2097152 => Alignment(AlignmentEnum::_Align1Shl21),
+            2097152 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl21 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            4194304 => Alignment(AlignmentEnum::_Align1Shl22),
+            4194304 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl22 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            8388608 => Alignment(AlignmentEnum::_Align1Shl23),
+            8388608 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl23 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            16777216 => Alignment(AlignmentEnum::_Align1Shl24),
+            16777216 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl24 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            33554432 => Alignment(AlignmentEnum::_Align1Shl25),
+            33554432 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl25 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            67108864 => Alignment(AlignmentEnum::_Align1Shl26),
+            67108864 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl26 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            134217728 => Alignment(AlignmentEnum::_Align1Shl27),
+            134217728 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl27 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            268435456 => Alignment(AlignmentEnum::_Align1Shl28),
+            268435456 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl28 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            536870912 => Alignment(AlignmentEnum::_Align1Shl29),
+            536870912 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl29 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            1073741824 => Alignment(AlignmentEnum::_Align1Shl30),
+            1073741824 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl30 },
             #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            2147483648 => Alignment(AlignmentEnum::_Align1Shl31),
+            2147483648 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl31 },
             #[cfg(target_pointer_width = "64")]
-            4294967296 => Alignment(AlignmentEnum::_Align1Shl32),
+            4294967296 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl32 },
             #[cfg(target_pointer_width = "64")]
-            8589934592 => Alignment(AlignmentEnum::_Align1Shl33),
+            8589934592 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl33 },
             #[cfg(target_pointer_width = "64")]
-            17179869184 => Alignment(AlignmentEnum::_Align1Shl34),
+            17179869184 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl34 },
             #[cfg(target_pointer_width = "64")]
-            34359738368 => Alignment(AlignmentEnum::_Align1Shl35),
+            34359738368 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl35 },
             #[cfg(target_pointer_width = "64")]
-            68719476736 => Alignment(AlignmentEnum::_Align1Shl36),
+            68719476736 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl36 },
             #[cfg(target_pointer_width = "64")]
-            137438953472 => Alignment(AlignmentEnum::_Align1Shl37),
+            137438953472 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl37 },
             #[cfg(target_pointer_width = "64")]
-            274877906944 => Alignment(AlignmentEnum::_Align1Shl38),
+            274877906944 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl38 },
             #[cfg(target_pointer_width = "64")]
-            549755813888 => Alignment(AlignmentEnum::_Align1Shl39),
+            549755813888 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl39 },
             #[cfg(target_pointer_width = "64")]
-            1099511627776 => Alignment(AlignmentEnum::_Align1Shl40),
+            1099511627776 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl40 },
             #[cfg(target_pointer_width = "64")]
-            2199023255552 => Alignment(AlignmentEnum::_Align1Shl41),
+            2199023255552 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl41 },
             #[cfg(target_pointer_width = "64")]
-            4398046511104 => Alignment(AlignmentEnum::_Align1Shl42),
+            4398046511104 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl42 },
             #[cfg(target_pointer_width = "64")]
-            8796093022208 => Alignment(AlignmentEnum::_Align1Shl43),
+            8796093022208 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl43 },
             #[cfg(target_pointer_width = "64")]
-            17592186044416 => Alignment(AlignmentEnum::_Align1Shl44),
+            17592186044416 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl44 },
             #[cfg(target_pointer_width = "64")]
-            35184372088832 => Alignment(AlignmentEnum::_Align1Shl45),
+            35184372088832 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl45 },
             #[cfg(target_pointer_width = "64")]
-            70368744177664 => Alignment(AlignmentEnum::_Align1Shl46),
+            70368744177664 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl46 },
             #[cfg(target_pointer_width = "64")]
-            140737488355328 => Alignment(AlignmentEnum::_Align1Shl47),
+            140737488355328 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl47 },
             #[cfg(target_pointer_width = "64")]
-            281474976710656 => Alignment(AlignmentEnum::_Align1Shl48),
+            281474976710656 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl48 },
             #[cfg(target_pointer_width = "64")]
-            562949953421312 => Alignment(AlignmentEnum::_Align1Shl49),
+            562949953421312 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl49 },
             #[cfg(target_pointer_width = "64")]
-            1125899906842624 => Alignment(AlignmentEnum::_Align1Shl50),
+            1125899906842624 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl50 },
             #[cfg(target_pointer_width = "64")]
-            2251799813685248 => Alignment(AlignmentEnum::_Align1Shl51),
+            2251799813685248 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl51 },
             #[cfg(target_pointer_width = "64")]
-            4503599627370496 => Alignment(AlignmentEnum::_Align1Shl52),
+            4503599627370496 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl52 },
             #[cfg(target_pointer_width = "64")]
-            9007199254740992 => Alignment(AlignmentEnum::_Align1Shl53),
+            9007199254740992 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl53 },
             #[cfg(target_pointer_width = "64")]
-            18014398509481984 => Alignment(AlignmentEnum::_Align1Shl54),
+            18014398509481984 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl54 },
             #[cfg(target_pointer_width = "64")]
-            36028797018963968 => Alignment(AlignmentEnum::_Align1Shl55),
+            36028797018963968 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl55 },
             #[cfg(target_pointer_width = "64")]
-            72057594037927936 => Alignment(AlignmentEnum::_Align1Shl56),
+            72057594037927936 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl56 },
             #[cfg(target_pointer_width = "64")]
-            144115188075855872 => Alignment(AlignmentEnum::_Align1Shl57),
+            144115188075855872 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl57 },
             #[cfg(target_pointer_width = "64")]
-            288230376151711744 => Alignment(AlignmentEnum::_Align1Shl58),
+            288230376151711744 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl58 },
             #[cfg(target_pointer_width = "64")]
-            576460752303423488 => Alignment(AlignmentEnum::_Align1Shl59),
+            576460752303423488 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl59 },
             #[cfg(target_pointer_width = "64")]
-            1152921504606846976 => Alignment(AlignmentEnum::_Align1Shl60),
+            1152921504606846976 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl60 },
             #[cfg(target_pointer_width = "64")]
-            2305843009213693952 => Alignment(AlignmentEnum::_Align1Shl61),
+            2305843009213693952 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl61 },
             #[cfg(target_pointer_width = "64")]
-            4611686018427387904 => Alignment(AlignmentEnum::_Align1Shl62),
+            4611686018427387904 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl62 },
             #[cfg(target_pointer_width = "64")]
-            9223372036854775808 => Alignment(AlignmentEnum::_Align1Shl63),
+            9223372036854775808 => Alignment { _inner_repr_trick: AlignmentEnum::_Align1Shl63 },
             _ => panic!("invalid alignment (not a power of two)"),
         }
     }
