@@ -153,7 +153,7 @@ fn vtable_descriptor_for_cast<'tcx>(
             // Casting to a `&dyn Trait` always yields a vtable.
             (
                 _,
-                ty::TyKind::Dynamic(ref preds, _, _),
+                ty::TyKind::Dynamic(ref preds, _),
             ) =>
                 preds.principal().map(|pred| pred.with_self_ty(tcx, old_pointee)),
 
@@ -318,9 +318,6 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "place": l.to_json(mir)
                 })
             }
-            &mir::Rvalue::Len(ref l) => {
-                json!({"kind": "Len", "lv": l.to_json(mir)})
-            }
             &mir::Rvalue::Cast(ref ck, ref op, ty) => {
                 let mut j = json!({
                     "kind": "Cast",
@@ -355,13 +352,6 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "R": ops.1.to_json(mir)
                 })
             }
-            &mir::Rvalue::NullaryOp(ref no, ref t) => {
-                json!({
-                    "kind": "NullaryOp",
-                    "op": no.to_json(mir),
-                    "ty": t.to_json(mir)
-                })
-            }
             &mir::Rvalue::UnaryOp(ref uo, ref o) => {
                 json!({
                     "kind": "UnaryOp",
@@ -393,13 +383,6 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                         "ops": opv.to_json(mir)
                     })
                 }
-            }
-            &mir::Rvalue::ShallowInitBox(ref op, ty) => {
-                json!({
-                    "kind": "ShallowInitBox",
-                    "ptr": op.to_json(mir),
-                    "ty": ty.to_json(mir)
-                })
             }
             &mir::Rvalue::CopyForDeref(ref l) => {
                 json!({
@@ -472,9 +455,6 @@ impl<'tcx> ToJson<'tcx> for mir::PlaceElem<'tcx> {
             &mir::ProjectionElem::UnwrapUnsafeBinder(ref ty) => {
                 json!({"kind": "UnwrapUnsafeBinder", "ty": ty.to_json(mir) })
             }
-            &mir::ProjectionElem::Subtype(ref ty) => {
-                json!({"kind": "Subtype", "ty": ty.to_json(mir) })
-            }
         }
     }
 }
@@ -496,6 +476,9 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
             }
             &mir::Operand::Constant(ref l) => {
                 json!({"kind": "Constant", "data": l.to_json(mir)})
+            }
+            &mir::Operand::RuntimeChecks(ref rc) => {
+                json!({"kind": "RuntimeChecks", "data": format!("{:?}", rc)})
             }
         }
     }
@@ -538,10 +521,6 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::FakeRead { .. } => {
                 // TODO
                 json!({"kind": "FakeRead"})
-            }
-            &mir::StatementKind::Deinit { .. } => {
-                // TODO
-                json!({"kind": "Deinit"})
             }
             &mir::StatementKind::SetDiscriminant {
                 ref place,
@@ -699,7 +678,7 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 json!({
                     "kind": "Call",
                     "func": func.to_json(mir),
-                    "args": args.to_json(mir),
+                    "args": args.iter().map(|a| a.node.to_json(mir)).collect::<Vec<_>>(),
                     "destination": destination,
                 })
             }
@@ -1409,7 +1388,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         let it = src.dylib.iter()
             .chain(src.rlib.iter())
             .chain(src.rmeta.iter());
-        for &(ref path, _) in it {
+        for path in it {
             let mir_path = path.with_extension("mir");
             if mir_path.exists() {
                 extern_mir_paths.push(mir_path);
@@ -1517,7 +1496,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                 item: ast::AttrItem {
                     unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),
-                    args: ast::AttrArgs::Delimited(
+                    args: ast::AttrItemKind::Unparsed(ast::AttrArgs::Delimited(
                         ast::DelimArgs {
                             dspan: tokenstream::DelimSpan::dummy(),
                             delim: token::Delimiter::Parenthesis,
@@ -1530,7 +1509,7 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                                     Span::default(),
                                 ),
                             ).collect(),
-                        }),
+                        })),
                     tokens: None,
                 },
                 tokens: None,

@@ -5,11 +5,11 @@ use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
-use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, NullOp, UnOp};
-use rustc_middle::ty::{self, Binder, DynKind, FloatTy, IntTy, TyCtxt, UintTy};
+use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, UnOp};
+use rustc_middle::ty::{self, Binder, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
-use rustc_span::source_map::Spanned;
+use rustc_span::Spanned;
 use rustc_span::symbol::Symbol;
 use serde_json;
 use std::collections::BTreeMap;
@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::hash::Hash;
 use std::ops::Deref;
+use std::marker::PointeeSized;
 use std::mem;
 
 
@@ -201,7 +202,7 @@ impl<'tcx> TraitInst<'tcx> {
             self.projs.iter().map(|p| ty::Binder::dummy(ty::ExistentialPredicate::Projection(*p))),
         );
         let preds = tcx.mk_poly_existential_predicates(&preds);
-        Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased, DynKind::Dyn))
+        Some(ty::Ty::new_dynamic(tcx, preds, tcx.lifetimes.re_erased))
     }
 
     /// Build a concrete, non-existential TraitRef, filling in the `Self` parameter with the `dyn`
@@ -439,7 +440,7 @@ pub struct MirState<'a, 'tcx : 'a> {
 /// The `'tcx` parameter allows writing impls like `ToJson<'tcx> for Ty<'tcx>`, where the lifetime
 /// parameter on `Self` is known to match the lifetime of `mir.state.tcx`.  This enables passing
 /// `self` (or its fields) to some `TyCtxt` methods that would otherwise be unusable.
-pub trait ToJson<'tcx> {
+pub trait ToJson<'tcx>: PointeeSized {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value;
 }
 
@@ -682,6 +683,7 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::Custom => json!({ "kind": "Custom" }),
             ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
             ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
+            ExternAbi::RustPreserveNone => json!({ "kind": "RustPreserveNone" }),
         }
     }
 }
@@ -731,7 +733,7 @@ impl ToJson<'_> for Safety {
 impl ToJson<'_> for PointerCoercion {
     fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
         match self {
-            PointerCoercion::ReifyFnPointer => json!({ "kind": "ReifyFnPointer" }),
+            PointerCoercion::ReifyFnPointer(_) => json!({ "kind": "ReifyFnPointer" }),
             PointerCoercion::UnsafeFnPointer => json!({ "kind": "UnsafeFnPointer" }),
             PointerCoercion::ClosureFnPointer(safety) => {
                 json!({
@@ -774,6 +776,7 @@ impl ToJson<'_> for CastKind {
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
             CastKind::Transmute => json!({ "kind": "Transmute" }),
+            CastKind::Subtype => json!({ "kind": "Subtype" }),
         }
     }
 }
@@ -816,23 +819,6 @@ impl ToJson<'_> for Mutability {
         match self {
             Mutability::Not => json!({ "kind": "Not" }),
             Mutability::Mut => json!({ "kind": "Mut" }),
-        }
-    }
-}
-
-impl<'tcx> ToJson<'tcx> for NullOp<'tcx> {
-    fn to_json(&self, mir: &mut MirState) -> serde_json::Value {
-        match self {
-            NullOp::SizeOf => json!({ "kind": "SizeOf" }),
-            NullOp::AlignOf => json!({ "kind": "AlignOf" }),
-            NullOp::OffsetOf(fields) => {
-                json!({
-                    "kind": "OffsetOf",
-                    "fields": fields.to_json(mir),
-                })
-            },
-            NullOp::UbChecks => json!({ "kind": "UbChecks" }),
-            NullOp::ContractChecks => json!({ "kind": "ContractChecks" }),
         }
     }
 }
