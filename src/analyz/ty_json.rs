@@ -12,9 +12,9 @@ use rustc_const_eval::interpret::{
     Projectable,
 };
 use rustc_middle::ty;
-use rustc_middle::ty::{AdtKind, DynKind, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::{AdtKind, TyCtxt, TypeVisitableExt};
 use rustc_middle::ty::util::IntTypeExt;
-use rustc_query_system::ich::StableHashingContext;
+use rustc_middle::ich::StableHashingContext;
 use rustc_abi::{Align, ExternAbi, FieldIdx, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
@@ -35,6 +35,7 @@ impl<'tcx, T> ToJson<'tcx> for ty::List<T>
         json!(j)
     }
 }
+
 
 impl ToJson<'_> for mir::BorrowKind {
     fn to_json(&self, _mir: &mut MirState) -> serde_json::Value {
@@ -371,7 +372,7 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 let self_ty = args.types().next()
                     .unwrap_or_else(|| panic!("expected self type in args for {:?}", self));
                 let preds = match *self_ty.kind() {
-                    ty::TyKind::Dynamic(ref preds, _region, _dynkind) => preds,
+                    ty::TyKind::Dynamic(ref preds, _region) => preds,
                     _ => panic!("expected `dyn` self type, but got {:?}", self_ty),
                 };
                 let ex_tref = match preds.principal() {
@@ -571,22 +572,18 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     // for tuples, so no additional information is needed.
                 })
             }
-            &ty::TyKind::Dynamic(preds, _region, dynkind) => {
-                match dynkind {
-                    DynKind::Dyn => {
-                        let ti = TraitInst::from_dynamic_predicates(mir.tcx, preds);
-                        let trait_name = trait_inst_id_str(mir.tcx, &ti);
-                        mir.used.traits.insert(ti);
-                        json!({
-                            "kind": "Dynamic",
-                            "trait_id": trait_name,
-                            "predicates": preds.iter().map(|p|{
-                                let p = tcx.instantiate_bound_regions_with_erased(p);
-                                p.to_json(mir)
-                            }).collect::<Vec<_>>(),
-                        })
-                    },
-                }
+            &ty::TyKind::Dynamic(preds, _region) => {
+                let ti = TraitInst::from_dynamic_predicates(mir.tcx, preds);
+                let trait_name = trait_inst_id_str(mir.tcx, &ti);
+                mir.used.traits.insert(ti);
+                json!({
+                    "kind": "Dynamic",
+                    "trait_id": trait_name,
+                    "predicates": preds.iter().map(|p|{
+                        let p = tcx.instantiate_bound_regions_with_erased(p);
+                        p.to_json(mir)
+                    }).collect::<Vec<_>>(),
+                })
             }
             &ty::TyKind::Alias(ty::AliasTyKind::Projection, _) => unreachable!(
                 "no TyKind::Alias with AliasTyKind Projection should remain after monomorphization"
@@ -746,7 +743,7 @@ impl<'tcx> ToJson<'tcx> for ty::TraitRef<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "trait":  self.def_id.to_json(ms),
-            "args":  self.args.to_json(ms)
+            "args": self.args.to_json(ms)
         })
     }
 }
@@ -1044,11 +1041,14 @@ mod machine {
             )).into()
         }
 
-        fn ub_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
-            interp_ok(false)
+        fn float_fuse_mul_add(_ecx: &InterpCx<'tcx, Self>) -> bool {
+            false
         }
 
-        fn contract_checks(_ecx: &InterpCx<'tcx, Self>) -> InterpResult<'tcx, bool> {
+        fn runtime_checks(
+            _ecx: &InterpCx<'tcx, Self>,
+            _checks: rustc_middle::mir::RuntimeChecks,
+        ) -> InterpResult<'tcx, bool> {
             interp_ok(false)
         }
 
@@ -1413,7 +1413,7 @@ pub fn try_render_opty<'tcx>(
                 _ => unreachable!("Function pointer doesn't point to a function"),
             }
         }
-        ty::TyKind::Dynamic(_, _, _) => unreachable!("dynamic should not occur here"),
+        ty::TyKind::Dynamic(_, _) => unreachable!("dynamic should not occur here"),
 
         ty::TyKind::Closure(_defid, args) => {
             let upvars_count = args.as_closure().upvar_tys().len();
@@ -1579,7 +1579,7 @@ fn make_allocation_body<'tcx>(
                     "rendered": rendered,
                 });
             },
-            ty::TyKind::Dynamic(ref preds, _, _) => {
+            ty::TyKind::Dynamic(ref preds, _) => {
                 let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
                 return do_default(mir, icx, unpacked_d.layout.ty, &unpacked_d);
             },
@@ -1678,7 +1678,7 @@ fn try_render_ref_opty<'tcx>(
                 return Some(do_slice(icx, &d, def_id_json)),
             ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
                 return Some(do_slice(icx, &d, def_id_json)),
-            ty::TyKind::Dynamic(ref preds, _, _) => {
+            ty::TyKind::Dynamic(ref preds, _) => {
                 let self_ty = unpack_dyn_ty(icx, &d, preds).unwrap();
                 let vtable_desc = preds.principal().map(|pred| pred.with_self_ty(tcx, self_ty));
                 match vtable_desc {
@@ -1947,7 +1947,7 @@ fn unpack_dyn_ty<'tcx>(
     expected_trait: &'tcx ty::List<ty::PolyExistentialPredicate<'tcx>>,
 ) -> InterpResult<'tcx, ty::Ty<'tcx>> {
     assert!(
-        matches!(mplace.layout.ty.kind(), ty::Dynamic(_, _, ty::Dyn)),
+        matches!(mplace.layout.ty.kind(), ty::Dynamic(_, _)),
         "`unpack_dyn_ty` only makes sense on `dyn*` types"
     );
     let vtable = mplace.meta().unwrap_meta().to_pointer(icx)?;

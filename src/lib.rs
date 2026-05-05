@@ -1,5 +1,6 @@
 #![feature(rustc_private)]
 #![feature(never_type)]
+#![feature(sized_hierarchy)]
 
 extern crate serde;
 #[macro_use] extern crate serde_json;
@@ -18,7 +19,6 @@ extern crate rustc_index;
 extern crate rustc_interface;
 extern crate rustc_middle;
 extern crate rustc_monomorphize;
-extern crate rustc_query_system;
 extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_target;
