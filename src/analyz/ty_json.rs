@@ -665,16 +665,18 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                         Some(offsets.iter().map(|&off| off.bytes()).collect::<Vec<_>>())
                     },
                 };
-                if layout.is_sized() {
-                    Some(json!({
-                        "align": layout.align.abi.bytes(),
-                        "size": layout.size.bytes(),
-                        "field_offsets": field_offsets
-                    }))
-                } else {
-                    // TODO: provide field offsets even for unsized types
-                    None
-                }
+                // Output size, align, and field_offsets for both sized and unsized types.  For
+                // unsized types, this is the minimum size and alignment: `dyn Trait` has size 0
+                // and align 1, and `[T]` has size 0 and `align_of::<T>()`.  Layouts for unsized
+                // structs / custom DSTs are computed accordingly.  This means custom DSTs will
+                // have `field_offsets` entries for all fields, but the offset of the last field
+                // may be inaccurate if it contains `dyn Trait` (since the layout computed here
+                // assumes align 1, but the actual alignment of the erased type may be higher).
+                Some(json!({
+                    "align": layout.align.abi.bytes(),
+                    "size": layout.size.bytes(),
+                    "field_offsets": field_offsets
+                }))
             }
         };
 
