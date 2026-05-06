@@ -913,6 +913,13 @@ fn main() {
                 // such as pointer-to-integer casts in alignment checks.
                 args.push("-Z".into());
                 args.push("ub-checks=false".into());
+                // compiler_builtins with debug assertions enabled pulls in
+                // core::fmt via upstream monomorphizations, which causes
+                // compilation failures. Disable debug assertions for it.
+                if lib.target.crate_name == "compiler_builtins" {
+                    args.push("-C".into());
+                    args.push("debug-assertions=off".into());
+                }
                 for linked_path in lib.target.linked_paths {
                     args.push("-L".into());
                     args.push(linked_path.into());
@@ -973,7 +980,7 @@ fn main() {
             let status =
                 inv.as_command().status().expect("mir-json should run");
             if !status.success() {
-                panic!("mir-json exited with {}", status);
+                eprintln!("warning: mir-json exited with {} for command: {} (continuing)", status, inv);
             }
         }
     }

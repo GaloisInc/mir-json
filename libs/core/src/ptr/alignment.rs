@@ -292,15 +292,8 @@ impl Alignment {
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const fn as_nonzero(self) -> NonZero<usize> {
-        #[cfg(target_pointer_width = "16")]
-        let x = self.0 as u16;
-        #[cfg(target_pointer_width = "32")]
-        let x = self.0 as u32;
-        #[cfg(target_pointer_width = "64")]
-        let x = self.0 as u64;
-
         // SAFETY: All the discriminants are non-zero.
-        unsafe { NonZero::new_unchecked(self.0 as usize) }
+        unsafe { crate::mem::transmute::<Alignment, NonZero<usize>>(self) }
     }
 
     /// Returns the base-2 logarithm of the alignment.

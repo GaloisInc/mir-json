@@ -840,7 +840,7 @@ where
 #[rustc_diagnostic_item = "ptr_null"]
 pub const fn null<T: PointeeSized + Thin>() -> *const T {
     #[inline(never)] // Keep the hook around even with optimizations applied
-    const fn crucible_null_hook<T: ?Sized + Thin>() -> *const T {
+    const fn crucible_null_hook<T: PointeeSized + Thin>() -> *const T {
         from_raw_parts(without_provenance::<()>(0), ())
     }
     crucible_null_hook()
@@ -869,7 +869,7 @@ pub const fn null<T: PointeeSized + Thin>() -> *const T {
 #[rustc_diagnostic_item = "ptr_null_mut"]
 pub const fn null_mut<T: PointeeSized + Thin>() -> *mut T {
     #[inline(never)] // Keep the hook around even with optimizations applied
-    const fn crucible_null_hook<T: ?Sized + Thin>() -> *mut T {
+    const fn crucible_null_hook<T: PointeeSized + Thin>() -> *mut T {
         from_raw_parts_mut(without_provenance_mut::<()>(0), ())
     }
     crucible_null_hook()
