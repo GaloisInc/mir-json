@@ -173,30 +173,6 @@ const fn min_non_zero_cap(size: usize) -> usize {
     }
 }
 
-#[rustc_const_unstable(feature = "const_heap", issue = "79597")]
-#[rustfmt::skip] // FIXME(fee1-dead): temporary measure before rustfmt is bumped
-const impl<T, A: [const] Allocator + [const] Destruct> RawVec<T, A> {
-    /// Like `with_capacity`, but parameterized over the choice of
-    /// allocator for the returned `RawVec`.
-    #[cfg(not(no_global_oom_handling))]
-    #[inline]
-    pub(crate) fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        Self {
-            inner: RawVecInner::with_capacity_in(capacity, alloc, T::LAYOUT),
-            _marker: PhantomData,
-        }
-    }
-
-    /// A specialized version of `self.reserve(len, 1)` which requires the
-    /// caller to ensure `len == self.capacity()`.
-    #[cfg(not(no_global_oom_handling))]
-    #[inline(never)]
-    pub(crate) fn grow_one(&mut self) {
-        // SAFETY: All calls on self.inner pass T::LAYOUT as the elem_layout
-        unsafe { self.inner.grow_one(T::LAYOUT) }
-    }
-}
-
 impl<T, A: Allocator> RawVec<T, A> {
     #[cfg(not(no_global_oom_handling))]
     pub(crate) const MIN_NON_ZERO_CAP: usize = min_non_zero_cap(size_of::<T>());
@@ -218,7 +194,6 @@ impl<T, A: Allocator> RawVec<T, A> {
     /// allocator for the returned `RawVec`.
     #[cfg(not(no_global_oom_handling))]
     #[inline]
-    #[track_caller]
     pub(crate) fn with_capacity_in(capacity: usize, alloc: A) -> Self {
         let inner_alloc = crucible::TypedAllocator::new();
         Self {
@@ -226,6 +201,15 @@ impl<T, A: Allocator> RawVec<T, A> {
             orig_alloc: alloc,
             _marker: PhantomData,
         }
+    }
+
+    /// A specialized version of `self.reserve(len, 1)` which requires the
+    /// caller to ensure `len == self.capacity()`.
+    #[cfg(not(no_global_oom_handling))]
+    #[inline(never)]
+    pub(crate) fn grow_one(&mut self) {
+        // SAFETY: All calls on self.inner pass T::LAYOUT as the elem_layout
+        unsafe { self.inner.grow_one(T::LAYOUT) }
     }
 
     /// Like `try_with_capacity`, but parameterized over the choice of

@@ -515,6 +515,7 @@ fn main() {
     let cargo_init_status = Command::new("cargo")
         .current_dir(&empty_project_dir)
         .arg("init")
+        .arg("--lib")
         .arg("--name")
         .arg(EMPTY_PROJECT_NAME)
         .arg("--vcs")
@@ -525,29 +526,41 @@ fn main() {
         panic!("cargo init exited with {}", cargo_init_status);
     }
 
-    // Run `cargo test -Z build-std` to obtain compiler artifact and build
+    // Disable debug assertions for compiler_builtins to prevent upstream
+    // monomorphization errors (compiler_builtins calls core::fmt via debug_assert).
+    {
+        let cargo_dir = empty_project_dir.path().join(".cargo");
+        std::fs::create_dir_all(&cargo_dir).expect("create .cargo dir");
+        std::fs::write(
+            cargo_dir.join("config.toml"),
+            "[profile.dev.package.compiler_builtins]\ndebug-assertions = false\n\
+             [profile.release.package.compiler_builtins]\ndebug-assertions = false\n\
+             [profile.test.package.compiler_builtins]\ndebug-assertions = false\n",
+        )
+        .expect("write .cargo/config.toml");
+    }
+
+    // Run `cargo build -Z build-std` to obtain compiler artifact and build
     // script result messages.
-    eprintln!("Running cargo test...");
+    eprintln!("Running cargo build -Z build-std...");
     let mut cargo_test_child = {
         let mut cmd = cargo_test_cmd(&empty_project_dir, target_triple);
         cmd.arg("--message-format")
-            .arg("json")
-            .arg("--no-run")
-            // Hack: When cross-compiling, cargo test will fail without an
-            // appropriate linker installed. But we only care about compiling
-            // the std libraries to rlibs, which rustc can do on its own. So we
-            // pass a dummy linker to get cargo test to succeed at the end
-            // without actually doing any linking. This has the side benefit of
-            // making non-cross builds faster as well by skipping the linking
-            // step. Note that "true" here is the program /usr/bin/true (or
-            // similar), not just enabling the flag.
-            .env("RUSTFLAGS", "-C linker=true");
+            .arg("json");
+        // Use a dummy linker to skip linking — we only need rlibs.
+        // Also disable debug assertions globally to prevent compiler_builtins
+        // from pulling in core::fmt via upstream monomorphization.
+        if cfg!(windows) {
+            cmd.env("RUSTFLAGS", "-C linker=cmd.exe -C link-args=/c -C debug-assertions=no");
+        } else {
+            cmd.env("RUSTFLAGS", "-C linker=true -C debug-assertions=no");
+        }
         if debug_enabled {
             cmd.arg("--verbose");
         }
         cmd.stdout(Stdio::piped())
             .spawn()
-            .expect("cargo test should run")
+            .expect("cargo build should run")
     };
     let cargo_test_child_stdout = cargo_test_child
         .stdout
@@ -871,6 +884,7 @@ fn main() {
         .map(|lib| CmdInvocation {
             program: "mir-json".into(),
             args: {
+                let is_compiler_builtins = lib.target.crate_name.to_string() == "compiler_builtins";
                 let mut args = vec![
                     lib.target.src_path.into(),
                     "--edition".into(),
@@ -916,7 +930,7 @@ fn main() {
                 // compiler_builtins with debug assertions enabled pulls in
                 // core::fmt via upstream monomorphizations, which causes
                 // compilation failures. Disable debug assertions for it.
-                if lib.target.crate_name == "compiler_builtins" {
+                if is_compiler_builtins {
                     args.push("-C".into());
                     args.push("debug-assertions=off".into());
                 }
@@ -986,11 +1000,12 @@ fn main() {
     }
 }
 
-/// Build a `cargo test -Z build-std` command.
+/// Build a `cargo build -Z build-std` command.
 fn cargo_test_cmd(project_dir: &TempDir, target_triple: &str) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(project_dir)
-        .arg("test")
+        .arg("build")
+        .arg("--lib")
         .arg("--target")
         .arg(target_triple)
         .arg("-Z");

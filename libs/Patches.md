@@ -128,6 +128,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   and has the effect of threading the element type through to the crucible-mir
   allocation functions.
 
+  *Update* (May 8, 2026): Merged upstream's `const impl` block methods
+  (`with_capacity_in`, `grow_one`) into the regular `impl<T, A: Allocator>`
+  block.  The `const impl` block requires `[const] Allocator + [const] Destruct`
+  bounds which `crucible::TypedAllocator<T>` does not satisfy.  Also added
+  `orig_alloc` field to `with_capacity_in` which was missing after the nightly
+  update introduced the `const impl` block.
+
 * Use `Box::new` instead of `box_new` in `vec!` macro (last applied: November 20, 2025)
 
   Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
