@@ -103,6 +103,19 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   Crucible doesn't support a `deallocate` operation.
 
+* Make some `Vec` methods non-const (last applied: June 9, 2026)
+
+  Some allocating methods, such as `Vec::with_capacity_in`, can now be used in
+  const contexts if the allocator is also const (`A: [const] Allocator`).
+  Currently we don't support const usage of `crucible::TypedAllocator<T>`.  For
+  now we handle this by making the methods non-const, which works because
+  nothing within the standard library relies on them being const.
+
+  If we need to support this properly in the future, we could try making
+  `TypedAllocator` dispatch to `alloc::Global` when used in const contexts.
+  This should produce static allocations, which mir-json and crucible-mir will
+  translate just like those arising from static slices and such.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
