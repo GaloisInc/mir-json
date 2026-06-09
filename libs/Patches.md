@@ -64,6 +64,11 @@ into the main commit for that patch, and then the *Update* line can be removed.
   The internal function `alloc::rc::is_dangling` is implemented similarly to
   `is_null`, so we reimplement it in terms of `compare_usize` as well.
 
+* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: September 17, 2026)
+
+  The actual implementation uses a pointer cast that Crucible can't handle.
+
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
