@@ -167,7 +167,7 @@ const fn min_non_zero_cap(size: usize) -> usize {
 
 #[rustc_const_unstable(feature = "const_heap", issue = "79597")]
 #[rustfmt::skip] // FIXME(fee1-dead): temporary measure before rustfmt is bumped
-const impl<T, A: [const] Allocator + [const] Destruct> RawVec<T, A> {
+impl<T, A: Allocator> RawVec<T, A> {
     /// Like `with_capacity`, but parameterized over the choice of
     /// allocator for the returned `RawVec`.
     #[cfg(not(no_global_oom_handling))]
