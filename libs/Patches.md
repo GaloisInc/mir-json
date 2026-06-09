@@ -38,3 +38,7 @@ into the main commit for that patch, and then the *Update* line can be removed.
   difficult because we don't have a good way to detect which union variant is
   active.  This specifically affects `array::from_fn` and
   `Iterator::next_chunk`.
+
+* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: June 9, 2026)
+
+  The actual implementation uses a pointer cast that Crucible can't handle.
