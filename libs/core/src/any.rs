@@ -742,7 +742,20 @@ unsafe impl Sync for TypeId {}
 const impl PartialEq for TypeId {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        crate::intrinsics::type_id_eq(*self, *other)
+        #[cfg(miri)]
+        return crate::intrinsics::type_id_eq(*self, *other);
+        #[cfg(not(miri))]
+        {
+            let this = self;
+            crate::intrinsics::const_eval_select!(
+                @capture { this: &TypeId, other: &TypeId } -> bool:
+                if const {
+                    crate::intrinsics::type_id_eq(*this, *other)
+                } else {
+                    this.data == other.data
+                }
+            )
+        }
     }
 }
 

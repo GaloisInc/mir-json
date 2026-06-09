@@ -1,5 +1,3 @@
-use crate::cmp::BytewiseEq;
-
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
 const impl<T, U, const N: usize> PartialEq<[U; N]> for [T; N]
@@ -145,18 +143,5 @@ const impl<T: [const] PartialEq<Other>, Other, const N: usize> SpecArrayEq<Other
     }
     default fn spec_ne(a: &[Self; N], b: &[Other; N]) -> bool {
         a[..] != b[..]
-    }
-}
-
-#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-const impl<T: [const] BytewiseEq<U>, U, const N: usize> SpecArrayEq<U, N> for T {
-    fn spec_eq(a: &[T; N], b: &[U; N]) -> bool {
-        // SAFETY: Arrays are compared element-wise, and don't add any padding
-        // between elements, so when the elements are `BytewiseEq`, we can
-        // compare the entire array at once.
-        unsafe { crate::intrinsics::raw_eq(a, crate::mem::transmute(b)) }
-    }
-    fn spec_ne(a: &[T; N], b: &[U; N]) -> bool {
-        !Self::spec_eq(a, b)
     }
 }
