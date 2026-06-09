@@ -2,9 +2,8 @@
 
 use super::{from_raw_parts, memchr};
 use crate::ascii;
-use crate::cmp::{self, BytewiseEq, Ordering};
+use crate::cmp::{self, Ordering};
 use crate::intrinsics::compare_bytes;
-use crate::mem::SizedTypeProperties;
 use crate::num::NonZero;
 use crate::ops::ControlFlow;
 
@@ -134,25 +133,6 @@ where
         }
 
         true
-    }
-}
-
-// When each element can be compared byte-wise, we can compare all the bytes
-// from the whole size in one call to the intrinsics.
-#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<A, B> const SlicePartialEq<B> for A
-where
-    A: [const] BytewiseEq<B>,
-{
-    #[inline]
-    unsafe fn equal_same_length(lhs: *const Self, rhs: *const B, len: usize) -> bool {
-        // SAFETY: by our precondition, `lhs` and `rhs` are guaranteed to be valid
-        // for reading `len` values, which also means the size is guaranteed
-        // not to overflow because it exists in memory;
-        unsafe {
-            let size = crate::intrinsics::unchecked_mul(len, Self::SIZE);
-            compare_bytes(lhs as _, rhs as _, size) == 0
-        }
     }
 }
 

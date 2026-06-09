@@ -26,6 +26,7 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 mod bytewise;
+#[allow(unused)]
 pub(crate) use bytewise::BytewiseEq;
 
 use self::Ordering::*;
