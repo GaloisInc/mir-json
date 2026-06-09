@@ -143,6 +143,20 @@
     --target wasm32-unknown-unknown` to add `dlmalloc` to `libs` (it will skip
     copying any libraries already in `libs`).
 
+    At this point, you can add a placeholder `crucible/lib.rs` to check that
+    the standard libraries compile:
+
+    ```
+    mkdir libs/crucible
+    # Avoid introducing a dependency on the original libstd
+    echo '#![no_std]' >libs/crucible/lib.rs
+    cargo run --bin mir-json-translate-libs
+    ```
+
+    At this point, translation should fail once it reaches the custom libraries
+    (e.g. `int512`), but should succeed on all of the standard libraries, up to
+    and including `std`.
+
 6. Copy over our custom libraries.
 
     In addition to the standard libraries, we also include some custom libraries
