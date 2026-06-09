@@ -37,6 +37,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   difficult due to limited ability to use generics in a const context.
   Instead, we wrap it in a hook that we can override in crucible-mir.
 
+* Disable `BytewiseEq`-based array/slice comparisons (last applied: September 17, 2026)
+
+  These require a special comparison intrinsic (`core::intrinsics::raw_eq`)
+  that Crucible doesn't support. We instead fall back on the other
+  `SpecArrayEq`/`SlicePartialEq` instances that are slower (but easier to
+  translate).
+
 
 # Notes
 
