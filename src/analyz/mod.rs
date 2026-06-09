@@ -980,8 +980,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
     let crux = Symbol::intern("crux");
     let test = Symbol::intern("test");
 
-    tcx.get_all_attrs(def_id).iter()
-        .any(|attr| attr.path_matches(&[crux, test]))
+    tcx.get_attrs_by_path(def_id, &[crux, test]).next().is_some()
 }
 
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
