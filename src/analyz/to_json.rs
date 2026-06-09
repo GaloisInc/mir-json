@@ -5,7 +5,7 @@ use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
-use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, UnOp};
+use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, UnOp, RuntimeChecks};
 use rustc_middle::ty::{self, Binder, FloatTy, IntTy, TyCtxt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
@@ -836,8 +836,6 @@ impl ToJson<'_> for UintTy {
     }
 }
 
-// end enum handlers
-
 impl ToJson<'_> for UnOp {
     fn to_json(&self, _: &mut MirState) -> serde_json::Value {
         match self {
@@ -847,6 +845,18 @@ impl ToJson<'_> for UnOp {
         }
     }
 }
+
+impl ToJson<'_> for RuntimeChecks {
+    fn to_json(&self, _: &mut MirState) -> serde_json::Value {
+        match self {
+            RuntimeChecks::UbChecks => json!({ "kind": "UbChecks" }),
+            RuntimeChecks::ContractChecks => json!({ "kind": "ContractChecks" }),
+            RuntimeChecks::OverflowChecks => json!({ "kind": "OverflowChecks" }),
+        }
+    }
+}
+
+// end enum handlers
 
 impl<'tcx, A, B> ToJson<'tcx> for (A, B)
 where
