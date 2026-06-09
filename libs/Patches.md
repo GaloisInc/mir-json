@@ -23,3 +23,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   After adding the crucible intrinsics in `core/src/crucible`, we need to add a
   reference to it in `core/src/lib.rs`.
+
+* Disable `BytewiseEq`-based array/slice comparisons (last applied: June 9, 2026)
+
+  These require a special comparison intrinsic (`core::intrinsics::raw_eq`)
+  that Crucible doesn't support. We instead fall back on the other
+  `SpecArrayEq`/`SlicePartialEq` instances that are slower (but easier to
+  translate).
