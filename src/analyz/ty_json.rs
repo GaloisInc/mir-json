@@ -624,8 +624,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 // TODO
                 json!({"kind": "Alias"})
             }
-            &ty::TyKind::Pat(_, _) => {
-                json!({"kind": "Unsupported"})
+            &ty::TyKind::Pat(ty, _) => {
+                json!({"kind": "Pat", "ty": ty.to_json(mir)})
             },
             &ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
                 json!({"kind": "Unsupported"})
