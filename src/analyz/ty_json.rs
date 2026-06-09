@@ -1456,8 +1456,11 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Infer(_) => unreachable!("infer is not a real type?"),
         ty::TyKind::Error(_) => unreachable!("error is not a real type?"),
 
-        ty::TyKind::Pat(_, _) => {
-            json!({"kind": "unsupported"})
+        ty::TyKind::Pat(ty, _) => {
+            let inner_ty_and_layout = mir.tcx.layout_of(
+                ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
+            let new_op_ty = op_ty.transmute(inner_ty_and_layout, icx).unwrap();
+            return try_render_opty(mir, icx, &new_op_ty);
         },
         ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
             json!({"kind": "unsupported"})
