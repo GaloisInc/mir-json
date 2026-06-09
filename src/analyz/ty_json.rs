@@ -1838,7 +1838,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
             } else {
                 self.adt.variants()
                         .iter()
-                        .map(|v| render_variant(mir, &self, v, &None))
+                        .map(|v| render_variant(mir, &self, v, "0".into()))
                         .collect::<Vec<serde_json::Value>>()
                         .into()
             };
@@ -1862,7 +1862,7 @@ fn render_enum_variants<'tcx>(
     let mut variants = Vec::with_capacity(adt.adt.variants().len());
     for (idx, d_value) in adt.adt.discriminants(mir.tcx) {
         let v = adt.adt.variant(idx);
-        let rendered = render_variant(mir, adt, v, &Some(d_value.to_string()));
+        let rendered = render_variant(mir, adt, v, d_value.to_string());
         variants.push(rendered);
     }
 
@@ -1873,7 +1873,7 @@ fn render_variant<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     adt: &AdtInst<'tcx>,
     v: &ty::VariantDef,
-    mb_discr: &Option<String>
+    discr: String
 ) -> serde_json::Value {
     let tcx = mir.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
@@ -1882,10 +1882,9 @@ fn render_variant<'tcx>(
 
     json!({
         "name": v.def_id.to_json(mir),
-        "discr": v.discr.to_json(mir),
         "fields": v.fields.tojson(mir, adt.args),
         "ctor_kind": v.ctor_kind().to_json(mir),
-        "discr_value": mb_discr,
+        "discr_value": discr,
         "inhabited": inhabited,
     })
 }
