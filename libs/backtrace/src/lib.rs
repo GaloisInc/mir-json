@@ -105,11 +105,11 @@ extern crate std;
 #[allow(unused_extern_crates)]
 extern crate alloc;
 
-pub use self::backtrace::{trace_unsynchronized, Frame};
+pub use self::backtrace::{Frame, trace_unsynchronized};
 mod backtrace;
 
 pub use self::symbolize::resolve_frame_unsynchronized;
-pub use self::symbolize::{resolve_unsynchronized, Symbol, SymbolName};
+pub use self::symbolize::{Symbol, SymbolName, resolve_unsynchronized};
 mod symbolize;
 
 pub use self::types::BytesOrWideString;
@@ -138,17 +138,14 @@ cfg_if::cfg_if! {
 
 #[cfg(feature = "std")]
 mod lock {
-    use std::boxed::Box;
     use std::cell::Cell;
-    use std::ptr;
-    use std::sync::{Mutex, MutexGuard, Once};
+    use std::sync::{Mutex, MutexGuard};
 
     /// A "Maybe" LockGuard
     pub struct LockGuard(Option<MutexGuard<'static, ()>>);
 
-    /// The global lock, lazily allocated on first use
-    static mut LOCK: *mut Mutex<()> = ptr::null_mut();
-    static INIT: Once = Once::new();
+    /// The global lock
+    static LOCK: Mutex<()> = Mutex::new(());
     // Whether this thread is the one that holds the lock
     thread_local!(static LOCK_HELD: Cell<bool> = const { Cell::new(false) });
 
@@ -226,14 +223,8 @@ mod lock {
         // Insist that we totally are the thread holding the lock
         // (our thread will block until we are)
         LOCK_HELD.with(|s| s.set(true));
-        unsafe {
-            // lazily allocate the lock if necessary
-            INIT.call_once(|| {
-                LOCK = Box::into_raw(Box::new(Mutex::new(())));
-            });
-            // ok *actually* try to acquire the lock, blocking as necessary
-            LockGuard(Some((*LOCK).lock().unwrap()))
-        }
+        // ok *actually* try to acquire the lock, blocking as necessary
+        LockGuard(Some(LOCK.lock().unwrap()))
     }
 }
 

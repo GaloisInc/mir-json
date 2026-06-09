@@ -1,7 +1,7 @@
 #![forbid(unsafe_op_in_unsafe_fn)]
 
 cfg_select! {
-    any(target_family = "unix", target_os = "hermit") => {
+    any(target_family = "unix", target_os = "hermit", target_os = "wasi") => {
         mod unix;
         pub use unix::*;
     }
@@ -12,6 +12,10 @@ cfg_select! {
     all(target_vendor = "fortanix", target_env = "sgx") => {
         mod sgx;
         pub use sgx::*;
+    }
+    target_os = "motor" => {
+        mod motor;
+        pub use motor::*;
     }
     target_os = "solid_asp3" => {
         mod solid;
@@ -29,13 +33,9 @@ cfg_select! {
         mod uefi;
         pub use uefi::*;
     }
-    all(target_os = "wasi", target_env = "p1") => {
-        mod wasip1;
-        pub use wasip1::*;
-    }
-    all(target_os = "wasi", target_env = "p2") => {
-        mod wasip2;
-        pub use wasip2::*;
+    target_os = "vexos" => {
+        mod vexos;
+        pub use vexos::*;
     }
     target_os = "xous" => {
         mod xous;

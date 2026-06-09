@@ -156,6 +156,7 @@
         target_env = "sgx",
         target_os = "xous",
         target_os = "trusty",
+        target_os = "hermit",
     ))
 ))]
 mod tests;
@@ -166,10 +167,8 @@ use crate::io::prelude::*;
 use crate::io::{self, BorrowedCursor, IoSlice, IoSliceMut};
 use crate::num::NonZero;
 use crate::path::Path;
-use crate::sys::pipe::{AnonPipe, read2};
-use crate::sys::process as imp;
-use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
-use crate::{fmt, fs, str};
+use crate::sys::{AsInner, AsInnerMut, FromInner, IntoInner, process as imp};
+use crate::{fmt, format_args_nl, fs, str};
 
 /// Representation of a running or exited child process.
 ///
@@ -268,8 +267,8 @@ impl AsInner<imp::Process> for Child {
     }
 }
 
-impl FromInner<(imp::Process, imp::StdioPipes)> for Child {
-    fn from_inner((handle, io): (imp::Process, imp::StdioPipes)) -> Child {
+impl FromInner<(imp::Process, StdioPipes)> for Child {
+    fn from_inner((handle, io): (imp::Process, StdioPipes)) -> Child {
         Child {
             handle,
             stdin: io.stdin.map(ChildStdin::from_inner),
@@ -296,6 +295,15 @@ impl fmt::Debug for Child {
     }
 }
 
+/// The pipes connected to a spawned process.
+///
+/// Used to pass pipe handles between this module and [`imp`].
+pub(crate) struct StdioPipes {
+    pub stdin: Option<imp::ChildPipe>,
+    pub stdout: Option<imp::ChildPipe>,
+    pub stderr: Option<imp::ChildPipe>,
+}
+
 /// A handle to a child process's standard input (stdin).
 ///
 /// This struct is used in the [`stdin`] field on [`Child`].
@@ -308,7 +316,7 @@ impl fmt::Debug for Child {
 /// [dropped]: Drop
 #[stable(feature = "process", since = "1.0.0")]
 pub struct ChildStdin {
-    inner: AnonPipe,
+    inner: imp::ChildPipe,
 }
 
 // In addition to the `impl`s here, `ChildStdin` also has `impl`s for
@@ -357,21 +365,21 @@ impl Write for &ChildStdin {
     }
 }
 
-impl AsInner<AnonPipe> for ChildStdin {
+impl AsInner<imp::ChildPipe> for ChildStdin {
     #[inline]
-    fn as_inner(&self) -> &AnonPipe {
+    fn as_inner(&self) -> &imp::ChildPipe {
         &self.inner
     }
 }
 
-impl IntoInner<AnonPipe> for ChildStdin {
-    fn into_inner(self) -> AnonPipe {
+impl IntoInner<imp::ChildPipe> for ChildStdin {
+    fn into_inner(self) -> imp::ChildPipe {
         self.inner
     }
 }
 
-impl FromInner<AnonPipe> for ChildStdin {
-    fn from_inner(pipe: AnonPipe) -> ChildStdin {
+impl FromInner<imp::ChildPipe> for ChildStdin {
+    fn from_inner(pipe: imp::ChildPipe) -> ChildStdin {
         ChildStdin { inner: pipe }
     }
 }
@@ -394,7 +402,7 @@ impl fmt::Debug for ChildStdin {
 /// [dropped]: Drop
 #[stable(feature = "process", since = "1.0.0")]
 pub struct ChildStdout {
-    inner: AnonPipe,
+    inner: imp::ChildPipe,
 }
 
 // In addition to the `impl`s here, `ChildStdout` also has `impl`s for
@@ -427,21 +435,21 @@ impl Read for ChildStdout {
     }
 }
 
-impl AsInner<AnonPipe> for ChildStdout {
+impl AsInner<imp::ChildPipe> for ChildStdout {
     #[inline]
-    fn as_inner(&self) -> &AnonPipe {
+    fn as_inner(&self) -> &imp::ChildPipe {
         &self.inner
     }
 }
 
-impl IntoInner<AnonPipe> for ChildStdout {
-    fn into_inner(self) -> AnonPipe {
+impl IntoInner<imp::ChildPipe> for ChildStdout {
+    fn into_inner(self) -> imp::ChildPipe {
         self.inner
     }
 }
 
-impl FromInner<AnonPipe> for ChildStdout {
-    fn from_inner(pipe: AnonPipe) -> ChildStdout {
+impl FromInner<imp::ChildPipe> for ChildStdout {
+    fn from_inner(pipe: imp::ChildPipe) -> ChildStdout {
         ChildStdout { inner: pipe }
     }
 }
@@ -464,7 +472,7 @@ impl fmt::Debug for ChildStdout {
 /// [dropped]: Drop
 #[stable(feature = "process", since = "1.0.0")]
 pub struct ChildStderr {
-    inner: AnonPipe,
+    inner: imp::ChildPipe,
 }
 
 // In addition to the `impl`s here, `ChildStderr` also has `impl`s for
@@ -497,21 +505,21 @@ impl Read for ChildStderr {
     }
 }
 
-impl AsInner<AnonPipe> for ChildStderr {
+impl AsInner<imp::ChildPipe> for ChildStderr {
     #[inline]
-    fn as_inner(&self) -> &AnonPipe {
+    fn as_inner(&self) -> &imp::ChildPipe {
         &self.inner
     }
 }
 
-impl IntoInner<AnonPipe> for ChildStderr {
-    fn into_inner(self) -> AnonPipe {
+impl IntoInner<imp::ChildPipe> for ChildStderr {
+    fn into_inner(self) -> imp::ChildPipe {
         self.inner
     }
 }
 
-impl FromInner<AnonPipe> for ChildStderr {
-    fn from_inner(pipe: AnonPipe) -> ChildStderr {
+impl FromInner<imp::ChildPipe> for ChildStderr {
+    fn from_inner(pipe: imp::ChildPipe) -> ChildStderr {
         ChildStderr { inner: pipe }
     }
 }
@@ -532,6 +540,7 @@ impl fmt::Debug for ChildStderr {
 /// to be changed (for example, by adding arguments) prior to spawning:
 ///
 /// ```
+/// # if cfg!(not(all(target_vendor = "apple", not(target_os = "macos")))) {
 /// use std::process::Command;
 ///
 /// let output = if cfg!(target_os = "windows") {
@@ -548,6 +557,7 @@ impl fmt::Debug for ChildStderr {
 /// };
 ///
 /// let hello = output.stdout;
+/// # }
 /// ```
 ///
 /// `Command` can be reused to spawn multiple processes. The builder methods
@@ -1195,6 +1205,30 @@ impl Command {
     pub fn get_current_dir(&self) -> Option<&Path> {
         self.inner.get_current_dir()
     }
+
+    /// Returns whether the environment will be cleared for the child process.
+    ///
+    /// This returns `true` if [`Command::env_clear`] was called, and `false` otherwise.
+    /// When `true`, the child process will not inherit any environment variables from
+    /// its parent process.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(command_resolved_envs)]
+    /// use std::process::Command;
+    ///
+    /// let mut cmd = Command::new("ls");
+    /// assert_eq!(cmd.get_env_clear(), false);
+    ///
+    /// cmd.env_clear();
+    /// assert_eq!(cmd.get_env_clear(), true);
+    /// ```
+    #[must_use]
+    #[unstable(feature = "command_resolved_envs", issue = "149070")]
+    pub fn get_env_clear(&self) -> bool {
+        self.inner.get_env_clear()
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -1347,8 +1381,9 @@ impl Output {
     /// # Examples
     ///
     /// ```
+    /// # #![allow(unused_features)]
     /// #![feature(exit_status_error)]
-    /// # #[cfg(all(unix, not(target_os = "android")))] {
+    /// # #[cfg(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos")))))] {
     /// use std::process::Command;
     /// assert!(Command::new("false").output().unwrap().exit_ok().is_err());
     /// # }
@@ -1695,7 +1730,7 @@ impl From<io::Stdout> for Stdio {
     /// # Ok(())
     /// # }
     /// #
-    /// # if cfg!(all(unix, not(target_os = "android"))) {
+    /// # if cfg!(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos"))))) {
     /// #     test().unwrap();
     /// # }
     /// ```
@@ -1724,7 +1759,7 @@ impl From<io::Stderr> for Stdio {
     /// # Ok(())
     /// # }
     /// #
-    /// # if cfg!(all(unix, not(target_os = "android"))) {
+    /// # if cfg!(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos"))))) {
     /// #     test().unwrap();
     /// # }
     /// ```
@@ -1800,7 +1835,7 @@ impl ExitStatus {
     ///
     /// ```
     /// #![feature(exit_status_error)]
-    /// # if cfg!(unix) {
+    /// # if cfg!(all(unix, not(all(target_vendor = "apple", not(target_os = "macos"))))) {
     /// use std::process::Command;
     ///
     /// let status = Command::new("ls")
@@ -1907,7 +1942,7 @@ impl crate::sealed::Sealed for ExitStatusError {}
 ///
 /// ```
 /// #![feature(exit_status_error)]
-/// # if cfg!(all(unix, not(target_os = "android"))) {
+/// # if cfg!(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos"))))) {
 /// use std::process::{Command, ExitStatusError};
 ///
 /// fn run(cmd: &str) -> Result<(), ExitStatusError> {
@@ -1926,6 +1961,7 @@ impl crate::sealed::Sealed for ExitStatusError {}
 pub struct ExitStatusError(imp::ExitStatusError);
 
 #[unstable(feature = "exit_status_error", issue = "84908")]
+#[doc(test(attr(allow(unused_features))))]
 impl ExitStatusError {
     /// Reports the exit code, if applicable, from an `ExitStatusError`.
     ///
@@ -1950,7 +1986,7 @@ impl ExitStatusError {
     ///
     /// ```
     /// #![feature(exit_status_error)]
-    /// # #[cfg(all(unix, not(target_os = "android")))] {
+    /// # #[cfg(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos")))))] {
     /// use std::process::Command;
     ///
     /// let bad = Command::new("false").status().unwrap().exit_ok().unwrap_err();
@@ -1975,7 +2011,7 @@ impl ExitStatusError {
     /// ```
     /// #![feature(exit_status_error)]
     ///
-    /// # if cfg!(all(unix, not(target_os = "android"))) {
+    /// # if cfg!(all(unix, not(target_os = "android"), not(all(target_vendor = "apple", not(target_os = "macos"))))) {
     /// use std::num::NonZero;
     /// use std::process::Command;
     ///
@@ -2345,7 +2381,7 @@ impl Child {
                 res.unwrap();
             }
             (Some(out), Some(err)) => {
-                let res = read2(out.inner, &mut stdout, err.inner, &mut stderr);
+                let res = imp::read_output(out.inner, &mut stdout, err.inner, &mut stderr);
                 res.unwrap();
             }
         }
@@ -2431,7 +2467,7 @@ impl Child {
 #[cfg_attr(not(test), rustc_diagnostic_item = "process_exit")]
 pub fn exit(code: i32) -> ! {
     crate::rt::cleanup();
-    crate::sys::os::exit(code)
+    crate::sys::exit::exit(code)
 }
 
 /// Terminates the process in an abnormal fashion.
@@ -2512,7 +2548,7 @@ pub fn abort() -> ! {
 #[must_use]
 #[stable(feature = "getpid", since = "1.26.0")]
 pub fn id() -> u32 {
-    crate::sys::os::getpid()
+    imp::getpid()
 }
 
 /// A trait for implementing arbitrary return types in the `main` function.

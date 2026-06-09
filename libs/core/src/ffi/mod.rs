@@ -28,7 +28,7 @@ pub mod c_str;
     issue = "44930",
     reason = "the `c_variadic` feature has not been properly tested on all supported platforms"
 )]
-pub use self::va_list::{VaArgSafe, VaList, VaListImpl};
+pub use self::va_list::{VaArgSafe, VaList};
 
 #[unstable(
     feature = "c_variadic",
@@ -56,7 +56,7 @@ pub use self::primitives::{c_ptrdiff_t, c_size_t, c_ssize_t};
 //     be UB.
 #[doc = include_str!("c_void.md")]
 #[lang = "c_void"]
-#[cfg_attr(not(doc), repr(u8))] // An implementation detail we don't want to show up in rustdoc
+#[repr(u8)]
 #[stable(feature = "core_c_void", since = "1.30.0")]
 pub enum c_void {
     #[unstable(

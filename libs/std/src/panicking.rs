@@ -22,7 +22,7 @@ use crate::io::try_set_output_capture;
 use crate::mem::{self, ManuallyDrop};
 use crate::panic::{BacktraceStyle, PanicHookInfo};
 use crate::sync::atomic::{Atomic, AtomicBool, Ordering};
-use crate::sync::{PoisonError, RwLock};
+use crate::sync::nonpoison::RwLock;
 use crate::sys::backtrace;
 use crate::sys::stdio::panic_output;
 use crate::{fmt, intrinsics, process, thread};
@@ -144,13 +144,9 @@ pub fn set_hook(hook: Box<dyn Fn(&PanicHookInfo<'_>) + 'static + Sync + Send>) {
         panic!("cannot modify the panic hook from a panicking thread");
     }
 
-    let new = Hook::Custom(hook);
-    let mut hook = HOOK.write().unwrap_or_else(PoisonError::into_inner);
-    let old = mem::replace(&mut *hook, new);
-    drop(hook);
-    // Only drop the old hook after releasing the lock to avoid deadlocking
-    // if its destructor panics.
-    drop(old);
+    // Drop the old hook after changing the hook to avoid deadlocking if its
+    // destructor panics.
+    drop(HOOK.replace(Hook::Custom(hook)));
 }
 
 /// Unregisters the current panic hook and returns it, registering the default hook
@@ -188,11 +184,7 @@ pub fn take_hook() -> Box<dyn Fn(&PanicHookInfo<'_>) + 'static + Sync + Send> {
         panic!("cannot modify the panic hook from a panicking thread");
     }
 
-    let mut hook = HOOK.write().unwrap_or_else(PoisonError::into_inner);
-    let old_hook = mem::take(&mut *hook);
-    drop(hook);
-
-    old_hook.into_box()
+    HOOK.replace(Hook::Default).into_box()
 }
 
 /// Atomic combination of [`take_hook`] and [`set_hook`]. Use this to replace the panic handler with
@@ -215,10 +207,10 @@ pub fn take_hook() -> Box<dyn Fn(&PanicHookInfo<'_>) + 'static + Sync + Send> {
 ///
 /// // Equivalent to
 /// // let prev = panic::take_hook();
-/// // panic::set_hook(move |info| {
+/// // panic::set_hook(Box::new(move |info| {
 /// //     println!("...");
 /// //     prev(info);
-/// // );
+/// // }));
 /// panic::update_hook(move |prev, info| {
 ///     println!("Print custom message and execute panic handler as usual");
 ///     prev(info);
@@ -238,7 +230,7 @@ where
         panic!("cannot modify the panic hook from a panicking thread");
     }
 
-    let mut hook = HOOK.write().unwrap_or_else(PoisonError::into_inner);
+    let mut hook = HOOK.write();
     let prev = mem::take(&mut *hook).into_box();
     *hook = Hook::Custom(Box::new(move |info| hook_fn(&prev, info)));
 }
@@ -293,7 +285,6 @@ fn default_hook(info: &PanicHookInfo<'_>) {
         static FIRST_PANIC: Atomic<bool> = AtomicBool::new(true);
 
         match backtrace {
-            // SAFETY: we took out a lock just a second ago.
             Some(BacktraceStyle::Short) => {
                 drop(lock.print(err, crate::backtrace_rs::PrintFmt::Short))
             }
@@ -331,7 +322,7 @@ fn default_hook(info: &PanicHookInfo<'_>) {
 
 #[cfg(not(test))]
 #[doc(hidden)]
-#[cfg(feature = "panic_immediate_abort")]
+#[cfg(panic = "immediate-abort")]
 #[unstable(feature = "update_panic_count", issue = "none")]
 pub mod panic_count {
     /// A reason for forcing an immediate abort on panic.
@@ -371,7 +362,7 @@ pub mod panic_count {
 
 #[cfg(not(test))]
 #[doc(hidden)]
-#[cfg(not(feature = "panic_immediate_abort"))]
+#[cfg(not(panic = "immediate-abort"))]
 #[unstable(feature = "update_panic_count", issue = "none")]
 pub mod panic_count {
     use crate::cell::Cell;
@@ -499,13 +490,13 @@ pub mod panic_count {
 pub use realstd::rt::panic_count;
 
 /// Invoke a closure, capturing the cause of an unwinding panic if one occurs.
-#[cfg(feature = "panic_immediate_abort")]
+#[cfg(panic = "immediate-abort")]
 pub unsafe fn catch_unwind<R, F: FnOnce() -> R>(f: F) -> Result<R, Box<dyn Any + Send>> {
     Ok(f())
 }
 
 /// Invoke a closure, capturing the cause of an unwinding panic if one occurs.
-#[cfg(not(feature = "panic_immediate_abort"))]
+#[cfg(not(panic = "immediate-abort"))]
 pub unsafe fn catch_unwind<R, F: FnOnce() -> R>(f: F) -> Result<R, Box<dyn Any + Send>> {
     union Data<F, R> {
         f: ManuallyDrop<F>,
@@ -720,14 +711,14 @@ pub fn panic_handler(info: &core::panic::PanicInfo<'_>) -> ! {
 #[unstable(feature = "libstd_sys_internals", reason = "used by the panic! macro", issue = "none")]
 #[cfg_attr(not(any(test, doctest)), lang = "begin_panic")]
 // lang item for CTFE panic support
-// never inline unless panic_immediate_abort to avoid code
+// never inline unless panic=immediate-abort to avoid code
 // bloat at the call sites as much as possible
-#[cfg_attr(not(feature = "panic_immediate_abort"), inline(never), cold, optimize(size))]
-#[cfg_attr(feature = "panic_immediate_abort", inline)]
+#[cfg_attr(not(panic = "immediate-abort"), inline(never), cold, optimize(size))]
+#[cfg_attr(panic = "immediate-abort", inline)]
 #[track_caller]
 #[rustc_do_not_const_check] // hooked by const-eval
 pub const fn begin_panic<M: Any + Send>(msg: M) -> ! {
-    if cfg!(feature = "panic_immediate_abort") {
+    if cfg!(panic = "immediate-abort") {
         intrinsics::abort()
     }
 
@@ -822,7 +813,7 @@ fn panic_with_hook(
         crate::process::abort();
     }
 
-    match *HOOK.read().unwrap_or_else(PoisonError::into_inner) {
+    match *HOOK.read() {
         // Some platforms (like wasm) know that printing to stderr won't ever actually
         // print anything, and if that's the case we can skip the default
         // hook. Since string formatting happens lazily when calling `payload`
@@ -861,7 +852,7 @@ fn panic_with_hook(
 
 /// This is the entry point for `resume_unwind`.
 /// It just forwards the payload to the panic runtime.
-#[cfg_attr(feature = "panic_immediate_abort", inline)]
+#[cfg_attr(panic = "immediate-abort", inline)]
 pub fn resume_unwind(payload: Box<dyn Any + Send>) -> ! {
     panic_count::increase(false);
 
@@ -890,16 +881,14 @@ pub fn resume_unwind(payload: Box<dyn Any + Send>) -> ! {
 /// on which to slap yer breakpoints.
 #[inline(never)]
 #[cfg_attr(not(test), rustc_std_internal_symbol)]
-#[cfg(not(feature = "panic_immediate_abort"))]
+#[cfg(not(panic = "immediate-abort"))]
 fn rust_panic(msg: &mut dyn PanicPayload) -> ! {
     let code = unsafe { __rust_start_panic(msg) };
     rtabort!("failed to initiate panic, error {code}")
 }
 
 #[cfg_attr(not(test), rustc_std_internal_symbol)]
-#[cfg(feature = "panic_immediate_abort")]
+#[cfg(panic = "immediate-abort")]
 fn rust_panic(_: &mut dyn PanicPayload) -> ! {
-    unsafe {
-        crate::intrinsics::abort();
-    }
+    crate::intrinsics::abort();
 }

@@ -334,25 +334,33 @@ pub macro PartialEq($item:item) {
 #[doc(alias = "!=")]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_diagnostic_item = "Eq"]
-#[const_trait]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-pub trait Eq: [const] PartialEq<Self> + PointeeSized {
-    // this method is used solely by `impl Eq or #[derive(Eq)]` to assert that every component of a
-    // type implements `Eq` itself. The current deriving infrastructure means doing this assertion
-    // without using a method on this trait is nearly impossible.
+pub const trait Eq: [const] PartialEq<Self> + PointeeSized {
+    // This method was used solely by `#[derive(Eq)]` to assert that every component of a
+    // type implements `Eq` itself.
     //
     // This should never be implemented by hand.
     #[doc(hidden)]
     #[coverage(off)]
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_diagnostic_item = "assert_receiver_is_total_eq"]
+    #[deprecated(since = "1.95.0", note = "implementation detail of `#[derive(Eq)]`")]
     fn assert_receiver_is_total_eq(&self) {}
+
+    // FIXME (#152504): this method is used solely by `#[derive(Eq)]` to assert that
+    // every component of a type implements `Eq` itself. It will be removed again soon.
+    #[doc(hidden)]
+    #[coverage(off)]
+    #[unstable(feature = "derive_eq_internals", issue = "none")]
+    fn assert_fields_are_eq(&self) {}
 }
 
 /// Derive macro generating an impl of the trait [`Eq`].
+/// The behavior of this macro is described in detail [here](Eq#derivable).
 #[rustc_builtin_macro]
 #[stable(feature = "builtin_macro_prelude", since = "1.38.0")]
-#[allow_internal_unstable(core_intrinsics, derive_eq, structural_match)]
+#[allow_internal_unstable(core_intrinsics, derive_eq_internals, structural_match)]
 #[allow_internal_unstable(coverage_attribute)]
 pub macro Eq($item:item) {
     /* compiler built-in */
@@ -364,7 +372,11 @@ pub macro Eq($item:item) {
 // This struct should never appear in user code.
 #[doc(hidden)]
 #[allow(missing_debug_implementations)]
-#[unstable(feature = "derive_eq", reason = "deriving hack, should not be public", issue = "none")]
+#[unstable(
+    feature = "derive_eq_internals",
+    reason = "deriving hack, should not be public",
+    issue = "none"
+)]
 pub struct AssertParamIsEq<T: Eq + PointeeSized> {
     _field: crate::marker::PhantomData<T>,
 }
@@ -966,9 +978,8 @@ impl<T: Clone> Clone for Reverse<T> {
 #[doc(alias = ">=")]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_diagnostic_item = "Ord"]
-#[const_trait]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-pub trait Ord: [const] Eq + [const] PartialOrd<Self> + PointeeSized {
+pub const trait Ord: [const] Eq + [const] PartialOrd<Self> + PointeeSized {
     /// This method returns an [`Ordering`] between `self` and `other`.
     ///
     /// By convention, `self.cmp(&other)` returns the ordering matching the expression
@@ -1188,7 +1199,7 @@ pub macro Ord($item:item) {
 /// every `a`. This isn't always the case for types that implement `PartialOrd`, for example:
 ///
 /// ```
-/// let a = f64::sqrt(-1.0);
+/// let a = f64::NAN;
 /// assert_eq!(a <= a, false);
 /// ```
 ///
@@ -1352,9 +1363,10 @@ pub macro Ord($item:item) {
 )]
 #[rustc_diagnostic_item = "PartialOrd"]
 #[allow(multiple_supertrait_upcastable)] // FIXME(sized_hierarchy): remove this
-#[const_trait]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-pub trait PartialOrd<Rhs: PointeeSized = Self>: PartialEq<Rhs> + PointeeSized {
+pub const trait PartialOrd<Rhs: PointeeSized = Self>:
+    [const] PartialEq<Rhs> + PointeeSized
+{
     /// This method returns an ordering between `self` and `other` values if one exists.
     ///
     /// # Examples
@@ -1856,6 +1868,7 @@ mod impls {
     use crate::hint::unreachable_unchecked;
     use crate::marker::PointeeSized;
     use crate::ops::ControlFlow::{self, Break, Continue};
+    use crate::panic::const_assert;
 
     macro_rules! partial_eq_impl {
         ($($t:ty)*) => ($(
@@ -1985,12 +1998,7 @@ mod impls {
             impl const PartialOrd for $t {
                 #[inline]
                 fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                    match (*self <= *other, *self >= *other) {
-                        (false, false) => None,
-                        (false, true) => Some(Greater),
-                        (true, false) => Some(Less),
-                        (true, true) => Some(Equal),
-                    }
+                    Some(crate::intrinsics::three_way_compare(*self, *other))
                 }
 
                 partial_ord_methods_primitive_impl!();
@@ -2001,10 +2009,26 @@ mod impls {
             impl const Ord for $t {
                 #[inline]
                 fn cmp(&self, other: &Self) -> Ordering {
-                    match (*self <= *other, *self >= *other) {
-                        (false, true) => Greater,
-                        (true, false) => Less,
-                        _ => Equal,
+                    crate::intrinsics::three_way_compare(*self, *other)
+                }
+
+                #[inline]
+                #[track_caller]
+                fn clamp(self, min: Self, max: Self) -> Self
+                {
+                    const_assert!(
+                        min <= max,
+                        "min > max",
+                        "min > max. min = {min:?}, max = {max:?}",
+                        min: $t,
+                        max: $t,
+                    );
+                    if self < min {
+                        min
+                    } else if self > max {
+                        max
+                    } else {
+                        self
                     }
                 }
             }

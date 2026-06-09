@@ -277,6 +277,7 @@ pub const NEG_INFINITY: f64 = f64::NEG_INFINITY;
 
 /// Basic mathematical constants.
 #[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_diagnostic_item = "f64_consts_mod"]
 pub mod consts {
     // FIXME: replace with mathematical constants from cmath.
 
@@ -291,12 +292,12 @@ pub mod consts {
     pub const TAU: f64 = 6.28318530717958647692528676655900577_f64;
 
     /// The golden ratio (φ)
-    #[unstable(feature = "more_float_constants", issue = "103883")]
-    pub const PHI: f64 = 1.618033988749894848204586834365638118_f64;
+    #[stable(feature = "euler_gamma_golden_ratio", since = "1.94.0")]
+    pub const GOLDEN_RATIO: f64 = 1.618033988749894848204586834365638118_f64;
 
     /// The Euler-Mascheroni constant (γ)
-    #[unstable(feature = "more_float_constants", issue = "103883")]
-    pub const EGAMMA: f64 = 0.577215664901532860606512090082402431_f64;
+    #[stable(feature = "euler_gamma_golden_ratio", since = "1.94.0")]
+    pub const EULER_GAMMA: f64 = 0.577215664901532860606512090082402431_f64;
 
     /// π/2
     #[stable(feature = "rust1", since = "1.0.0")]
@@ -323,12 +324,12 @@ pub mod consts {
     pub const FRAC_1_PI: f64 = 0.318309886183790671537767526745028724_f64;
 
     /// 1/sqrt(π)
-    #[unstable(feature = "more_float_constants", issue = "103883")]
+    #[unstable(feature = "more_float_constants", issue = "146939")]
     pub const FRAC_1_SQRT_PI: f64 = 0.564189583547756286948079451560772586_f64;
 
     /// 1/sqrt(2π)
     #[doc(alias = "FRAC_1_SQRT_TAU")]
-    #[unstable(feature = "more_float_constants", issue = "103883")]
+    #[unstable(feature = "more_float_constants", issue = "146939")]
     pub const FRAC_1_SQRT_2PI: f64 = 0.398942280401432677939946059934381868_f64;
 
     /// 2/π
@@ -348,12 +349,20 @@ pub mod consts {
     pub const FRAC_1_SQRT_2: f64 = 0.707106781186547524400844362104849039_f64;
 
     /// sqrt(3)
-    #[unstable(feature = "more_float_constants", issue = "103883")]
+    #[unstable(feature = "more_float_constants", issue = "146939")]
     pub const SQRT_3: f64 = 1.732050807568877293527446341505872367_f64;
 
     /// 1/sqrt(3)
-    #[unstable(feature = "more_float_constants", issue = "103883")]
+    #[unstable(feature = "more_float_constants", issue = "146939")]
     pub const FRAC_1_SQRT_3: f64 = 0.577350269189625764509148780501957456_f64;
+
+    /// sqrt(5)
+    #[unstable(feature = "more_float_constants", issue = "146939")]
+    pub const SQRT_5: f64 = 2.23606797749978969640917366873127623_f64;
+
+    /// 1/sqrt(5)
+    #[unstable(feature = "more_float_constants", issue = "146939")]
+    pub const FRAC_1_SQRT_5: f64 = 0.44721359549995793928183473374625524_f64;
 
     /// Euler's number (e)
     #[stable(feature = "rust1", since = "1.0.0")]
@@ -384,10 +393,15 @@ pub mod consts {
     pub const LN_10: f64 = 2.30258509299404568401799145468436421_f64;
 }
 
+#[doc(test(attr(allow(unused_features))))]
 impl f64 {
     /// The radix or base of the internal representation of `f64`.
     #[stable(feature = "assoc_int_consts", since = "1.43.0")]
     pub const RADIX: u32 = 2;
+
+    /// The size of this float type in bits.
+    #[unstable(feature = "float_bits_const", issue = "151073")]
+    pub const BITS: u32 = 64;
 
     /// Number of significant digits in base 2.
     ///
@@ -498,6 +512,64 @@ impl f64 {
     /// Negative infinity (−∞).
     #[stable(feature = "assoc_int_consts", since = "1.43.0")]
     pub const NEG_INFINITY: f64 = -1.0_f64 / 0.0_f64;
+
+    /// Maximum integer that can be represented exactly in an [`f64`] value,
+    /// with no other integer converting to the same floating point value.
+    ///
+    /// For an integer `x` which satisfies `MIN_EXACT_INTEGER <= x <= MAX_EXACT_INTEGER`,
+    /// there is a "one-to-one" mapping between [`i64`] and [`f64`] values.
+    /// `MAX_EXACT_INTEGER + 1` also converts losslessly to [`f64`] and back to
+    /// [`i64`], but `MAX_EXACT_INTEGER + 2` converts to the same [`f64`] value
+    /// (and back to `MAX_EXACT_INTEGER + 1` as an integer) so there is not a
+    /// "one-to-one" mapping.
+    ///
+    /// [`MAX_EXACT_INTEGER`]: f64::MAX_EXACT_INTEGER
+    /// [`MIN_EXACT_INTEGER`]: f64::MIN_EXACT_INTEGER
+    /// ```
+    /// #![feature(float_exact_integer_constants)]
+    /// # // FIXME(#152635): Float rounding on `i586` does not adhere to IEEE 754
+    /// # #[cfg(not(all(target_arch = "x86", not(target_feature = "sse"))))] {
+    /// let max_exact_int = f64::MAX_EXACT_INTEGER;
+    /// assert_eq!(max_exact_int, max_exact_int as f64 as i64);
+    /// assert_eq!(max_exact_int + 1, (max_exact_int + 1) as f64 as i64);
+    /// assert_ne!(max_exact_int + 2, (max_exact_int + 2) as f64 as i64);
+    ///
+    /// // Beyond `f64::MAX_EXACT_INTEGER`, multiple integers can map to one float value
+    /// assert_eq!((max_exact_int + 1) as f64, (max_exact_int + 2) as f64);
+    /// # }
+    /// ```
+    #[unstable(feature = "float_exact_integer_constants", issue = "152466")]
+    pub const MAX_EXACT_INTEGER: i64 = (1 << Self::MANTISSA_DIGITS) - 1;
+
+    /// Minimum integer that can be represented exactly in an [`f64`] value,
+    /// with no other integer converting to the same floating point value.
+    ///
+    /// For an integer `x` which satisfies `MIN_EXACT_INTEGER <= x <= MAX_EXACT_INTEGER`,
+    /// there is a "one-to-one" mapping between [`i64`] and [`f64`] values.
+    /// `MAX_EXACT_INTEGER + 1` also converts losslessly to [`f64`] and back to
+    /// [`i64`], but `MAX_EXACT_INTEGER + 2` converts to the same [`f64`] value
+    /// (and back to `MAX_EXACT_INTEGER + 1` as an integer) so there is not a
+    /// "one-to-one" mapping.
+    ///
+    /// This constant is equivalent to `-MAX_EXACT_INTEGER`.
+    ///
+    /// [`MAX_EXACT_INTEGER`]: f64::MAX_EXACT_INTEGER
+    /// [`MIN_EXACT_INTEGER`]: f64::MIN_EXACT_INTEGER
+    /// ```
+    /// #![feature(float_exact_integer_constants)]
+    /// # // FIXME(#152635): Float rounding on `i586` does not adhere to IEEE 754
+    /// # #[cfg(not(all(target_arch = "x86", not(target_feature = "sse"))))] {
+    /// let min_exact_int = f64::MIN_EXACT_INTEGER;
+    /// assert_eq!(min_exact_int, min_exact_int as f64 as i64);
+    /// assert_eq!(min_exact_int - 1, (min_exact_int - 1) as f64 as i64);
+    /// assert_ne!(min_exact_int - 2, (min_exact_int - 2) as f64 as i64);
+    ///
+    /// // Below `f64::MIN_EXACT_INTEGER`, multiple integers can map to one float value
+    /// assert_eq!((min_exact_int - 1) as f64, (min_exact_int - 2) as f64);
+    /// # }
+    /// ```
+    #[unstable(feature = "float_exact_integer_constants", issue = "152466")]
+    pub const MIN_EXACT_INTEGER: i64 = -Self::MAX_EXACT_INTEGER;
 
     /// Sign bit
     pub(crate) const SIGN_MASK: u64 = 0x8000_0000_0000_0000;
@@ -914,52 +986,69 @@ impl f64 {
 
     /// Returns the maximum of the two numbers, ignoring NaN.
     ///
-    /// If one of the arguments is NaN, then the other argument is returned.
-    /// This follows the IEEE 754-2008 semantics for maxNum, except for handling of signaling NaNs;
-    /// this function handles all NaNs the same way and avoids maxNum's problems with associativity.
-    /// This also matches the behavior of libm’s fmax. In particular, if the inputs compare equal
-    /// (such as for the case of `+0.0` and `-0.0`), either input may be returned non-deterministically.
+    /// If exactly one of the arguments is NaN (quiet or signaling), then the other argument is
+    /// returned. If both arguments are NaN, the return value is NaN, with the bit pattern picked
+    /// using the usual [rules for arithmetic operations](f32#nan-bit-patterns). If the inputs
+    /// compare equal (such as for the case of `+0.0` and `-0.0`), either input may be returned
+    /// non-deterministically.
+    ///
+    /// The handling of NaNs follows the IEEE 754-2019 semantics for `maximumNumber`, treating all
+    /// NaNs the same way to ensure the operation is associative. The handling of signed zeros
+    /// follows the IEEE 754-2008 semantics for `maxNum`.
     ///
     /// ```
     /// let x = 1.0_f64;
     /// let y = 2.0_f64;
     ///
     /// assert_eq!(x.max(y), y);
+    /// assert_eq!(x.max(f64::NAN), x);
     /// ```
     #[must_use = "this returns the result of the comparison, without modifying either input"]
     #[stable(feature = "rust1", since = "1.0.0")]
     #[rustc_const_stable(feature = "const_float_methods", since = "1.85.0")]
     #[inline]
     pub const fn max(self, other: f64) -> f64 {
-        intrinsics::maxnumf64(self, other)
+        intrinsics::maximum_number_nsz_f64(self, other)
     }
 
     /// Returns the minimum of the two numbers, ignoring NaN.
     ///
-    /// If one of the arguments is NaN, then the other argument is returned.
-    /// This follows the IEEE 754-2008 semantics for minNum, except for handling of signaling NaNs;
-    /// this function handles all NaNs the same way and avoids minNum's problems with associativity.
-    /// This also matches the behavior of libm’s fmin. In particular, if the inputs compare equal
-    /// (such as for the case of `+0.0` and `-0.0`), either input may be returned non-deterministically.
+    /// If exactly one of the arguments is NaN (quiet or signaling), then the other argument is
+    /// returned. If both arguments are NaN, the return value is NaN, with the bit pattern picked
+    /// using the usual [rules for arithmetic operations](f32#nan-bit-patterns). If the inputs
+    /// compare equal (such as for the case of `+0.0` and `-0.0`), either input may be returned
+    /// non-deterministically.
+    ///
+    /// The handling of NaNs follows the IEEE 754-2019 semantics for `minimumNumber`, treating all
+    /// NaNs the same way to ensure the operation is associative. The handling of signed zeros
+    /// follows the IEEE 754-2008 semantics for `minNum`.
     ///
     /// ```
     /// let x = 1.0_f64;
     /// let y = 2.0_f64;
     ///
     /// assert_eq!(x.min(y), x);
+    /// assert_eq!(x.min(f64::NAN), x);
     /// ```
     #[must_use = "this returns the result of the comparison, without modifying either input"]
     #[stable(feature = "rust1", since = "1.0.0")]
     #[rustc_const_stable(feature = "const_float_methods", since = "1.85.0")]
     #[inline]
     pub const fn min(self, other: f64) -> f64 {
-        intrinsics::minnumf64(self, other)
+        intrinsics::minimum_number_nsz_f64(self, other)
     }
 
     /// Returns the maximum of the two numbers, propagating NaN.
     ///
-    /// This returns NaN when *either* argument is NaN, as opposed to
-    /// [`f64::max`] which only returns NaN when *both* arguments are NaN.
+    /// If at least one of the arguments is NaN, the return value is NaN, with the bit pattern
+    /// picked using the usual [rules for arithmetic operations](f32#nan-bit-patterns). Furthermore,
+    /// `-0.0` is considered to be less than `+0.0`, making this function fully deterministic for
+    /// non-NaN inputs.
+    ///
+    /// This is in contrast to [`f64::max`] which only returns NaN when *both* arguments are NaN,
+    /// and which does not reliably order `-0.0` and `+0.0`.
+    ///
+    /// This follows the IEEE 754-2019 semantics for `maximum`.
     ///
     /// ```
     /// #![feature(float_minimum_maximum)]
@@ -969,13 +1058,6 @@ impl f64 {
     /// assert_eq!(x.maximum(y), y);
     /// assert!(x.maximum(f64::NAN).is_nan());
     /// ```
-    ///
-    /// If one of the arguments is NaN, then NaN is returned. Otherwise this returns the greater
-    /// of the two numbers. For this operation, -0.0 is considered to be less than +0.0.
-    /// Note that this follows the semantics specified in IEEE 754-2019.
-    ///
-    /// Also note that "propagation" of NaNs here doesn't necessarily mean that the bitpattern of a NaN
-    /// operand is conserved; see the [specification of NaN bit patterns](f32#nan-bit-patterns) for more info.
     #[must_use = "this returns the result of the comparison, without modifying either input"]
     #[unstable(feature = "float_minimum_maximum", issue = "91079")]
     #[inline]
@@ -985,8 +1067,15 @@ impl f64 {
 
     /// Returns the minimum of the two numbers, propagating NaN.
     ///
-    /// This returns NaN when *either* argument is NaN, as opposed to
-    /// [`f64::min`] which only returns NaN when *both* arguments are NaN.
+    /// If at least one of the arguments is NaN, the return value is NaN, with the bit pattern
+    /// picked using the usual [rules for arithmetic operations](f32#nan-bit-patterns). Furthermore,
+    /// `-0.0` is considered to be less than `+0.0`, making this function fully deterministic for
+    /// non-NaN inputs.
+    ///
+    /// This is in contrast to [`f64::min`] which only returns NaN when *both* arguments are NaN,
+    /// and which does not reliably order `-0.0` and `+0.0`.
+    ///
+    /// This follows the IEEE 754-2019 semantics for `minimum`.
     ///
     /// ```
     /// #![feature(float_minimum_maximum)]
@@ -996,13 +1085,6 @@ impl f64 {
     /// assert_eq!(x.minimum(y), x);
     /// assert!(x.minimum(f64::NAN).is_nan());
     /// ```
-    ///
-    /// If one of the arguments is NaN, then NaN is returned. Otherwise this returns the lesser
-    /// of the two numbers. For this operation, -0.0 is considered to be less than +0.0.
-    /// Note that this follows the semantics specified in IEEE 754-2019.
-    ///
-    /// Also note that "propagation" of NaNs here doesn't necessarily mean that the bitpattern of a NaN
-    /// operand is conserved; see the [specification of NaN bit patterns](f32#nan-bit-patterns) for more info.
     #[must_use = "this returns the result of the comparison, without modifying either input"]
     #[unstable(feature = "float_minimum_maximum", issue = "91079")]
     #[inline]
@@ -1351,9 +1433,10 @@ impl f64 {
     /// }
     /// ```
     #[stable(feature = "total_cmp", since = "1.62.0")]
+    #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
     #[must_use]
     #[inline]
-    pub fn total_cmp(&self, other: &Self) -> crate::cmp::Ordering {
+    pub const fn total_cmp(&self, other: &Self) -> crate::cmp::Ordering {
         let mut left = self.to_bits() as i64;
         let mut right = other.to_bits() as i64;
 
@@ -1391,7 +1474,8 @@ impl f64 {
     /// less than `min`. Otherwise this returns `self`.
     ///
     /// Note that this function returns NaN if the initial value was NaN as
-    /// well.
+    /// well. If the result is zero and among the three inputs `self`, `min`, and `max` there are
+    /// zeros with different sign, either `0.0` or `-0.0` is returned non-deterministically.
     ///
     /// # Panics
     ///
@@ -1404,6 +1488,12 @@ impl f64 {
     /// assert!((0.0f64).clamp(-2.0, 1.0) == 0.0);
     /// assert!((2.0f64).clamp(-2.0, 1.0) == 1.0);
     /// assert!((f64::NAN).clamp(-2.0, 1.0).is_nan());
+    ///
+    /// // These always returns zero, but the sign (which is ignored by `==`) is non-deterministic.
+    /// assert!((0.0f64).clamp(-0.0, -0.0) == 0.0);
+    /// assert!((1.0f64).clamp(-0.0, 0.0) == 0.0);
+    /// // This is definitely a negative zero.
+    /// assert!((-1.0f64).clamp(-0.0, 1.0).is_sign_negative());
     /// ```
     #[must_use = "method returns a new number and does not mutate the original value"]
     #[stable(feature = "clamp", since = "1.50.0")]
@@ -1427,6 +1517,35 @@ impl f64 {
         self
     }
 
+    /// Clamps this number to a symmetric range centered around zero.
+    ///
+    /// The method clamps the number's magnitude (absolute value) to be at most `limit`.
+    ///
+    /// This is functionally equivalent to `self.clamp(-limit, limit)`, but is more
+    /// explicit about the intent.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `limit` is negative or NaN, as this indicates a logic error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(clamp_magnitude)]
+    /// assert_eq!(5.0f64.clamp_magnitude(3.0), 3.0);
+    /// assert_eq!((-5.0f64).clamp_magnitude(3.0), -3.0);
+    /// assert_eq!(2.0f64.clamp_magnitude(3.0), 2.0);
+    /// assert_eq!((-2.0f64).clamp_magnitude(3.0), -2.0);
+    /// ```
+    #[must_use = "this returns the clamped value and does not modify the original"]
+    #[unstable(feature = "clamp_magnitude", issue = "148519")]
+    #[inline]
+    pub fn clamp_magnitude(self, limit: f64) -> f64 {
+        assert!(limit >= 0.0, "limit must be non-negative");
+        let limit = limit.abs(); // Canonicalises -0.0 to 0.0
+        self.clamp(-limit, limit)
+    }
+
     /// Computes the absolute value of `self`.
     ///
     /// This function always returns the precise result.
@@ -1447,8 +1566,7 @@ impl f64 {
     #[rustc_const_stable(feature = "const_float_methods", since = "1.85.0")]
     #[inline]
     pub const fn abs(self) -> f64 {
-        // SAFETY: this is actually a safe intrinsic
-        unsafe { intrinsics::fabsf64(self) }
+        intrinsics::fabsf64(self)
     }
 
     /// Returns a number that represents the sign of `self`.
@@ -1506,8 +1624,7 @@ impl f64 {
     #[rustc_const_stable(feature = "const_float_methods", since = "1.85.0")]
     #[inline]
     pub const fn copysign(self, sign: f64) -> f64 {
-        // SAFETY: this is actually a safe intrinsic
-        unsafe { intrinsics::copysignf64(self, sign) }
+        intrinsics::copysignf64(self, sign)
     }
 
     /// Float addition that allows optimizations based on algebraic rules.
@@ -1573,7 +1690,7 @@ impl f64 {
 /// They will be stabilized as inherent methods._
 pub mod math {
     use crate::intrinsics;
-    use crate::num::libm;
+    use crate::num::imp::libm;
 
     /// Experimental version of `floor` in `core`. See [`f64::floor`] for details.
     ///
@@ -1601,8 +1718,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub const fn floor(x: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::floorf64(x) }
+        intrinsics::floorf64(x)
     }
 
     /// Experimental version of `ceil` in `core`. See [`f64::ceil`] for details.
@@ -1630,8 +1746,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub const fn ceil(x: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::ceilf64(x) }
+        intrinsics::ceilf64(x)
     }
 
     /// Experimental version of `round` in `core`. See [`f64::round`] for details.
@@ -1664,8 +1779,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub const fn round(x: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::roundf64(x) }
+        intrinsics::roundf64(x)
     }
 
     /// Experimental version of `round_ties_even` in `core`. See [`f64::round_ties_even`] for
@@ -1727,8 +1841,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub const fn trunc(x: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::truncf64(x) }
+        intrinsics::truncf64(x)
     }
 
     /// Experimental version of `fract` in `core`. See [`f64::fract`] for details.
@@ -1765,6 +1878,7 @@ pub mod math {
     /// # Examples
     ///
     /// ```
+    /// # #![allow(unused_features)]
     /// #![feature(core_float_math)]
     ///
     /// # // FIXME(#140515): mingw has an incorrect fma
@@ -1801,9 +1915,8 @@ pub mod math {
     #[doc(alias = "fma", alias = "fusedMultiplyAdd")]
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
-    pub fn mul_add(x: f64, a: f64, b: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::fmaf64(x, a, b) }
+    pub const fn mul_add(x: f64, a: f64, b: f64) -> f64 {
+        intrinsics::fmaf64(x, a, b)
     }
 
     /// Experimental version of `div_euclid` in `core`. See [`f64::div_euclid`] for details.
@@ -1894,8 +2007,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn powi(x: f64, n: i32) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::powif64(x, n) }
+        intrinsics::powif64(x, n)
     }
 
     /// Experimental version of `sqrt` in `core`. See [`f64::sqrt`] for details.
@@ -1925,8 +2037,7 @@ pub mod math {
     #[unstable(feature = "core_float_math", issue = "137578")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn sqrt(x: f64) -> f64 {
-        // SAFETY: intrinsic with no preconditions
-        unsafe { intrinsics::sqrtf64(x) }
+        intrinsics::sqrtf64(x)
     }
 
     /// Experimental version of `abs_sub` in `core`. See [`f64::abs_sub`] for details.
