@@ -478,7 +478,7 @@ impl<'tcx> ToJson<'tcx> for mir::Operand<'tcx> {
                 json!({"kind": "Constant", "data": l.to_json(mir)})
             }
             &mir::Operand::RuntimeChecks(ref rc) => {
-                json!({"kind": "RuntimeChecks", "data": format!("{:?}", rc)})
+                json!({"kind": "RuntimeChecks", "data": rc.to_json(mir)})
             }
         }
     }
