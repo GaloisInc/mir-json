@@ -68,6 +68,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   it.  Finally, this patch removes a `transmute` in the opposite direction from
   `Alignment::as_usize`.
 
+* Add a hook in `NonZero::new` (last applied: June 9, 2026)
+
+  The new generic `NonZero::new` relies on transmute to convert `u32` to
+  `Option<NonZero<u32>>` in a const context.  Removing this transmute is
+  difficult due to limited ability to use generics in a const context.
+  Instead, we wrap it in a hook that we can override in crucible-mir.
+
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
