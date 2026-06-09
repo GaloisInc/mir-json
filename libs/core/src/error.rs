@@ -16,12 +16,18 @@ use crate::fmt::{self, Debug, Display, Formatter};
 /// assert_eq!(err.to_string(), "invalid digit found in string");
 /// ```
 ///
+/// # Error source
+///
 /// Errors may provide cause information. [`Error::source()`] is generally
 /// used when errors cross "abstraction boundaries". If one module must report
 /// an error that is caused by an error from a lower-level module, it can allow
-/// accessing that error via [`Error::source()`]. This makes it possible for the
+/// accessing that error via `Error::source()`. This makes it possible for the
 /// high-level module to provide its own errors while also revealing some of the
 /// implementation for debugging.
+///
+/// In error types that wrap an underlying error, the underlying error
+/// should be either returned by the outer error's `Error::source()`, or rendered
+/// by the outer error's `Display` implementation, but not both.
 ///
 /// # Example
 ///
@@ -197,6 +203,56 @@ pub trait Error: Debug + Display {
     ///
     ///     assert!(core::ptr::eq(&error.backtrace, backtrace_ref));
     ///     assert!(request_ref::<MyLittleTeaPot>(dyn_error).is_none());
+    /// }
+    /// ```
+    ///
+    /// # Delegating Impls
+    ///
+    /// <div class="warning">
+    ///
+    /// **Warning**: We recommend implementors avoid delegating implementations of `provide` to
+    /// source error implementations.
+    ///
+    /// </div>
+    ///
+    /// This method should expose context from the current piece of the source chain only, not from
+    /// sources that are exposed in the chain of sources. Delegating `provide` implementations cause
+    /// the same context to be provided by multiple errors in the chain of sources which can cause
+    /// unintended duplication of information in error reports or require heuristics to deduplicate.
+    ///
+    /// In other words, the following implementation pattern for `provide` is discouraged and should
+    /// not be used for [`Error`] types exposed in public APIs to third parties.
+    ///
+    /// ```rust
+    /// # #![feature(error_generic_member_access)]
+    /// # use core::fmt;
+    /// # use core::error::Request;
+    /// # #[derive(Debug)]
+    /// struct MyError {
+    ///     source: Error,
+    /// }
+    /// # #[derive(Debug)]
+    /// # struct Error;
+    /// # impl fmt::Display for Error {
+    /// #     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    /// #         write!(f, "Example Source Error")
+    /// #     }
+    /// # }
+    /// # impl fmt::Display for MyError {
+    /// #     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    /// #         write!(f, "Example Error")
+    /// #     }
+    /// # }
+    /// # impl std::error::Error for Error { }
+    ///
+    /// impl std::error::Error for MyError {
+    ///     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    ///         Some(&self.source)
+    ///     }
+    ///
+    ///     fn provide<'a>(&'a self, request: &mut Request<'a>) {
+    ///         self.source.provide(request) // <--- Discouraged
+    ///     }
     /// }
     /// ```
     #[unstable(feature = "error_generic_member_access", issue = "99301")]

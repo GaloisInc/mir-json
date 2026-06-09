@@ -3,7 +3,7 @@ use core::cmp::Ordering;
 use core::error::Error;
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
-use core::iter::FusedIterator;
+use core::iter::{FusedIterator, TrustedLen};
 use core::marker::PhantomData;
 use core::mem::{self, ManuallyDrop};
 use core::ops::{Bound, Index, RangeBounds};
@@ -194,6 +194,9 @@ pub struct BTreeMap<
     root: Option<Root<K, V>>,
     length: usize,
     /// `ManuallyDrop` to control drop order (needs to be dropped after all the nodes).
+    // Although some of the accessory types store a copy of the allocator, the nodes do not.
+    // Because allocations will remain live as long as any copy (like this one) of the allocator
+    // is live, it's unnecessary to store the allocator in each node.
     pub(super) alloc: ManuallyDrop<A>,
     // For dropck; the `Box` avoids making the `Unpin` impl more strict than before
     _marker: PhantomData<crate::boxed::Box<(K, V), A>>,
@@ -546,7 +549,11 @@ impl<K, V: fmt::Debug> fmt::Debug for ValuesMut<'_, K, V> {
 /// [`into_keys`]: BTreeMap::into_keys
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[stable(feature = "map_into_keys_values", since = "1.54.0")]
-pub struct IntoKeys<K, V, A: Allocator + Clone = Global> {
+pub struct IntoKeys<
+    K,
+    V,
+    #[unstable(feature = "allocator_api", issue = "32838")] A: Allocator + Clone = Global,
+> {
     inner: IntoIter<K, V, A>,
 }
 
@@ -686,6 +693,7 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     /// map.insert(1, "a");
     /// ```
     #[unstable(feature = "btreemap_alloc", issue = "32838")]
+    #[must_use]
     pub const fn new_in(alloc: A) -> BTreeMap<K, V, A> {
         BTreeMap { root: None, length: 0, alloc: ManuallyDrop::new(alloc), _marker: PhantomData }
     }
@@ -1174,6 +1182,10 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     ///
     /// If a key from `other` is already present in `self`, the respective
     /// value from `self` will be overwritten with the respective value from `other`.
+    /// Similar to [`insert`], though, the key is not overwritten,
+    /// which matters for types that can be `==` without being identical.
+    ///
+    /// [`insert`]: BTreeMap::insert
     ///
     /// # Examples
     ///
@@ -1227,6 +1239,162 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
             &mut self.length,
             (*self.alloc).clone(),
         )
+    }
+
+    /// Moves all elements from `other` into `self`, leaving `other` empty.
+    ///
+    /// If a key from `other` is already present in `self`, then the `conflict`
+    /// closure is used to return a value to `self`. The `conflict`
+    /// closure takes in a borrow of `self`'s key, `self`'s value, and `other`'s value
+    /// in that order.
+    ///
+    /// An example of why one might use this method over [`append`]
+    /// is to combine `self`'s value with `other`'s value when their keys conflict.
+    ///
+    /// Similar to [`insert`], though, the key is not overwritten,
+    /// which matters for types that can be `==` without being identical.
+    ///
+    /// [`insert`]: BTreeMap::insert
+    /// [`append`]: BTreeMap::append
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(btree_merge)]
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut a = BTreeMap::new();
+    /// a.insert(1, String::from("a"));
+    /// a.insert(2, String::from("b"));
+    /// a.insert(3, String::from("c")); // Note: Key (3) also present in b.
+    ///
+    /// let mut b = BTreeMap::new();
+    /// b.insert(3, String::from("d")); // Note: Key (3) also present in a.
+    /// b.insert(4, String::from("e"));
+    /// b.insert(5, String::from("f"));
+    ///
+    /// // concatenate a's value and b's value
+    /// a.merge(b, |_, a_val, b_val| {
+    ///     format!("{a_val}{b_val}")
+    /// });
+    ///
+    /// assert_eq!(a.len(), 5); // all of b's keys in a
+    ///
+    /// assert_eq!(a[&1], "a");
+    /// assert_eq!(a[&2], "b");
+    /// assert_eq!(a[&3], "cd"); // Note: "c" has been combined with "d".
+    /// assert_eq!(a[&4], "e");
+    /// assert_eq!(a[&5], "f");
+    /// ```
+    #[unstable(feature = "btree_merge", issue = "152152")]
+    pub fn merge(&mut self, mut other: Self, mut conflict: impl FnMut(&K, V, V) -> V)
+    where
+        K: Ord,
+        A: Clone,
+    {
+        // Do we have to append anything at all?
+        if other.is_empty() {
+            return;
+        }
+
+        // We can just swap `self` and `other` if `self` is empty.
+        if self.is_empty() {
+            mem::swap(self, &mut other);
+            return;
+        }
+
+        let mut other_iter = other.into_iter();
+        let (first_other_key, first_other_val) = other_iter.next().unwrap();
+
+        // find the first gap that has the smallest key greater than or equal to
+        // the first key from other
+        let mut self_cursor = self.lower_bound_mut(Bound::Included(&first_other_key));
+
+        if let Some((self_key, _)) = self_cursor.peek_next() {
+            match K::cmp(self_key, &first_other_key) {
+                Ordering::Equal => {
+                    // if `f` unwinds, the next entry is already removed leaving
+                    // the tree in valid state.
+                    // FIXME: Once `MaybeDangling` is implemented, we can optimize
+                    // this through using a drop handler and transmutating CursorMutKey<K, V>
+                    // to CursorMutKey<ManuallyDrop<K>, ManuallyDrop<V>> (see PR #152418)
+                    if let Some((k, v)) = self_cursor.remove_next() {
+                        // SAFETY: we remove the K, V out of the next entry,
+                        // apply 'f' to get a new (K, V), and insert it back
+                        // into the next entry that the cursor is pointing at
+                        let v = conflict(&k, v, first_other_val);
+                        unsafe { self_cursor.insert_after_unchecked(k, v) };
+                    }
+                }
+                Ordering::Greater =>
+                // SAFETY: we know our other_key's ordering is less than self_key,
+                // so inserting before will guarantee sorted order
+                unsafe {
+                    self_cursor.insert_before_unchecked(first_other_key, first_other_val);
+                },
+                Ordering::Less => {
+                    unreachable!("Cursor's peek_next should return None.");
+                }
+            }
+        } else {
+            // SAFETY: reaching here means our cursor is at the end
+            // self BTreeMap so we just insert other_key here
+            unsafe {
+                self_cursor.insert_before_unchecked(first_other_key, first_other_val);
+            }
+        }
+
+        for (other_key, other_val) in other_iter {
+            loop {
+                if let Some((self_key, _)) = self_cursor.peek_next() {
+                    match K::cmp(self_key, &other_key) {
+                        Ordering::Equal => {
+                            // if `f` unwinds, the next entry is already removed leaving
+                            // the tree in valid state.
+                            // FIXME: Once `MaybeDangling` is implemented, we can optimize
+                            // this through using a drop handler and transmutating CursorMutKey<K, V>
+                            // to CursorMutKey<ManuallyDrop<K>, ManuallyDrop<V>> (see PR #152418)
+                            if let Some((k, v)) = self_cursor.remove_next() {
+                                // SAFETY: we remove the K, V out of the next entry,
+                                // apply 'f' to get a new (K, V), and insert it back
+                                // into the next entry that the cursor is pointing at
+                                let v = conflict(&k, v, other_val);
+                                unsafe { self_cursor.insert_after_unchecked(k, v) };
+                            }
+                            break;
+                        }
+                        Ordering::Greater => {
+                            // SAFETY: we know our self_key's ordering is greater than other_key,
+                            // so inserting before will guarantee sorted order
+                            unsafe {
+                                self_cursor.insert_before_unchecked(other_key, other_val);
+                            }
+                            break;
+                        }
+                        Ordering::Less => {
+                            // FIXME: instead of doing a linear search here,
+                            // this can be optimized to search the tree by starting
+                            // from self_cursor and going towards the root and then
+                            // back down to the proper node -- that should probably
+                            // be a new method on Cursor*.
+                            self_cursor.next();
+                        }
+                    }
+                } else {
+                    // FIXME: If we get here, that means all of other's keys are greater than
+                    // self's keys. For performance, this should really do a bulk insertion of items
+                    // from other_iter into the end of self `BTreeMap`. Maybe this should be
+                    // a method for Cursor*?
+
+                    // SAFETY: reaching here means our cursor is at the end
+                    // self BTreeMap so we just insert other_key here
+                    unsafe {
+                        self_cursor.insert_before_unchecked(other_key, other_val);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the map.
@@ -1361,7 +1529,8 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     }
 
     /// Splits the collection into two at the given key. Returns everything after the given key,
-    /// including the key.
+    /// including the key. If the key is not present, the split will occur at the nearest
+    /// greater key, or return an empty map if no such key exists.
     ///
     /// # Examples
     ///
@@ -1426,7 +1595,8 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     ///
     /// If the returned `ExtractIf` is not exhausted, e.g. because it is dropped without iterating
     /// or the iteration short-circuits, then the remaining elements will be retained.
-    /// Use [`retain`] with a negated predicate if you do not need the returned iterator.
+    /// Use `extract_if().for_each(drop)` if you do not need the returned iterator,
+    /// or [`retain`] with a negated predicate if you also do not need to restrict the range.
     ///
     /// [`retain`]: BTreeMap::retain
     ///
@@ -1449,7 +1619,7 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     /// assert_eq!(low.keys().copied().collect::<Vec<_>>(), [0, 1, 2, 3]);
     /// assert_eq!(high.keys().copied().collect::<Vec<_>>(), [4, 5, 6, 7]);
     /// ```
-    #[stable(feature = "btree_extract_if", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "btree_extract_if", since = "1.91.0")]
     pub fn extract_if<F, R>(&mut self, range: R, pred: F) -> ExtractIf<'_, K, V, R, F, A>
     where
         K: Ord,
@@ -1615,6 +1785,9 @@ impl<K, V> ExactSizeIterator for Iter<'_, K, V> {
     }
 }
 
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V> TrustedLen for Iter<'_, K, V> {}
+
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<K, V> Clone for Iter<'_, K, V> {
     fn clone(&self) -> Self {
@@ -1686,6 +1859,9 @@ impl<K, V> ExactSizeIterator for IterMut<'_, K, V> {
         self.length
     }
 }
+
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V> TrustedLen for IterMut<'_, K, V> {}
 
 #[stable(feature = "fused", since = "1.26.0")]
 impl<K, V> FusedIterator for IterMut<'_, K, V> {}
@@ -1808,6 +1984,9 @@ impl<K, V, A: Allocator + Clone> ExactSizeIterator for IntoIter<K, V, A> {
     }
 }
 
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V, A: Allocator + Clone> TrustedLen for IntoIter<K, V, A> {}
+
 #[stable(feature = "fused", since = "1.26.0")]
 impl<K, V, A: Allocator + Clone> FusedIterator for IntoIter<K, V, A> {}
 
@@ -1855,6 +2034,9 @@ impl<K, V> ExactSizeIterator for Keys<'_, K, V> {
         self.inner.len()
     }
 }
+
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V> TrustedLen for Keys<'_, K, V> {}
 
 #[stable(feature = "fused", since = "1.26.0")]
 impl<K, V> FusedIterator for Keys<'_, K, V> {}
@@ -1911,6 +2093,9 @@ impl<K, V> ExactSizeIterator for Values<'_, K, V> {
     }
 }
 
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V> TrustedLen for Values<'_, K, V> {}
+
 #[stable(feature = "fused", since = "1.26.0")]
 impl<K, V> FusedIterator for Values<'_, K, V> {}
 
@@ -1936,8 +2121,9 @@ impl<K, V> Default for Values<'_, K, V> {
 }
 
 /// An iterator produced by calling `extract_if` on BTreeMap.
-#[stable(feature = "btree_extract_if", since = "CURRENT_RUSTC_VERSION")]
-#[must_use = "iterators are lazy and do nothing unless consumed"]
+#[stable(feature = "btree_extract_if", since = "1.91.0")]
+#[must_use = "iterators are lazy and do nothing unless consumed; \
+    use `retain` or `extract_if().for_each(drop)` to remove and discard elements"]
 pub struct ExtractIf<
     'a,
     K,
@@ -1969,7 +2155,7 @@ pub(super) struct ExtractIfInner<'a, K, V, R> {
     range: R,
 }
 
-#[stable(feature = "btree_extract_if", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "btree_extract_if", since = "1.91.0")]
 impl<K, V, R, F, A> fmt::Debug for ExtractIf<'_, K, V, R, F, A>
 where
     K: fmt::Debug,
@@ -1981,7 +2167,7 @@ where
     }
 }
 
-#[stable(feature = "btree_extract_if", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "btree_extract_if", since = "1.91.0")]
 impl<K, V, R, F, A: Allocator + Clone> Iterator for ExtractIf<'_, K, V, R, F, A>
 where
     K: PartialOrd,
@@ -2055,7 +2241,7 @@ impl<'a, K, V, R> ExtractIfInner<'a, K, V, R> {
     }
 }
 
-#[stable(feature = "btree_extract_if", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "btree_extract_if", since = "1.91.0")]
 impl<K, V, R, F> FusedIterator for ExtractIf<'_, K, V, R, F>
 where
     K: PartialOrd,
@@ -2150,6 +2336,9 @@ impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
     }
 }
 
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V> TrustedLen for ValuesMut<'_, K, V> {}
+
 #[stable(feature = "fused", since = "1.26.0")]
 impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
 
@@ -2212,6 +2401,9 @@ impl<K, V, A: Allocator + Clone> ExactSizeIterator for IntoKeys<K, V, A> {
     }
 }
 
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V, A: Allocator + Clone> TrustedLen for IntoKeys<K, V, A> {}
+
 #[stable(feature = "map_into_keys_values", since = "1.54.0")]
 impl<K, V, A: Allocator + Clone> FusedIterator for IntoKeys<K, V, A> {}
 
@@ -2262,6 +2454,9 @@ impl<K, V, A: Allocator + Clone> ExactSizeIterator for IntoValues<K, V, A> {
         self.inner.len()
     }
 }
+
+#[unstable(feature = "trusted_len", issue = "37572")]
+unsafe impl<K, V, A: Allocator + Clone> TrustedLen for IntoValues<K, V, A> {}
 
 #[stable(feature = "map_into_keys_values", since = "1.54.0")]
 impl<K, V, A: Allocator + Clone> FusedIterator for IntoValues<K, V, A> {}

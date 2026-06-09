@@ -5,26 +5,27 @@
 #![stable(feature = "core_array", since = "1.35.0")]
 
 use crate::borrow::{Borrow, BorrowMut};
+use crate::clone::TrivialClone;
 use crate::cmp::Ordering;
 use crate::convert::Infallible;
 use crate::error::Error;
-use crate::fmt;
 use crate::hash::{self, Hash};
 use crate::intrinsics::transmute_unchecked;
 use crate::iter::{UncheckedIterator, repeat_n};
-use crate::mem::{self, MaybeUninit};
+use crate::marker::Destruct;
+use crate::mem::{self, ManuallyDrop, MaybeUninit};
 use crate::ops::{
     ChangeOutputType, ControlFlow, FromResidual, Index, IndexMut, NeverShortCircuit, Residual, Try,
 };
 use crate::ptr::{null, null_mut};
 use crate::slice::{Iter, IterMut};
+use crate::{fmt, ptr};
 
 mod ascii;
 mod drain;
 mod equality;
 mod iter;
 
-pub(crate) use drain::drain_array_with;
 #[stable(feature = "array_value_iter", since = "1.51.0")]
 pub use iter::IntoIter;
 
@@ -49,7 +50,7 @@ pub use iter::IntoIter;
 /// ```
 #[inline]
 #[must_use = "cloning is often expensive and is not expected to have side effects"]
-#[stable(feature = "array_repeat", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "array_repeat", since = "1.91.0")]
 pub fn repeat<T: Clone, const N: usize>(val: T) -> [T; N] {
     from_trusted_iterator(repeat_n(val, N))
 }
@@ -104,9 +105,10 @@ pub fn repeat<T: Clone, const N: usize>(val: T) -> [T; N] {
 /// ```
 #[inline]
 #[stable(feature = "array_from_fn", since = "1.63.0")]
-pub fn from_fn<T, const N: usize, F>(f: F) -> [T; N]
+#[rustc_const_unstable(feature = "const_array", issue = "147606")]
+pub const fn from_fn<T: [const] Destruct, const N: usize, F>(f: F) -> [T; N]
 where
-    F: FnMut(usize) -> T,
+    F: [const] FnMut(usize) -> T + [const] Destruct,
 {
     try_from_fn(NeverShortCircuit::wrap_mut_1(f)).0
 }
@@ -142,16 +144,13 @@ where
 /// ```
 #[inline]
 #[unstable(feature = "array_try_from_fn", issue = "89379")]
-pub fn try_from_fn<R, const N: usize, F>(cb: F) -> ChangeOutputType<R, [R::Output; N]>
+#[rustc_const_unstable(feature = "array_try_from_fn", issue = "89379")]
+pub const fn try_from_fn<R, const N: usize, F>(cb: F) -> ChangeOutputType<R, [R::Output; N]>
 where
-    F: FnMut(usize) -> R,
-    R: Try,
-    R::Residual: Residual<[R::Output; N]>,
+    R: [const] Try<Residual: [const] Residual<[R::Output; N]>, Output: [const] Destruct>,
+    F: [const] FnMut(usize) -> R + [const] Destruct,
 {
-    let array: MaybeUninit<[MaybeUninit<_>; N]> = MaybeUninit::uninit();
-    // `MaybeUninit::uninit().assume_init()` is normally undefined behavior, but in this case the
-    // value we're getting out doesn't contain any initialized data, only `N` `MaybeUninit`s.
-    let mut array: [MaybeUninit<_>; N] = unsafe { array.assume_init() };
+    let mut array = [const { MaybeUninit::uninit() }; N];
     match try_from_fn_erased(&mut array, cb) {
         ControlFlow::Break(r) => FromResidual::from_residual(r),
         ControlFlow::Continue(()) => {
@@ -165,12 +164,8 @@ where
 #[stable(feature = "array_from_ref", since = "1.53.0")]
 #[rustc_const_stable(feature = "const_array_from_ref_shared", since = "1.63.0")]
 pub const fn from_ref<T>(s: &T) -> &[T; 1] {
-    #[inline(never)] // Keep the hook around even with optimizations applied
-    const fn crucible_array_from_ref_hook<T>(r: &T) -> &[T; 1] {
-        // SAFETY: Converting `&T` to `&[T; 1]` is sound.
-        unsafe { &*(r as *const T).cast::<[T; 1]>() }
-    }
-    crucible_array_from_ref_hook(s)
+    // SAFETY: Converting `&T` to `&[T; 1]` is sound.
+    unsafe { &*(s as *const T).cast::<[T; 1]>() }
 }
 
 /// Converts a mutable reference to `T` into a mutable reference to an array of length 1 (without copying).
@@ -458,6 +453,10 @@ impl<T: Clone, const N: usize> Clone for [T; N] {
     }
 }
 
+#[doc(hidden)]
+#[unstable(feature = "trivial_clone", issue = "none")]
+unsafe impl<T: TrivialClone, const N: usize> TrivialClone for [T; N] {}
+
 trait SpecArrayClone: Clone {
     fn clone<const N: usize>(array: &[Self; N]) -> [Self; N];
 }
@@ -469,16 +468,23 @@ impl<T: Clone> SpecArrayClone for T {
     }
 }
 
-impl<T: Copy> SpecArrayClone for T {
+impl<T: TrivialClone> SpecArrayClone for T {
     #[inline]
     fn clone<const N: usize>(array: &[T; N]) -> [T; N] {
-        *array
+        // SAFETY: `TrivialClone` implies that this is equivalent to calling
+        // `Clone` on every element.
+        unsafe { ptr::read(array) }
     }
 }
 
 // The Default impls cannot be done with const generics because `[T; 0]` doesn't
 // require Default to be implemented, and having different impl blocks for
 // different numbers isn't supported yet.
+//
+// Trying to improve the `[T; 0]` situation has proven to be difficult.
+// Please see these issues for more context on past attempts and crater runs:
+// - https://github.com/rust-lang/rust/issues/61415
+// - https://github.com/rust-lang/rust/pull/145457
 
 macro_rules! array_impl_default {
     {$n:expr, $t:ident $($ts:ident)*} => {
@@ -510,20 +516,47 @@ impl<T, const N: usize> [T; N] {
     ///
     /// # Note on performance and stack usage
     ///
-    /// Unfortunately, usages of this method are currently not always optimized
-    /// as well as they could be. This mainly concerns large arrays, as mapping
-    /// over small arrays seem to be optimized just fine. Also note that in
-    /// debug mode (i.e. without any optimizations), this method can use a lot
-    /// of stack space (a few times the size of the array or more).
+    /// Note that this method is *eager*.  It evaluates `f` all `N` times before
+    /// returning the new array.
     ///
-    /// Therefore, in performance-critical code, try to avoid using this method
-    /// on large arrays or check the emitted code. Also try to avoid chained
-    /// maps (e.g. `arr.map(...).map(...)`).
+    /// That means that `arr.map(f).map(g)` is, in general, *not* equivalent to
+    /// `array.map(|x| g(f(x)))`, as the former calls `f` 4 times then `g` 4 times,
+    /// whereas the latter interleaves the calls (`fgfgfgfg`).
     ///
-    /// In many cases, you can instead use [`Iterator::map`] by calling `.iter()`
-    /// or `.into_iter()` on your array. `[T; N]::map` is only necessary if you
-    /// really need a new array of the same size as the result. Rust's lazy
-    /// iterators tend to get optimized very well.
+    /// A consequence of this is that it can have fairly-high stack usage, especially
+    /// in debug mode or for long arrays.  The backend may be able to optimize it
+    /// away, but especially for complicated mappings it might not be able to.
+    ///
+    /// If you're doing a one-step `map` and really want an array as the result,
+    /// then absolutely use this method.  Its implementation uses a bunch of tricks
+    /// to help the optimizer handle it well.  Particularly for simple arrays,
+    /// like `[u8; 3]` or `[f32; 4]`, there's nothing to be concerned about.
+    ///
+    /// However, if you don't actually need an *array* of the results specifically,
+    /// just to process them, then you likely want [`Iterator::map`] instead.
+    ///
+    /// For example, rather than doing an array-to-array map of all the elements
+    /// in the array up-front and only iterating after that completes,
+    ///
+    /// ```
+    /// # let my_array = [1, 2, 3];
+    /// # let f = |x: i32| x + 1;
+    /// for x in my_array.map(f) {
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// It's often better to use an iterator along the lines of
+    ///
+    /// ```
+    /// # let my_array = [1, 2, 3];
+    /// # let f = |x: i32| x + 1;
+    /// for x in my_array.into_iter().map(f) {
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// as that's more likely to avoid large temporaries.
     ///
     ///
     /// # Examples
@@ -544,9 +577,12 @@ impl<T, const N: usize> [T; N] {
     /// ```
     #[must_use]
     #[stable(feature = "array_map", since = "1.55.0")]
-    pub fn map<F, U>(self, f: F) -> [U; N]
+    #[rustc_const_unstable(feature = "const_array", issue = "147606")]
+    pub const fn map<F, U>(self, f: F) -> [U; N]
     where
-        F: FnMut(T) -> U,
+        F: [const] FnMut(T) -> U + [const] Destruct,
+        U: [const] Destruct,
+        T: [const] Destruct,
     {
         self.try_map(NeverShortCircuit::wrap_mut_1(f)).0
     }
@@ -582,11 +618,19 @@ impl<T, const N: usize> [T; N] {
     /// assert_eq!(c, Some(a));
     /// ```
     #[unstable(feature = "array_try_map", issue = "79711")]
-    pub fn try_map<R>(self, f: impl FnMut(T) -> R) -> ChangeOutputType<R, [R::Output; N]>
+    #[rustc_const_unstable(feature = "array_try_map", issue = "79711")]
+    pub const fn try_map<R>(
+        self,
+        mut f: impl [const] FnMut(T) -> R + [const] Destruct,
+    ) -> ChangeOutputType<R, [R::Output; N]>
     where
-        R: Try<Residual: Residual<[R::Output; N]>>,
+        R: [const] Try<Residual: [const] Residual<[R::Output; N]>, Output: [const] Destruct>,
+        T: [const] Destruct,
     {
-        drain_array_with(self, |iter| try_from_trusted_iterator(iter.map(f)))
+        let mut me = ManuallyDrop::new(self);
+        // SAFETY: try_from_fn calls `f` N times.
+        let mut f = unsafe { drain::Drain::new(&mut me, &mut f) };
+        try_from_fn(&mut f)
     }
 
     /// Returns a slice containing the entire array. Equivalent to `&s[..]`.
@@ -629,7 +673,7 @@ impl<T, const N: usize> [T; N] {
     /// assert_eq!(strings.len(), 3);
     /// ```
     #[stable(feature = "array_methods", since = "1.77.0")]
-    #[rustc_const_stable(feature = "const_array_each_ref", since = "CURRENT_RUSTC_VERSION")]
+    #[rustc_const_stable(feature = "const_array_each_ref", since = "1.91.0")]
     pub const fn each_ref(&self) -> [&T; N] {
         let mut buf = [null::<T>(); N];
 
@@ -660,7 +704,7 @@ impl<T, const N: usize> [T; N] {
     /// assert_eq!(floats, [0.0, 2.7, -1.0]);
     /// ```
     #[stable(feature = "array_methods", since = "1.77.0")]
-    #[rustc_const_stable(feature = "const_array_each_ref", since = "CURRENT_RUSTC_VERSION")]
+    #[rustc_const_stable(feature = "const_array_each_ref", since = "1.91.0")]
     pub const fn each_mut(&mut self) -> [&mut T; N] {
         let mut buf = [null_mut::<T>(); N];
 
@@ -880,13 +924,11 @@ where
 /// not optimizing away.  So if you give it a shot, make sure to watch what
 /// happens in the codegen tests.
 #[inline]
-fn try_from_fn_erased<T, R>(
-    buffer: &mut [MaybeUninit<T>],
-    mut generator: impl FnMut(usize) -> R,
-) -> ControlFlow<R::Residual>
-where
-    R: Try<Output = T>,
-{
+#[rustc_const_unstable(feature = "array_try_from_fn", issue = "89379")]
+const fn try_from_fn_erased<R: [const] Try<Output: [const] Destruct>>(
+    buffer: &mut [MaybeUninit<R::Output>],
+    mut generator: impl [const] FnMut(usize) -> R + [const] Destruct,
+) -> ControlFlow<R::Residual> {
     let mut guard = Guard { array_mut: buffer, initialized: 0 };
 
     while guard.initialized < guard.array_mut.len() {
@@ -909,7 +951,7 @@ where
 /// All write accesses to this structure are unsafe and must maintain a correct
 /// count of `initialized` elements.
 ///
-/// To minimize indirection fields are still pub but callers should at least use
+/// To minimize indirection, fields are still pub but callers should at least use
 /// `push_unchecked` to signal that something unsafe is going on.
 struct Guard<'a, T> {
     /// The array to be initialized.
@@ -925,9 +967,10 @@ impl<T> Guard<'_, T> {
     ///
     /// No more than N elements must be initialized.
     #[inline]
-    pub(crate) unsafe fn push_unchecked(&mut self, item: T) {
+    #[rustc_const_unstable(feature = "array_try_from_fn", issue = "89379")]
+    pub(crate) const unsafe fn push_unchecked(&mut self, item: T) {
         // SAFETY: If `initialized` was correct before and the caller does not
-        // invoke this method more than N times then writes will be in-bounds
+        // invoke this method more than N times, then writes will be in-bounds
         // and slots will not be initialized more than once.
         unsafe {
             self.array_mut.get_unchecked_mut(self.initialized).write(item);
@@ -936,11 +979,11 @@ impl<T> Guard<'_, T> {
     }
 }
 
-impl<T> Drop for Guard<'_, T> {
+#[rustc_const_unstable(feature = "array_try_from_fn", issue = "89379")]
+impl<T: [const] Destruct> const Drop for Guard<'_, T> {
     #[inline]
     fn drop(&mut self) {
         debug_assert!(self.initialized <= self.array_mut.len());
-
         // SAFETY: this slice will contain only initialized objects.
         unsafe {
             self.array_mut.get_unchecked_mut(..self.initialized).assume_init_drop();
@@ -956,7 +999,7 @@ impl<T> Drop for Guard<'_, T> {
 /// `next` at most `N` times, the iterator can still be used afterwards to
 /// retrieve the remaining items.
 ///
-/// If `iter.next()` panicks, all items already yielded by the iterator are
+/// If `iter.next()` panics, all items already yielded by the iterator are
 /// dropped.
 ///
 /// Used for [`Iterator::next_chunk`].
@@ -964,14 +1007,7 @@ impl<T> Drop for Guard<'_, T> {
 pub(crate) fn iter_next_chunk<T, const N: usize>(
     iter: &mut impl Iterator<Item = T>,
 ) -> Result<[T; N], IntoIter<T, N>> {
-    // We ensure that the call to MaybeUninit::uninit() below is not in a const
-    // context so that the function call appears in the MIR JSON, thereby
-    // allowing crucible-mir to override it. We must be careful not to write
-    // something like `array = [MaybeUninit::uninit(); N]`, as that would
-    // require `T` to implement `Copy` (which doesn't hold here). Thankfully,
-    // `array::from_fn` allows us to write an equivalent expression without
-    // requiring `Copy`.
-    let mut array = from_fn(|_| MaybeUninit::uninit());
+    let mut array = [const { MaybeUninit::uninit() }; N];
     let r = iter_next_chunk_erased(&mut array, iter);
     match r {
         Ok(()) => {
@@ -995,6 +1031,7 @@ fn iter_next_chunk_erased<T>(
     buffer: &mut [MaybeUninit<T>],
     iter: &mut impl Iterator<Item = T>,
 ) -> Result<(), usize> {
+    // if `Iterator::next` panics, this guard will drop already initialized items
     let mut guard = Guard { array_mut: buffer, initialized: 0 };
     while guard.initialized < guard.array_mut.len() {
         let Some(item) = iter.next() else {

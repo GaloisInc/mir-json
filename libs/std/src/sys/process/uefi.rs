@@ -6,10 +6,10 @@ pub use crate::ffi::OsString as EnvKey;
 use crate::ffi::{OsStr, OsString};
 use crate::num::{NonZero, NonZeroI32};
 use crate::path::Path;
+use crate::process::StdioPipes;
 use crate::sys::fs::File;
+use crate::sys::io::error_string;
 use crate::sys::pal::helpers;
-use crate::sys::pal::os::error_string;
-use crate::sys::pipe::AnonPipe;
 use crate::sys::unsupported;
 use crate::{fmt, io};
 
@@ -25,14 +25,6 @@ pub struct Command {
     stderr: Option<Stdio>,
     stdin: Option<Stdio>,
     env: CommandEnv,
-}
-
-// passed back to std::process with the pipes connected to the child, if any
-// were requested
-pub struct StdioPipes {
-    pub stdin: Option<AnonPipe>,
-    pub stdout: Option<AnonPipe>,
-    pub stderr: Option<AnonPipe>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -88,6 +80,10 @@ impl Command {
 
     pub fn get_envs(&self) -> CommandEnvs<'_> {
         self.env.iter()
+    }
+
+    pub fn get_env_clear(&self) -> bool {
+        self.env.does_clear()
     }
 
     pub fn get_current_dir(&self) -> Option<&Path> {
@@ -207,8 +203,8 @@ pub fn output(command: &mut Command) -> io::Result<(ExitStatus, Vec<u8>, Vec<u8>
     Ok((ExitStatus(stat), stdout, stderr))
 }
 
-impl From<AnonPipe> for Stdio {
-    fn from(pipe: AnonPipe) -> Stdio {
+impl From<ChildPipe> for Stdio {
+    fn from(pipe: ChildPipe) -> Stdio {
         pipe.diverge()
     }
 }
@@ -359,6 +355,17 @@ impl<'a> fmt::Debug for CommandArgs<'a> {
     }
 }
 
+pub type ChildPipe = crate::sys::pipe::Pipe;
+
+pub fn read_output(
+    out: ChildPipe,
+    _stdout: &mut Vec<u8>,
+    _err: ChildPipe,
+    _stderr: &mut Vec<u8>,
+) -> io::Result<()> {
+    match out.diverge() {}
+}
+
 #[allow(dead_code)]
 mod uefi_command_internal {
     use r_efi::protocols::{loaded_image, simple_text_input, simple_text_output};
@@ -370,8 +377,8 @@ mod uefi_command_internal {
     use crate::os::uefi::ffi::{OsStrExt, OsStringExt};
     use crate::ptr::NonNull;
     use crate::slice;
+    use crate::sys::helpers::WStrUnits;
     use crate::sys::pal::helpers::{self, OwnedTable};
-    use crate::sys_common::wstr::WStrUnits;
 
     pub struct Image {
         handle: NonNull<crate::ffi::c_void>,
@@ -892,4 +899,8 @@ fn env_changes(env: &CommandEnv) -> Option<BTreeMap<EnvKey, (Option<OsString>, O
     }
 
     Some(result)
+}
+
+pub fn getpid() -> u32 {
+    panic!("no pids on this platform")
 }

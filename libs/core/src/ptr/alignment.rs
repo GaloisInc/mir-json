@@ -1,5 +1,6 @@
 #![allow(clippy::enum_clike_unportable_variant)]
 
+use crate::marker::MetaSized;
 use crate::num::NonZero;
 use crate::ub_checks::assert_unsafe_precondition;
 use crate::{cmp, fmt, hash, mem, num};
@@ -12,7 +13,12 @@ use crate::{cmp, fmt, hash, mem, num};
 #[unstable(feature = "ptr_alignment_type", issue = "102070")]
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct Alignment(AlignmentEnum);
+pub struct Alignment {
+    // This field is never used directly (nor is the enum),
+    // as it's just there to convey the validity invariant.
+    // (Hopefully it'll eventually be a pattern type instead.)
+    _inner_repr_trick: AlignmentEnum,
+}
 
 // Alignment is `repr(usize)`, but via extra steps.
 const _: () = assert!(size_of::<Alignment>() == size_of::<usize>());
@@ -36,7 +42,7 @@ impl Alignment {
     /// assert_eq!(Alignment::MIN.as_usize(), 1);
     /// ```
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
-    pub const MIN: Self = Self(AlignmentEnum::_Align1Shl0);
+    pub const MIN: Self = Self::new(1).unwrap();
 
     /// Returns the alignment for a type.
     ///
@@ -46,8 +52,79 @@ impl Alignment {
     #[inline]
     #[must_use]
     pub const fn of<T>() -> Self {
-        // This can't actually panic since type alignment is always a power of two.
-        const { Alignment::new(align_of::<T>()).unwrap() }
+        <T as mem::SizedTypeProperties>::ALIGNMENT
+    }
+
+    /// Returns the [ABI]-required minimum alignment of the type of the value that `val` points to.
+    ///
+    /// Every reference to a value of the type `T` must be a multiple of this number.
+    ///
+    /// [ABI]: https://en.wikipedia.org/wiki/Application_binary_interface
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ptr_alignment_type)]
+    /// use std::ptr::Alignment;
+    ///
+    /// assert_eq!(Alignment::of_val(&5i32).as_usize(), 4);
+    /// ```
+    #[inline]
+    #[must_use]
+    #[unstable(feature = "ptr_alignment_type", issue = "102070")]
+    pub const fn of_val<T: MetaSized>(val: &T) -> Self {
+        let align = mem::align_of_val(val);
+        // SAFETY: `align_of_val` returns valid alignment
+        unsafe { Alignment::new_unchecked(align) }
+    }
+
+    /// Returns the [ABI]-required minimum alignment of the type of the value that `val` points to.
+    ///
+    /// Every reference to a value of the type `T` must be a multiple of this number.
+    ///
+    /// [ABI]: https://en.wikipedia.org/wiki/Application_binary_interface
+    ///
+    /// # Safety
+    ///
+    /// This function is only safe to call if the following conditions hold:
+    ///
+    /// - If `T` is `Sized`, this function is always safe to call.
+    /// - If the unsized tail of `T` is:
+    ///     - a [slice], then the length of the slice tail must be an initialized
+    ///       integer, and the size of the *entire value*
+    ///       (dynamic tail length + statically sized prefix) must fit in `isize`.
+    ///       For the special case where the dynamic tail length is 0, this function
+    ///       is safe to call.
+    ///     - a [trait object], then the vtable part of the pointer must point
+    ///       to a valid vtable acquired by an unsizing coercion, and the size
+    ///       of the *entire value* (dynamic tail length + statically sized prefix)
+    ///       must fit in `isize`.
+    ///     - an (unstable) [extern type], then this function is always safe to
+    ///       call, but may panic or otherwise return the wrong value, as the
+    ///       extern type's layout is not known. This is the same behavior as
+    ///       [`Alignment::of_val`] on a reference to a type with an extern type tail.
+    ///     - otherwise, it is conservatively not allowed to call this function.
+    ///
+    /// [trait object]: ../../book/ch17-02-trait-objects.html
+    /// [extern type]: ../../unstable-book/language-features/extern-types.html
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ptr_alignment_type)]
+    /// use std::ptr::Alignment;
+    ///
+    /// assert_eq!(unsafe { Alignment::of_val_raw(&5i32) }.as_usize(), 4);
+    /// ```
+    #[inline]
+    #[must_use]
+    #[unstable(feature = "ptr_alignment_type", issue = "102070")]
+    // #[unstable(feature = "layout_for_ptr", issue = "69835")]
+    pub const unsafe fn of_val_raw<T: MetaSized>(val: *const T) -> Self {
+        // SAFETY: precondition propagated to the caller
+        let align = unsafe { mem::align_of_val_raw(val) };
+        // SAFETY: `align_of_val_raw` returns valid alignment
+        unsafe { Alignment::new_unchecked(align) }
     }
 
     /// Creates an `Alignment` from a `usize`, or returns `None` if it's
@@ -83,144 +160,32 @@ impl Alignment {
             (align: usize = align) => align.is_power_of_two()
         );
 
-        match align {
-            1 => Alignment(AlignmentEnum::_Align1Shl0),
-            2 => Alignment(AlignmentEnum::_Align1Shl1),
-            4 => Alignment(AlignmentEnum::_Align1Shl2),
-            8 => Alignment(AlignmentEnum::_Align1Shl3),
-            16 => Alignment(AlignmentEnum::_Align1Shl4),
-            32 => Alignment(AlignmentEnum::_Align1Shl5),
-            64 => Alignment(AlignmentEnum::_Align1Shl6),
-            128 => Alignment(AlignmentEnum::_Align1Shl7),
-            256 => Alignment(AlignmentEnum::_Align1Shl8),
-            512 => Alignment(AlignmentEnum::_Align1Shl9),
-            1024 => Alignment(AlignmentEnum::_Align1Shl10),
-            2048 => Alignment(AlignmentEnum::_Align1Shl11),
-            4096 => Alignment(AlignmentEnum::_Align1Shl12),
-            8192 => Alignment(AlignmentEnum::_Align1Shl13),
-            16384 => Alignment(AlignmentEnum::_Align1Shl14),
-            32768 => Alignment(AlignmentEnum::_Align1Shl15),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            65536 => Alignment(AlignmentEnum::_Align1Shl16),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            131072 => Alignment(AlignmentEnum::_Align1Shl17),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            262144 => Alignment(AlignmentEnum::_Align1Shl18),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            524288 => Alignment(AlignmentEnum::_Align1Shl19),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            1048576 => Alignment(AlignmentEnum::_Align1Shl20),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            2097152 => Alignment(AlignmentEnum::_Align1Shl21),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            4194304 => Alignment(AlignmentEnum::_Align1Shl22),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            8388608 => Alignment(AlignmentEnum::_Align1Shl23),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            16777216 => Alignment(AlignmentEnum::_Align1Shl24),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            33554432 => Alignment(AlignmentEnum::_Align1Shl25),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            67108864 => Alignment(AlignmentEnum::_Align1Shl26),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            134217728 => Alignment(AlignmentEnum::_Align1Shl27),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            268435456 => Alignment(AlignmentEnum::_Align1Shl28),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            536870912 => Alignment(AlignmentEnum::_Align1Shl29),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            1073741824 => Alignment(AlignmentEnum::_Align1Shl30),
-            #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-            2147483648 => Alignment(AlignmentEnum::_Align1Shl31),
-            #[cfg(target_pointer_width = "64")]
-            4294967296 => Alignment(AlignmentEnum::_Align1Shl32),
-            #[cfg(target_pointer_width = "64")]
-            8589934592 => Alignment(AlignmentEnum::_Align1Shl33),
-            #[cfg(target_pointer_width = "64")]
-            17179869184 => Alignment(AlignmentEnum::_Align1Shl34),
-            #[cfg(target_pointer_width = "64")]
-            34359738368 => Alignment(AlignmentEnum::_Align1Shl35),
-            #[cfg(target_pointer_width = "64")]
-            68719476736 => Alignment(AlignmentEnum::_Align1Shl36),
-            #[cfg(target_pointer_width = "64")]
-            137438953472 => Alignment(AlignmentEnum::_Align1Shl37),
-            #[cfg(target_pointer_width = "64")]
-            274877906944 => Alignment(AlignmentEnum::_Align1Shl38),
-            #[cfg(target_pointer_width = "64")]
-            549755813888 => Alignment(AlignmentEnum::_Align1Shl39),
-            #[cfg(target_pointer_width = "64")]
-            1099511627776 => Alignment(AlignmentEnum::_Align1Shl40),
-            #[cfg(target_pointer_width = "64")]
-            2199023255552 => Alignment(AlignmentEnum::_Align1Shl41),
-            #[cfg(target_pointer_width = "64")]
-            4398046511104 => Alignment(AlignmentEnum::_Align1Shl42),
-            #[cfg(target_pointer_width = "64")]
-            8796093022208 => Alignment(AlignmentEnum::_Align1Shl43),
-            #[cfg(target_pointer_width = "64")]
-            17592186044416 => Alignment(AlignmentEnum::_Align1Shl44),
-            #[cfg(target_pointer_width = "64")]
-            35184372088832 => Alignment(AlignmentEnum::_Align1Shl45),
-            #[cfg(target_pointer_width = "64")]
-            70368744177664 => Alignment(AlignmentEnum::_Align1Shl46),
-            #[cfg(target_pointer_width = "64")]
-            140737488355328 => Alignment(AlignmentEnum::_Align1Shl47),
-            #[cfg(target_pointer_width = "64")]
-            281474976710656 => Alignment(AlignmentEnum::_Align1Shl48),
-            #[cfg(target_pointer_width = "64")]
-            562949953421312 => Alignment(AlignmentEnum::_Align1Shl49),
-            #[cfg(target_pointer_width = "64")]
-            1125899906842624 => Alignment(AlignmentEnum::_Align1Shl50),
-            #[cfg(target_pointer_width = "64")]
-            2251799813685248 => Alignment(AlignmentEnum::_Align1Shl51),
-            #[cfg(target_pointer_width = "64")]
-            4503599627370496 => Alignment(AlignmentEnum::_Align1Shl52),
-            #[cfg(target_pointer_width = "64")]
-            9007199254740992 => Alignment(AlignmentEnum::_Align1Shl53),
-            #[cfg(target_pointer_width = "64")]
-            18014398509481984 => Alignment(AlignmentEnum::_Align1Shl54),
-            #[cfg(target_pointer_width = "64")]
-            36028797018963968 => Alignment(AlignmentEnum::_Align1Shl55),
-            #[cfg(target_pointer_width = "64")]
-            72057594037927936 => Alignment(AlignmentEnum::_Align1Shl56),
-            #[cfg(target_pointer_width = "64")]
-            144115188075855872 => Alignment(AlignmentEnum::_Align1Shl57),
-            #[cfg(target_pointer_width = "64")]
-            288230376151711744 => Alignment(AlignmentEnum::_Align1Shl58),
-            #[cfg(target_pointer_width = "64")]
-            576460752303423488 => Alignment(AlignmentEnum::_Align1Shl59),
-            #[cfg(target_pointer_width = "64")]
-            1152921504606846976 => Alignment(AlignmentEnum::_Align1Shl60),
-            #[cfg(target_pointer_width = "64")]
-            2305843009213693952 => Alignment(AlignmentEnum::_Align1Shl61),
-            #[cfg(target_pointer_width = "64")]
-            4611686018427387904 => Alignment(AlignmentEnum::_Align1Shl62),
-            #[cfg(target_pointer_width = "64")]
-            9223372036854775808 => Alignment(AlignmentEnum::_Align1Shl63),
-            _ => panic!("invalid alignment (not a power of two)"),
-        }
+        // SAFETY: By precondition, this must be a power of two, and
+        // our variants encompass all possible powers of two.
+        unsafe { mem::transmute::<usize, Alignment>(align) }
     }
 
     /// Returns the alignment as a [`usize`].
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const fn as_usize(self) -> usize {
-        self.0 as usize
+        // Going through `as_nonzero` helps this be more clearly the inverse of
+        // `new_unchecked`, letting MIR optimizations fold it away.
+
+        self.as_nonzero().get()
     }
 
     /// Returns the alignment as a <code>[NonZero]<[usize]></code>.
     #[unstable(feature = "ptr_alignment_type", issue = "102070")]
     #[inline]
     pub const fn as_nonzero(self) -> NonZero<usize> {
-        #[cfg(target_pointer_width = "16")]
-        let x = self.0 as u16;
-        #[cfg(target_pointer_width = "32")]
-        let x = self.0 as u32;
-        #[cfg(target_pointer_width = "64")]
-        let x = self.0 as u64;
+        // This transmutes directly to avoid the UbCheck in `NonZero::new_unchecked`
+        // since there's no way for the user to trip that check anyway -- the
+        // validity invariant of the type would have to have been broken earlier --
+        // and emitting it in an otherwise simple method is bad for compile time.
 
         // SAFETY: All the discriminants are non-zero.
-        unsafe { NonZero::new_unchecked(self.0 as usize) }
+        unsafe { mem::transmute::<Alignment, NonZero<usize>>(self) }
     }
 
     /// Returns the base-2 logarithm of the alignment.

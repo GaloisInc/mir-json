@@ -7,9 +7,10 @@
 //!
 //! [`collections`]: crate::collections
 
-#[allow(deprecated)]
 use super::{BuildHasher, Hasher, SipHasher13};
+use crate::cell::Cell;
 use crate::fmt;
+use crate::sys::random::hashmap_random_keys;
 
 /// `RandomState` is the default state for [`HashMap`] types.
 ///
@@ -52,7 +53,26 @@ impl RandomState {
     #[must_use]
     #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
     pub fn new() -> RandomState {
-        RandomState { k0: 1, k1: 2 }
+        // Historically this function did not cache keys from the OS and instead
+        // simply always called `rand::thread_rng().gen()` twice. In #31356 it
+        // was discovered, however, that because we re-seed the thread-local RNG
+        // from the OS periodically that this can cause excessive slowdown when
+        // many hash maps are created on a thread. To solve this performance
+        // trap we cache the first set of randomly generated keys per-thread.
+        //
+        // Later in #36481 it was discovered that exposing a deterministic
+        // iteration order allows a form of DOS attack. To counter that we
+        // increment one of the seeds on every RandomState creation, giving
+        // every corresponding HashMap a different iteration order.
+        thread_local!(static KEYS: Cell<(u64, u64)> = {
+            Cell::new(hashmap_random_keys())
+        });
+
+        KEYS.with(|keys| {
+            let (k0, k1) = keys.get();
+            keys.set((k0.wrapping_add(1), k1));
+            RandomState { k0, k1 }
+        })
     }
 }
 
@@ -60,7 +80,6 @@ impl RandomState {
 impl BuildHasher for RandomState {
     type Hasher = DefaultHasher;
     #[inline]
-    #[allow(deprecated)]
     fn build_hasher(&self) -> DefaultHasher {
         DefaultHasher(SipHasher13::new_with_keys(self.k0, self.k1))
     }
@@ -70,7 +89,6 @@ impl BuildHasher for RandomState {
 ///
 /// The internal algorithm is not specified, and so it and its hashes should
 /// not be relied upon over releases.
-#[allow(deprecated)]
 #[derive(Clone, Debug)]
 #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
 pub struct DefaultHasher(SipHasher13);
@@ -83,15 +101,16 @@ impl DefaultHasher {
     /// instances created through `new` or `default`.
     #[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
     #[inline]
-    #[allow(deprecated)]
+    #[rustc_const_unstable(feature = "const_default", issue = "143894")]
     #[must_use]
-    pub fn new() -> DefaultHasher {
+    pub const fn new() -> DefaultHasher {
         DefaultHasher(SipHasher13::new_with_keys(0, 0))
     }
 }
 
 #[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
-impl Default for DefaultHasher {
+#[rustc_const_unstable(feature = "const_default", issue = "143894")]
+impl const Default for DefaultHasher {
     /// Creates a new `DefaultHasher` using [`new`].
     /// See its documentation for more.
     ///

@@ -6,9 +6,10 @@
 //! * [`Sender`]
 //! * [`Receiver`]
 //!
-//! [`Sender`]s are used to send data to a set of [`Receiver`]s. Both
-//! sender and receiver are cloneable (multi-producer) such that many threads can send
-//! simultaneously to receivers (multi-consumer).
+//! [`Sender`]s are used to send data to a set of [`Receiver`]s where each item
+//! sent is delivered to (at most) one receiver. Both sender and receiver are
+//! cloneable (multi-producer) such that many threads can send simultaneously
+//! to receivers (multi-consumer).
 //!
 //! These channels come in two flavors:
 //!
@@ -622,6 +623,33 @@ impl<T> Sender<T> {
             _ => false,
         }
     }
+
+    /// Returns `true` if the channel is disconnected.
+    ///
+    /// Note that a return value of `false` does not guarantee the channel will
+    /// remain connected. The channel may be disconnected immediately after this method
+    /// returns, so a subsequent [`Sender::send`] may still fail with [`SendError`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(mpmc_channel)]
+    ///
+    /// use std::sync::mpmc::channel;
+    ///
+    /// let (tx, rx) = channel::<i32>();
+    /// assert!(!tx.is_disconnected());
+    /// drop(rx);
+    /// assert!(tx.is_disconnected());
+    /// ```
+    #[unstable(feature = "mpmc_channel", issue = "126840")]
+    pub fn is_disconnected(&self) -> bool {
+        match &self.flavor {
+            SenderFlavor::Array(chan) => chan.is_disconnected(),
+            SenderFlavor::List(chan) => chan.is_disconnected(),
+            SenderFlavor::Zero(chan) => chan.is_disconnected(),
+        }
+    }
 }
 
 #[unstable(feature = "mpmc_channel", issue = "126840")]
@@ -653,7 +681,7 @@ impl<T> Clone for Sender<T> {
 #[unstable(feature = "mpmc_channel", issue = "126840")]
 impl<T> fmt::Debug for Sender<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("Sender { .. }")
+        f.debug_struct("Sender").finish_non_exhaustive()
     }
 }
 
@@ -1348,6 +1376,33 @@ impl<T> Receiver<T> {
     pub fn iter(&self) -> Iter<'_, T> {
         Iter { rx: self }
     }
+
+    /// Returns `true` if the channel is disconnected.
+    ///
+    /// Note that a return value of `false` does not guarantee the channel will
+    /// remain connected. The channel may be disconnected immediately after this method
+    /// returns, so a subsequent [`Receiver::recv`] may still fail with [`RecvError`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(mpmc_channel)]
+    ///
+    /// use std::sync::mpmc::channel;
+    ///
+    /// let (tx, rx) = channel::<i32>();
+    /// assert!(!rx.is_disconnected());
+    /// drop(tx);
+    /// assert!(rx.is_disconnected());
+    /// ```
+    #[unstable(feature = "mpmc_channel", issue = "126840")]
+    pub fn is_disconnected(&self) -> bool {
+        match &self.flavor {
+            ReceiverFlavor::Array(chan) => chan.is_disconnected(),
+            ReceiverFlavor::List(chan) => chan.is_disconnected(),
+            ReceiverFlavor::Zero(chan) => chan.is_disconnected(),
+        }
+    }
 }
 
 #[unstable(feature = "mpmc_channel", issue = "126840")]
@@ -1379,7 +1434,7 @@ impl<T> Clone for Receiver<T> {
 #[unstable(feature = "mpmc_channel", issue = "126840")]
 impl<T> fmt::Debug for Receiver<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("Receiver { .. }")
+        f.debug_struct("Receiver").finish_non_exhaustive()
     }
 }
 

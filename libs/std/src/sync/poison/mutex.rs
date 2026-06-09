@@ -401,6 +401,7 @@ impl<T> Mutex<T> {
     /// assert_eq!(mutex.get_cloned().unwrap(), 11);
     /// ```
     #[unstable(feature = "lock_value_accessors", issue = "133407")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn set(&self, value: T) -> Result<(), PoisonError<T>> {
         if mem::needs_drop::<T>() {
             // If the contained value has non-trivial destructor, we
@@ -438,6 +439,7 @@ impl<T> Mutex<T> {
     /// assert_eq!(mutex.get_cloned().unwrap(), 11);
     /// ```
     #[unstable(feature = "lock_value_accessors", issue = "133407")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn replace(&self, value: T) -> LockResult<T> {
         match self.lock() {
             Ok(mut guard) => Ok(mem::replace(&mut *guard, value)),
@@ -484,6 +486,7 @@ impl<T: ?Sized> Mutex<T> {
     /// assert_eq!(*mutex.lock().unwrap(), 10);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
         unsafe {
             self.inner.lock();
@@ -532,6 +535,7 @@ impl<T: ?Sized> Mutex<T> {
     /// assert_eq!(*mutex.lock().unwrap(), 10);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn try_lock(&self) -> TryLockResult<MutexGuard<'_, T>> {
         unsafe {
             if self.inner.try_lock() {
@@ -602,6 +606,7 @@ impl<T: ?Sized> Mutex<T> {
     /// ```
     #[inline]
     #[stable(feature = "mutex_unpoison", since = "1.77.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn clear_poison(&self) {
         self.poison.clear();
     }
@@ -668,7 +673,7 @@ impl<T: ?Sized> Mutex<T> {
     /// are properly synchronized to avoid data races, and that it is not read
     /// or written through after the mutex is dropped.
     #[unstable(feature = "mutex_data_ptr", issue = "140368")]
-    pub fn data_ptr(&self) -> *mut T {
+    pub const fn data_ptr(&self) -> *mut T {
         self.data.get()
     }
 }
@@ -683,7 +688,7 @@ impl<T> From<T> for Mutex<T> {
 }
 
 #[stable(feature = "mutex_default", since = "1.10.0")]
-impl<T: ?Sized + Default> Default for Mutex<T> {
+impl<T: Default> Default for Mutex<T> {
     /// Creates a `Mutex<T>`, with the `Default` value for T.
     fn default() -> Mutex<T> {
         Mutex::new(Default::default())

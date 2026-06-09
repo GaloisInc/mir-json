@@ -13,7 +13,7 @@ use crate::rc::Rc;
 use crate::str::FromStr;
 use crate::sync::Arc;
 use crate::sys::os_str::{Buf, Slice};
-use crate::sys_common::{AsInner, FromInner, IntoInner};
+use crate::sys::{AsInner, FromInner, IntoInner};
 use crate::{cmp, fmt, slice};
 
 /// A type that can represent owned, mutable platform-native strings, but is
@@ -137,7 +137,7 @@ impl OsString {
     #[stable(feature = "rust1", since = "1.0.0")]
     #[must_use]
     #[inline]
-    #[rustc_const_stable(feature = "const_pathbuf_osstring_new", since = "CURRENT_RUSTC_VERSION")]
+    #[rustc_const_stable(feature = "const_pathbuf_osstring_new", since = "1.91.0")]
     pub const fn new() -> OsString {
         OsString { inner: Buf::from_string(String::new()) }
     }
@@ -576,15 +576,21 @@ impl OsString {
 
     /// Truncate the `OsString` to the specified length.
     ///
+    /// If `new_len` is greater than the string's current length, this has no
+    /// effect.
+    ///
     /// # Panics
+    ///
     /// Panics if `len` does not lie on a valid `OsStr` boundary
     /// (as described in [`OsStr::slice_encoded_bytes`]).
     #[inline]
     #[unstable(feature = "os_string_truncate", issue = "133262")]
     pub fn truncate(&mut self, len: usize) {
-        self.as_os_str().inner.check_public_boundary(len);
-        // SAFETY: The length was just checked to be at a valid boundary.
-        unsafe { self.inner.truncate_unchecked(len) };
+        if len <= self.len() {
+            self.as_os_str().inner.check_public_boundary(len);
+            // SAFETY: The length was just checked to be at a valid boundary.
+            unsafe { self.inner.truncate_unchecked(len) };
+        }
     }
 
     /// Provides plumbing to `Vec::extend_from_slice` without giving full
@@ -1215,6 +1221,8 @@ impl OsStr {
 
     /// Checks if all characters in this string are within the ASCII range.
     ///
+    /// An empty string returns `true`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -1276,6 +1284,17 @@ impl OsStr {
     pub fn display(&self) -> Display<'_> {
         Display { os_str: self }
     }
+
+    /// Returns the same string as a string slice `&OsStr`.
+    ///
+    /// This method is redundant when used directly on `&OsStr`, but
+    /// it helps dereferencing other string-like types to string slices,
+    /// for example references to `Box<OsStr>` or `Arc<OsStr>`.
+    #[inline]
+    #[unstable(feature = "str_as_str", issue = "130366")]
+    pub const fn as_os_str(&self) -> &OsStr {
+        self
+    }
 }
 
 #[stable(feature = "box_from_os_str", since = "1.17.0")]
@@ -1283,8 +1302,7 @@ impl From<&OsStr> for Box<OsStr> {
     /// Copies the string into a newly allocated <code>[Box]&lt;[OsStr]&gt;</code>.
     #[inline]
     fn from(s: &OsStr) -> Box<OsStr> {
-        let rw = Box::into_raw(s.inner.into_box()) as *mut OsStr;
-        unsafe { Box::from_raw(rw) }
+        Box::clone_from_ref(s)
     }
 }
 
@@ -1553,7 +1571,7 @@ impl Ord for OsStr {
 macro_rules! impl_cmp {
     ($lhs:ty, $rhs: ty) => {
         #[stable(feature = "cmp_os_str", since = "1.8.0")]
-        impl<'a, 'b> PartialEq<$rhs> for $lhs {
+        impl PartialEq<$rhs> for $lhs {
             #[inline]
             fn eq(&self, other: &$rhs) -> bool {
                 <OsStr as PartialEq>::eq(self, other)
@@ -1561,7 +1579,7 @@ macro_rules! impl_cmp {
         }
 
         #[stable(feature = "cmp_os_str", since = "1.8.0")]
-        impl<'a, 'b> PartialEq<$lhs> for $rhs {
+        impl PartialEq<$lhs> for $rhs {
             #[inline]
             fn eq(&self, other: &$lhs) -> bool {
                 <OsStr as PartialEq>::eq(self, other)
@@ -1569,7 +1587,7 @@ macro_rules! impl_cmp {
         }
 
         #[stable(feature = "cmp_os_str", since = "1.8.0")]
-        impl<'a, 'b> PartialOrd<$rhs> for $lhs {
+        impl PartialOrd<$rhs> for $lhs {
             #[inline]
             fn partial_cmp(&self, other: &$rhs) -> Option<cmp::Ordering> {
                 <OsStr as PartialOrd>::partial_cmp(self, other)
@@ -1577,7 +1595,7 @@ macro_rules! impl_cmp {
         }
 
         #[stable(feature = "cmp_os_str", since = "1.8.0")]
-        impl<'a, 'b> PartialOrd<$lhs> for $rhs {
+        impl PartialOrd<$lhs> for $rhs {
             #[inline]
             fn partial_cmp(&self, other: &$lhs) -> Option<cmp::Ordering> {
                 <OsStr as PartialOrd>::partial_cmp(self, other)
@@ -1587,10 +1605,10 @@ macro_rules! impl_cmp {
 }
 
 impl_cmp!(OsString, OsStr);
-impl_cmp!(OsString, &'a OsStr);
-impl_cmp!(Cow<'a, OsStr>, OsStr);
-impl_cmp!(Cow<'a, OsStr>, &'b OsStr);
-impl_cmp!(Cow<'a, OsStr>, OsString);
+impl_cmp!(OsString, &OsStr);
+impl_cmp!(Cow<'_, OsStr>, OsStr);
+impl_cmp!(Cow<'_, OsStr>, &OsStr);
+impl_cmp!(Cow<'_, OsStr>, OsString);
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Hash for OsStr {

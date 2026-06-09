@@ -118,9 +118,14 @@
 //!
 //! # Representation
 //!
-//! Rust guarantees to optimize the following types `T` such that
-//! [`Option<T>`] has the same size, alignment, and [function call ABI] as `T`. In some
-//! of these cases, Rust further guarantees the following:
+//! Rust guarantees to optimize the following types `T` such that [`Option<T>`]
+//! has the same size, alignment, and [function call ABI] as `T`. It is
+//! therefore sound, when `T` is one of these types, to transmute a value `t` of
+//! type `T` to type `Option<T>` (producing the value `Some(t)`) and to
+//! transmute a value `Some(t)` of type `Option<T>` to type `T` (producing the
+//! value `t`).
+//!
+//! In some of these cases, Rust further guarantees the following:
 //! - `transmute::<_, Option<T>>([0u8; size_of::<T>()])` is sound and produces
 //!   `Option::<T>::None`
 //! - `transmute::<_, [u8; size_of::<T>()]>(Option::<T>::None)` is sound and produces
@@ -576,9 +581,10 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
+use crate::clone::TrivialClone;
 use crate::iter::{self, FusedIterator, TrustedLen};
 use crate::marker::Destruct;
-use crate::ops::{self, ControlFlow, Deref, DerefMut};
+use crate::ops::{self, ControlFlow, Deref, DerefMut, Residual, Try};
 use crate::panicking::{panic, panic_display};
 use crate::pin::Pin;
 use crate::{cmp, convert, hint, mem, slice};
@@ -1771,7 +1777,7 @@ impl<T> Option<T> {
     #[rustc_const_unstable(feature = "const_option_ops", issue = "143956")]
     pub const fn get_or_insert_default(&mut self) -> &mut T
     where
-        T: [const] Default + [const] Destruct,
+        T: [const] Default,
     {
         self.get_or_insert_with(T::default)
     }
@@ -1799,15 +1805,73 @@ impl<T> Option<T> {
     pub const fn get_or_insert_with<F>(&mut self, f: F) -> &mut T
     where
         F: [const] FnOnce() -> T + [const] Destruct,
-        T: [const] Destruct,
     {
         if let None = self {
-            *self = Some(f());
+            // The effect of the following statement is identical to
+            //     *self = Some(f());
+            // except that it does not drop the old value of `*self`. This is not a leak, because
+            // we just checked that the old value is `None`, which contains no fields to drop.
+            // This implementation strategy
+            //
+            // * avoids needing a `T: [const] Destruct` bound, to the benefit of `const` callers,
+            // * and avoids possibly compiling needless drop code (as would sometimes happen in the
+            //   previous implementation), to the benefit of non-`const` callers.
+            //
+            // FIXME(const-hack): It would be nice if this weird trick were made obsolete
+            // (though that is likely to be hard/wontfix).
+            //
+            // It could also be expressed as `unsafe { core::ptr::write(self, Some(f())) }`, but
+            // no reason is currently known to use additional unsafe code here.
+
+            mem::forget(mem::replace(self, Some(f())));
         }
 
         // SAFETY: a `None` variant for `self` would have been replaced by a `Some`
         // variant in the code above.
         unsafe { self.as_mut().unwrap_unchecked() }
+    }
+
+    /// If the option is `None`, calls the closure and inserts its output if successful.
+    ///
+    /// If the closure returns a residual value such as `Err` or `None`,
+    /// that residual value is returned and nothing is inserted.
+    ///
+    /// If the option is `Some`, nothing is inserted.
+    ///
+    /// Unless a residual is returned, a mutable reference to the value
+    /// of the option will be output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(option_get_or_try_insert_with)]
+    /// let mut o1: Option<u32> = None;
+    /// let mut o2: Option<u8> = None;
+    ///
+    /// let number = "12345";
+    ///
+    /// assert_eq!(o1.get_or_try_insert_with(|| number.parse()).copied(), Ok(12345));
+    /// assert!(o2.get_or_try_insert_with(|| number.parse()).is_err());
+    /// assert_eq!(o1, Some(12345));
+    /// assert_eq!(o2, None);
+    /// ```
+    #[inline]
+    #[unstable(feature = "option_get_or_try_insert_with", issue = "143648")]
+    pub fn get_or_try_insert_with<'a, R, F>(
+        &'a mut self,
+        f: F,
+    ) -> <R::Residual as Residual<&'a mut T>>::TryType
+    where
+        F: FnOnce() -> R,
+        R: Try<Output = T, Residual: Residual<&'a mut T>>,
+    {
+        if let None = self {
+            *self = Some(f()?);
+        }
+        // SAFETY: a `None` variant for `self` would have been replaced by a `Some`
+        // variant in the code above.
+
+        Try::from_output(unsafe { self.as_mut().unwrap_unchecked() })
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2002,6 +2066,30 @@ impl<T> Option<T> {
     }
 }
 
+impl<T: IntoIterator> Option<T> {
+    /// Transforms an optional iterator into an iterator.
+    ///
+    /// If `self` is `None`, the resulting iterator is empty.
+    /// Otherwise, an iterator is made from the `Some` value and returned.
+    /// # Examples
+    /// ```
+    /// #![feature(option_into_flat_iter)]
+    ///
+    /// let o1 = Some([1, 2]);
+    /// let o2 = None::<&[usize]>;
+    ///
+    /// assert_eq!(o1.into_flat_iter().collect::<Vec<_>>(), [1, 2]);
+    /// assert_eq!(o2.into_flat_iter().collect::<Vec<_>>(), Vec::<&usize>::new());
+    /// ```
+    #[unstable(feature = "option_into_flat_iter", issue = "148441")]
+    pub fn into_flat_iter<A>(self) -> OptionFlatten<A>
+    where
+        T: IntoIterator<IntoIter = A>,
+    {
+        OptionFlatten { iter: self.map(IntoIterator::into_iter) }
+    }
+}
+
 impl<T, U> Option<(T, U)> {
     /// Unzips an option containing a tuple of two options.
     ///
@@ -2073,10 +2161,7 @@ impl<T> Option<&T> {
     where
         T: Clone,
     {
-        match self {
-            Some(t) => Some(t.clone()),
-            None => None,
-        }
+        self.map(T::clone)
     }
 }
 
@@ -2124,10 +2209,7 @@ impl<T> Option<&mut T> {
     where
         T: Clone,
     {
-        match self {
-            Some(t) => Some(t.clone()),
-            None => None,
-        }
+        self.as_deref().map(T::clone)
     }
 }
 
@@ -2161,8 +2243,8 @@ impl<T, E> Option<Result<T, E>> {
     }
 }
 
-#[cfg_attr(not(feature = "panic_immediate_abort"), inline(never))]
-#[cfg_attr(feature = "panic_immediate_abort", inline)]
+#[cfg_attr(not(panic = "immediate-abort"), inline(never))]
+#[cfg_attr(panic = "immediate-abort", inline)]
 #[cold]
 #[track_caller]
 const fn unwrap_failed() -> ! {
@@ -2170,8 +2252,8 @@ const fn unwrap_failed() -> ! {
 }
 
 // This is a separate function to reduce the code size of .expect() itself.
-#[cfg_attr(not(feature = "panic_immediate_abort"), inline(never))]
-#[cfg_attr(feature = "panic_immediate_abort", inline)]
+#[cfg_attr(not(panic = "immediate-abort"), inline(never))]
+#[cfg_attr(panic = "immediate-abort", inline)]
 #[cold]
 #[track_caller]
 const fn expect_failed(msg: &str) -> ! {
@@ -2210,6 +2292,11 @@ where
 #[unstable(feature = "ergonomic_clones", issue = "132290")]
 impl<T> crate::clone::UseCloned for Option<T> where T: crate::clone::UseCloned {}
 
+#[doc(hidden)]
+#[unstable(feature = "trivial_clone", issue = "none")]
+#[rustc_const_unstable(feature = "const_clone", issue = "142757")]
+unsafe impl<T> const TrivialClone for Option<T> where T: [const] TrivialClone + [const] Destruct {}
+
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_default", issue = "143894")]
 impl<T> const Default for Option<T> {
@@ -2228,7 +2315,8 @@ impl<T> const Default for Option<T> {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<T> IntoIterator for Option<T> {
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+impl<T> const IntoIterator for Option<T> {
     type Item = T;
     type IntoIter = IntoIter<T>;
 
@@ -2400,7 +2488,8 @@ struct Item<A> {
     opt: Option<A>,
 }
 
-impl<A> Iterator for Item<A> {
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+impl<A> const Iterator for Item<A> {
     type Item = A;
 
     #[inline]
@@ -2410,7 +2499,7 @@ impl<A> Iterator for Item<A> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.len();
+        let len = self.opt.len();
         (len, Some(len))
     }
 }
@@ -2534,7 +2623,8 @@ pub struct IntoIter<A> {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<A> Iterator for IntoIter<A> {
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+impl<A> const Iterator for IntoIter<A> {
     type Item = A;
 
     #[inline]
@@ -2563,6 +2653,42 @@ impl<A> FusedIterator for IntoIter<A> {}
 
 #[unstable(feature = "trusted_len", issue = "37572")]
 unsafe impl<A> TrustedLen for IntoIter<A> {}
+
+/// The iterator produced by [`Option::into_flat_iter`]. See its documentation for more.
+#[derive(Clone, Debug)]
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+pub struct OptionFlatten<A> {
+    iter: Option<A>,
+}
+
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+impl<A: Iterator> Iterator for OptionFlatten<A> {
+    type Item = A::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.as_mut()?.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.as_ref().map(|i| i.size_hint()).unwrap_or((0, Some(0)))
+    }
+}
+
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+impl<A: DoubleEndedIterator> DoubleEndedIterator for OptionFlatten<A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.as_mut()?.next_back()
+    }
+}
+
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+impl<A: ExactSizeIterator> ExactSizeIterator for OptionFlatten<A> {}
+
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+impl<A: FusedIterator> FusedIterator for OptionFlatten<A> {}
+
+#[unstable(feature = "option_into_flat_iter", issue = "148441")]
+unsafe impl<A: TrustedLen> TrustedLen for OptionFlatten<A> {}
 
 /////////////////////////////////////////////////////////////////////////////
 // FromIterator
@@ -2632,9 +2758,6 @@ impl<A, V: FromIterator<A>> FromIterator<Option<A>> for Option<V> {
     /// so the final value of `shared` is 6 (= `3 + 2 + 1`), not 16.
     #[inline]
     fn from_iter<I: IntoIterator<Item = Option<A>>>(iter: I) -> Option<V> {
-        // FIXME(#11084): This could be replaced with Iterator::scan when this
-        // performance bug is closed.
-
         iter::try_process(iter.into_iter(), |i| i.collect())
     }
 }
@@ -2721,6 +2844,95 @@ impl<T> Option<Option<T>> {
         // FIXME(const-hack): could be written with `and_then`
         match self {
             Some(inner) => inner,
+            None => None,
+        }
+    }
+}
+
+impl<'a, T> Option<&'a Option<T>> {
+    /// Converts from `Option<&Option<T>>` to `Option<&T>`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// #![feature(option_reference_flattening)]
+    ///
+    /// let x: Option<&Option<u32>> = Some(&Some(6));
+    /// assert_eq!(Some(&6), x.flatten_ref());
+    ///
+    /// let x: Option<&Option<u32>> = Some(&None);
+    /// assert_eq!(None, x.flatten_ref());
+    ///
+    /// let x: Option<&Option<u32>> = None;
+    /// assert_eq!(None, x.flatten_ref());
+    /// ```
+    #[inline]
+    #[unstable(feature = "option_reference_flattening", issue = "149221")]
+    pub const fn flatten_ref(self) -> Option<&'a T> {
+        match self {
+            Some(inner) => inner.as_ref(),
+            None => None,
+        }
+    }
+}
+
+impl<'a, T> Option<&'a mut Option<T>> {
+    /// Converts from `Option<&mut Option<T>>` to `&Option<T>`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// #![feature(option_reference_flattening)]
+    ///
+    /// let y = &mut Some(6);
+    /// let x: Option<&mut Option<u32>> = Some(y);
+    /// assert_eq!(Some(&6), x.flatten_ref());
+    ///
+    /// let y: &mut Option<u32> = &mut None;
+    /// let x: Option<&mut Option<u32>> = Some(y);
+    /// assert_eq!(None, x.flatten_ref());
+    ///
+    /// let x: Option<&mut Option<u32>> = None;
+    /// assert_eq!(None, x.flatten_ref());
+    /// ```
+    #[inline]
+    #[unstable(feature = "option_reference_flattening", issue = "149221")]
+    pub const fn flatten_ref(self) -> Option<&'a T> {
+        match self {
+            Some(inner) => inner.as_ref(),
+            None => None,
+        }
+    }
+
+    /// Converts from `Option<&mut Option<T>>` to `Option<&mut T>`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// #![feature(option_reference_flattening)]
+    ///
+    /// let y: &mut Option<u32> = &mut Some(6);
+    /// let x: Option<&mut Option<u32>> = Some(y);
+    /// assert_eq!(Some(&mut 6), x.flatten_mut());
+    ///
+    /// let y: &mut Option<u32> = &mut None;
+    /// let x: Option<&mut Option<u32>> = Some(y);
+    /// assert_eq!(None, x.flatten_mut());
+    ///
+    /// let x: Option<&mut Option<u32>> = None;
+    /// assert_eq!(None, x.flatten_mut());
+    /// ```
+    #[inline]
+    #[unstable(feature = "option_reference_flattening", issue = "149221")]
+    pub const fn flatten_mut(self) -> Option<&'a mut T> {
+        match self {
+            Some(inner) => inner.as_mut(),
             None => None,
         }
     }

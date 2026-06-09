@@ -21,8 +21,9 @@ use crate::intrinsics::{self, const_eval_select};
 /// slow down const-eval/Miri and we'll get the panic message instead of the interpreter's nice
 /// diagnostic, but our ability to detect UB is unchanged.
 /// But if `check_language_ub` is used when the check is actually for library UB, the check is
-/// omitted in const-eval/Miri and thus if we eventually execute language UB which relies on the
-/// library UB, the backtrace Miri reports may be far removed from original cause.
+/// omitted in const-eval/Miri and thus UB might occur undetected. Even if we eventually execute
+/// language UB which relies on the library UB, the backtrace Miri reports may be far removed from
+/// original cause.
 ///
 /// These checks are behind a condition which is evaluated at codegen time, not expansion time like
 /// [`debug_assert`]. This means that a standard library built with optimizations and debug
@@ -69,7 +70,7 @@ macro_rules! assert_unsafe_precondition {
                     let msg = concat!("unsafe precondition(s) violated: ", $message,
                         "\n\nThis indicates a bug in the program. \
                         This Undefined Behavior check is optional, and cannot be relied on for safety.");
-                    ::core::panicking::panic_nounwind_fmt(::core::fmt::Arguments::new_const(&[msg]), false);
+                    ::core::panicking::panic_nounwind_fmt(::core::fmt::Arguments::from_str(msg), false);
                 }
             }
 
@@ -94,17 +95,16 @@ pub use intrinsics::ub_checks as check_library_ub;
 #[rustc_allow_const_fn_unstable(const_eval_select)]
 pub(crate) const fn check_language_ub() -> bool {
     // Only used for UB checks so we may const_eval_select.
-    intrinsics::ub_checks()
-        && const_eval_select!(
-            @capture { } -> bool:
-            if const {
-                // Always disable UB checks.
-                false
-            } else {
-                // Disable UB checks in Miri.
-                !cfg!(miri)
-            }
-        )
+    const_eval_select!(
+        @capture { } -> bool:
+        if const {
+            // Always disable UB checks.
+            false
+        } else {
+            // Disable UB checks in Miri.
+            !cfg!(miri)
+        }
+    ) && intrinsics::ub_checks()
 }
 
 /// Checks whether `ptr` is properly aligned with respect to the given alignment, and

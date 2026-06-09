@@ -1,6 +1,5 @@
 use super::*;
 use crate::cmp::Ordering::{Equal, Greater, Less};
-use crate::crucible;
 use crate::intrinsics::const_eval_select;
 use crate::mem::{self, SizedTypeProperties};
 use crate::slice::{self, SliceIndex};
@@ -21,7 +20,24 @@ impl<T: PointeeSized> *const T {
     #[inline]
     #[rustc_allow_const_fn_unstable(const_eval_select)]
     pub const fn is_null(self) -> bool {
-        crucible::ptr::compare_usize(self, 0)
+        // Compare via a cast to a thin pointer, so fat pointers are only
+        // considering their "data" part for null-ness.
+        let ptr = self as *const u8;
+        const_eval_select!(
+            @capture { ptr: *const u8 } -> bool:
+            // This use of `const_raw_ptr_comparison` has been explicitly blessed by t-lang.
+            if const #[rustc_allow_const_fn_unstable(const_raw_ptr_comparison)] {
+                match (ptr).guaranteed_eq(null_mut()) {
+                    Some(res) => res,
+                    // To remain maximally conservative, we stop execution when we don't
+                    // know whether the pointer is null or not.
+                    // We can *not* return `false` here, that would be unsound in `NonNull::new`!
+                    None => panic!("null-ness of this pointer cannot be determined in const context"),
+                }
+            } else {
+                ptr.addr() == 0
+            }
+        )
     }
 
     /// Casts to a pointer of another type.
@@ -223,7 +239,7 @@ impl<T: PointeeSized> *const T {
     /// let ptr: *const u8 = &10u8 as *const u8;
     ///
     /// unsafe {
-    ///     let val_back = &*ptr;
+    ///     let val_back = ptr.as_ref_unchecked();
     ///     assert_eq!(val_back, &10);
     /// }
     /// ```
@@ -243,6 +259,7 @@ impl<T: PointeeSized> *const T {
     ///
     /// [`is_null`]: #method.is_null
     /// [`as_uninit_ref`]: #method.as_uninit_ref
+    /// [`as_ref_unchecked`]: #method.as_ref_unchecked
     #[stable(feature = "ptr_as_ref", since = "1.9.0")]
     #[rustc_const_stable(feature = "const_ptr_is_null", since = "1.84.0")]
     #[inline]
@@ -267,15 +284,14 @@ impl<T: PointeeSized> *const T {
     /// # Examples
     ///
     /// ```
-    /// #![feature(ptr_as_ref_unchecked)]
     /// let ptr: *const u8 = &10u8 as *const u8;
     ///
     /// unsafe {
     ///     assert_eq!(ptr.as_ref_unchecked(), &10);
     /// }
     /// ```
-    // FIXME: mention it in the docs for `as_ref` and `as_uninit_ref` once stabilized.
-    #[unstable(feature = "ptr_as_ref_unchecked", issue = "122034")]
+    #[stable(feature = "ptr_as_ref_unchecked", since = "1.95.0")]
+    #[rustc_const_stable(feature = "ptr_as_ref_unchecked", since = "1.95.0")]
     #[inline]
     #[must_use]
     pub const unsafe fn as_ref_unchecked<'a>(self) -> &'a T {
@@ -1370,6 +1386,43 @@ impl<T> *const T {
     pub const fn cast_uninit(self) -> *const MaybeUninit<T> {
         self as _
     }
+
+    /// Forms a raw slice from a pointer and a length.
+    ///
+    /// The `len` argument is the number of **elements**, not the number of bytes.
+    ///
+    /// This function is safe, but actually using the return value is unsafe.
+    /// See the documentation of [`slice::from_raw_parts`] for slice safety requirements.
+    ///
+    /// [`slice::from_raw_parts`]: crate::slice::from_raw_parts
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// #![feature(ptr_cast_slice)]
+    /// // create a slice pointer when starting out with a pointer to the first element
+    /// let x = [5, 6, 7];
+    /// let raw_pointer = x.as_ptr();
+    /// let slice = raw_pointer.cast_slice(3);
+    /// assert_eq!(unsafe { &*slice }[2], 7);
+    /// ```
+    ///
+    /// You must ensure that the pointer is valid and not null before dereferencing
+    /// the raw slice. A slice reference must never have a null pointer, even if it's empty.
+    ///
+    /// ```rust,should_panic
+    /// #![feature(ptr_cast_slice)]
+    /// use std::ptr;
+    /// let danger: *const [u8] = ptr::null::<u8>().cast_slice(0);
+    /// unsafe {
+    ///     danger.as_ref().expect("references must not be null");
+    /// }
+    /// ```
+    #[inline]
+    #[unstable(feature = "ptr_cast_slice", issue = "149103")]
+    pub const fn cast_slice(self, len: usize) -> *const [T] {
+        slice_from_raw_parts(self, len)
+    }
 }
 impl<T> *const MaybeUninit<T> {
     /// Casts from a maybe-uninitialized type to its initialized version.
@@ -1446,7 +1499,8 @@ impl<T> *const [T] {
     /// Gets a raw pointer to the underlying array.
     ///
     /// If `N` is not exactly equal to the length of `self`, then this method returns `None`.
-    #[unstable(feature = "slice_as_array", issue = "133508")]
+    #[stable(feature = "core_slice_as_array", since = "1.93.0")]
+    #[rustc_const_stable(feature = "core_slice_as_array", since = "1.93.0")]
     #[inline]
     #[must_use]
     pub const fn as_array<const N: usize>(self) -> Option<*const [T; N]> {
@@ -1550,6 +1604,10 @@ impl<T, const N: usize> *const [T; N] {
 
 /// Pointer equality is by address, as produced by the [`<*const T>::addr`](pointer::addr) method.
 #[stable(feature = "rust1", since = "1.0.0")]
+#[diagnostic::on_const(
+    message = "pointers cannot be reliably compared during const eval",
+    note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
+)]
 impl<T: PointeeSized> PartialEq for *const T {
     #[inline]
     #[allow(ambiguous_wide_pointer_comparisons)]
@@ -1560,10 +1618,18 @@ impl<T: PointeeSized> PartialEq for *const T {
 
 /// Pointer equality is an equivalence relation.
 #[stable(feature = "rust1", since = "1.0.0")]
+#[diagnostic::on_const(
+    message = "pointers cannot be reliably compared during const eval",
+    note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
+)]
 impl<T: PointeeSized> Eq for *const T {}
 
 /// Pointer comparison is by address, as produced by the `[`<*const T>::addr`](pointer::addr)` method.
 #[stable(feature = "rust1", since = "1.0.0")]
+#[diagnostic::on_const(
+    message = "pointers cannot be reliably compared during const eval",
+    note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
+)]
 impl<T: PointeeSized> Ord for *const T {
     #[inline]
     #[allow(ambiguous_wide_pointer_comparisons)]
@@ -1580,6 +1646,10 @@ impl<T: PointeeSized> Ord for *const T {
 
 /// Pointer comparison is by address, as produced by the `[`<*const T>::addr`](pointer::addr)` method.
 #[stable(feature = "rust1", since = "1.0.0")]
+#[diagnostic::on_const(
+    message = "pointers cannot be reliably compared during const eval",
+    note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
+)]
 impl<T: PointeeSized> PartialOrd for *const T {
     #[inline]
     #[allow(ambiguous_wide_pointer_comparisons)]
