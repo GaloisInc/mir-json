@@ -183,6 +183,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   operation is not supported in crucible-mir, so this patch replaces the
   intrinsic calls with some ordinary two-way comparisons.
 
+* Avoid int-to-struct transmute in `NonNull::without_provenance` (last applied: June 10, 2026)
+
+  This switches back to an older upstream implementation that goes through
+  `core::ptr::without_provenance`, which uses an int-to-pointer transmute
+  instead.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
