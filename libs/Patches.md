@@ -155,6 +155,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
   these optimized `SpecFill` impls in favor of generic ones that are slower but
   easier for `crucible-mir` to simulate.
 
+* Use hooks in `core::slice::from_ref` and `from_mut` (last applied: September 21, 2026)
+
+  The actual implementations use pointer casts that Crucible can't handle.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
