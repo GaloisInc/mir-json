@@ -196,6 +196,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
   non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
   `ptr::null` and `ptr::null_mut`.
 
+* Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
+
+  The actual implementations use pointer casts that Crucible can't handle.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
