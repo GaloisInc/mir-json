@@ -159,6 +159,16 @@ into the main commit for that patch, and then the *Update* line can be removed.
   The internal function `alloc::rc::is_dangling` is implemented similarly to
   `is_null`, so we reimplement it in terms of `compare_usize` as well.
 
+* Avoid transmute and pointer casts in `Atomic` implementation (last applied: June 10, 2026)
+
+  `AtomicU32` is an alias for `Atomic<u32>`, which is a struct containing
+  `UnsafeCell<u32::Storage>`; `u32::Storage` resolves to `Align4<u32>`, a
+  non-transparent wrapper containing a `u32`.  The upstream implementation cuts
+  through all these layers using `transmute` and pointer casts, which Crucible
+  doesn't support.  This patch changes the `new` method to use a different
+  `transmute` that it does support, and changes `into_inner` and `as_ptr`
+  methods to access the innermost field directly without `transmute` or casts.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written

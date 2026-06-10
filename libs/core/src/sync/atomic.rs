@@ -261,19 +261,19 @@ mod private {
 
     #[cfg(target_has_atomic_load_store = "8")]
     #[repr(C, align(1))]
-    pub struct Align1<T>(T);
+    pub struct Align1<T>(pub(super) T);
     #[cfg(target_has_atomic_load_store = "16")]
     #[repr(C, align(2))]
-    pub struct Align2<T>(T);
+    pub struct Align2<T>(pub(super) T);
     #[cfg(target_has_atomic_load_store = "32")]
     #[repr(C, align(4))]
-    pub struct Align4<T>(T);
+    pub struct Align4<T>(pub(super) T);
     #[cfg(target_has_atomic_load_store = "64")]
     #[repr(C, align(8))]
-    pub struct Align8<T>(T);
+    pub struct Align8<T>(pub(super) T);
     #[cfg(target_has_atomic_load_store = "128")]
     #[repr(C, align(16))]
-    pub struct Align16<T>(T);
+    pub struct Align16<T>(pub(super) T);
 }
 
 /// A marker trait for primitive types which can be modified atomically.
@@ -313,6 +313,8 @@ macro impl_atomic_primitive(
     }
 }
 
+// Crucible: the impl for bool originally used `Align1<u8>`, but `u8` and `bool` don't have
+// compatible representations in crucible-mir.
 impl_atomic_primitive!([] bool as Align1<u8>, size("8"));
 impl_atomic_primitive!([] i8 as Align1<i8>, size("8"));
 impl_atomic_primitive!([] u8 as Align1<u8>, size("8"));
@@ -534,9 +536,11 @@ impl AtomicBool {
     #[rustc_const_stable(feature = "const_atomic_new", since = "1.24.0")]
     #[must_use]
     pub const fn new(v: bool) -> AtomicBool {
-        // SAFETY:
-        // `Atomic<T>` is essentially a transparent wrapper around `T`.
-        unsafe { transmute(v) }
+        // Crucible: see the int case below for an explanation of this approach.
+        let storage = unsafe {
+            transmute::<(u8,), <bool as AtomicPrimitive>::Storage>((v as u8,))
+        };
+        Atomic { v: UnsafeCell::new(storage) }
     }
 
     /// Creates a new `AtomicBool` from a pointer.
@@ -707,11 +711,7 @@ impl AtomicBool {
     #[stable(feature = "atomic_access", since = "1.15.0")]
     #[rustc_const_stable(feature = "const_atomic_into_inner", since = "1.79.0")]
     pub const fn into_inner(self) -> bool {
-        // SAFETY:
-        // * `Atomic<T>` is essentially a transparent wrapper around `T`.
-        // * all operations on `Atomic<bool>` ensure that `T::Storage` remains
-        //   a valid `bool`.
-        unsafe { transmute(self) }
+        unsafe { *self.as_ptr() }
     }
 
     /// Loads a value from the bool.
@@ -738,7 +738,7 @@ impl AtomicBool {
     pub fn load(&self, order: Ordering) -> bool {
         // SAFETY: any data races are prevented by atomic intrinsics and the raw
         // pointer passed in is valid because we got it from a reference.
-        unsafe { atomic_load(self.v.get().cast::<u8>(), order) != 0 }
+        unsafe { atomic_load(self.as_ptr().cast::<u8>(), order) != 0 }
     }
 
     /// Stores a value into the bool.
@@ -768,7 +768,7 @@ impl AtomicBool {
         // SAFETY: any data races are prevented by atomic intrinsics and the raw
         // pointer passed in is valid because we got it from a reference.
         unsafe {
-            atomic_store(self.v.get().cast::<u8>(), val as u8, order);
+            atomic_store(self.as_ptr().cast::<u8>(), val as u8, order);
         }
     }
 
@@ -802,7 +802,7 @@ impl AtomicBool {
             if val { self.fetch_or(true, order) } else { self.fetch_and(false, order) }
         } else {
             // SAFETY: data races are prevented by atomic intrinsics.
-            unsafe { atomic_swap(self.v.get().cast::<u8>(), val as u8, order) != 0 }
+            unsafe { atomic_swap(self.as_ptr().cast::<u8>(), val as u8, order) != 0 }
         }
     }
 
@@ -963,7 +963,7 @@ impl AtomicBool {
             // SAFETY: data races are prevented by atomic intrinsics.
             match unsafe {
                 atomic_compare_exchange(
-                    self.v.get().cast::<u8>(),
+                    self.as_ptr().cast::<u8>(),
                     current as u8,
                     new as u8,
                     success,
@@ -1043,7 +1043,7 @@ impl AtomicBool {
         // SAFETY: data races are prevented by atomic intrinsics.
         match unsafe {
             atomic_compare_exchange_weak(
-                self.v.get().cast::<u8>(),
+                self.as_ptr().cast::<u8>(),
                 current as u8,
                 new as u8,
                 success,
@@ -1094,7 +1094,7 @@ impl AtomicBool {
     #[rustc_should_not_be_called_on_const_items]
     pub fn fetch_and(&self, val: bool, order: Ordering) -> bool {
         // SAFETY: data races are prevented by atomic intrinsics.
-        unsafe { atomic_and(self.v.get().cast::<u8>(), val as u8, order) != 0 }
+        unsafe { atomic_and(self.as_ptr().cast::<u8>(), val as u8, order) != 0 }
     }
 
     /// Logical "nand" with a boolean value.
@@ -1190,7 +1190,7 @@ impl AtomicBool {
     #[rustc_should_not_be_called_on_const_items]
     pub fn fetch_or(&self, val: bool, order: Ordering) -> bool {
         // SAFETY: data races are prevented by atomic intrinsics.
-        unsafe { atomic_or(self.v.get().cast::<u8>(), val as u8, order) != 0 }
+        unsafe { atomic_or(self.as_ptr().cast::<u8>(), val as u8, order) != 0 }
     }
 
     /// Logical "xor" with a boolean value.
@@ -1232,7 +1232,7 @@ impl AtomicBool {
     #[rustc_should_not_be_called_on_const_items]
     pub fn fetch_xor(&self, val: bool, order: Ordering) -> bool {
         // SAFETY: data races are prevented by atomic intrinsics.
-        unsafe { atomic_xor(self.v.get().cast::<u8>(), val as u8, order) != 0 }
+        unsafe { atomic_xor(self.as_ptr().cast::<u8>(), val as u8, order) != 0 }
     }
 
     /// Logical "not" with a boolean value.
@@ -1308,7 +1308,8 @@ impl AtomicBool {
     #[rustc_never_returns_null_ptr]
     #[rustc_should_not_be_called_on_const_items]
     pub const fn as_ptr(&self) -> *mut bool {
-        self.v.get().cast()
+        // Crucible: project into the inner field instead of using a pointer cast.
+        unsafe { (&raw mut (*self.v.get()).0).cast::<bool>() }
     }
 
     /// An alias for [`AtomicBool::try_update`].
@@ -1481,9 +1482,11 @@ impl<T> AtomicPtr<T> {
     #[stable(feature = "rust1", since = "1.0.0")]
     #[rustc_const_stable(feature = "const_atomic_new", since = "1.24.0")]
     pub const fn new(p: *mut T) -> AtomicPtr<T> {
-        // SAFETY:
-        // `Atomic<T>` is essentially a transparent wrapper around `T`.
-        unsafe { transmute(p) }
+        // Crucible: see the int case below for an explanation of this approach.
+        let storage = unsafe {
+            transmute::<(*mut T,), <*mut T as AtomicPrimitive>::Storage>((p,))
+        };
+        Atomic { v: UnsafeCell::new(storage) }
     }
 
     /// Creates a new `AtomicPtr` from a pointer.
@@ -1700,9 +1703,7 @@ impl<T> AtomicPtr<T> {
     #[stable(feature = "atomic_access", since = "1.15.0")]
     #[rustc_const_stable(feature = "const_atomic_into_inner", since = "1.79.0")]
     pub const fn into_inner(self) -> *mut T {
-        // SAFETY:
-        // `Atomic<T>` is essentially a transparent wrapper around `T`.
-        unsafe { transmute(self) }
+        unsafe { *self.as_ptr() }
     }
 
     /// Loads a value from the pointer.
@@ -2497,7 +2498,8 @@ impl<T> AtomicPtr<T> {
     #[rustc_const_stable(feature = "atomic_as_ptr", since = "1.70.0")]
     #[rustc_never_returns_null_ptr]
     pub const fn as_ptr(&self) -> *mut *mut T {
-        self.v.get().cast()
+        // Crucible: project into the inner field instead of using a pointer cast.
+        unsafe { &raw mut (*self.v.get()).0 }
     }
 }
 
@@ -2626,9 +2628,17 @@ macro_rules! atomic_int {
             #[$const_stable_new]
             #[must_use]
             pub const fn new(v: $int_type) -> Self {
-                // SAFETY:
-                // `Atomic<T>` is essentially a transparent wrapper around `T`.
-                unsafe { transmute(v) }
+                // Crucible:
+                // - `Atomic` contains an `UnsafeCell<T::Storage>`
+                // - `T::Storage` is an alignment wrapper like `Align8<T>`
+                // - `Align8<T>` (etc.) has a single field of type `T`
+                // We can't write a struct literal of type `T::Storage`, but we know it has the
+                // same representation as the tuple `(T,)` (`MirAggregateRepr` with a single field
+                // of type `T` at offset zero), so we can transmute between them.
+                let storage = unsafe {
+                    transmute::<($int_type,), <$int_type as AtomicPrimitive>::Storage>((v,))
+                };
+                Atomic { v: UnsafeCell::new(storage) }
             }
 
             /// Creates a new reference to an atomic integer from a pointer.
@@ -2839,9 +2849,7 @@ macro_rules! atomic_int {
             #[$stable_access]
             #[$const_stable_into_inner]
             pub const fn into_inner(self) -> $int_type {
-                // SAFETY:
-                // `Atomic<T>` is essentially a transparent wrapper around `T`.
-                unsafe { transmute(self) }
+                unsafe { *self.as_ptr() }
             }
 
             /// Loads a value from the atomic integer.
@@ -3612,7 +3620,8 @@ macro_rules! atomic_int {
             #[rustc_const_stable(feature = "atomic_as_ptr", since = "1.70.0")]
             #[rustc_never_returns_null_ptr]
             pub const fn as_ptr(&self) -> *mut $int_type {
-                self.v.get().cast()
+                // Crucible: project into the inner field instead of using a pointer cast.
+                unsafe { &raw mut (*self.v.get()).0 }
             }
         }
     }
