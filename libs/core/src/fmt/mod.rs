@@ -715,7 +715,13 @@ impl<'a> Formatter<'a> {
 #[derive(Copy, Clone)]
 pub struct Arguments<'a> {
     template: NonNull<u8>,
-    args: NonNull<rt::Argument<'a>>,
+    args: ArgsField<'a>,
+}
+
+#[derive(Copy, Clone)]
+enum ArgsField<'a> {
+    ArgsPtr(NonNull<rt::Argument<'a>>),
+    StringLen(usize),
 }
 
 /// Used by the format_args!() macro to create a fmt::Arguments object.
@@ -731,7 +737,12 @@ impl<'a> Arguments<'a> {
         args: &'a [rt::Argument<'a>; M],
     ) -> Arguments<'a> {
         // SAFETY: Responsibility of the caller.
-        unsafe { Arguments { template: mem::transmute(template), args: mem::transmute(args) } }
+        unsafe {
+            Arguments {
+                template: mem::transmute(template.as_ptr()),
+                args: ArgsField::ArgsPtr(mem::transmute(args.as_ptr())),
+            }
+        }
     }
 
     // Same as `from_str`, but not const.
@@ -817,7 +828,7 @@ impl<'a> Arguments<'a> {
         unsafe {
             Arguments {
                 template: mem::transmute(s.as_ptr()),
-                args: mem::transmute(s.len() << 1 | 1),
+                args: ArgsField::StringLen(s.len()),
             }
         }
     }
@@ -874,17 +885,16 @@ impl<'a> Arguments<'a> {
         // (I.e. only fmt::Arguments::from_str is const, fmt::Arguments::new is not.)
         //
         // Outside const eval, transmuting a pointer to a usize is fine.
-        let bits: usize = unsafe { mem::transmute(self.args) };
-        if bits & 1 == 1 {
-            // SAFETY: This fmt::Arguments stores a &'static str. See encoding documentation above.
-            Some(unsafe {
-                str::from_utf8_unchecked(crate::slice::from_raw_parts(
-                    self.template.as_ptr(),
-                    bits >> 1,
-                ))
-            })
-        } else {
-            None
+        match self.args {
+            ArgsField::StringLen(len) => {
+                unsafe {
+                    Some(str::from_utf8_unchecked(crate::slice::from_raw_parts(
+                        self.template.as_ptr(),
+                        len,
+                    )))
+                }
+            },
+            _ => None,
         }
     }
 
@@ -1633,7 +1643,13 @@ pub fn write(output: &mut dyn Write, fmt: Arguments<'_>) -> Result {
     }
 
     let mut template = fmt.template;
-    let args = fmt.args;
+    let args = match fmt.args {
+        ArgsField::ArgsPtr(ptr) => ptr,
+        ArgsField::StringLen(_) => {
+            // Would have gone into the `as_str()` case above.
+            unreachable!()
+        },
+    };
 
     let mut arg_index = 0;
 
