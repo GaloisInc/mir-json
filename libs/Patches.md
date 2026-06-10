@@ -80,6 +80,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   allocation functions.
 
 
+* Remove use of tagged pointers from `core::fmt` (last applied: September 18, 2026)
+
+  `core::fmt::Arguments` uses a tagged-pointer representation, where the low
+  bit of the `args` pointer is used to indicate whether the `Arguments`
+  represents a string literal.  Crucible doesn't support the bitwise arithmetic
+  on valid pointers that's used to read and write the tag.  This patch replaces
+  the tagged pointer representation with an enum.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
