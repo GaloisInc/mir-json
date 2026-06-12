@@ -265,6 +265,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   check if the pointer is not equal to each of the individual sentinel values.
   See also the "Avoid raw pointer comparisons" note below.
 
+* Use global allocator instead of `System` in `Thread` (last applied: June 12, 2026)
+
+  Upstream uses the `System` allocator, which calls `malloc`/`free` directly,
+  which prevents issues with custom global allocators that use thread-local
+  storage.  Crucible doesn't support untyped `malloc`, so this patch switches
+  back to using the global allocator instead.  We already don't support custom
+  global allocators, so this shouldn't cause any problems.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
