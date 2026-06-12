@@ -3,7 +3,7 @@ use super::main_thread;
 use crate::ffi::CStr;
 use crate::fmt;
 use crate::pin::Pin;
-use crate::sync::Arc;
+use crate::sync::{Arc, ArcInner};
 use crate::sys::sync::Parker;
 use crate::time::Duration;
 
@@ -279,7 +279,7 @@ impl Thread {
     pub fn into_raw(self) -> *const () {
         // Safety: We only expose an opaque pointer, which maintains the `Pin` invariant.
         let inner = unsafe { Pin::into_inner_unchecked(self.inner) };
-        Arc::into_raw_with_allocator(inner).0 as *const ()
+        Arc::into_inner_raw(inner) as *const ()
     }
 
     /// Constructs a `Thread` from a raw pointer.
@@ -302,7 +302,7 @@ impl Thread {
     pub unsafe fn from_raw(ptr: *const ()) -> Thread {
         // Safety: Upheld by caller.
         unsafe {
-            Thread { inner: Pin::new_unchecked(Arc::from_raw(ptr as *const Inner)) }
+            Thread { inner: Pin::new_unchecked(Arc::from_inner_raw(ptr as *const ArcInner<Inner>)) }
         }
     }
 
