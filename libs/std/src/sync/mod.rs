@@ -180,6 +180,8 @@ pub use core::sync::atomic;
 pub use alloc_crate::sync::UniqueArc;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use alloc_crate::sync::{Arc, Weak};
+#[stable(feature = "rc_raw", since = "1.17.0")]
+pub use alloc_crate::sync::ArcInner;
 
 #[unstable(feature = "mpmc_channel", issue = "126840")]
 pub mod mpmc;
