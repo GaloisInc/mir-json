@@ -215,6 +215,14 @@ into the main commit for that patch, and then the *Update* line can be removed.
   that we don't support. It makes one big allocation and uses the first N bytes
   as flags and the remaining M bytes as key-value pairs.
 
+* Use global allocator instead of `System` in `Thread` (last applied: October 1, 2026)
+
+  Upstream uses the `System` allocator, which calls `malloc`/`free` directly,
+  which prevents issues with custom global allocators that use thread-local
+  storage.  Crucible doesn't support untyped `malloc`, so this patch switches
+  back to using the global allocator instead.  We already don't support custom
+  global allocators, so this shouldn't cause any problems.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written

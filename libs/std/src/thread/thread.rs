@@ -1,6 +1,5 @@
 use super::id::ThreadId;
 use super::main_thread;
-use crate::alloc::System;
 use crate::ffi::CStr;
 use crate::fmt;
 use crate::pin::Pin;
@@ -86,7 +85,10 @@ pub struct Thread {
     // We use the System allocator such that creating or dropping this handle
     // does not interfere with a potential Global allocator using thread-local
     // storage.
-    inner: Pin<Arc<Inner, System>>,
+    //
+    // Crucible: We don't use the system allocator, since it tries to call `malloc` (untyped),
+    // which we don't support.  We don't support custom global allocators, so this is okay for now.
+    inner: Pin<Arc<Inner>>,
 }
 
 impl Thread {
@@ -99,7 +101,7 @@ impl Thread {
         // SAFETY: We pin the Arc immediately after creation, so its address never
         // changes.
         let inner = unsafe {
-            let mut arc = Arc::<Inner, _>::new_uninit_in(System);
+            let mut arc = Arc::<Inner, _>::new_uninit();
             let ptr = Arc::get_mut_unchecked(&mut arc).as_mut_ptr();
             (&raw mut (*ptr).name).write(name);
             (&raw mut (*ptr).id).write(id);
@@ -300,7 +302,7 @@ impl Thread {
     pub unsafe fn from_raw(ptr: *const ()) -> Thread {
         // Safety: Upheld by caller.
         unsafe {
-            Thread { inner: Pin::new_unchecked(Arc::from_raw_in(ptr as *const Inner, System)) }
+            Thread { inner: Pin::new_unchecked(Arc::from_raw(ptr as *const Inner)) }
         }
     }
 
