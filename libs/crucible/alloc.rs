@@ -14,9 +14,10 @@ pub fn allocate_zeroed<T>(len: usize) -> *mut T {
     unimplemented!("allocate_zeroed")
 }
 
-/// Reallocate the array at `*ptr` to contain `new_len` elements.  This reallocation always happens
-/// in-place and never fails, so there is no need to return a new pointer.
-pub fn reallocate<T>(ptr: *mut T, new_len: usize) {
+/// Reallocate the array at `*ptr` to contain `new_len` elements. Accessing this
+/// array via the `ptr` parameter, rather than the newly-returned pointer, is
+/// unspecified behavior.
+pub fn reallocate<T>(ptr: *mut T, new_len: usize) -> *mut T {
     unimplemented!("reallocate")
 }
 
@@ -80,9 +81,9 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
     ) -> Result<NonNull<[u8]>, AllocError> {
         let old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
-        reallocate(ptr.as_ptr().cast::<T>(), new_len);
-        // `reallocate` always reallocates in place, so we can just return the old pointer.
-        Ok(NonNull::slice_from_raw_parts(ptr.cast::<u8>(), new_len))
+        let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
+        let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());
+        Ok(NonNull::slice_from_raw_parts(new_nonnull, new_len))
     }
     unsafe fn grow_zeroed(
         &self,
@@ -100,7 +101,8 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
     ) -> Result<NonNull<[u8]>, AllocError> {
         let old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
-        reallocate(ptr.as_ptr().cast::<T>(), new_len);
-        Ok(NonNull::slice_from_raw_parts(ptr.cast::<u8>(), new_len))
+        let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
+        let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());
+        Ok(NonNull::slice_from_raw_parts(new_nonnull, new_len))
     }
 }
