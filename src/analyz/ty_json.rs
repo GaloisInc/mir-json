@@ -1379,11 +1379,11 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
 
         // similar to ref in some ways
-        ty::TyKind::RawPtr(pty, mutability) =>
-            try_render_ref_opty(mir, icx, op_ty, pty, mutability)?,
+        ty::TyKind::RawPtr(_, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, mutability)?,
 
-        ty::TyKind::Ref(_, rty, mutability) =>
-            try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
+        ty::TyKind::Ref(_, _, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, mutability)?,
 
         ty::TyKind::FnDef(_, _) |
         ty::TyKind::Never => json!({"kind": "zst"}),
@@ -1490,7 +1490,6 @@ fn try_render_opty_upvars<'tcx>(
 fn make_allocation_body<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
-    rty: ty::Ty<'tcx>,
     d: &MPlaceTy<'tcx>,
     is_mut: bool,
 ) -> serde_json::Value {
@@ -1499,9 +1498,9 @@ fn make_allocation_body<'tcx>(
     fn do_default<'tcx>(
         mir: &mut MirState<'_, 'tcx>,
         icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
-        rty: ty::Ty<'tcx>,
         d: &MPlaceTy<'tcx>,
     ) -> serde_json::Value {
+        let rty = d.layout.ty;
         let rlayout = mir.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
         let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
         let rendered = try_render_opty(mir, icx, &mpty.into());
@@ -1543,7 +1542,7 @@ fn make_allocation_body<'tcx>(
             })
         }
 
-        match *rty.kind() {
+        match *d.layout.ty.kind() {
             // Special cases for references to unsized types. Currently, the
             // following are supported:
             //
@@ -1588,21 +1587,20 @@ fn make_allocation_body<'tcx>(
             },
             ty::TyKind::Dynamic(ref preds, _) => {
                 let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
-                return do_default(mir, icx, unpacked_d.layout.ty, &unpacked_d);
+                return do_default(mir, icx, &unpacked_d);
             },
             _ => ()
         }
     }
 
     // Default case
-    return do_default(mir, icx, rty, d);
+    return do_default(mir, icx, d);
 }
 
 fn try_render_ref_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
-    rty: ty::Ty<'tcx>,
     mutability: hir::Mutability,
 ) -> Option<serde_json::Value> {
     let tcx = mir.tcx;
@@ -1638,7 +1636,7 @@ fn try_render_ref_opty<'tcx>(
                 Some(alloc_id) => alloc_id.to_owned(),
                 None => {
                     // create the allocation
-                    let body = make_allocation_body(mir, icx, rty, &d, is_mut);
+                    let body = make_allocation_body(mir, icx, &d, is_mut);
                     mir.allocs.insert(tcx, ca, ty, body)
                 }
             };
@@ -1680,7 +1678,7 @@ fn try_render_ref_opty<'tcx>(
         // * Trait objects (&dyn Trait)
         //
         // These special cases and the ones in make_allocation_body above should be kept in sync.
-        match *rty.kind() {
+        match *d.layout.ty.kind() {
             ty::TyKind::Str | ty::TyKind::Slice(_) =>
                 return Some(do_slice(icx, &d, def_id_json)),
             ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
