@@ -455,21 +455,27 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
             },
             ty::InstanceKind::ConstructCoroutineInClosureShim { .. } => json!({
                 "kind": "Unsupported",
+                "shim_kind": "ConstructCoroutineInClosureShim",
             }),
             ty::InstanceKind::ThreadLocalShim(_def_id) => json!({
                 "kind": "Unsupported",
+                "shim_kind": "ThreadLocalShim",
             }),
             ty::InstanceKind::FutureDropPollShim(_def_id, _proxy_cor_ty, _impl_cor_ty) => json!({
                 "kind": "Unsupported",
+                "shim_kind": "FutureDropPollShim",
             }),
             ty::InstanceKind::FnPtrAddrShim(_def_id, _ty) => json!({
                 "kind": "Unsupported",
+                "shim_kind": "FnPtrAddrShim",
             }),
             ty::InstanceKind::AsyncDropGlueCtorShim(_def_id, _ty) => json!({
                 "kind": "Unsupported",
+                "shim_kind": "AsyncDropGlueCtorShim",
             }),
             ty::InstanceKind::AsyncDropGlue(_def_id, _ty) => json!({
                 "kind": "Unsupported",
+                "shim_kind": "AsyncDropGlue",
             }),
         }
     }
