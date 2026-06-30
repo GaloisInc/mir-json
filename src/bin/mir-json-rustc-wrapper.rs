@@ -33,7 +33,9 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::iter;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -171,8 +173,11 @@ fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
 
 fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {
     let json_name = json_path.file_name().unwrap().to_str().unwrap();
-    let mut f = OpenOptions::new().write(true).create(true).truncate(true)
-        .mode(0o755).open(script_path)?;
+    let mut opts = OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    { opts.mode(0o755); }
+    let mut f = opts.open(script_path)?;
     writeln!(f, "#!/bin/sh")?;
     writeln!(f, r#"exec "${{CRUX_MIR:-crux-mir}}" --assert-false-on-error --cargo-test-file "$(dirname "$0")"/'{}' "$@""#, json_name)?;
     Ok(())
@@ -193,10 +198,21 @@ fn go() -> ExitCode {
         let rustc = &args[0];
         let args = &args[1..];
         debug!("this is a host build - exec {:?} {:?}", rustc, args);
-        let e = Command::new(rustc)
-            .args(args)
-            .exec();
-        unreachable!("exec failed: {:?}", e);
+        let mut cmd = Command::new(rustc);
+        cmd.args(args);
+
+        #[cfg(unix)]
+        {
+            let e = cmd.exec();
+            unreachable!("exec failed: {:?}", e);
+        }
+
+        #[cfg(windows)]
+        {
+            let status = cmd.status()
+                .unwrap_or_else(|e| { eprintln!("exec failed: {:?}", e); std::process::exit(1); });
+            std::process::exit(status.code().unwrap_or(1));
+        }
     }
 
     // All build steps need `--cfg crux` and library paths.

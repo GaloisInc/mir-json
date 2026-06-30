@@ -6,6 +6,7 @@ use std::iter;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 use std::str;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 
 fn die(msg: impl Display) -> ! {
@@ -25,8 +26,10 @@ const ALREADY_SET_VAR: &str = "CRUX_MIR_ALREADY_SET_PATH";
 const LIB_PATH_VAR: &str = "LD_LIBRARY_PATH";
 #[cfg(target_os = "macos")]
 const LIB_PATH_VAR: &str = "DYLD_LIBRARY_PATH";
+#[cfg(target_os = "windows")]
+const LIB_PATH_VAR: &str = "PATH";
 
-const TOOLCHAIN: &str = "nightly-2025-09-14";
+const TOOLCHAIN: &str = "nightly-2026-03-21";
 
 fn find_lib_dir() -> PathBuf {
     let output = Command::new("rustc")
@@ -108,6 +111,16 @@ fn main() {
     // Ensure the correct Rust toolchain is used at runtime
     cmd.env("RUSTUP_TOOLCHAIN", TOOLCHAIN);
 
-    let e = cmd.exec();
-    die!("error executing {:?}: {}", real_arg0, e);
+    #[cfg(unix)]
+    {
+        let e = cmd.exec();
+        die!("error executing {:?}: {}", real_arg0, e);
+    }
+
+    #[cfg(windows)]
+    {
+        let status = cmd.status()
+            .unwrap_or_else(|e| die!("error executing {:?}: {}", real_arg0, e));
+        process::exit(status.code().unwrap_or(1));
+    }
 }
