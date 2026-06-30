@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # mir-json's implementation is tightly coupled to the cargo API, which
+      # means that it is generally not possible to update to newer versions of
+      # cargo automatically.
+      - dependency-name: "cargo"
