@@ -56,24 +56,36 @@ use crate::sys::sync as sys;
 /// # Examples
 ///
 /// ```
-/// use std::sync::RwLock;
+/// use std::sync::{Arc, RwLock};
+/// use std::thread;
+/// use std::time::Duration;
 ///
-/// let lock = RwLock::new(5);
+/// let data = Arc::new(RwLock::new(5));
 ///
-/// // many reader locks can be held at once
-/// {
-///     let r1 = lock.read().unwrap();
-///     let r2 = lock.read().unwrap();
-///     assert_eq!(*r1, 5);
-///     assert_eq!(*r2, 5);
-/// } // read locks are dropped at this point
+/// // Multiple readers can access in parallel.
+/// for i in 0..3 {
+///     let lock_clone = Arc::clone(&data);
 ///
-/// // only one write lock may be held, however
-/// {
-///     let mut w = lock.write().unwrap();
-///     *w += 1;
-///     assert_eq!(*w, 6);
-/// } // write lock is dropped here
+///     thread::spawn(move || {
+///         let value = lock_clone.read().unwrap();
+///
+///         println!("Reader {}: Read value {}, now holding lock...", i, *value);
+///
+///         // Simulating a long read operation
+///         thread::sleep(Duration::from_secs(1));
+///
+///         println!("Reader {}: Dropping lock.", i);
+///         // Read lock unlocked when going out of scope.
+///     });
+/// }
+///
+/// thread::sleep(Duration::from_millis(100));  // Wait for readers to start
+///
+/// // While all readers can proceed, a call to .write() has to wait for
+//  // current active reader locks.
+/// let mut writable_data = data.write().unwrap();
+/// println!("Writer proceeds...");
+/// *writable_data += 1;
 /// ```
 ///
 /// [`Mutex`]: super::Mutex
@@ -299,6 +311,7 @@ impl<T> RwLock<T> {
     /// assert_eq!(lock.get_cloned().unwrap(), 11);
     /// ```
     #[unstable(feature = "lock_value_accessors", issue = "133407")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn set(&self, value: T) -> Result<(), PoisonError<T>> {
         if mem::needs_drop::<T>() {
             // If the contained value has non-trivial destructor, we
@@ -337,6 +350,7 @@ impl<T> RwLock<T> {
     /// assert_eq!(lock.get_cloned().unwrap(), 11);
     /// ```
     #[unstable(feature = "lock_value_accessors", issue = "133407")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn replace(&self, value: T) -> LockResult<T> {
         match self.write() {
             Ok(mut guard) => Ok(mem::replace(&mut *guard, value)),
@@ -368,7 +382,8 @@ impl<T: ?Sized> RwLock<T> {
     ///
     /// # Panics
     ///
-    /// This function might panic when called if the lock is already held by the current thread.
+    /// This function might panic when called if the lock is already held by the current thread
+    /// in read or write mode.
     ///
     /// # Examples
     ///
@@ -389,6 +404,7 @@ impl<T: ?Sized> RwLock<T> {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, T>> {
         unsafe {
             self.inner.read();
@@ -435,6 +451,7 @@ impl<T: ?Sized> RwLock<T> {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn try_read(&self) -> TryLockResult<RwLockReadGuard<'_, T>> {
         unsafe {
             if self.inner.try_read() {
@@ -463,7 +480,8 @@ impl<T: ?Sized> RwLock<T> {
     ///
     /// # Panics
     ///
-    /// This function might panic when called if the lock is already held by the current thread.
+    /// This function might panic when called if the lock is already held by the current thread
+    /// in read or write mode.
     ///
     /// # Examples
     ///
@@ -479,6 +497,7 @@ impl<T: ?Sized> RwLock<T> {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, T>> {
         unsafe {
             self.inner.write();
@@ -526,6 +545,7 @@ impl<T: ?Sized> RwLock<T> {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_should_not_be_called_on_const_items]
     pub fn try_write(&self) -> TryLockResult<RwLockWriteGuard<'_, T>> {
         unsafe {
             if self.inner.try_write() {
@@ -667,7 +687,7 @@ impl<T: ?Sized> RwLock<T> {
     /// are properly synchronized to avoid data races, and that it is not read
     /// or written through after the lock is dropped.
     #[unstable(feature = "rwlock_data_ptr", issue = "140368")]
-    pub fn data_ptr(&self) -> *mut T {
+    pub const fn data_ptr(&self) -> *mut T {
         self.data.get()
     }
 }
@@ -813,8 +833,6 @@ impl<'rwlock, T: ?Sized> RwLockWriteGuard<'rwlock, T> {
     /// `downgrade` takes ownership of the `RwLockWriteGuard` and returns a [`RwLockReadGuard`].
     ///
     /// ```
-    /// #![feature(rwlock_downgrade)]
-    ///
     /// use std::sync::{RwLock, RwLockWriteGuard};
     ///
     /// let rw = RwLock::new(0);
@@ -831,8 +849,6 @@ impl<'rwlock, T: ?Sized> RwLockWriteGuard<'rwlock, T> {
     /// thread calling `downgrade` and any reads it performs after downgrading.
     ///
     /// ```
-    /// #![feature(rwlock_downgrade)]
-    ///
     /// use std::sync::{Arc, RwLock, RwLockWriteGuard};
     ///
     /// let rw = Arc::new(RwLock::new(1));
@@ -863,7 +879,7 @@ impl<'rwlock, T: ?Sized> RwLockWriteGuard<'rwlock, T> {
     /// # let final_check = rw.read().unwrap();
     /// # assert_eq!(*final_check, 3);
     /// ```
-    #[unstable(feature = "rwlock_downgrade", issue = "128203")]
+    #[stable(feature = "rwlock_downgrade", since = "1.92.0")]
     pub fn downgrade(s: Self) -> RwLockReadGuard<'rwlock, T> {
         let lock = s.lock;
 

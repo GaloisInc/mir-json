@@ -1,6 +1,5 @@
 // These tests are in a separate integration test as they modify the environment,
 // and would otherwise cause some other tests to fail.
-#![feature(cfg_select)]
 
 use std::env::*;
 use std::ffi::{OsStr, OsString};
@@ -99,7 +98,6 @@ fn test_env_set_var() {
 
 #[test]
 #[cfg_attr(not(any(unix, windows)), ignore, allow(unused))]
-#[allow(deprecated)]
 fn env_home_dir() {
     use std::path::PathBuf;
 

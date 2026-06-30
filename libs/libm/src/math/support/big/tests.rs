@@ -3,6 +3,7 @@ use std::string::String;
 use std::{eprintln, format};
 
 use super::{HInt, MinInt, i256, u256};
+use crate::support::{Int as _, NarrowingDiv};
 
 const LOHI_SPLIT: u128 = 0xaaaaaaaaaaaaaaaaffffffffffffffff;
 
@@ -260,8 +261,6 @@ fn shr_u256() {
 #[test]
 #[should_panic]
 #[cfg(debug_assertions)]
-// FIXME(ppc): ppc64le seems to have issues with `should_panic` tests.
-#[cfg(not(all(target_arch = "powerpc64", target_endian = "little")))]
 fn shr_u256_overflow() {
     // Like regular shr, panic on overflow with debug assertions
     let _ = u256::MAX >> 256;
@@ -334,5 +333,30 @@ fn i256_shifts() {
         assert_eq!(y + y, x);
         assert!(x < y);
         x = y;
+    }
+}
+#[test]
+fn div_u256_by_u128() {
+    for j in i8::MIN..=i8::MAX {
+        let y: u128 = (j as i128).rotate_right(4).unsigned();
+        if y == 0 {
+            continue;
+        }
+        for i in i8::MIN..=i8::MAX {
+            let x: u128 = (i as i128).rotate_right(4).unsigned();
+            let xy = x.widen_mul(y);
+            assert_eq!(xy.checked_narrowing_div_rem(y), Some((x, 0)));
+            if y != 1 {
+                assert_eq!((xy + u256::ONE).checked_narrowing_div_rem(y), Some((x, 1)));
+            }
+            if x != 0 {
+                assert_eq!(
+                    (xy - u256::ONE).checked_narrowing_div_rem(y),
+                    Some((x - 1, y - 1))
+                );
+            }
+            let r = ((y as f64) * 0.12345) as u128;
+            assert_eq!((xy + r.widen()).checked_narrowing_div_rem(y), Some((x, r)));
+        }
     }
 }

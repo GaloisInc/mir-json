@@ -308,10 +308,10 @@ fn wtf8buf_truncate_fail_code_point_boundary() {
 }
 
 #[test]
-#[should_panic]
-fn wtf8buf_truncate_fail_longer() {
+fn wtf8buf_truncate_invalid_len() {
     let mut string = Wtf8Buf::from_str("aé");
     string.truncate(4);
+    assert_eq!(string, Wtf8Buf::from_str("aé"));
 }
 
 #[test]
@@ -577,6 +577,17 @@ fn wtf8_encode_wide_size_hint() {
     iter.next().unwrap();
     assert_eq!((0, Some(0)), iter.size_hint());
     assert!(iter.next().is_none());
+}
+
+#[test]
+fn wtf8_encode_wide_debug() {
+    let mut string = Wtf8Buf::from_str("aé ");
+    string.push(CodePoint::from_u32(0xD83D).unwrap());
+    string.push_char('💩');
+    assert_eq!(
+        format!("{:?}", string.encode_wide()),
+        r#"EncodeWide(['a', 'é', ' ', 0xD83D, 0xD83D, 0xDCA9])"#
+    );
 }
 
 #[test]

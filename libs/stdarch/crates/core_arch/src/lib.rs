@@ -22,8 +22,8 @@
     arm_target_feature,
     mips_target_feature,
     powerpc_target_feature,
-    s390x_target_feature,
     loongarch_target_feature,
+    hexagon_target_feature,
     wasm_target_feature,
     abi_unadjusted,
     rtm_target_feature,
@@ -33,7 +33,14 @@
     x86_amx_intrinsics,
     f16,
     aarch64_unstable_target_feature,
-    bigint_helper_methods
+    target_feature_inline_always,
+    funnel_shifts,
+    avx10_target_feature,
+    const_trait_impl,
+    const_cmp,
+    const_eval_select,
+    maybe_uninit_as_bytes,
+    movrs_target_feature
 )]
 #![cfg_attr(test, feature(test, abi_vectorcall, stdarch_internal))]
 #![deny(clippy::missing_inline_in_public_items)]
@@ -63,11 +70,7 @@
 )]
 #![cfg_attr(
     test,
-    feature(
-        stdarch_arm_feature_detection,
-        stdarch_powerpc_feature_detection,
-        stdarch_s390x_feature_detection
-    )
+    feature(stdarch_arm_feature_detection, stdarch_powerpc_feature_detection,)
 )]
 
 #[cfg(test)]
@@ -87,4 +90,4 @@ pub mod arch {
 }
 
 #[allow(unused_imports)]
-use core::{array, convert, ffi, fmt, hint, intrinsics, marker, mem, ops, ptr, sync};
+use core::{array, cmp, convert, ffi, fmt, hint, intrinsics, marker, mem, ops, ptr, sync};

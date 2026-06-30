@@ -5,7 +5,6 @@ extern crate rustc_driver;
 extern crate rustc_interface;
 extern crate rustc_metadata;
 extern crate rustc_session;
-extern crate getopts;
 extern crate rustc_errors;
 extern crate rustc_target;
 extern crate rustc_ast;

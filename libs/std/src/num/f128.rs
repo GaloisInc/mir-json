@@ -16,8 +16,14 @@ use crate::intrinsics;
 use crate::sys::cmath;
 
 #[cfg(not(test))]
+#[doc(test(attr(allow(unused_features))))]
 impl f128 {
     /// Raises a number to a floating point power.
+    ///
+    /// Note that this function is special in that it can return non-NaN results for NaN inputs. For
+    /// example, `f128::powf(f128::NAN, 0.0)` returns `1.0`. However, if an input is a *signaling*
+    /// NaN, then the result is non-deterministically either a NaN or the result that the
+    /// corresponding quiet NaN would produce.
     ///
     /// # Unspecified precision
     ///
@@ -37,6 +43,7 @@ impl f128 {
     ///
     /// assert_eq!(f128::powf(1.0, f128::NAN), 1.0);
     /// assert_eq!(f128::powf(f128::NAN, 0.0), 1.0);
+    /// assert_eq!(f128::powf(0.0, 0.0), 1.0);
     /// # }
     /// ```
     #[inline]
@@ -44,7 +51,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn powf(self, n: f128) -> f128 {
-        unsafe { intrinsics::powf128(self, n) }
+        intrinsics::powf128(self, n)
     }
 
     /// Returns `e^(self)`, (the exponential function).
@@ -76,7 +83,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn exp(self) -> f128 {
-        unsafe { intrinsics::expf128(self) }
+        intrinsics::expf128(self)
     }
 
     /// Returns `2^(self)`.
@@ -106,7 +113,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn exp2(self) -> f128 {
-        unsafe { intrinsics::exp2f128(self) }
+        intrinsics::exp2f128(self)
     }
 
     /// Returns the natural logarithm of the number.
@@ -151,7 +158,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn ln(self) -> f128 {
-        unsafe { intrinsics::logf128(self) }
+        intrinsics::logf128(self)
     }
 
     /// Returns the logarithm of the number with respect to an arbitrary base.
@@ -241,7 +248,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn log2(self) -> f128 {
-        unsafe { intrinsics::log2f128(self) }
+        intrinsics::log2f128(self)
     }
 
     /// Returns the base 10 logarithm of the number.
@@ -284,7 +291,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn log10(self) -> f128 {
-        unsafe { intrinsics::log10f128(self) }
+        intrinsics::log10f128(self)
     }
 
     /// Returns the cube root of a number.
@@ -385,7 +392,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn sin(self) -> f128 {
-        unsafe { intrinsics::sinf128(self) }
+        intrinsics::sinf128(self)
     }
 
     /// Computes the cosine of a number (in radians).
@@ -414,7 +421,7 @@ impl f128 {
     #[unstable(feature = "f128", issue = "116909")]
     #[must_use = "method returns a new number and does not mutate the original value"]
     pub fn cos(self) -> f128 {
-        unsafe { intrinsics::cosf128(self) }
+        intrinsics::cosf128(self)
     }
 
     /// Computes the tangent of a number (in radians).
@@ -557,10 +564,12 @@ impl f128 {
 
     /// Computes the four quadrant arctangent of `self` (`y`) and `other` (`x`) in radians.
     ///
-    /// * `x = 0`, `y = 0`: `0`
-    /// * `x >= 0`: `arctan(y/x)` -> `[-pi/2, pi/2]`
-    /// * `y >= 0`: `arctan(y/x) + pi` -> `(pi/2, pi]`
-    /// * `y < 0`: `arctan(y/x) - pi` -> `(-pi, -pi/2)`
+    ///  | `x`     | `y`     | Piecewise Definition | Range         |
+    ///  |---------|---------|----------------------|---------------|
+    ///  | `>= +0` | `>= +0` | `arctan(y/x)`        | `[+0, +pi/2]` |
+    ///  | `>= +0` | `<= -0` | `arctan(y/x)`        | `[-pi/2, -0]` |
+    ///  | `<= -0` | `>= +0` | `arctan(y/x) + pi`   | `[+pi/2, +pi]`|
+    ///  | `<= -0` | `<= -0` | `arctan(y/x) - pi`   | `[-pi, -pi/2]`|
     ///
     /// # Unspecified precision
     ///

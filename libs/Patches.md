@@ -19,12 +19,135 @@ an *Update* line (along with a date) describing what the patch does. That way,
 when the next Rust toolchain upgrade is performed, the update can be folded
 into the main commit for that patch, and then the *Update* line can be removed.
 
-* Add reference to `core::crucible` module (last applied: November 18, 2025)
+* Add reference to `core::crucible` module (last applied: June 9, 2026)
 
   After adding the crucible intrinsics in `core/src/crucible`, we need to add a
   reference to it in `core/src/lib.rs`.
 
-* Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: November 17, 2025)
+* Disable `BytewiseEq`-based array/slice comparisons (last applied: June 9, 2026)
+
+  These require a special comparison intrinsic (`core::intrinsics::raw_eq`)
+  that Crucible doesn't support. We instead fall back on the other
+  `SpecArrayEq`/`SlicePartialEq` instances that are slower (but easier to
+  translate).
+
+* Avoid use of `const { MaybeUninit::uninit() }` (last applied: June 9, 2026)
+
+  Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
+  general, producing rendered constants for unions (like `MaybeUninit`) is
+  difficult because we don't have a good way to detect which union variant is
+  active.  This specifically affects `array::from_fn` and
+  `Iterator::next_chunk`.
+
+* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: June 9, 2026)
+
+  The actual implementation uses a pointer cast that Crucible can't handle.
+
+* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied June 9, 2026)
+
+  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
+  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
+  model doesn't support in general.  This patch adds a hook for the cast so we
+  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
+  which is a special case designed specifically for `<[_]>::as_chunks`.
+
+  Given this capability the following functions are then rewritten in terms of
+  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
+  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
+
+  See also the "Limitations of zero-length arrays and
+  `slice::as_chunks_unchecked(_mut)`" note below.
+
+* Avoid `transmute` in `Layout` and `Alignment` (last applied: June 9, 2026)
+
+  `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
+  value, assuming that the integer is a valid discriminant for the enum.
+  `Layout::from_size_align` performs the same `transmute` operation directly,
+  bypassing `Alignment::new_unchecked`.  This patch reimplements
+  `Alignment::new_unchecked` without `transmute` and modifies `Layout` to call
+  it.  Finally, this patch removes a `transmute` in the opposite direction from
+  `Alignment::as_usize`.
+
+* Add a hook in `NonZero::new` (last applied: June 9, 2026)
+
+  The new generic `NonZero::new` relies on transmute to convert `u32` to
+  `Option<NonZero<u32>>` in a const context.  Removing this transmute is
+  difficult due to limited ability to use generics in a const context.
+  Instead, we wrap it in a hook that we can override in crucible-mir.
+
+* Use crucible's allocator in `Box` constructors (last applied: June 9, 2026)
+
+  Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
+  casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
+  with typed memory, we replace the allocator calls in `Box::new` and related
+  functions to call built-in Crucible allocation functions instead (e.g.
+  `crucible::alloc::allocate`).
+
+* Specialize `Clone` impl for `Box` to use Crucible's allocator (last applied: June 9, 2026)
+
+  The default `Clone` impl for `Box` is parameterized over an arbitrary
+  allocator, and as a result, it has to call the `new_uninit_in` function,
+  which `crucible-mir` cannot easily support. We add a specialized version of
+  the `Clone` impl for the `Global` allocator that instead calls the more
+  Crucible-friendly `new_uninit` function. (See also the `` Use crucible's
+  allocator in `Box` constructors `` patch above.)
+
+* Define `Arc`/`Rc` constructors in terms of `{Arc,Rc}::new` (last applied: June 9, 2026)
+
+  This ensures that all `Arc`/`Rc` constructors are defined in terms of
+  `Box::new`, which uses Crucible's typed allocator instead of Rust's untyped
+  allocator. (See the `` Use crucible's allocator in `Box` constructors ``
+  patch above.)
+
+* Don't deallocate in `Box`/`Rc`/`Arc` `drop` methods (last applied: June 9, 2026)
+
+  Crucible doesn't support a `deallocate` operation.
+
+* Make some `Vec` methods non-const (last applied: June 9, 2026)
+
+  Some allocating methods, such as `Vec::with_capacity_in`, can now be used in
+  const contexts if the allocator is also const (`A: [const] Allocator`).
+  Currently we don't support const usage of `crucible::TypedAllocator<T>`.  For
+  now we handle this by making the methods non-const, which works because
+  nothing within the standard library relies on them being const.
+
+  If we need to support this properly in the future, we could try making
+  `TypedAllocator` dispatch to `alloc::Global` when used in const contexts.
+  This should produce static allocations, which mir-json and crucible-mir will
+  translate just like those arising from static slices and such.
+
+* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: June 9, 2026)
+
+  Upstream has polymorphized the `RawVec` implementation by factoring out most
+  of the logic into a new `RawVecInner` type that's parameterized only by an
+  allocator, not by the element type `T`.  This makes it difficult to switch
+  over to crucible-mir's allocation functions, which require the element type.
+  This patch modifies `RawVec` to always instantiate `RawVecInner` with
+  `crucible::TypedAllocator<T>` as its allocator, which is minimally invasive
+  and has the effect of threading the element type through to the crucible-mir
+  allocation functions.
+
+* Use `Box::new` instead of `box_new` in `vec!` macro (last applied: June 9, 2026)
+
+  Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
+  `exchange_malloc`, which is an untyped allocation function and thus
+  unsupported by crucible-mir.
+
+* Use `crucible_cell_swap_is_nonoverlapping_hook` in `Cell::swap` (last applied: June 9, 2026)
+
+  The actual implementation of `cell::swap` checks for overlapping `Cell`
+  references before performing the swap and panics if there is overlap. The
+  overlap check relies pointer-to-integer casts that `crucible-mir` does not
+  currently support. As such, we use a Crucible override for the overlap check.
+
+* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: June 9, 2026)
+
+  `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
+  guard against attempts to drop the statically-allocated `Arc` used for
+  `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
+  unsupported by crucible-mir (though it probably wouldn't be too hard to add).
+
+* Use `crucible::ptr::compare_usize` for pointer-integer comparisons (last applied: June 10, 2026)
 
   The `is_null` method on pointers works by casting the pointer to an integer
   and comparing to zero.  However, crucible-mir doesn't support casting valid
@@ -36,112 +159,164 @@ into the main commit for that patch, and then the *Update* line can be removed.
   The internal function `alloc::rc::is_dangling` is implemented similarly to
   `is_null`, so we reimplement it in terms of `compare_usize` as well.
 
-* Disable `IsRawEqComparable`-based `SpecArrayEq` instances (last applied: November 17, 2025)
+* Avoid transmute and pointer casts in `Atomic` implementation (last applied: June 10, 2026)
 
-  These require pointer casts that Crucible can't support. We instead fall back
-  on the other `SpecArrayEq` instances that are slower (but easier to
-  translate).
+  `AtomicU32` is an alias for `Atomic<u32>`, which is a struct containing
+  `UnsafeCell<u32::Storage>`; `u32::Storage` resolves to `Align4<u32>`, a
+  non-transparent wrapper containing a `u32`.  The upstream implementation cuts
+  through all these layers using `transmute` and pointer casts, which Crucible
+  doesn't support.  This patch changes the `new` method to use a different
+  `transmute` that it does support, and changes `into_inner` and `as_ptr`
+  methods to access the innermost field directly without `transmute` or casts.
 
-* Disable bytewise equality comparisons for `[T]` (last applied: November 19, 2025)
+* Implement `HashMap` in terms of `Vec` (last applied: June 10, 2026)
 
-  These require the `compare_bytes` intrinsic, which Crucible doesn't currently
-  support. These also require pointer casts to `*const u8` that Crucible can't
-  support.
+  The actual implementation (in terms of `hashbrown`) is too complicated for
+  Crucible to handle effectively. In particular, it has a mixed-type allocation
+  that we don't support. It makes one big allocation and uses the first N bytes
+  as flags and the remaining M bytes as key-value pairs.
 
-* Remove the use of `ptr::from_raw_parts` from `ptr::null` (last applied: November 20, 2025)
-
-  The `ptr::from_raw_parts` function implicitly performs a pointer cast through
-  the `AggregateKind::RawPtr` intrinsic, which crucible-mir does not support for
-  non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
-  `ptr::null` and `ptr::null_mut`.
-
-* Avoid `transmute` in `Layout` and `Alignment` (last applied: November 19, 2025)
-
-  `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
-  value, assuming that the integer is a valid discriminant for the enum.
-  `Layout::from_size_align` performs the same `transmute` operation directly,
-  bypassing `Alignment::new_unchecked`.  This patch reimplements
-  `Alignment::new_unchecked` without `transmute` and modifies `Layout` to call
-  it.  Finally, this patch removes a `transmute` in the opposite direction from
-  `Alignment::as_usize`.
-
-* Add a hook in `NonZero::new` (last applied: November 19, 2025)
-
-  The new generic `NonZero::new` relies on transmute to convert `u32` to
-  `Option<NonZero<u32>>` in a const context.  Removing this transmute is
-  difficult due to limited ability to use generics in a const context. Instead,
-  we wrap it in a hook that we can override in crucible-mir. See also the "Mark
-  hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
-* Use crucible's allocator in `Box` constructors (last applied: November 17, 2025)
-
-  Rust's allocator API returns untyped memory, similar to `malloc`, and `Box`
-  casts the result from `*mut u8` to `*mut T`.  Since crucible-mir works only
-  with typed memory, we replace the allocator calls in `Box::new` and related
-  functions to call built-in Crucible allocation functions instead (e.g.
-  `crucible::alloc::allocate`).
-
-* Specialize `Clone` impl for `Box` to use Crucible's allocator (last applied: Feburary 26, 2026)
-
-  The default `Clone` impl for `Box` is parameterized over an arbitrary
-  allocator, and as a result, it has to call the `new_uninit_in` function,
-  which `crucible-mir` cannot easily support. We add a specialized version of
-  the `Clone` impl for the `Global` allocator that instead calls the more
-  Crucible-friendly `new_uninit` function. (See also the `` Use crucible's
-  allocator in `Box` constructors `` patch above.)
-
-* Define `Arc`/`Rc` constructors in terms of `{Arc,Rc}::new` (last applied: January 20, 2026)
-
-  This ensures that all `Arc`/`Rc` constructors are defined in terms of
-  `Box::new`, which uses Crucible's typed allocator instead of Rust's untyped
-  allocator. (See the `` Use crucible's allocator in `Box` constructors ``
-  patch above.)
-
-* Don't deallocate in `Box::drop` (last applied: November 17, 2025)
-
-  Crucible doesn't support a `deallocate` operation.
-
-* Don't deallocate in `Arc::drop`, `Rc::drop`, and related functions (last applied: November 17, 2025)
-
-  Crucible doesn't support a `deallocate` operation.
-
-  *Update* (January 20, 2026): Also patch out `Rc`-related functions (e.g.,
-  `Rc::drop`).
-
-* Skip `addr_eq` debug asserts in `Arc::drop` (last applied: November 20, 2025)
-
-  `Arc::drop` (and its corresponding `Weak::drop`) has a `debug_assert!` to
-  guard against attempts to drop the statically-allocated `Arc` used for
-  `Arc::<[T]>::default()`.  This check calls `ptr::addr_eq`, which is
-  unsupported by crucible-mir (though it probably wouldn't be too hard to add).
-
-* Always use `crucible::TypedAllocator` in `RawVecInner` (last applied: November 19, 2025)
-
-  Upstream has polymorphized the `RawVec` implementation by factoring out most
-  of the logic into a new `RawVecInner` type that's parameterized only by an
-  allocator, not by the element type `T`.  This makes it difficult to switch
-  over to crucible-mir's allocation functions, which require the element type.
-  This patch modifies `RawVec` to always instantiate `RawVecInner` with
-  `crucible::TypedAllocator<T>` as its allocator, which is minimally invasive
-  and has the effect of threading the element type through to the crucible-mir
-  allocation functions.
-
-* Use `Box::new` instead of `box_new` in `vec!` macro (last applied: November 20, 2025)
-
-  Calls to the intrinsic `alloc::boxed::box_new` get compiled down to calls to
-  `exchange_malloc`, which is an untyped allocation function and thus
-  unsupported by crucible-mir.
-
-* Remove calls to `three_way_compare` intrinsic (last applied: December 1, 2025)
+* Remove calls to `three_way_compare` intrinsic (last applied: June 10, 2026)
 
   The `PartialOrd` and `Ord` impls for integers are implemented with the
   `three_way_compare` intrinsic, which compiles down to `BinOp::Cmp`.  This
   operation is not supported in crucible-mir, so this patch replaces the
   intrinsic calls with some ordinary two-way comparisons.
 
-* Replace end pointer with length in slice iterator (last applied: December 1, 2025)
+* Avoid int-to-struct transmute in `NonNull::without_provenance` (last applied: June 10, 2026)
+
+  This switches back to an older upstream implementation that goes through
+  `core::ptr::without_provenance`, which uses an int-to-pointer transmute
+  instead.
+
+* Remove the use of `ptr::from_raw_parts` from `ptr::null` (last applied: June 10, 2026)
+
+  The `ptr::from_raw_parts` function implicitly performs a pointer cast through
+  the `AggregateKind::RawPtr` intrinsic, which crucible-mir does not support for
+  non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
+  `ptr::null` and `ptr::null_mut`.
+
+* Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
+
+  The actual implementations use pointer casts that Crucible can't handle.
+
+* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: June 10, 2026)
+
+  Crucible does not currently support pointer casts from single elements to
+  arrays, so we implement this function by explicitly creating a
+  `MaybeUninit<[T; N]>` and copying into it.
+
+* Remove use of tagged pointers from `core::fmt` (last applied: June 10, 2026)
+
+  `core::fmt::Arguments` uses a tagged-pointer representation, where the low
+  bit of the `args` pointer is used to indicate whether the `Arguments`
+  represents a string literal.  Crucible doesn't support the bitwise arithmetic
+  on valid pointers that's used to read and write the tag.  This patch replaces
+  the tagged pointer representation with an enum.
+
+* Use `no_threads` version of `condvar`, `mutex`, `once`, and `rwlock` (last applied: June 10, 2026)
+
+  Because Crucible is effectively single-threaded, we can use `std`'s
+  `no_threads` implementations of locks which are much simpler than the real
+  ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
+  concurrent crucible support.
+
+* Replace `sys::time` with Crux-specific implementation (last applied: June 10, 2026)
+
+  Crux's version is not suitable for doing actual timing (it hard-codes the
+  time to a fixed date), but it does simulate much more easily than the actual
+  implementation.
+
+* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: June 10, 2026)
+
+  `RawVec` casts `*mut T` to `*mut u8` to store it with the type erased, and
+  casts back later before dereferencing.  When `T = [u8; N]`, Crucible handles
+  the `*mut [u8; N]` to `*mut u8` cast by inserting an indexing projection,
+  which is unwanted here and results in an invalid reference after casting
+  back.
+
+* Always use regular `sleep` in `std::sys::thread::unix::sleep_until` (last applied: June 10, 2026)
+
+  The `sleep_until` implementation on unix tries to use `clock_nanosleep` when
+  applicable, by getting a `Timespec` out of the passed-in `time::Instant`. Our
+  Crux-specific time implementation does not have a `Timespec` in it, so we
+  instead always use the regular `sleep` function just like on other platforms.
+
+* Simplify implementations of TLS destructors and guards (last applied June 10, 2026)
+
+  The `std::sys::thread_local::destructors::linux_like` module calls into some
+  low-level extern symbols like `__cxa_thread_atexit_impl`, which we don't
+  support.  This causes errors when initializing a `thread_local!` variable in
+  some cases.  The alternative `destructors::list` implementation is simpler
+  and is defined in terms of things we already support (`Vec` and `RefCell`).
+
+  Similarly, `std::sys::thread_local::guard::key::enable` calls into
+  `pthread_key_create`, which we don't support.  This patch switches to the
+  WASM implementation of `guard::enable`, which is a no-op.
+
+  Together, these changes allow using `thread_local!` for types that have a
+  destructor.
+
+* Avoid raw pointer comparisons in `std::thread` (last applied: June 11, 2026)
+
+  `std::thread` reserves raw pointers with the addresses 0-2 as sentinel
+  values. Instead of checking if a thread's pointer is not a sentinel value by
+  seeing if it is larger than the sentinel with the largest address, we instead
+  check if the pointer is not equal to each of the individual sentinel values.
+  See also the "Avoid raw pointer comparisons" note below.
+
+* Use global allocator instead of `System` in `Thread` (last applied: June 12, 2026)
+
+  Upstream uses the `System` allocator, which calls `malloc`/`free` directly,
+  which prevents issues with custom global allocators that use thread-local
+  storage.  Crucible doesn't support untyped `malloc`, so this patch switches
+  back to using the global allocator instead.  We already don't support custom
+  global allocators, so this shouldn't cause any problems.
+
+* Add `{Arc,Rc}::{from,into}_inner_raw` API functions (last applied: June 12, 2026)
+
+  `crucible-mir` is not currently able to simulate the
+  `{Arc,Rc}::{from,into}_raw` functions, as they rely on non-trivial pointer
+  offsets plus read from type-casted pointers.
+  `{Arc,Rc}::{from,into}_inner_raw` offer alternatives with very similar types,
+  but which are implemented in a Crucible-friendly way.
+
+  See also the "`{Arc,Rc}::{from,into}_inner_raw`" below.
+
+* Use `Arc::{from,into}_inner_raw` in `Thread` implementation (last applied: June 12, 2026)
+
+  This avoids issues with `thread::current()`, which creates a `Thread` handle
+  on first use and stores it as `*const ()` in a thread-local variable for
+  later use.
+
+* Don't use a `union` in `LazyLock`'s internals (last applied June 12, 2026)
+
+  The internals of `std::sync::LazyLock` use a `union` value to distinguish
+  between uninitialized and initialized values, but `crucible-mir` cannot
+  currently support this usage of `union`s. This patch replaces the `union`
+  with an equivalent `enum`.
+
+* Return dummy location in `Location::caller` (last applied: June 15, 2026)
+
+  `crucible-mir` does not currently support the `intrinsics::caller_location()`
+  intrinsic. To prevent this function from throwing translation errors, we have
+  it return a constant dummy location.
+
+* Use `memchr_naive` for all `memchr` variants (last applied June 15, 2026)
+
+  The optimized implementation tries to load an entire `usize` at a time
+  instead of going byte by byte, but crucible-mir doesn't support this sort of
+  transmuting load.  The naive version is equivalent (according to comments in
+  that file) and should be much simpler to simulate.
+
+* Replace raw pointer cast in `std::hash` (last applied: June 15, 2026)
+
+  Crucible doesn't currently support casting a `*mut u32` pointer to a `*mut
+  u8` and then trying to write `u8` values into it. We instead rewrite the code
+  slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
+  u8`, thereby avoiding the need for `u32` altogether.
+
+* Replace end pointer with length in slice iterator (last applied: June 15, 2026)
 
   The standard library implementation of slice iterators for non-ZSTs consists
   of a start pointer and an end pointer.  This is a problem because pointer
@@ -158,187 +333,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Crucible `RefCell` instead.  For the ZST case, we could add support for
   casting `MirReference_Integer` pointers back to an integer, which would allow
   for the `pointer -> integer -> pointer` casts that are used in the iterator.
-
-* Implement `HashMap` in terms of `Vec` (last applied: November 21, 2025)
-
-  The actual implementation (in terms of `hashbrown`) is too complicated for
-  Crucible to handle effectively. In particular, it has a mixed-type allocation
-  that we don't support. It makes one big allocation and uses the first N bytes
-  as flags and the remaining M bytes as key-value pairs.
-
-* Use `crucible_cell_swap_is_nonoverlapping_hook` in `Cell::swap` (last applied: December 1, 2025)
-
-  The actual implementation of `cell::swap` checks for overlapping `Cell`
-  references before performing the swap and panics if there is overlap. The
-  overlap check relies pointer-to-integer casts that `crucible-mir` does not
-  currently support. As such, we use a Crucible override for the overlap check.
-  See also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
-* Use `no_threads` version of `condvar`, `mutex`, `once`, and `rwlock` (last applied: November 27, 2025)
-
-  Because Crucible is effectively single-threaded, we can use `std`'s
-  `no_threads` implementations of locks which are much simpler than the real
-  ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
-  concurrent crucible support.
-
-  *Update* (March 17, 2026): Also include `once`.
-
-* Replace `sys::time` with Crux-specific implementation (last applied: November 25, 2025)
-
-  Crux's version is not suitable for doing actual timing (it hard-codes the
-  time to a fixed date), but it does simulate much more easily than the actual
-  implementation.
-
-* Always use regular `sleep` in `std::sys::thread::unix::sleep_until` (last applied: December 2, 2025)
-
-  The `sleep_until` implementation on unix tries to use `clock_nanosleep` when
-  applicable, by getting a `Timespec` out of the passed-in `time::Instant`. Our
-  Crux-specific time implementation does not have a `Timespec` in it, so we
-  instead always use the regular `sleep` function just like on other platforms.
-
-* Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: December 1, 2025)
-
-  Crucible does not currently support pointer casts from single elements to
-  arrays, so we implement this function by explicitly creating a
-  `MaybeUninit<[T; N]>` and copying into it.
-
-* Avoid use of `const { MaybeUninit::uninit() }` (last applied: November 25, 2025)
-
-  Crucible doesn't support `MaybeUninit::uninit()` in const contexts.  In
-  general, producing rendered constants for unions (like `MaybeUninit`) is
-  difficult because we don't have a good way to detect which union variant is
-  active.
-
-* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: November 25, 2025)
-
-  The actual implementation uses a pointer cast that Crucible can't handle. See
-  also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
-* Replace `NonNull::cast` with `transmute` in `TypedAllocator` allocation (last applied: July 25, 2025)
-
-  Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
-  with Crucible's representation of arrays.
-
-* Use `crucible_slice_from_mut_hook` in `core::slice::from_mut` (last applied: November 25, 2025)
-
-  The actual implementation uses a pointer cast that Crucible can't handle. See
-  also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
-* Use `crucible_slice_from_ref_hook` in `core::slice::from_ref` (last applied: November 25, 2025)
-
-  The actual implementation uses a pointer cast that Crucible can't handle. See
-  also the "Mark hook functions as `#[inline(never)]`" note below.
-
-  *Update* (December 3, 2025): Add an `#[inline(never)]` attribute.
-
-* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: November 27, 2025)
-
-  Its use of `cast`, specifically for `NonNull<[u8; N]>` pointers, can conflict
-  with Crucible's representation of arrays.
-
-* Avoid `transmute` in `impl PartialEq for TypeId` (last applied: December 1, 2025)
-
-  Crucible doesn't support transmuting a struct into a `u128`. We always use the
-  `type_id_eq` fallback instead.
-
-* Remove the dynamic CPU support detection in `memchr` package (last applied: November 24, 2025)
-
-  This feature was using an `AtomicPtr<()>` with a cast from function
-  pointer to `*mut ()` that we don't support in its initializer.
-
-* Replace raw pointer cast in `std::hash` (last applied: January 22, 2026)
-
-  Crucible doesn't currently support casting a `*mut u32` pointer to a `*mut
-  u8` and then trying to write `u8` values into it. We instead rewrite the code
-  slightly such that we build a `&mut [u8]` slice and then cast it to a `*mut
-  u8`, thereby avoiding the need for `u32` altogether.
-
-* Return dummy location in `Location::caller` (last applied: January 22, 2026)
-
-  `crucible-mir` does not currently support the `intrinsics::caller_location()`
-  intrinsic. To prevent this function from throwing translation errors, we have
-  it return a constant dummy location.
-
-* Avoid raw pointer comparisons in `std::thread` (last applied: January 22, 2026)
-
-  `std::thread` reserves raw pointers with the addresses 0-2 as sentinel
-  values. Instead of checking if a thread's pointer is not a sentinel value by
-  seeing if it is larger than the sentinel with the largest address, we instead
-  check if the pointer is not equal to each of the individual sentinel values.
-  See also the "Avoid raw pointer comparisons" note below.
-
-* Add `{Arc,Rc}::{from,inner}_into_raw` API functions (last applied: January 22, 2026)
-
-  `crucible-mir` is not currently able to simulate the
-  `{Arc,Rc}::{from,inner}_raw` functions, as they rely on non-trivial pointer
-  offsets plus read from type-casted pointers.
-  `{Arc,Rc}::{from,inner}_into_raw` offer alternatives with very similar types,
-  but which are implemented in a Crucible-friendly way. We use these functions
-  in the internals of `std::thread`.
-
-  See also the "`{Arc,Rc}::{from,inner}_into_raw`" below.
-
-* Simplify implementations of thread parking and `guard::enable` (last applied: January 22, 2025)
-
-  The real implementations of these parts of the code use low-level,
-  OS-specific primitives (e.g., system calls) that Crucible cannot support. We
-  uniformly replace these parts of the code with simpler implementations:
-
-  * We use the `unsupported` configuration for thread parking, where all
-    parking-related functions are treated as no-ops.
-  * We use the Wasm configuration for the internal `guard::enable` function,
-    which simply leaks everything.
-
-* Remove `i8` and `u8` specializations for `SliceContains` (last applied Mar 4, 2026)
-
-  These specializations used `memchr` and we don't support that. The generic
-  implementations are sufficient for `u8` and `i8`.
-
-* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied March 6, 2026)
-
-  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
-  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
-  model doesn't support in general.  This patch adds a hook for the cast so we
-  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
-  which is a special case designed specifically for `<[_]>::as_chunks`.
-
-  Given this capability the following functions are then rewritten in terms of
-  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
-  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
-
-  See also the "Limitations of zero-length arrays and
-  `slice::as_chunks_unchecked(_mut)`" note below.
-
-  *Update* (April 22, 2026): Add special cases for length-zero arrays in
-  `slice::as(_mut)_array`.
-
-* Don't use a `union` in `LazyLock`'s internals (last applied March 17, 2026)
-
-  The internals of `std::sync::LazyLock` use a `union` value to distinguish
-  between uninitialized and initialized values, but `crucible-mir` cannot
-  currently support this usage of `union`s. This patch replaces the `union`
-  with an equivalent `enum`.
-
-* Use `list` TLS destructors instead of `linux_like` (last applied April 22, 2026)
-
-  The `std::sys::thread_local::destructors::linux_like` module calls into some
-  low-level extern symbols like `__cxa_thread_atexit_impl`, which we don't
-  support.  This causes errors when initializing a `thread_local!` variable in
-  some cases.  The alternative `destructors::list` implementation is simpler
-  and is defined in terms of things we already support (`Vec` and `RefCell`).
-
-* Use `memchr_naive` for all `memchr` variants (last applied April 22, 2026)
-
-  The optimized implementation tries to load an entire `usize` at a time
-  instead of going byte by byte, but crucible-mir doesn't support this sort of
-  transmuting load.  The naive version is equivalent (according to comments in
-  that file) and should be much simpler to simulate.
 
 # Notes
 
@@ -362,6 +356,36 @@ this actually happened.)
 
 As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
 ensure that they persist when optimizations are applied.
+
+## Limitations of zero-length arrays and `slice::as_chunks_unchecked(_mut)`
+
+One of the reasons why we override `slice::as_chunks_unchecked(_mut)` is so
+that we can guarantee that the input reference aliases the output reference.
+Currently, this requires custom overrides in `crucible-mir` to accomplish.
+Moreover, we can define many similar-looking functions in terms of
+`slice::as_chunks_unchecked(_mut)`, which allows us to get away with only
+defining two custom overrides.
+
+Unfortunately, this approach has a notable drawback. We define functions such
+as `slice::as(_mut)_array` in terms of `slice::as_chunks_unchecked(_mut)`, but
+while the former functions work for arrays of any length, the latter functions
+have a precondition that the array length is non-zero. This means that if we
+call `slice::as(_mut)_array` with an array length of zero, then we cannot call
+`slice::as_chunks_unchecked(_mut)` and must use a different approach.
+
+One possible way to go about this would be to give `slice::as(_mut)_array` and
+friends additional custom overrides to handle the length-0 cases. This is
+doable, but it would be annoying to maintain, given that we would need to add a
+significant amount of additional special-casing. What's more, we are planning
+to remove these special cases later once the migration to `MirAggregate` is
+finished (see https://github.com/GaloisInc/crucible/issues/1499), so it feels
+wasteful to invest in this kind of solution.
+
+We instead adopt a less correct but much cheaper solution: when the array
+length is zero, simply return `&[]` or `&mut []`. This sort of output reference
+will _not_ alias the input reference, but since the output has no actual
+elements, the lack of aliasing is hard to observe. As such, this compromise is
+likely fine for most use cases.
 
 ## Avoid raw pointer comparisons
 
@@ -447,33 +471,3 @@ Once `crucible-mir` finishes migrating to use `MirAggregate` (see
 https://github.com/GaloisInc/crucible/issues/1499), it should be able to
 simulate `{Arc,Rc}::{from,into}_raw` properly, which would allow us to remove
 `{Arc,Rc}::{from,into}_inner_raw`.
-
-## Limitations of zero-length arrays and `slice::as_chunks_unchecked(_mut)`
-
-One of the reasons why we override `slice::as_chunks_unchecked(_mut)` is so
-that we can guarantee that the input reference aliases the output reference.
-Currently, this requires custom overrides in `crucible-mir` to accomplish.
-Moreover, we can define many similar-looking functions in terms of
-`slice::as_chunks_unchecked(_mut)`, which allows us to get away with only
-defining two custom overrides.
-
-Unfortunately, this approach has a notable drawback. We define functions such
-as `slice::as(_mut)_array` in terms of `slice::as_chunks_unchecked(_mut)`, but
-while the former functions work for arrays of any length, the latter functions
-have a precondition that the array length is non-zero. This means that if we
-call `slice::as(_mut)_array` with an array length of zero, then we cannot call
-`slice::as_chunks_unchecked(_mut)` and must use a different approach.
-
-One possible way to go about this would be to give `slice::as(_mut)_array` and
-friends additional custom overrides to handle the length-0 cases. This is
-doable, but it would be annoying to maintain, given that we would need to add a
-significant amount of additional special-casing. What's more, we are planning
-to remove these special cases later once the migration to `MirAggregate` is
-finished (see https://github.com/GaloisInc/crucible/issues/1499), so it feels
-wasteful to invest in this kind of solution.
-
-We instead adopt a less correct but much cheaper solution: when the array
-length is zero, simply return `&[]` or `&mut []`. This sort of output reference
-will _not_ alias the input reference, but since the output has no actual
-elements, the lack of aliasing is hard to observe. As such, this compromise is
-likely fine for most use cases.

@@ -1,24 +1,8 @@
-use fortanix_sgx_abi::{Error, RESULT_SUCCESS};
-
 use crate::ffi::{OsStr, OsString};
 use crate::marker::PhantomData;
 use crate::path::{self, PathBuf};
-use crate::sys::{decode_error_kind, sgx_ineffective, unsupported};
+use crate::sys::{sgx_ineffective, unsupported};
 use crate::{fmt, io};
-
-pub fn errno() -> i32 {
-    RESULT_SUCCESS
-}
-
-pub fn error_string(errno: i32) -> String {
-    if errno == RESULT_SUCCESS {
-        "operation successful".into()
-    } else if ((Error::UserRangeStart as _)..=(Error::UserRangeEnd as _)).contains(&errno) {
-        format!("user-specified error {errno:08x}")
-    } else {
-        decode_error_kind(errno).as_str().into()
-    }
-}
 
 pub fn getcwd() -> io::Result<PathBuf> {
     unsupported()
@@ -70,12 +54,4 @@ pub fn temp_dir() -> PathBuf {
 
 pub fn home_dir() -> Option<PathBuf> {
     None
-}
-
-pub fn exit(code: i32) -> ! {
-    super::abi::exit_with_code(code as _)
-}
-
-pub fn getpid() -> u32 {
-    panic!("no pids in SGX")
 }

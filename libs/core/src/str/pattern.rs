@@ -38,7 +38,6 @@
     issue = "27721"
 )]
 
-use crate::char::MAX_LEN_UTF8;
 use crate::cmp::Ordering;
 use crate::convert::TryInto as _;
 use crate::slice::memchr;
@@ -563,7 +562,7 @@ impl Pattern for char {
 
     #[inline]
     fn into_searcher<'a>(self, haystack: &'a str) -> Self::Searcher<'a> {
-        let mut utf8_encoded = [0; MAX_LEN_UTF8];
+        let mut utf8_encoded = [0; char::MAX_LEN_UTF8];
         let utf8_size = self
             .encode_utf8(&mut utf8_encoded)
             .len()
@@ -998,7 +997,8 @@ impl<'b> Pattern for &'b str {
 
                 #[cfg(any(
                     all(target_arch = "x86_64", target_feature = "sse2"),
-                    all(target_arch = "loongarch64", target_feature = "lsx")
+                    all(target_arch = "loongarch64", target_feature = "lsx"),
+                    all(target_arch = "aarch64", target_feature = "neon")
                 ))]
                 if self.len() <= 32 {
                     if let Some(result) = simd_contains(self, haystack) {
@@ -1783,7 +1783,8 @@ impl TwoWayStrategy for RejectAndMatch {
 /// [0]: http://0x80.pl/articles/simd-strfind.html#sse-avx2
 #[cfg(any(
     all(target_arch = "x86_64", target_feature = "sse2"),
-    all(target_arch = "loongarch64", target_feature = "lsx")
+    all(target_arch = "loongarch64", target_feature = "lsx"),
+    all(target_arch = "aarch64", target_feature = "neon")
 ))]
 #[inline]
 fn simd_contains(needle: &str, haystack: &str) -> Option<bool> {
@@ -1918,7 +1919,8 @@ fn simd_contains(needle: &str, haystack: &str) -> Option<bool> {
 /// Both slices must have the same length.
 #[cfg(any(
     all(target_arch = "x86_64", target_feature = "sse2"),
-    all(target_arch = "loongarch64", target_feature = "lsx")
+    all(target_arch = "loongarch64", target_feature = "lsx"),
+    all(target_arch = "aarch64", target_feature = "neon")
 ))]
 #[inline]
 unsafe fn small_slice_eq(x: &[u8], y: &[u8]) -> bool {

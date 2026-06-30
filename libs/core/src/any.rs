@@ -86,7 +86,10 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use crate::{fmt, hash, intrinsics};
+use crate::intrinsics::{self, type_id_vtable};
+use crate::mem::transmute;
+use crate::mem::type_info::{TraitImpl, TypeKind};
+use crate::{fmt, hash, ptr};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Any trait
@@ -227,7 +230,7 @@ impl dyn Any {
             // SAFETY: just checked whether we are pointing to the correct type, and we can rely on
             // that check for memory safety because we have implemented Any for all types; no other
             // impls can exist as they would conflict with our impl.
-            unsafe { Some(self.downcast_ref_unchecked()) }
+            unsafe { Some(self.downcast_unchecked_ref()) }
         } else {
             None
         }
@@ -263,7 +266,7 @@ impl dyn Any {
             // SAFETY: just checked whether we are pointing to the correct type, and we can rely on
             // that check for memory safety because we have implemented Any for all types; no other
             // impls can exist as they would conflict with our impl.
-            unsafe { Some(self.downcast_mut_unchecked()) }
+            unsafe { Some(self.downcast_unchecked_mut()) }
         } else {
             None
         }
@@ -281,7 +284,7 @@ impl dyn Any {
     /// let x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     assert_eq!(*x.downcast_ref_unchecked::<usize>(), 1);
+    ///     assert_eq!(*x.downcast_unchecked_ref::<usize>(), 1);
     /// }
     /// ```
     ///
@@ -291,7 +294,7 @@ impl dyn Any {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_ref_unchecked<T: Any>(&self) -> &T {
+    pub unsafe fn downcast_unchecked_ref<T: Any>(&self) -> &T {
         debug_assert!(self.is::<T>());
         // SAFETY: caller guarantees that T is the correct type
         unsafe { &*(self as *const dyn Any as *const T) }
@@ -309,7 +312,7 @@ impl dyn Any {
     /// let mut x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     *x.downcast_mut_unchecked::<usize>() += 1;
+    ///     *x.downcast_unchecked_mut::<usize>() += 1;
     /// }
     ///
     /// assert_eq!(*x.downcast_ref::<usize>().unwrap(), 2);
@@ -321,7 +324,7 @@ impl dyn Any {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_mut_unchecked<T: Any>(&mut self) -> &mut T {
+    pub unsafe fn downcast_unchecked_mut<T: Any>(&mut self) -> &mut T {
         debug_assert!(self.is::<T>());
         // SAFETY: caller guarantees that T is the correct type
         unsafe { &mut *(self as *mut dyn Any as *mut T) }
@@ -417,7 +420,7 @@ impl dyn Any + Send {
     /// let x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     assert_eq!(*x.downcast_ref_unchecked::<usize>(), 1);
+    ///     assert_eq!(*x.downcast_unchecked_ref::<usize>(), 1);
     /// }
     /// ```
     ///
@@ -427,9 +430,9 @@ impl dyn Any + Send {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_ref_unchecked<T: Any>(&self) -> &T {
+    pub unsafe fn downcast_unchecked_ref<T: Any>(&self) -> &T {
         // SAFETY: guaranteed by caller
-        unsafe { <dyn Any>::downcast_ref_unchecked::<T>(self) }
+        unsafe { <dyn Any>::downcast_unchecked_ref::<T>(self) }
     }
 
     /// Forwards to the method defined on the type `dyn Any`.
@@ -444,7 +447,7 @@ impl dyn Any + Send {
     /// let mut x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     *x.downcast_mut_unchecked::<usize>() += 1;
+    ///     *x.downcast_unchecked_mut::<usize>() += 1;
     /// }
     ///
     /// assert_eq!(*x.downcast_ref::<usize>().unwrap(), 2);
@@ -456,9 +459,9 @@ impl dyn Any + Send {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_mut_unchecked<T: Any>(&mut self) -> &mut T {
+    pub unsafe fn downcast_unchecked_mut<T: Any>(&mut self) -> &mut T {
         // SAFETY: guaranteed by caller
-        unsafe { <dyn Any>::downcast_mut_unchecked::<T>(self) }
+        unsafe { <dyn Any>::downcast_unchecked_mut::<T>(self) }
     }
 }
 
@@ -551,7 +554,7 @@ impl dyn Any + Send + Sync {
     /// let x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     assert_eq!(*x.downcast_ref_unchecked::<usize>(), 1);
+    ///     assert_eq!(*x.downcast_unchecked_ref::<usize>(), 1);
     /// }
     /// ```
     /// # Safety
@@ -560,9 +563,9 @@ impl dyn Any + Send + Sync {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_ref_unchecked<T: Any>(&self) -> &T {
+    pub unsafe fn downcast_unchecked_ref<T: Any>(&self) -> &T {
         // SAFETY: guaranteed by caller
-        unsafe { <dyn Any>::downcast_ref_unchecked::<T>(self) }
+        unsafe { <dyn Any>::downcast_unchecked_ref::<T>(self) }
     }
 
     /// Forwards to the method defined on the type `Any`.
@@ -577,7 +580,7 @@ impl dyn Any + Send + Sync {
     /// let mut x: Box<dyn Any> = Box::new(1_usize);
     ///
     /// unsafe {
-    ///     *x.downcast_mut_unchecked::<usize>() += 1;
+    ///     *x.downcast_unchecked_mut::<usize>() += 1;
     /// }
     ///
     /// assert_eq!(*x.downcast_ref::<usize>().unwrap(), 2);
@@ -588,9 +591,9 @@ impl dyn Any + Send + Sync {
     /// with the incorrect type is *undefined behavior*.
     #[unstable(feature = "downcast_unchecked", issue = "90850")]
     #[inline]
-    pub unsafe fn downcast_mut_unchecked<T: Any>(&mut self) -> &mut T {
+    pub unsafe fn downcast_unchecked_mut<T: Any>(&mut self) -> &mut T {
         // SAFETY: guaranteed by caller
-        unsafe { <dyn Any>::downcast_mut_unchecked::<T>(self) }
+        unsafe { <dyn Any>::downcast_unchecked_mut::<T>(self) }
     }
 }
 
@@ -610,6 +613,15 @@ impl dyn Any + Send + Sync {
 /// While `TypeId` implements `Hash`, `PartialOrd`, and `Ord`, it is worth
 /// noting that the hashes and ordering will vary between Rust releases. Beware
 /// of relying on them inside of your code!
+///
+/// # Layout
+///
+/// Like other [`Rust`-representation][repr-rust] types, `TypeId`'s size and layout are unstable.
+/// In particular, this means that you cannot rely on the size and layout of `TypeId` remaining the
+/// same between Rust releases; they are subject to change without prior notice between Rust
+/// releases.
+///
+/// [repr-rust]: https://doc.rust-lang.org/reference/type-layout.html#r-layout.repr.rust.unspecified
 ///
 /// # Danger of Improper Variance
 ///
@@ -730,7 +742,20 @@ unsafe impl Sync for TypeId {}
 impl const PartialEq for TypeId {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
+        #[cfg(miri)]
         return crate::intrinsics::type_id_eq(*self, *other);
+        #[cfg(not(miri))]
+        {
+            let this = self;
+            crate::intrinsics::const_eval_select!(
+                @capture { this: &TypeId, other: &TypeId } -> bool:
+                if const {
+                    crate::intrinsics::type_id_eq(*this, *other)
+                } else {
+                    this.data == other.data
+                }
+            )
+        }
     }
 }
 
@@ -751,9 +776,70 @@ impl TypeId {
     /// ```
     #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_type_id", since = "CURRENT_RUSTC_VERSION")]
+    #[rustc_const_stable(feature = "const_type_id", since = "1.91.0")]
     pub const fn of<T: ?Sized + 'static>() -> TypeId {
         const { intrinsics::type_id::<T>() }
+    }
+
+    /// Checks if the [TypeId] implements the trait. If it does it returns [TraitImpl] which can be used to build a fat pointer.
+    /// It can only be called at compile time. `self` must be the [TypeId] of a sized type or None will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(type_info)]
+    /// use std::any::{TypeId};
+    ///
+    /// pub trait Blah {}
+    /// impl Blah for u8 {}
+    ///
+    /// assert!(const { TypeId::of::<u8>().trait_info_of::<dyn Blah>() }.is_some());
+    /// assert!(const { TypeId::of::<u16>().trait_info_of::<dyn Blah>() }.is_none());
+    /// ```
+    #[unstable(feature = "type_info", issue = "146922")]
+    #[rustc_const_unstable(feature = "type_info", issue = "146922")]
+    pub const fn trait_info_of<
+        T: ptr::Pointee<Metadata = ptr::DynMetadata<T>> + ?Sized + 'static,
+    >(
+        self,
+    ) -> Option<TraitImpl<T>> {
+        // SAFETY: The vtable was obtained for `T`, so it is guaranteed to be `DynMetadata<T>`.
+        // The intrinsic can't infer this because it is designed to work with arbitrary TypeIds.
+        unsafe { transmute(self.trait_info_of_trait_type_id(const { TypeId::of::<T>() })) }
+    }
+
+    /// Checks if the [TypeId] implements the trait of `trait_represented_by_type_id`. If it does it returns [TraitImpl] which can be used to build a fat pointer.
+    /// It can only be called at compile time. `self` must be the [TypeId] of a sized type or None will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(type_info)]
+    /// use std::any::{TypeId};
+    ///
+    /// pub trait Blah {}
+    /// impl Blah for u8 {}
+    ///
+    /// assert!(const { TypeId::of::<u8>().trait_info_of_trait_type_id(TypeId::of::<dyn Blah>()) }.is_some());
+    /// assert!(const { TypeId::of::<u16>().trait_info_of_trait_type_id(TypeId::of::<dyn Blah>()) }.is_none());
+    /// ```
+    #[unstable(feature = "type_info", issue = "146922")]
+    #[rustc_const_unstable(feature = "type_info", issue = "146922")]
+    pub const fn trait_info_of_trait_type_id(
+        self,
+        trait_represented_by_type_id: TypeId,
+    ) -> Option<TraitImpl<*const ()>> {
+        if self.info().size.is_none() {
+            return None;
+        }
+
+        if matches!(trait_represented_by_type_id.info().kind, TypeKind::DynTrait(_))
+            && let Some(vtable) = type_id_vtable(self, trait_represented_by_type_id)
+        {
+            Some(TraitImpl { vtable })
+        } else {
+            None
+        }
     }
 
     fn as_u128(self) -> u128 {
@@ -873,4 +959,112 @@ pub const fn type_name<T: ?Sized>() -> &'static str {
 #[rustc_const_unstable(feature = "const_type_name", issue = "63084")]
 pub const fn type_name_of_val<T: ?Sized>(_val: &T) -> &'static str {
     type_name::<T>()
+}
+
+/// Returns `Some(&U)` if `T` can be coerced to the trait object type `U`. Otherwise, it returns `None`.
+///
+/// # Compile-time failures
+/// Determining whether `T` can be coerced to the trait object type `U` requires compiler trait resolution.
+/// In some cases, that resolution can exceed the recursion limit,
+/// and compilation will fail instead of this function returning `None`.
+/// # Examples
+///
+/// ```rust
+/// #![feature(try_as_dyn)]
+///
+/// use core::any::try_as_dyn;
+///
+/// trait Animal {
+///     fn speak(&self) -> &'static str;
+/// }
+///
+/// struct Dog;
+/// impl Animal for Dog {
+///     fn speak(&self) -> &'static str { "woof" }
+/// }
+///
+/// struct Rock; // does not implement Animal
+///
+/// let dog = Dog;
+/// let rock = Rock;
+///
+/// let as_animal: Option<&dyn Animal> = try_as_dyn::<Dog, dyn Animal>(&dog);
+/// assert_eq!(as_animal.unwrap().speak(), "woof");
+///
+/// let not_an_animal: Option<&dyn Animal> = try_as_dyn::<Rock, dyn Animal>(&rock);
+/// assert!(not_an_animal.is_none());
+/// ```
+#[must_use]
+#[unstable(feature = "try_as_dyn", issue = "144361")]
+pub const fn try_as_dyn<
+    T: Any + 'static,
+    U: ptr::Pointee<Metadata = ptr::DynMetadata<U>> + ?Sized + 'static,
+>(
+    t: &T,
+) -> Option<&U> {
+    let vtable: Option<ptr::DynMetadata<U>> =
+        const { TypeId::of::<T>().trait_info_of::<U>().as_ref().map(TraitImpl::get_vtable) };
+    match vtable {
+        Some(dyn_metadata) => {
+            let pointer = ptr::from_raw_parts(t, dyn_metadata);
+            // SAFETY: `t` is a reference to a type, so we know it is valid.
+            // `dyn_metadata` is a vtable for T, implementing the trait of `U`.
+            Some(unsafe { &*pointer })
+        }
+        None => None,
+    }
+}
+
+/// Returns `Some(&mut U)` if `T` can be coerced to the trait object type `U`. Otherwise, it returns `None`.
+///
+/// # Compile-time failures
+/// Determining whether `T` can be coerced to the trait object type `U` requires compiler trait resolution.
+/// In some cases, that resolution can exceed the recursion limit,
+/// and compilation will fail instead of this function returning `None`.
+/// # Examples
+///
+/// ```rust
+/// #![feature(try_as_dyn)]
+///
+/// use core::any::try_as_dyn_mut;
+///
+/// trait Animal {
+///     fn speak(&self) -> &'static str;
+/// }
+///
+/// struct Dog;
+/// impl Animal for Dog {
+///     fn speak(&self) -> &'static str { "woof" }
+/// }
+///
+/// struct Rock; // does not implement Animal
+///
+/// let mut dog = Dog;
+/// let mut rock = Rock;
+///
+/// let as_animal: Option<&mut dyn Animal> = try_as_dyn_mut::<Dog, dyn Animal>(&mut dog);
+/// assert_eq!(as_animal.unwrap().speak(), "woof");
+///
+/// let not_an_animal: Option<&mut dyn Animal> = try_as_dyn_mut::<Rock, dyn Animal>(&mut rock);
+/// assert!(not_an_animal.is_none());
+/// ```
+#[must_use]
+#[unstable(feature = "try_as_dyn", issue = "144361")]
+pub const fn try_as_dyn_mut<
+    T: Any + 'static,
+    U: ptr::Pointee<Metadata = ptr::DynMetadata<U>> + ?Sized + 'static,
+>(
+    t: &mut T,
+) -> Option<&mut U> {
+    let vtable: Option<ptr::DynMetadata<U>> =
+        const { TypeId::of::<T>().trait_info_of::<U>().as_ref().map(TraitImpl::get_vtable) };
+    match vtable {
+        Some(dyn_metadata) => {
+            let pointer = ptr::from_raw_parts_mut(t, dyn_metadata);
+            // SAFETY: `t` is a reference to a type, so we know it is valid.
+            // `dyn_metadata` is a vtable for T, implementing the trait of `U`.
+            Some(unsafe { &mut *pointer })
+        }
+        None => None,
+    }
 }

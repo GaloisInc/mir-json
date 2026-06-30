@@ -22,9 +22,8 @@ use crate::net::Shutdown;
 use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use crate::path::Path;
 use crate::sealed::Sealed;
-use crate::sys::cvt;
 use crate::sys::net::Socket;
-use crate::sys_common::{AsInner, FromInner, IntoInner};
+use crate::sys::{AsInner, FromInner, IntoInner, cvt};
 use crate::time::Duration;
 use crate::{fmt, io};
 #[cfg(not(any(
@@ -159,7 +158,7 @@ impl UnixDatagram {
     /// ```
     #[stable(feature = "unix_socket", since = "1.10.0")]
     pub fn unbound() -> io::Result<UnixDatagram> {
-        let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_DGRAM)?;
+        let inner = Socket::new(libc::AF_UNIX, libc::SOCK_DGRAM)?;
         Ok(UnixDatagram(inner))
     }
 
