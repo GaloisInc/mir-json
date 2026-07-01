@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      # mir-json's implementation is tightly coupled to the cargo API, which
-      # means that it is generally not possible to update to newer versions of
-      # cargo automatically.
-      - dependency-name: "cargo"
+      # Only propose minor or patch updates to cargo dependencies, as these are
+      # much more likely to be backwards-compatible than major updates.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
