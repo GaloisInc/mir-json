@@ -947,10 +947,6 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
     emit_fn(ms, out, &name, None, mir)?;
     emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
 
-    for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-        emit_promoted(ms, out, &name, idx, mir)?;
-    }
-
     Ok(())
 }
 
@@ -1144,31 +1140,6 @@ fn emit_instance<'tcx>(
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(ty_inst), mir)?;
 
-    if let ty::InstanceKind::Item(def_id) = ty_inst.def {
-        for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = ty_inst.instantiate_mir_and_normalize_erasing_regions(
-                tcx,
-                ty::TypingEnv::fully_monomorphized(),
-                ty::EarlyBinder::bind(mir.clone()),
-            );
-            let mir = tcx.arena.alloc(mir);
-            emit_promoted(ms, out, &name, idx, mir)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn emit_promoted<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    out: &mut impl JsonOutput,
-    parent: &str,
-    idx: mir::Promoted,
-    mir: &'tcx Body<'tcx>,
-) -> io::Result<()> {
-    let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
-    emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false)?;
     Ok(())
 }
 
