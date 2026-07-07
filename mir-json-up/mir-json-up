@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+set -e
+
+require_tool() {
+    local TOOL_EXEC="$1"
+    local TOOL_NAME="$2"
+    set +e
+    TOOL_PATH=$(which "${TOOL_EXEC}")
+    set -e
+    if [[ "$?" != 0 ]]; then
+        echo "This script requires ${TOOL_NAME}"
+        exit 1
+    fi
+}
+
+require_rust_component() {
+    local COMPONENT_NAME="$1"
+    if [[ $(rustup component list --toolchain "${MIR_JSON_RUST_TOOLCHAIN}" --installed | grep -c "^${COMPONENT_NAME}") == 0 ]]; then
+        echo "Building mir-json requires the Rust component ${COMPONENT_NAME}; install it with"
+        echo "  rustup component add --toolchain \"${MIR_JSON_RUST_TOOLCHAIN}\" ${COMPONENT_NAME}"
+        exit 1
+    fi
+}
+
+# Need 'git' to download 'mir-json', 'cc' to run the compiler,
+# and 'rustup' to handle Rust dependencies.
+check_tools() {
+    require_tool cc "a C compiler"
+    require_tool git "Git"
+    require_tool rustup "Rustup"
+}
+
+check_rust_toolchain() {
+    if [[ $(rustup toolchain list | grep "${MIR_JSON_RUST_TOOLCHAIN}") == "" ]]; then
+        echo "Building mir-json requires the Rust toolchain ${MIR_JSON_RUST_TOOLCHAIN}; install it with"
+        echo "  rustup toolchain install ${MIR_JSON_RUST_TOOLCHAIN}"
+        exit 1
+    fi
+}
+
+get_toolchain_dir() {
+    local TOOLCHAIN="${1:-${MIR_JSON_RUST_TOOLCHAIN}}"
+    local TARGET="${2:-${TARGET_TRIPLET}}"
+    echo "${MIR_JSON_INSTALL_DIR}/toolchains/${TOOLCHAIN}/${TARGET}"
+}
+
+get_mir_json_src() {
+    local MIR_JSON_SRC_DIR="$(get_toolchain_dir)/src"
+    mkdir -p "${MIR_JSON_SRC_DIR}"
+    cd "${MIR_JSON_SRC_DIR}"
+    if ! [[ -d mir-json ]]; then
+        git clone https://github.com/GaloisInc/mir-json.git
+    fi
+}
+
+build_mir_json() {
+    local MIR_JSON_SRC_DIR="$(get_toolchain_dir)/src"
+    local MIR_JSON_BIN_DIR="$(get_toolchain_dir)/bin"
+    local MIR_JSON_RLIBS_DIR="$(get_toolchain_dir)/rlibs"
+    mkdir -p "${MIR_JSON_BIN_DIR}"
+    cd "${MIR_JSON_SRC_DIR}/mir-json"
+    cargo +"${MIR_JSON_RUST_TOOLCHAIN}" build -r --target-dir "${MIR_JSON_BIN_DIR}" --locked
+    PATH="${MIR_JSON_BIN_DIR}/release:$PATH"
+    echo $PATH
+    mir-json-translate-libs
+    if [[ $? == 0 ]]; then
+        if [[ -e "${MIR_JSON_RLIBS_DIR}" ]]; then
+            rm -rfv "${MIR_JSON_RLIBS_DIR}"
+        fi
+        cp -RL rlibs "${MIR_JSON_RLIBS_DIR}"
+    fi
+}
+
+check_all_prerequisites() {
+    check_tools
+
+    MIR_JSON_INSTALL_DIR=${MIR_JSON_INSTALL_DIR:-~/.mir-json-up}
+    MIR_JSON_RUST_TOOLCHAIN=${MIR_JSON_RUST_TOOLCHAIN:-nightly-2025-09-14}
+    TARGET_TRIPLET=${TARGET_TRIPLET:-$(cc -dumpmachine)}
+
+    check_rust_toolchain
+
+    require_rust_component rust-src
+    require_rust_component rustc-dev
+}
+
+build_env() {
+    local TOOLCHAIN_DIR=$(get_toolchain_dir)
+    cat <<EOF >> "${MIR_JSON_INSTALL_DIR}/env"
+#!/bin/sh
+case ":\${PATH}:" in
+   *:"${TOOLCHAIN_DIR}/bin/release":*)
+       ;;
+   *)
+       export PATH="${TOOLCHAIN_DIR}/bin/release:$PATH"
+esac
+export CRUX_RUST_LIBRARY_PATH="${TOOLCHAIN_DIR}/rlibs"
+EOF
+}
+
+COMMAND="$1"
+shift 1
+
+case "$COMMAND" in
+    check)
+        check_all_prerequisites
+        echo "All prerequisites in place"
+        echo "  Rust toolchain: $MIR_JSON_RUST_TOOLCHAIN"
+        echo "  Installing into: $MIR_JSON_INSTALL_DIR"
+        echo "  Target: $TARGET_TRIPLET"
+        ;;
+    build)
+        check_all_prerequisites
+        get_mir_json_src
+        build_mir_json
+        build_env
+        echo "Successfully built mir-json"
+        echo "To configure the current shell, run . ${MIR_JSON_INSTALL_DIR}/env"
+        ;;
+    run)
+        check_all_prerequisites
+        if [[ ! -e "${MIR_JSON_INSTALL_DIR}/env" ]]; then
+            echo "Cannot run before building: ${MIR_JSON_INSTALL_DIR}/env does not exist"
+            exit 1
+        fi
+        . "${MIR_JSON_INSTALL_DIR}/env"
+        $@
+        ;;
+    *)
+        echo "Invalid command: ${COMMAND}"
+        exit 1
+        ;;
+esac
+
