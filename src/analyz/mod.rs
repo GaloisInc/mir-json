@@ -945,23 +945,11 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
     // let mir = tcx.optimized_mir(def_id);
     let mir = tcx.mir_for_ctfe(def_id);
     emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
-
-    Ok(())
-}
-
-/// Add a new static declaration to `out.statics`.
-fn emit_static_decl<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    out: &mut impl JsonOutput,
-    name: &str,
-    ty: ty::Ty<'tcx>,
-    mutable: bool,
-) -> io::Result<()> {
+    // Add a new static declaration to `out.statics`.
     let j = json!({
         "name": name,
-        "ty": ty.to_json(ms),
-        "mutable": mutable,
+        "ty": mir.return_ty().to_json(ms),
+        "mutable": tcx.is_mutable_static(def_id),
         "kind": "body",
     });
     out.emit(EntryKind::Static, j)?;
