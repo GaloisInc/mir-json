@@ -625,6 +625,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 json!({"kind": "Alias"})
             }
             &ty::TyKind::Pat(ty, _) => {
+                // Don't serialize the pattern, since it's not used in crucible-mir.  All values of
+                // the pattern type are also values of the underlying type, and crucible-mir
+                // doesn't currently check whether values match the pattern or rely on them doing
+                // so in any way.
                 json!({"kind": "Pat", "ty": ty.to_json(mir)})
             },
             &ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
@@ -1841,7 +1845,7 @@ impl<'tcx> ToJson<'tcx> for AdtInst<'tcx> {
             } else {
                 self.adt.variants()
                         .iter()
-                        .map(|v| render_variant(mir, &self, v, "0".into()))
+                        .map(|v| render_variant(mir, &self, v, None))
                         .collect::<Vec<serde_json::Value>>()
                         .into()
             };
@@ -1865,7 +1869,7 @@ fn render_enum_variants<'tcx>(
     let mut variants = Vec::with_capacity(adt.adt.variants().len());
     for (idx, d_value) in adt.adt.discriminants(mir.tcx) {
         let v = adt.adt.variant(idx);
-        let rendered = render_variant(mir, adt, v, d_value.to_string());
+        let rendered = render_variant(mir, adt, v, Some(d_value));
         variants.push(rendered);
     }
 
@@ -1876,18 +1880,23 @@ fn render_variant<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     adt: &AdtInst<'tcx>,
     v: &ty::VariantDef,
-    discr: String
+    discr: Option<ty::util::Discr<'tcx>>,
 ) -> serde_json::Value {
     let tcx = mir.tcx;
     let inhabited = v.inhabited_predicate(tcx, adt.adt)
                      .instantiate(tcx, adt.args)
                      .apply_ignore_module(tcx, ty::TypingEnv::fully_monomorphized());
+    // Convert the discriminant value (an integer) to a string for precise representation in JSON.
+    let discr_value = match discr {
+        Some(d) => d.to_string(),
+        None => "0".into(),
+    };
 
     json!({
         "name": v.def_id.to_json(mir),
         "fields": v.fields.tojson(mir, adt.args),
         "ctor_kind": v.ctor_kind().to_json(mir),
-        "discr_value": discr,
+        "discr_value": discr_value,
         "inhabited": inhabited,
     })
 }
