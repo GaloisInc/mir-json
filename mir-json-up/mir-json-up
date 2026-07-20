@@ -244,7 +244,8 @@ case "$COMMAND" in
         create_installation_dir
         build_env        
         echo "Successfully initialized mir-json-up"
-        echo "To configure the current shell, run . ${MIR_JSON_INSTALL_DIR}/env"
+	    echo "To configure a shell, run or insert the following into your initialization script:"
+        echo "  . ${MIR_JSON_INSTALL_DIR}/env"
         ;;
     install)
         check_all_prerequisites
@@ -265,6 +266,7 @@ case "$COMMAND" in
         find */*/* -maxdepth 0 -type d
         ;;
     remove)
+        check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
             echo "${MIR_JSON_INSTALL_DIR} does not exist"
             exit 1
