@@ -64,12 +64,12 @@ pub use validations::{next_code_point, utf8_char_width};
 #[cold]
 #[track_caller]
 #[rustc_allow_const_fn_unstable(const_eval_select)]
-#[cfg(not(feature = "panic_immediate_abort"))]
+#[cfg(not(panic = "immediate-abort"))]
 const fn slice_error_fail(s: &str, begin: usize, end: usize) -> ! {
     crate::intrinsics::const_eval_select((s, begin, end), slice_error_fail_ct, slice_error_fail_rt)
 }
 
-#[cfg(feature = "panic_immediate_abort")]
+#[cfg(panic = "immediate-abort")]
 const fn slice_error_fail(s: &str, begin: usize, end: usize) -> ! {
     slice_error_fail_ct(s, begin, end)
 }
@@ -81,38 +81,50 @@ const fn slice_error_fail_ct(_: &str, _: usize, _: usize) -> ! {
 
 #[track_caller]
 fn slice_error_fail_rt(s: &str, begin: usize, end: usize) -> ! {
-    const MAX_DISPLAY_LENGTH: usize = 256;
-    let trunc_len = s.floor_char_boundary(MAX_DISPLAY_LENGTH);
-    let s_trunc = &s[..trunc_len];
-    let ellipsis = if trunc_len < s.len() { "[...]" } else { "" };
+    let len = s.len();
 
-    // 1. out of bounds
-    if begin > s.len() || end > s.len() {
-        let oob_index = if begin > s.len() { begin } else { end };
-        panic!("byte index {oob_index} is out of bounds of `{s_trunc}`{ellipsis}");
+    // 1. begin is OOB.
+    if begin > len {
+        panic!("start byte index {begin} is out of bounds for string of length {len}");
     }
 
-    // 2. begin <= end
-    assert!(
-        begin <= end,
-        "begin <= end ({} <= {}) when slicing `{}`{}",
-        begin,
-        end,
-        s_trunc,
-        ellipsis
-    );
+    // 2. end is OOB.
+    if end > len {
+        panic!("end byte index {end} is out of bounds for string of length {len}");
+    }
 
-    // 3. character boundary
-    let index = if !s.is_char_boundary(begin) { begin } else { end };
-    // find the character
-    let char_start = s.floor_char_boundary(index);
-    // `char_start` must be less than len and a char boundary
-    let ch = s[char_start..].chars().next().unwrap();
-    let char_range = char_start..char_start + ch.len_utf8();
-    panic!(
-        "byte index {} is not a char boundary; it is inside {:?} (bytes {:?}) of `{}`{}",
-        index, ch, char_range, s_trunc, ellipsis
-    );
+    // 3. range is backwards.
+    if begin > end {
+        panic!("byte range starts at {begin} but ends at {end}");
+    }
+
+    // 4. begin is inside a character.
+    if !s.is_char_boundary(begin) {
+        let floor = s.floor_char_boundary(begin);
+        let ceil = s.ceil_char_boundary(begin);
+        let range = floor..ceil;
+        let ch = s[floor..ceil].chars().next().unwrap();
+        panic!(
+            "start byte index {begin} is not a char boundary; it is inside {ch:?} (bytes {range:?} of string)"
+        )
+    }
+
+    // 5. end is inside a character.
+    if !s.is_char_boundary(end) {
+        let floor = s.floor_char_boundary(end);
+        let ceil = s.ceil_char_boundary(end);
+        let range = floor..ceil;
+        let ch = s[floor..ceil].chars().next().unwrap();
+        panic!(
+            "end byte index {end} is not a char boundary; it is inside {ch:?} (bytes {range:?} of string)"
+        )
+    }
+
+    // 6. end is OOB and range is inclusive (end == len).
+    // This test cannot be combined with 2. above because for cases like
+    // `"abcαβγ"[4..9]` the error is that 4 is inside 'α', not that 9 is OOB.
+    debug_assert_eq!(end, len);
+    panic!("end byte index {end} is out of bounds for string of length {len}");
 }
 
 impl str {
@@ -404,8 +416,8 @@ impl str {
     /// assert_eq!(closest, 10);
     /// assert_eq!(&s[..closest], "❤️🧡");
     /// ```
-    #[stable(feature = "round_char_boundary", since = "CURRENT_RUSTC_VERSION")]
-    #[rustc_const_stable(feature = "round_char_boundary", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "round_char_boundary", since = "1.91.0")]
+    #[rustc_const_stable(feature = "round_char_boundary", since = "1.91.0")]
     #[inline]
     pub const fn floor_char_boundary(&self, index: usize) -> usize {
         if index >= self.len() {
@@ -447,8 +459,8 @@ impl str {
     /// assert_eq!(closest, 14);
     /// assert_eq!(&s[..closest], "❤️🧡💛");
     /// ```
-    #[stable(feature = "round_char_boundary", since = "CURRENT_RUSTC_VERSION")]
-    #[rustc_const_stable(feature = "round_char_boundary", since = "CURRENT_RUSTC_VERSION")]
+    #[stable(feature = "round_char_boundary", since = "1.91.0")]
+    #[rustc_const_stable(feature = "round_char_boundary", since = "1.91.0")]
     #[inline]
     pub const fn ceil_char_boundary(&self, index: usize) -> usize {
         if index >= self.len() {
@@ -1251,6 +1263,8 @@ impl str {
     /// ending will return the same lines as an otherwise identical string
     /// without a final line ending.
     ///
+    /// An empty string returns an empty iterator.
+    ///
     /// # Examples
     ///
     /// Basic usage:
@@ -1280,6 +1294,15 @@ impl str {
     /// assert_eq!(Some("baz"), lines.next());
     ///
     /// assert_eq!(None, lines.next());
+    /// ```
+    ///
+    /// An empty string returns an empty iterator:
+    ///
+    /// ```
+    /// let text = "";
+    /// let mut lines = text.lines();
+    ///
+    /// assert_eq!(lines.next(), None);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     #[inline]
@@ -1953,6 +1976,7 @@ impl str {
     ///
     /// ```
     /// assert_eq!("cfg".rsplit_once('='), None);
+    /// assert_eq!("cfg=".rsplit_once('='), Some(("cfg", "")));
     /// assert_eq!("cfg=foo".rsplit_once('='), Some(("cfg", "foo")));
     /// assert_eq!("cfg=foo=bar".rsplit_once('='), Some(("cfg=foo", "bar")));
     /// ```
@@ -2447,6 +2471,42 @@ impl str {
         suffix.strip_suffix_of(self)
     }
 
+    /// Returns a string slice with the prefix and suffix removed.
+    ///
+    /// If the string starts with the pattern `prefix` and ends with the pattern `suffix`, returns
+    /// the substring after the prefix and before the suffix, wrapped in `Some`.
+    /// Unlike [`trim_start_matches`] and [`trim_end_matches`], this method removes both the prefix
+    /// and suffix exactly once.
+    ///
+    /// If the string does not start with `prefix` or does not end with `suffix`, returns `None`.
+    ///
+    /// Each [pattern] can be a `&str`, [`char`], a slice of [`char`]s, or a
+    /// function or closure that determines if a character matches.
+    ///
+    /// [`char`]: prim@char
+    /// [pattern]: self::pattern
+    /// [`trim_start_matches`]: Self::trim_start_matches
+    /// [`trim_end_matches`]: Self::trim_end_matches
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(strip_circumfix)]
+    ///
+    /// assert_eq!("bar:hello:foo".strip_circumfix("bar:", ":foo"), Some("hello"));
+    /// assert_eq!("bar:foo".strip_circumfix("foo", "foo"), None);
+    /// assert_eq!("foo:bar;".strip_circumfix("foo:", ';'), Some("bar"));
+    /// ```
+    #[must_use = "this returns the remaining substring as a new slice, \
+                  without modifying the original"]
+    #[unstable(feature = "strip_circumfix", issue = "147946")]
+    pub fn strip_circumfix<P: Pattern, S: Pattern>(&self, prefix: P, suffix: S) -> Option<&str>
+    where
+        for<'a> S::Searcher<'a>: ReverseSearcher<'a>,
+    {
+        self.strip_prefix(prefix)?.strip_suffix(suffix)
+    }
+
     /// Returns a string slice with the optional prefix removed.
     ///
     /// If the string starts with the pattern `prefix`, returns the substring after the prefix.
@@ -2703,6 +2763,8 @@ impl str {
     }
 
     /// Checks if all characters in this string are within the ASCII range.
+    ///
+    /// An empty string returns `true`.
     ///
     /// # Examples
     ///

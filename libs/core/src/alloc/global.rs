@@ -19,7 +19,7 @@ use crate::{cmp, ptr};
 ///
 /// # Example
 ///
-/// ```
+/// ```standalone_crate
 /// use std::alloc::{GlobalAlloc, Layout};
 /// use std::cell::UnsafeCell;
 /// use std::ptr::null_mut;
@@ -57,7 +57,7 @@ use crate::{cmp, ptr};
 ///         let mut allocated = 0;
 ///         if self
 ///             .remaining
-///             .fetch_update(Relaxed, Relaxed, |mut remaining| {
+///             .try_update(Relaxed, Relaxed, |mut remaining| {
 ///                 if size > remaining {
 ///                     return None;
 ///                 }
@@ -115,6 +115,31 @@ use crate::{cmp, ptr};
 ///   Whether allocations happen or not is not part of the program behavior, even if it
 ///   could be detected via an allocator that tracks allocations by printing or otherwise
 ///   having side effects.
+///
+/// # Re-entrance
+///
+/// When implementing a global allocator, one has to be careful not to create an infinitely recursive
+/// implementation by accident, as many constructs in the Rust standard library may allocate in
+/// their implementation. For example, on some platforms, [`std::sync::Mutex`] may allocate, so using
+/// it is highly problematic in a global allocator.
+///
+/// For this reason, one should generally stick to library features available through
+/// [`core`], and avoid using [`std`] in a global allocator. A few features from [`std`] are
+/// guaranteed to not use `#[global_allocator]` to allocate:
+///
+///  - [`std::thread_local`],
+///  - [`std::thread::current`],
+///  - [`std::thread::park`] and [`std::thread::Thread`]'s [`unpark`] method and
+/// [`Clone`] implementation.
+///
+/// [`std`]: ../../std/index.html
+/// [`std::sync::Mutex`]: ../../std/sync/struct.Mutex.html
+/// [`std::thread_local`]: ../../std/macro.thread_local.html
+/// [`std::thread::current`]: ../../std/thread/fn.current.html
+/// [`std::thread::park`]: ../../std/thread/fn.park.html
+/// [`std::thread::Thread`]: ../../std/thread/struct.Thread.html
+/// [`unpark`]: ../../std/thread/struct.Thread.html#method.unpark
+
 #[stable(feature = "global_alloc", since = "1.28.0")]
 pub unsafe trait GlobalAlloc {
     /// Allocates memory as described by the given `layout`.
@@ -124,7 +149,7 @@ pub unsafe trait GlobalAlloc {
     ///
     /// # Safety
     ///
-    /// `layout` must have non-zero size. Attempting to allocate for a zero-sized `layout` may
+    /// `layout` must have non-zero size. Attempting to allocate for a zero-sized `layout` will
     /// result in undefined behavior.
     ///
     /// (Extension subtraits might provide more specific bounds on
@@ -163,7 +188,7 @@ pub unsafe trait GlobalAlloc {
     /// * `layout` is the same layout that was used to allocate that block of
     ///   memory.
     ///
-    /// Otherwise undefined behavior can result.
+    /// Otherwise the behavior is undefined.
     #[stable(feature = "global_alloc", since = "1.28.0")]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout);
 
@@ -173,7 +198,7 @@ pub unsafe trait GlobalAlloc {
     /// # Safety
     ///
     /// The caller has to ensure that `layout` has non-zero size. Like `alloc`
-    /// zero sized `layout` can result in undefined behavior.
+    /// zero sized `layout` will result in undefined behavior.
     /// However the allocated block of memory is guaranteed to be initialized.
     ///
     /// # Errors
@@ -234,7 +259,7 @@ pub unsafe trait GlobalAlloc {
     ///   does not overflow `isize` (i.e., the rounded value must be less than or
     ///   equal to `isize::MAX`).
     ///
-    /// If these are not followed, undefined behavior can result.
+    /// If these are not followed, the behavior is undefined.
     ///
     /// (Extension subtraits might provide more specific bounds on
     /// behavior, e.g., guarantee a sentinel address or a null pointer
@@ -259,9 +284,10 @@ pub unsafe trait GlobalAlloc {
     /// [`handle_alloc_error`]: ../../alloc/alloc/fn.handle_alloc_error.html
     #[stable(feature = "global_alloc", since = "1.28.0")]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        // SAFETY: the caller must ensure that the `new_size` does not overflow.
-        // `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
-        let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, layout.align()) };
+        let alignment = layout.alignment();
+        // SAFETY: the caller must ensure that the `new_size` does not overflow
+        // when rounded up to the next multiple of `alignment`.
+        let new_layout = unsafe { Layout::from_size_alignment_unchecked(new_size, alignment) };
         // SAFETY: the caller must ensure that `new_layout` is greater than zero.
         let new_ptr = unsafe { self.alloc(new_layout) };
         if !new_ptr.is_null() {

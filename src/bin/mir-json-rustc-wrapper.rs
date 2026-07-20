@@ -7,7 +7,6 @@ extern crate rustc_codegen_ssa;
 extern crate rustc_driver;
 extern crate rustc_interface;
 extern crate rustc_metadata;
-extern crate getopts;
 extern crate rustc_ast;
 extern crate rustc_errors;
 extern crate rustc_middle;

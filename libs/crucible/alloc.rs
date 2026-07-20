@@ -24,6 +24,9 @@ pub fn reallocate<T>(ptr: *mut T, new_len: usize) -> *mut T {
 pub struct TypedAllocator<T>(pub PhantomData<T>);
 
 impl<T> TypedAllocator<T> {
+    /// Workaround for const-stability issues when using `fn new` from `RawVec` const methods.
+    pub const NEW: Self = Self(PhantomData);
+
     pub const fn new() -> TypedAllocator<T> {
         TypedAllocator(PhantomData)
     }

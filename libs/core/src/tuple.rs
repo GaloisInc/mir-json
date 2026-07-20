@@ -1,7 +1,8 @@
 // See core/src/primitive_docs.rs for documentation.
 
+use crate::cell::CloneFromCell;
 use crate::cmp::Ordering::{self, *};
-use crate::marker::{ConstParamTy_, StructuralPartialEq, UnsizedConstParamTy};
+use crate::marker::{ConstParamTy_, StructuralPartialEq};
 use crate::ops::ControlFlow::{self, Break, Continue};
 
 // Recursive macro for implementing n-ary tuple functions and operations
@@ -47,14 +48,8 @@ macro_rules! tuple_impls {
         maybe_tuple_doc! {
             $($T)+ @
             #[unstable(feature = "adt_const_params", issue = "95174")]
+            #[unstable_feature_bound(unsized_const_params)]
             impl<$($T: ConstParamTy_),+> ConstParamTy_ for ($($T,)+)
-            {}
-        }
-
-        maybe_tuple_doc! {
-            $($T)+ @
-            #[unstable(feature = "unsized_const_params", issue = "95174")]
-            impl<$($T: UnsizedConstParamTy),+> UnsizedConstParamTy for ($($T,)+)
             {}
         }
 
@@ -160,6 +155,15 @@ macro_rules! tuple_impls {
                     [$($T,)+]
                 }
             }
+        }
+
+        maybe_tuple_doc! {
+            $($T)+ @
+            // SAFETY: tuples introduce no additional indirection, so they can be copied whenever T
+            // can.
+            #[unstable(feature = "cell_get_cloned", issue = "145329")]
+            unsafe impl<$($T: CloneFromCell),+> CloneFromCell for ($($T,)+)
+            {}
         }
     }
 }

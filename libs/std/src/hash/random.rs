@@ -7,7 +7,6 @@
 //!
 //! [`collections`]: crate::collections
 
-#[allow(deprecated)]
 use super::{BuildHasher, Hasher, SipHasher13};
 use crate::fmt;
 
@@ -60,7 +59,6 @@ impl RandomState {
 impl BuildHasher for RandomState {
     type Hasher = DefaultHasher;
     #[inline]
-    #[allow(deprecated)]
     fn build_hasher(&self) -> DefaultHasher {
         DefaultHasher(SipHasher13::new_with_keys(self.k0, self.k1))
     }
@@ -70,7 +68,6 @@ impl BuildHasher for RandomState {
 ///
 /// The internal algorithm is not specified, and so it and its hashes should
 /// not be relied upon over releases.
-#[allow(deprecated)]
 #[derive(Clone, Debug)]
 #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
 pub struct DefaultHasher(SipHasher13);
@@ -83,15 +80,16 @@ impl DefaultHasher {
     /// instances created through `new` or `default`.
     #[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
     #[inline]
-    #[allow(deprecated)]
+    #[rustc_const_unstable(feature = "const_default", issue = "143894")]
     #[must_use]
-    pub fn new() -> DefaultHasher {
+    pub const fn new() -> DefaultHasher {
         DefaultHasher(SipHasher13::new_with_keys(0, 0))
     }
 }
 
 #[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
-impl Default for DefaultHasher {
+#[rustc_const_unstable(feature = "const_default", issue = "143894")]
+impl const Default for DefaultHasher {
     /// Creates a new `DefaultHasher` using [`new`].
     /// See its documentation for more.
     ///

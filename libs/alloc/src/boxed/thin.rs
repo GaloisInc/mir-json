@@ -245,7 +245,7 @@ impl<H> WithHeader<H> {
                 // Some paranoia checking, mostly so that the ThinBox tests are
                 // more able to catch issues.
                 debug_assert!(value_offset == 0 && T::IS_ZST && H::IS_ZST);
-                layout.dangling()
+                layout.dangling_ptr()
             } else {
                 let ptr = alloc::alloc(layout);
                 if ptr.is_null() {
@@ -282,7 +282,7 @@ impl<H> WithHeader<H> {
                 // Some paranoia checking, mostly so that the ThinBox tests are
                 // more able to catch issues.
                 debug_assert!(value_offset == 0 && size_of::<T>() == 0 && size_of::<H>() == 0);
-                layout.dangling()
+                layout.dangling_ptr()
             } else {
                 let ptr = alloc::alloc(layout);
                 if ptr.is_null() {
@@ -428,5 +428,14 @@ impl<H> WithHeader<H> {
 impl<T: ?Sized + Error> Error for ThinBox<T> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.deref().source()
+    }
+}
+
+#[cfg(not(no_global_oom_handling))]
+#[unstable(feature = "thin_box", issue = "92791")]
+impl<T> From<T> for ThinBox<T> {
+    #[inline(always)]
+    fn from(value: T) -> Self {
+        Self::new(value)
     }
 }

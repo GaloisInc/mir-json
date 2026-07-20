@@ -1,3 +1,4 @@
+use crate::alloc::{Allocator, Global};
 use crate::borrow::Borrow;
 use crate::collections::TryReserveError;
 use crate::hash::Hash;
@@ -10,8 +11,8 @@ use crate::vec;
 /// A simple Vec-based key/value map.  Presents the same API as `hashbrown::HashMap`, so it can be
 /// subbed in for `base::HashMap` in the implementation of `std::collections::HashMap`.
 #[derive(Clone)]
-pub struct HashMap<K, V, S> {
-    items: Vec<(K, V)>,
+pub struct HashMap<K, V, S, A: Allocator = Global> {
+    items: Vec<(K, V), A>,
     hasher: S,
     _marker: PhantomData<S>,
 }
@@ -28,6 +29,24 @@ impl<K, V, S> HashMap<K, V, S> {
     pub fn with_capacity_and_hasher(cap: usize, hash_builder: S) -> HashMap<K, V, S> {
         HashMap {
             items: Vec::with_capacity(cap),
+            hasher: hash_builder,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<K, V, S, A: Allocator> HashMap<K, V, S, A> {
+    pub const fn with_hasher_in(hash_builder: S, allocator: A) -> HashMap<K, V, S, A> {
+        HashMap {
+            items: Vec::new_in(allocator),
+            hasher: hash_builder,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn with_capacity_and_hasher_in(cap: usize, hash_builder: S, allocator: A) -> HashMap<K, V, S, A> {
+        HashMap {
+            items: Vec::with_capacity_in(cap, allocator),
             hasher: hash_builder,
             _marker: PhantomData,
         }
@@ -53,7 +72,7 @@ impl<K, V, S> HashMap<K, V, S> {
         self.items.is_empty()
     }
 
-    pub fn drain(&mut self) -> Drain<'_, K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V, A> {
         Drain { it: self.items.drain(..) }
     }
 
@@ -77,7 +96,7 @@ impl<K, V, S> HashMap<K, V, S> {
         }
     }
 
-    pub fn extract_if<F>(&mut self, f: F) -> ExtractIf<'_, K, V, F>
+    pub fn extract_if<F>(&mut self, f: F) -> ExtractIf<'_, K, V, F, A>
     where
         F: FnMut(&K, &mut V) -> bool,
     {
@@ -87,7 +106,7 @@ impl<K, V, S> HashMap<K, V, S> {
     }
 }
 
-impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
+impl<K: Eq + Hash, V, S, A: Allocator> HashMap<K, V, S, A> {
     pub fn reserve(&mut self, additional: usize) {
         self.items.reserve(additional)
     }
@@ -104,7 +123,7 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         self.items.shrink_to(min_capacity);
     }
 
-    pub fn rustc_entry(&mut self, k: K) -> RustcEntry<'_, K, V> {
+    pub fn rustc_entry(&mut self, k: K) -> RustcEntry<'_, K, V, A> {
         match self.items.iter().position(|&(ref k2, _)| k2 == &k) {
             Some(idx) => RustcEntry::Occupied(RustcOccupiedEntry {
                 items: &mut self.items,
@@ -154,7 +173,7 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
             .map(|&mut (_, ref mut v)| v)
     }
 
-    pub fn get_many_mut<Q: ?Sized, const N: usize>(
+    pub fn get_disjoint_mut<Q: ?Sized, const N: usize>(
         &mut self,
         ks: [&Q; N],
     ) -> [Option<&'_ mut V>; N]
@@ -171,13 +190,13 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
                 .find(|&&mut (ref k, _)| (*k).borrow() == ks[i])
                 .map(|&mut (_, ref mut opt_v)| {
                     opt_v.take()
-                        .expect("get_many_mut should not have duplicates")
+                        .expect("get_disjoint_mut should not have duplicates")
                 });
         }
         results
     }
 
-    pub unsafe fn get_many_unchecked_mut<Q: ?Sized, const N: usize>(
+    pub unsafe fn get_disjoint_unchecked_mut<Q: ?Sized, const N: usize>(
         &mut self,
         ks: [&Q; N],
     ) -> [Option<&'_ mut V>; N]
@@ -185,10 +204,10 @@ impl<K: Eq + Hash, V, S> HashMap<K, V, S> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.get_many_mut(ks)
+        self.get_disjoint_mut(ks)
     }
 
-    fn get_many_indices<Q: ?Sized, const N: usize>(
+    fn get_disjoint_indices<Q: ?Sized, const N: usize>(
         &self,
         ks: [&Q; N],
     ) -> [Range<usize>; N]
@@ -309,23 +328,23 @@ impl<'a, K, V> Default for IterMut<'a, K, V> {
 }
 
 
-impl<K, V, S> IntoIterator for HashMap<K, V, S> {
+impl<K, V, S, A: Allocator> IntoIterator for HashMap<K, V, S, A> {
     type Item = (K, V);
-    type IntoIter = IntoIter<K, V>;
+    type IntoIter = IntoIter<K, V, A>;
 
     #[inline]
-    fn into_iter(self) -> IntoIter<K, V> {
+    fn into_iter(self) -> IntoIter<K, V, A> {
         IntoIter {
             it: self.items.into_iter(),
         }
     }
 }
 
-pub struct IntoIter<K, V> {
-    it: vec::IntoIter<(K, V)>,
+pub struct IntoIter<K, V, A: Allocator = Global> {
+    it: vec::IntoIter<(K, V), A>,
 }
 
-impl<K, V> IntoIter<K, V> {
+impl<K, V, A: Allocator> IntoIter<K, V, A> {
     pub fn rustc_iter(&self) -> Iter<'_, K, V> {
         Iter {
             it: self.it.as_slice().iter(),
@@ -333,7 +352,7 @@ impl<K, V> IntoIter<K, V> {
     }
 }
 
-impl<K, V> Iterator for IntoIter<K, V> {
+impl<K, V, A: Allocator> Iterator for IntoIter<K, V, A> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -345,24 +364,24 @@ impl<K, V> Iterator for IntoIter<K, V> {
     }
 }
 
-impl<K, V> ExactSizeIterator for IntoIter<K, V> {
+impl<K, V, A: Allocator> ExactSizeIterator for IntoIter<K, V, A> {
     fn len(&self) -> usize {
         self.it.len()
     }
 }
 
-impl<K, V> Default for IntoIter<K, V> {
+impl<K, V, A: Allocator + Default> Default for IntoIter<K, V, A> {
     fn default() -> Self {
         IntoIter { it: Default::default() }
     }
 }
 
 
-pub struct Drain<'a, K, V> {
-    it: vec::Drain<'a, (K, V)>,
+pub struct Drain<'a, K, V, A: Allocator = Global> {
+    it: vec::Drain<'a, (K, V), A>,
 }
 
-impl<'a, K, V> Drain<'a, K, V> {
+impl<'a, K, V, A: Allocator> Drain<'a, K, V, A> {
     pub fn rustc_iter(&self) -> Iter<'_, K, V> {
         Iter {
             it: self.it.as_slice().iter(),
@@ -370,7 +389,7 @@ impl<'a, K, V> Drain<'a, K, V> {
     }
 }
 
-impl<'a, K, V> Iterator for Drain<'a, K, V> {
+impl<'a, K, V, A: Allocator> Iterator for Drain<'a, K, V, A> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -382,15 +401,15 @@ impl<'a, K, V> Iterator for Drain<'a, K, V> {
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for Drain<'a, K, V> {
+impl<'a, K, V, A: Allocator> ExactSizeIterator for Drain<'a, K, V, A> {
     fn len(&self) -> usize {
         self.it.len()
     }
 }
 
 
-pub struct ExtractIf<'a, K, V, F> {
-    it: vec::ExtractIf<'a, (K, V), ExtractIfFnAdapter<F>>,
+pub struct ExtractIf<'a, K, V, F, A: Allocator = Global> {
+    it: vec::ExtractIf<'a, (K, V), ExtractIfFnAdapter<F>, A>,
 }
 
 // Our extract_if is passed a (&K, &mut V) -> bool closure, but Vec's extract_if
@@ -414,7 +433,7 @@ impl<'a, K, V, F: FnMut(&'a K, &'a mut V) -> bool> FnMut<(&'a mut (K, V),)> for 
 }
 
 
-impl<'a, K, V, F> Iterator for ExtractIf<'a, K, V, F>
+impl<'a, K, V, F, A: Allocator> Iterator for ExtractIf<'a, K, V, F, A>
 where
     F: FnMut(&K, &mut V) -> bool,
 {
@@ -430,7 +449,7 @@ where
 }
 
 
-impl<K, V, S> Extend<(K, V)> for HashMap<K, V, S>
+impl<K, V, S, A: Allocator> Extend<(K, V)> for HashMap<K, V, S, A>
 where
     K: Eq + Hash,
 {
@@ -441,7 +460,7 @@ where
     }
 }
 
-impl<'a, K, V, S> Extend<(&'a K, &'a V)> for HashMap<K, V, S>
+impl<'a, K, V, S, A: Allocator> Extend<(&'a K, &'a V)> for HashMap<K, V, S, A>
 where
     K: Eq + Hash + Copy,
     V: Copy,
@@ -453,23 +472,23 @@ where
 }
 
 
-pub enum RustcEntry<'a, K: 'a, V: 'a> {
-    Occupied(RustcOccupiedEntry<'a, K, V>),
-    Vacant(RustcVacantEntry<'a, K, V>),
+pub enum RustcEntry<'a, K: 'a, V: 'a, A: Allocator = Global> {
+    Occupied(RustcOccupiedEntry<'a, K, V, A>),
+    Vacant(RustcVacantEntry<'a, K, V, A>),
 }
 
-pub struct RustcOccupiedEntry<'a, K, V> {
-    items: &'a mut Vec<(K, V)>,
+pub struct RustcOccupiedEntry<'a, K, V, A: Allocator = Global> {
+    items: &'a mut Vec<(K, V), A>,
     idx: usize,
     k: Option<K>,
 }
 
-pub struct RustcVacantEntry<'a, K, V> {
-    items: &'a mut Vec<(K, V)>,
+pub struct RustcVacantEntry<'a, K, V, A: Allocator = Global> {
+    items: &'a mut Vec<(K, V), A>,
     k: K,
 }
 
-impl<'a, K, V> RustcOccupiedEntry<'a, K, V> {
+impl<'a, K, V, A: Allocator> RustcOccupiedEntry<'a, K, V, A> {
     pub fn key(&self) -> &K {
         &self.items[self.idx].0
     }
@@ -507,7 +526,7 @@ impl<'a, K, V> RustcOccupiedEntry<'a, K, V> {
     }
 }
 
-impl<'a, K, V> RustcVacantEntry<'a, K, V> {
+impl<'a, K, V, A: Allocator> RustcVacantEntry<'a, K, V, A> {
     pub fn key(&self) -> &K {
         &self.k
     }
@@ -521,7 +540,7 @@ impl<'a, K, V> RustcVacantEntry<'a, K, V> {
         &mut self.items.last_mut().unwrap().1
     }
 
-    pub fn insert_entry(self, v: V) -> RustcOccupiedEntry<'a, K, V> {
+    pub fn insert_entry(self, v: V) -> RustcOccupiedEntry<'a, K, V, A> {
         let idx = self.items.len();
         self.items.push((self.k, v));
         RustcOccupiedEntry {

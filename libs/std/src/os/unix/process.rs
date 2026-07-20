@@ -8,7 +8,8 @@ use crate::ffi::OsStr;
 use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use crate::path::Path;
 use crate::sealed::Sealed;
-use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
+use crate::sys::process::ChildPipe;
+use crate::sys::{AsInner, AsInnerMut, FromInner, IntoInner};
 use crate::{io, process, sys};
 
 cfg_select! {
@@ -80,6 +81,9 @@ pub trait CommandExt: Sealed {
     /// or acquiring a mutex are not guaranteed to work (due to
     /// other threads perhaps still running when the `fork` was run).
     ///
+    /// Note that the list of allocating functions includes [`Error::new`] and
+    /// [`Error::other`]. To signal a non-trivial error, prefer [`panic!`].
+    ///
     /// For further details refer to the [POSIX fork() specification]
     /// and the equivalent documentation for any targeted
     /// platform, especially the requirements around *async-signal-safety*.
@@ -102,6 +106,8 @@ pub trait CommandExt: Sealed {
     /// [POSIX fork() specification]:
     ///     https://pubs.opengroup.org/onlinepubs/9699919799/functions/fork.html
     /// [`std::env`]: mod@crate::env
+    /// [`Error::new`]: crate::io::Error::new
+    /// [`Error::other`]: crate::io::Error::other
     #[stable(feature = "process_pre_exec", since = "1.34.0")]
     unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command
     where
@@ -406,8 +412,10 @@ pub trait ChildExt: Sealed {
     /// use libc::SIGTERM;
     ///
     /// fn main() -> io::Result<()> {
+    ///     # if cfg!(not(all(target_vendor = "apple", not(target_os = "macos")))) {
     ///     let child = Command::new("cat").stdin(Stdio::piped()).spawn()?;
     ///     child.send_signal(SIGTERM)?;
+    ///     # }
     ///     Ok(())
     /// }
     /// ```
@@ -504,7 +512,7 @@ impl From<crate::process::ChildStdin> for OwnedFd {
     /// Takes ownership of a [`ChildStdin`](crate::process::ChildStdin)'s file descriptor.
     #[inline]
     fn from(child_stdin: crate::process::ChildStdin) -> OwnedFd {
-        child_stdin.into_inner().into_inner().into_inner()
+        child_stdin.into_inner().into_inner()
     }
 }
 
@@ -516,8 +524,7 @@ impl From<crate::process::ChildStdin> for OwnedFd {
 impl From<OwnedFd> for process::ChildStdin {
     #[inline]
     fn from(fd: OwnedFd) -> process::ChildStdin {
-        let fd = sys::fd::FileDesc::from_inner(fd);
-        let pipe = sys::pipe::AnonPipe::from_inner(fd);
+        let pipe = ChildPipe::from_inner(fd);
         process::ChildStdin::from_inner(pipe)
     }
 }
@@ -535,7 +542,7 @@ impl From<crate::process::ChildStdout> for OwnedFd {
     /// Takes ownership of a [`ChildStdout`](crate::process::ChildStdout)'s file descriptor.
     #[inline]
     fn from(child_stdout: crate::process::ChildStdout) -> OwnedFd {
-        child_stdout.into_inner().into_inner().into_inner()
+        child_stdout.into_inner().into_inner()
     }
 }
 
@@ -547,8 +554,7 @@ impl From<crate::process::ChildStdout> for OwnedFd {
 impl From<OwnedFd> for process::ChildStdout {
     #[inline]
     fn from(fd: OwnedFd) -> process::ChildStdout {
-        let fd = sys::fd::FileDesc::from_inner(fd);
-        let pipe = sys::pipe::AnonPipe::from_inner(fd);
+        let pipe = ChildPipe::from_inner(fd);
         process::ChildStdout::from_inner(pipe)
     }
 }
@@ -566,7 +572,7 @@ impl From<crate::process::ChildStderr> for OwnedFd {
     /// Takes ownership of a [`ChildStderr`](crate::process::ChildStderr)'s file descriptor.
     #[inline]
     fn from(child_stderr: crate::process::ChildStderr) -> OwnedFd {
-        child_stderr.into_inner().into_inner().into_inner()
+        child_stderr.into_inner().into_inner()
     }
 }
 
@@ -578,8 +584,7 @@ impl From<crate::process::ChildStderr> for OwnedFd {
 impl From<OwnedFd> for process::ChildStderr {
     #[inline]
     fn from(fd: OwnedFd) -> process::ChildStderr {
-        let fd = sys::fd::FileDesc::from_inner(fd);
-        let pipe = sys::pipe::AnonPipe::from_inner(fd);
+        let pipe = ChildPipe::from_inner(fd);
         process::ChildStderr::from_inner(pipe)
     }
 }
@@ -588,5 +593,5 @@ impl From<OwnedFd> for process::ChildStderr {
 #[must_use]
 #[stable(feature = "unix_ppid", since = "1.27.0")]
 pub fn parent_id() -> u32 {
-    crate::sys::os::getppid()
+    crate::sys::process::getppid()
 }

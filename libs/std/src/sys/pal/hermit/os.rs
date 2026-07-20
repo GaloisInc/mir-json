@@ -1,17 +1,8 @@
-use super::hermit_abi;
 use crate::ffi::{OsStr, OsString};
 use crate::marker::PhantomData;
 use crate::path::{self, PathBuf};
 use crate::sys::unsupported;
 use crate::{fmt, io};
-
-pub fn errno() -> i32 {
-    unsafe { hermit_abi::get_errno() }
-}
-
-pub fn error_string(errno: i32) -> String {
-    hermit_abi::error_string(errno).to_string()
-}
 
 pub fn getcwd() -> io::Result<PathBuf> {
     Ok(PathBuf::from("/"))
@@ -63,12 +54,4 @@ pub fn temp_dir() -> PathBuf {
 
 pub fn home_dir() -> Option<PathBuf> {
     None
-}
-
-pub fn exit(code: i32) -> ! {
-    unsafe { hermit_abi::exit(code) }
-}
-
-pub fn getpid() -> u32 {
-    unsafe { hermit_abi::getpid() as u32 }
 }

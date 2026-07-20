@@ -39,11 +39,11 @@ fn __rust_abort() {
 // - nothing (so this macro is a no-op)
 macro_rules! rtprintpanic {
     ($($t:tt)*) => {
-        #[cfg(not(feature = "panic_immediate_abort"))]
+        #[cfg(not(panic = "immediate-abort"))]
         if let Some(mut out) = crate::sys::stdio::panic_output() {
             let _ = crate::io::Write::write_fmt(&mut out, format_args!($($t)*));
         }
-        #[cfg(feature = "panic_immediate_abort")]
+        #[cfg(panic = "immediate-abort")]
         {
             let _ = format_args!($($t)*);
         }
@@ -109,14 +109,14 @@ fn handle_rt_panic<T>(e: Box<dyn Any + Send>) -> T {
 // `compiler/rustc_session/src/config/sigpipe.rs`.
 #[cfg_attr(test, allow(dead_code))]
 unsafe fn init(argc: isize, argv: *const *const u8, sigpipe: u8) {
+    // Remember the main thread ID to give it the correct name.
+    // SAFETY: this is the only time and place where we call this function.
+    unsafe { main_thread::set(thread::current_id()) };
+
     #[cfg_attr(target_os = "teeos", allow(unused_unsafe))]
     unsafe {
         sys::init(argc, argv, sigpipe)
     };
-
-    // Remember the main thread ID to give it the correct name.
-    // SAFETY: this is the only time and place where we call this function.
-    unsafe { main_thread::set(thread::current_id()) };
 }
 
 /// Clean up the thread-local runtime state. This *should* be run after all other
@@ -161,7 +161,7 @@ fn lang_start_internal(
     // mechanism itself.
     //
     // There are a couple of instances where unwinding can begin. First is inside of the
-    // `rt::init`, `rt::cleanup` and similar functions controlled by bstd. In those instances a
+    // `rt::init`, `rt::cleanup` and similar functions controlled by std. In those instances a
     // panic is a std implementation bug. A quite likely one too, as there isn't any way to
     // prevent std from accidentally introducing a panic to these functions. Another is from
     // user code from `main` or, more nefariously, as described in e.g. issue #86030.
@@ -187,7 +187,7 @@ fn lang_start_internal(
         cleanup();
         // Guard against multiple threads calling `libc::exit` concurrently.
         // See the documentation for `unique_thread_exit` for more information.
-        crate::sys::exit_guard::unique_thread_exit();
+        crate::sys::exit::unique_thread_exit();
 
         ret_code
     })

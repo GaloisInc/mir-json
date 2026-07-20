@@ -14,7 +14,7 @@
 #[cfg(test)]
 mod tests;
 
-use core::char::{MAX_LEN_UTF8, encode_utf8_raw};
+use core::char::encode_utf8_raw;
 use core::hash::{Hash, Hasher};
 pub use core::wtf8::{CodePoint, Wtf8};
 #[cfg(not(test))]
@@ -166,7 +166,7 @@ impl Wtf8Buf {
     /// This does **not** include the WTF-8 concatenation check or `is_known_utf8` check.
     /// Copied from String::push.
     unsafe fn push_code_point_unchecked(&mut self, code_point: CodePoint) {
-        let mut bytes = [0; MAX_LEN_UTF8];
+        let mut bytes = [0; char::MAX_LEN_UTF8];
         let bytes = encode_utf8_raw(code_point.to_u32(), &mut bytes);
         self.bytes.extend_from_slice(bytes)
     }
@@ -342,14 +342,18 @@ impl Wtf8Buf {
 
     /// Shortens a string to the specified length.
     ///
+    /// If `new_len` is greater than the string's current length, this has no
+    /// effect.
+    ///
     /// # Panics
     ///
-    /// Panics if `new_len` > current length,
-    /// or if `new_len` is not a code point boundary.
+    /// Panics if `new_len` does not lie on a code point boundary.
     #[inline]
     pub fn truncate(&mut self, new_len: usize) {
-        assert!(self.is_code_point_boundary(new_len));
-        self.bytes.truncate(new_len)
+        if new_len <= self.len() {
+            assert!(self.is_code_point_boundary(new_len));
+            self.bytes.truncate(new_len)
+        }
     }
 
     /// Consumes the WTF-8 string and tries to convert it to a vec of bytes.

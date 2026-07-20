@@ -7,9 +7,9 @@ use core::mem::{ManuallyDrop, MaybeUninit, SizedTypeProperties};
 use core::num::NonZero;
 #[cfg(not(no_global_oom_handling))]
 use core::ops::Deref;
+use core::panic::UnwindSafe;
 use core::ptr::{self, NonNull};
-use core::slice::{self};
-use core::{array, fmt};
+use core::{array, fmt, slice};
 
 #[cfg(not(no_global_oom_handling))]
 use super::AsVecIntoIter;
@@ -59,6 +59,11 @@ pub struct IntoIter<
     /// For non-ZSTs the pointer is treated as `NonNull<T>`
     pub(super) end: *const T,
 }
+
+// Manually mirroring what `Vec` has,
+// because otherwise we get `T: RefUnwindSafe` from `NonNull`.
+#[stable(feature = "catch_unwind", since = "1.9.0")]
+impl<T: UnwindSafe, A: Allocator + UnwindSafe> UnwindSafe for IntoIter<T, A> {}
 
 #[stable(feature = "vec_intoiter_debug", since = "1.13.0")]
 impl<T: fmt::Debug, A: Allocator> fmt::Debug for IntoIter<T, A> {
@@ -405,7 +410,12 @@ impl<T, A: Allocator> DoubleEndedIterator for IntoIter<T, A> {
             // SAFETY: same as for advance_by()
             self.end = unsafe { self.end.sub(step_size) };
         }
-        let to_drop = ptr::slice_from_raw_parts_mut(self.end as *mut T, step_size);
+        let to_drop = if T::IS_ZST {
+            // ZST may cause unalignment
+            ptr::slice_from_raw_parts_mut(ptr::NonNull::<T>::dangling().as_ptr(), step_size)
+        } else {
+            ptr::slice_from_raw_parts_mut(self.end as *mut T, step_size)
+        };
         // SAFETY: same as for advance_by()
         unsafe {
             ptr::drop_in_place(to_drop);

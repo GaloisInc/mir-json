@@ -86,10 +86,6 @@ unsafe extern "unadjusted" {
     fn llvm_i8x16_all_true(x: simd::i8x16) -> i32;
     #[link_name = "llvm.wasm.bitmask.v16i8"]
     fn llvm_bitmask_i8x16(a: simd::i8x16) -> i32;
-    #[link_name = "llvm.wasm.narrow.signed.v16i8.v8i16"]
-    fn llvm_narrow_i8x16_s(a: simd::i16x8, b: simd::i16x8) -> simd::i8x16;
-    #[link_name = "llvm.wasm.narrow.unsigned.v16i8.v8i16"]
-    fn llvm_narrow_i8x16_u(a: simd::i16x8, b: simd::i16x8) -> simd::i8x16;
     #[link_name = "llvm.wasm.avgr.unsigned.v16i8"]
     fn llvm_avgr_u_i8x16(a: simd::i8x16, b: simd::i8x16) -> simd::i8x16;
 
@@ -103,10 +99,6 @@ unsafe extern "unadjusted" {
     fn llvm_i16x8_all_true(x: simd::i16x8) -> i32;
     #[link_name = "llvm.wasm.bitmask.v8i16"]
     fn llvm_bitmask_i16x8(a: simd::i16x8) -> i32;
-    #[link_name = "llvm.wasm.narrow.signed.v8i16.v4i32"]
-    fn llvm_narrow_i16x8_s(a: simd::i32x4, b: simd::i32x4) -> simd::i16x8;
-    #[link_name = "llvm.wasm.narrow.unsigned.v8i16.v4i32"]
-    fn llvm_narrow_i16x8_u(a: simd::i32x4, b: simd::i32x4) -> simd::i16x8;
     #[link_name = "llvm.wasm.avgr.unsigned.v8i16"]
     fn llvm_avgr_u_i16x8(a: simd::i16x8, b: simd::i16x8) -> simd::i16x8;
 
@@ -141,16 +133,6 @@ unsafe extern "unadjusted" {
     fn llvm_f64x2_max(x: simd::f64x2, y: simd::f64x2) -> simd::f64x2;
 }
 
-#[repr(C, packed)]
-#[derive(Copy)]
-struct Unaligned<T>(T);
-
-impl<T: Copy> Clone for Unaligned<T> {
-    fn clone(&self) -> Unaligned<T> {
-        *self
-    }
-}
-
 /// Loads a `v128` vector from the given heap address.
 ///
 /// This intrinsic will emit a load with an alignment of 1. While this is
@@ -179,7 +161,7 @@ impl<T: Copy> Clone for Unaligned<T> {
 #[doc(alias("v128.load"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn v128_load(m: *const v128) -> v128 {
-    (*(m as *const Unaligned<v128>)).0
+    m.read_unaligned()
 }
 
 /// Load eight 8-bit integers and sign extend each one to a 16-bit lane
@@ -196,8 +178,8 @@ pub unsafe fn v128_load(m: *const v128) -> v128 {
 #[doc(alias("v128.load8x8_s"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i16x8_load_extend_i8x8(m: *const i8) -> v128 {
-    let m = *(m as *const Unaligned<simd::i8x8>);
-    simd_cast::<_, simd::i16x8>(m.0).v128()
+    let m = m.cast::<simd::i8x8>().read_unaligned();
+    simd_cast::<_, simd::i16x8>(m).v128()
 }
 
 /// Load eight 8-bit integers and zero extend each one to a 16-bit lane
@@ -214,8 +196,8 @@ pub unsafe fn i16x8_load_extend_i8x8(m: *const i8) -> v128 {
 #[doc(alias("v128.load8x8_u"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i16x8_load_extend_u8x8(m: *const u8) -> v128 {
-    let m = *(m as *const Unaligned<simd::u8x8>);
-    simd_cast::<_, simd::u16x8>(m.0).v128()
+    let m = m.cast::<simd::u8x8>().read_unaligned();
+    simd_cast::<_, simd::u16x8>(m).v128()
 }
 
 #[stable(feature = "wasm_simd", since = "1.54.0")]
@@ -235,8 +217,8 @@ pub use i16x8_load_extend_u8x8 as u16x8_load_extend_u8x8;
 #[doc(alias("v128.load16x4_s"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i32x4_load_extend_i16x4(m: *const i16) -> v128 {
-    let m = *(m as *const Unaligned<simd::i16x4>);
-    simd_cast::<_, simd::i32x4>(m.0).v128()
+    let m = m.cast::<simd::i16x4>().read_unaligned();
+    simd_cast::<_, simd::i32x4>(m).v128()
 }
 
 /// Load four 16-bit integers and zero extend each one to a 32-bit lane
@@ -253,8 +235,8 @@ pub unsafe fn i32x4_load_extend_i16x4(m: *const i16) -> v128 {
 #[doc(alias("v128.load16x4_u"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i32x4_load_extend_u16x4(m: *const u16) -> v128 {
-    let m = *(m as *const Unaligned<simd::u16x4>);
-    simd_cast::<_, simd::u32x4>(m.0).v128()
+    let m = m.cast::<simd::u16x4>().read_unaligned();
+    simd_cast::<_, simd::u32x4>(m).v128()
 }
 
 #[stable(feature = "wasm_simd", since = "1.54.0")]
@@ -274,8 +256,8 @@ pub use i32x4_load_extend_u16x4 as u32x4_load_extend_u16x4;
 #[doc(alias("v128.load32x2_s"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i64x2_load_extend_i32x2(m: *const i32) -> v128 {
-    let m = *(m as *const Unaligned<simd::i32x2>);
-    simd_cast::<_, simd::i64x2>(m.0).v128()
+    let m = m.cast::<simd::i32x2>().read_unaligned();
+    simd_cast::<_, simd::i64x2>(m).v128()
 }
 
 /// Load two 32-bit integers and zero extend each one to a 64-bit lane
@@ -292,8 +274,8 @@ pub unsafe fn i64x2_load_extend_i32x2(m: *const i32) -> v128 {
 #[doc(alias("v128.load32x2_u"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn i64x2_load_extend_u32x2(m: *const u32) -> v128 {
-    let m = *(m as *const Unaligned<simd::u32x2>);
-    simd_cast::<_, simd::u64x2>(m.0).v128()
+    let m = m.cast::<simd::u32x2>().read_unaligned();
+    simd_cast::<_, simd::u64x2>(m).v128()
 }
 
 #[stable(feature = "wasm_simd", since = "1.54.0")]
@@ -453,7 +435,7 @@ pub unsafe fn v128_load64_zero(m: *const u64) -> v128 {
 #[doc(alias("v128.store"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub unsafe fn v128_store(m: *mut v128, a: v128) {
-    *(m as *mut Unaligned<v128>) = Unaligned(a);
+    m.write_unaligned(a)
 }
 
 /// Loads an 8-bit value from `m` and sets lane `L` of `v` to that value.
@@ -2291,7 +2273,23 @@ pub use i8x16_bitmask as u8x16_bitmask;
 #[doc(alias("i8x16.narrow_i16x8_s"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub fn i8x16_narrow_i16x8(a: v128, b: v128) -> v128 {
-    unsafe { llvm_narrow_i8x16_s(a.as_i16x8(), b.as_i16x8()).v128() }
+    unsafe {
+        let v: simd::i16x16 = simd_shuffle!(
+            a.as_i16x8(),
+            b.as_i16x8(),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        );
+
+        let max = simd_splat(i16::from(i8::MAX));
+        let min = simd_splat(i16::from(i8::MIN));
+
+        let v = simd_select(simd_gt::<_, simd::i16x16>(v, max), max, v);
+        let v = simd_select(simd_lt::<_, simd::i16x16>(v, min), min, v);
+
+        let v: simd::i8x16 = simd_cast(v);
+
+        v.v128()
+    }
 }
 
 /// Converts two input vectors into a smaller lane vector by narrowing each
@@ -2305,7 +2303,23 @@ pub fn i8x16_narrow_i16x8(a: v128, b: v128) -> v128 {
 #[doc(alias("i8x16.narrow_i16x8_u"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub fn u8x16_narrow_i16x8(a: v128, b: v128) -> v128 {
-    unsafe { llvm_narrow_i8x16_u(a.as_i16x8(), b.as_i16x8()).v128() }
+    unsafe {
+        let v: simd::i16x16 = simd_shuffle!(
+            a.as_i16x8(),
+            b.as_i16x8(),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        );
+
+        let max = simd_splat(i16::from(u8::MAX));
+        let min = simd_splat(i16::from(u8::MIN));
+
+        let v = simd_select(simd_gt::<_, simd::i16x16>(v, max), max, v);
+        let v = simd_select(simd_lt::<_, simd::i16x16>(v, min), min, v);
+
+        let v: simd::u8x16 = simd_cast(v);
+
+        v.v128()
+    }
 }
 
 /// Shifts each lane to the left by the specified number of bits.
@@ -2603,7 +2617,19 @@ pub use i16x8_bitmask as u16x8_bitmask;
 #[doc(alias("i16x8.narrow_i32x4_s"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub fn i16x8_narrow_i32x4(a: v128, b: v128) -> v128 {
-    unsafe { llvm_narrow_i16x8_s(a.as_i32x4(), b.as_i32x4()).v128() }
+    unsafe {
+        let v: simd::i32x8 = simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 6, 7]);
+
+        let max = simd_splat(i32::from(i16::MAX));
+        let min = simd_splat(i32::from(i16::MIN));
+
+        let v = simd_select(simd_gt::<_, simd::i32x8>(v, max), max, v);
+        let v = simd_select(simd_lt::<_, simd::i32x8>(v, min), min, v);
+
+        let v: simd::i16x8 = simd_cast(v);
+
+        v.v128()
+    }
 }
 
 /// Converts two input vectors into a smaller lane vector by narrowing each
@@ -2617,7 +2643,19 @@ pub fn i16x8_narrow_i32x4(a: v128, b: v128) -> v128 {
 #[doc(alias("i16x8.narrow_i32x4_u"))]
 #[stable(feature = "wasm_simd", since = "1.54.0")]
 pub fn u16x8_narrow_i32x4(a: v128, b: v128) -> v128 {
-    unsafe { llvm_narrow_i16x8_u(a.as_i32x4(), b.as_i32x4()).v128() }
+    unsafe {
+        let v: simd::i32x8 = simd_shuffle!(a, b, [0, 1, 2, 3, 4, 5, 6, 7]);
+
+        let max = simd_splat(i32::from(u16::MAX));
+        let min = simd_splat(i32::from(u16::MIN));
+
+        let v = simd_select(simd_gt::<_, simd::i32x8>(v, max), max, v);
+        let v = simd_select(simd_lt::<_, simd::i32x8>(v, min), min, v);
+
+        let v: simd::u16x8 = simd_cast(v);
+
+        v.v128()
+    }
 }
 
 /// Converts low half of the smaller lane vector to a larger lane
