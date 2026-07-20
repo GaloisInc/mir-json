@@ -158,7 +158,6 @@ check_all_prerequisites() {
 }
 
 build_env() {
-    local TOOLCHAIN_DIR=$(get_toolchain_dir)
     cat <<EOF >> "${MIR_JSON_INSTALL_DIR}/env"
 #!/bin/sh
 case ":\${PATH}:" in
@@ -171,17 +170,68 @@ export CRUX_RUST_LIBRARY_PATH="${MIR_JSON_INSTALL_DIR}/default/rlibs"
 EOF
 }
 
+display_help() {
+    echo "Usage: mir-json-up [--install-dir DIR] [--mir-json-version GIT-REF]"
+    echo "         [--mir-json-rust-toolchain RUST-TOOLCHAIN] [--target-triplet TRIPLET] command"
+    echo "Options:"
+    echo "   --install-dir        Directory holding the 'mir-json-up' installation"
+    echo "                            (default \$HOME/.mir-json-up)"
+    echo "   --mir-json-version   Git reference for the version of 'mir-json' to use/install"
+    echo "                            (default 'master')"
+    echo "   --mir-json-rust-toolchain     Rust toolchain to use (default 'nightly-2025-09-14')"
+    echo "   --target-triplet     Target triplet to use (default is the output of cc -dumpmachine)"
+    echo "Commands:"
+    echo "  mir-json-up check     Check if all requirements are in place for building 'mir-json'"
+    echo "  mir-json-up init      Install 'mir-json-up'"
+    echo "  mir-json-up install   Download and build a specific version of 'mir-json' for a specific target"
+    echo "  mir-json-up list      List all version/target 'mir-json' combinations installed"
+    echo "  mir-json-up remove    Remove the given 'mir-json' version/target combination"
+    echo "  mir-json-up run       Run a command within the active 'mir-json' version/target combination"
+    echo "  mir-json-up set       Set the active 'mir-json' version/target combination"
+}
+
 SCRIPT_FILE=$(realpath "$0")
-COMMAND="$1"
-shift 1
+
+while (( "$#" )); do
+    case "$1" in
+        "--install-dir")
+            MIR_JSON_INSTALL_DIR="$2"
+            shift 2
+            ;;
+        "--mir-json-version")
+            MIR_JSON_VERSION="$2"
+            shift 2
+            ;;
+        "--mir-json-rust-toolchain")
+            MIR_JSON_RUST_TOOLCHAIN="$2"
+            shift 2
+            ;;
+        "--target-triplet")
+            TARGET_TRIPLET="$2"
+            shift 2
+            ;;
+        check|init|install|list|remove|run|set)
+            COMMAND="$1"
+            shift 1
+            if [[ "$1" == "--" ]]; then
+                shift 1
+            fi
+            break
+            ;;
+        help)
+            display_help
+            exit 0
+            ;;
+        *)
+            echo "Invalid command: $1"
+            exit 1
+            ;;
+    esac
+done
+
+COMMAND="${COMMAND:-help}"
 
 case "$COMMAND" in
-    build)
-        check_all_prerequisites
-        create_installation_dir
-        get_mir_json_src
-        build_mir_json
-        ;;
     check)
         check_all_prerequisites
         echo "All prerequisites in place"
@@ -196,6 +246,15 @@ case "$COMMAND" in
         echo "Successfully initialized mir-json-up"
         echo "To configure the current shell, run . ${MIR_JSON_INSTALL_DIR}/env"
         ;;
+    install)
+        check_all_prerequisites
+        if [[ ! -d "${MIR_JSON_INSTALL_DIR}" ]]; then
+            echo "${MIR_JSON_INSTALL_DIR} does not exist"
+            exit 1
+        fi
+        get_mir_json_src
+        build_mir_json
+        ;;
     list)
         check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
@@ -204,6 +263,14 @@ case "$COMMAND" in
         fi
         cd "${MIR_JSON_INSTALL_DIR}/toolchains"
         find */*/* -maxdepth 0 -type d
+        ;;
+    remove)
+        if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
+            echo "${MIR_JSON_INSTALL_DIR} does not exist"
+            exit 1
+        fi
+        local TOOLCHAIN_DIR="$(get_toolchain_dir)"
+        rm -rf "${TOOLCHAIN_DIR}"
         ;;
     run)
         check_all_prerequisites
@@ -219,17 +286,11 @@ case "$COMMAND" in
         create_default_symlinks "$(get_toolchain_dir)"
         ;;
     help)
-        echo "Usage:"
-        echo "  mir-json-up build   Download and build a specific version of 'mir-json' for a specific target"
-        echo "  mir-json-up check   Check if all requirements are in place for building 'mir-json'"
-        echo "  mir-json-up init    Install 'mir-json-up'"
-        echo "  mir-json-up list    List all version/target 'mir-json' combinations installed"
-        echo "  mir-json-up run     Run a command within the active 'mir-json' version/target combination"
-        echo "  mir-json-up set     Set the active 'mir-json' version/target combination"
+        display_help
+        exit 1
         ;;
     *)
         echo "Invalid command: ${COMMAND}"
         exit 1
         ;;
 esac
-
