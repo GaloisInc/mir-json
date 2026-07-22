@@ -14,7 +14,7 @@ extern crate mir_json;
 extern crate rustc_log;
 
 use std::env;
-use std::fs::File;
+use std::fs;
 use std::io;
 use std::time::Instant;
 use mir_json::link;
@@ -38,9 +38,10 @@ fn main() {
         dur
     };
 
-    let mut inputs = env::args().skip(1).map(|arg| File::open(&arg))
-        .collect::<io::Result<Vec<_>>>().unwrap();
+    let inputs = env::args().skip(1).map(|arg| {
+        fs::read(&arg)
+    }).collect::<Result<Vec<Vec<u8>>, _>>().unwrap();
     let output = io::BufWriter::new(io::stdout());
-    link::link_crates(&mut inputs, output).unwrap();
+    link::link_crates(&inputs, output).unwrap();
     debug!("{:?}: link crates", measure());
 }

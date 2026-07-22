@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{self, Read, Write, Seek, SeekFrom};
+use std::io::{self, Write};
 
 use serde_cbor;
 use serde_json;
@@ -8,12 +8,12 @@ use crate::lib_util::{self, CrateIndex, InternTable, EntryKind, StringId};
 use crate::schema_ver::SCHEMA_VER;
 
 
-fn read_crates<R: Read + Seek>(
-    inputs: &mut [R],
-) -> serde_cbor::Result<(Vec<CrateIndex>, Vec<u64>)> {
+fn read_crates(
+    inputs: &[impl AsRef<[u8]>],
+) -> serde_cbor::Result<(Vec<CrateIndex>, Vec<usize>)> {
     let mut indexes = Vec::with_capacity(inputs.len());
     let mut json_offsets = Vec::with_capacity(inputs.len());
-    for r in inputs.iter_mut() {
+    for r in inputs {
         let (i, j) = lib_util::read_crate_index(r)?;
         indexes.push(i);
         json_offsets.push(j);
@@ -89,8 +89,8 @@ fn check_matching_versions(indexes: &[CrateIndex]) -> serde_cbor::Result<()> {
 }
 
 /// Combine the contents of `ocs`, producing a combined JSON crate data object as the result.
-pub fn link_crates<R, W>(inputs: &mut [R], mut output: W) -> serde_cbor::Result<()>
-where R: Read + Seek, W: Write {
+pub fn link_crates<W>(inputs: &[impl AsRef<[u8]>], mut output: W) -> serde_cbor::Result<()>
+where W: Write {
     let (indexes, json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
     let (roots, tests) = collect_roots(&indexes, &translate);
@@ -155,9 +155,9 @@ where R: Read + Seek, W: Write {
                 write!(output, ",")?;
             }
 
-            let input = &mut inputs[crate_num];
-            input.seek(SeekFrom::Start(offset))?;
-            io::copy(&mut input.take(len), &mut output)?;
+            let input = inputs[crate_num].as_ref();
+            let chunk = &input[offset .. offset + len];
+            output.write_all(chunk)?;
         }
         write!(output, "]")?;
     }
@@ -188,8 +188,8 @@ where R: Read + Seek, W: Write {
     Ok(())
 }
 
-pub fn gather_calls<R: Read + Seek>(
-    inputs: &mut [R],
+pub fn gather_calls(
+    inputs: &[impl AsRef<[u8]>],
 ) -> serde_cbor::Result<(InternTable, Vec<(StringId, StringId)>)> {
     let (indexes, _json_offsets) = read_crates(inputs)?;
     let (it, defs, translate) = assign_global_ids(&indexes);
