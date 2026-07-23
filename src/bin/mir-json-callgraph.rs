@@ -12,7 +12,7 @@ extern crate mir_json;
 
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::fs::File;
+use std::fs;
 use std::io;
 use serde_json::Value as JsonValue;
 use mir_json::lib_util::{StringId, InternTable};
@@ -27,9 +27,10 @@ fn main() {
     }
 
     let root_name = env::args().nth(1).unwrap();
-    let mut inputs = env::args().skip(2).map(|arg| File::open(&arg))
-        .collect::<io::Result<Vec<_>>>().unwrap();
-    let (mut it, calls) = link::gather_calls(&mut inputs).unwrap();
+    let inputs = env::args().skip(2).map(|arg| {
+        fs::read(&arg)
+    }).collect::<Result<Vec<Vec<u8>>, _>>().unwrap();
+    let (mut it, calls) = link::gather_calls(&inputs).unwrap();
 
     let mut map = HashMap::new();
     for (a, b) in calls {

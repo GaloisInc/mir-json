@@ -29,7 +29,7 @@ use rustc_session::config::{Externs, ExternLocation, OutFileName, OutputFilename
 use rustc_span::Symbol;
 use std::collections::HashSet;
 use std::env;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::iter;
 use std::os::unix::fs::OpenOptionsExt;
@@ -161,11 +161,11 @@ impl rustc_driver::Callbacks for MirJsonCallbacks {
 }
 
 fn link_mirs(main_path: PathBuf, extern_paths: &[PathBuf], out_path: &Path) {
-    let mut inputs = iter::once(&main_path).chain(extern_paths.iter())
-        .map(File::open)
-        .collect::<io::Result<Vec<_>>>().unwrap();
+    let inputs = iter::once(&main_path).chain(extern_paths.iter()).map(|arg| {
+        fs::read(&arg)
+    }).collect::<Result<Vec<Vec<u8>>, _>>().unwrap();
     let output = io::BufWriter::new(File::create(out_path).unwrap());
-    link::link_crates(&mut inputs, output).unwrap();
+    link::link_crates(&inputs, output).unwrap();
 }
 
 fn write_test_script(script_path: &Path, json_path: &Path) -> io::Result<()> {

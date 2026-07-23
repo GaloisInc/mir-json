@@ -18,9 +18,10 @@
 //! live items is known, those items can be copied directly into the output JSON without parsing.
 
 use std::borrow::Cow;
+use std::convert::TryFrom;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, Read, Write, Seek, SeekFrom, Cursor, BufWriter};
+use std::io::{self, Write, Cursor, BufWriter};
 use std::path::Path;
 
 use serde_json::Value as JsonValue;
@@ -61,7 +62,7 @@ pub struct ItemData {
 
     /// The location of each entry for this item.  The first `u64` is the offset of the entry's
     /// JSON representation within `crates.json`, and the second `u64` is the length.
-    pub locations: HashMap<EntryKind, (u64, u64)>,
+    pub locations: HashMap<EntryKind, (usize, usize)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
@@ -178,7 +179,7 @@ impl<W: Write> Write for CountWrite<W> {
 #[derive(Default)]
 struct EmitterState {
     dep_map: HashMap<StringId, HashSet<StringId>>,
-    entry_loc: HashMap<(StringId, EntryKind), (u64, u64)>,
+    entry_loc: HashMap<(StringId, EntryKind), (usize, usize)>,
     roots: HashSet<StringId>,
     tests: HashSet<StringId>,
     intern: InternTable,
@@ -210,7 +211,7 @@ impl EmitterState {
         }
     }
 
-    fn emit_entry<E, F: FnOnce(EntryKind, &JsonValue) -> Result<(u64, u64), E>>(
+    fn emit_entry<E, F: FnOnce(EntryKind, &JsonValue) -> Result<(usize, usize), E>>(
         &mut self,
         kind: EntryKind,
         j: &JsonValue,
@@ -283,9 +284,9 @@ impl<W: Write> Emitter<W> {
     fn emit_entry(&mut self, kind: EntryKind, j: &JsonValue) -> io::Result<()> {
         let writer = &mut self.writer;
         self.state.emit_entry(kind, j, |_, j| {
-            let start = writer.count as u64;
+            let start = writer.count;
             serde_json::to_writer(&mut *writer, j)?;
-            let end = writer.count as u64;
+            let end = writer.count;
             Ok((start, end))
         })
     }
@@ -389,29 +390,69 @@ where W: Write + Send + 'static {
 
 /// Read the crate index.  Also returns the byte offset of the start of `crate.json`, to avoid a
 /// second scan over the archive.
-pub fn read_crate_index<R: Read + Seek>(mut input: R) -> serde_cbor::Result<(CrateIndex, u64)> {
-    input.seek(SeekFrom::Start(0))?;
-    let mut tar = tar::Archive::new(input);
+pub fn read_crate_index(input: impl AsRef<[u8]>) -> serde_cbor::Result<(CrateIndex, usize)> {
+    let input = input.as_ref();
 
     let mut index = None;
     let mut json_offset = None;
 
-    for entry in tar.entries()? {
-        let entry = entry?;
-        let path = entry.path()?;
+    let mut pos = 0;
+    // Tar headers are always 512 bytes in length.
+    const HEADER_LEN: usize = 512;
+    while pos < input.len() {
+        // Consume `HEADER_LEN` bytes and parse them as a `tar::Header`.
+        debug_assert_eq!(pos % HEADER_LEN, 0);
+        let header_start = pos;
+        pos = pos.checked_add(HEADER_LEN)
+            .ok_or_else(|| io::Error::other(format!("pos overflow: {pos} + {HEADER_LEN}")))?;
+        let header_end = pos;
+        let header_bytes = input.get(header_start .. header_end)
+            .ok_or_else(|| io::Error::other(format!(
+                "not enough bytes for header: end {header_end} >= len {}", input.len())))?;
+        // "The end of an archive is marked by at least two consecutive zero-filled records."  We
+        // just skip all-zero headers, and stop upon reaching the end of the file.
+        if header_bytes.iter().all(|&b| b == 0) {
+            continue;
+        }
+        let header = tar::Header::from_byte_slice(header_bytes);
+
+        let path = header.path()?;
+
+        let size = header.size()?;
+        let entry_size = header.entry_size()?;
+        if entry_size != size {
+            return Err(io::Error::other(format!("sparse files are not supported: \
+                size {size} != entry_size {entry_size}, for {path:?}")).into());
+        }
+        let size = usize::try_from(size)
+            .map_err(|_| io::Error::other(format!("size {size} for {path:?} is out of range")))?;
+        let data_start = pos;
+        let data_end = data_start.checked_add(size)
+            .ok_or_else(|| io::Error::other(format!(
+                "size overflow for {path:?}: {data_start} + {size}")))?;
+        // Entries are padded to a multiple of 512.
+        let padded_size = size.checked_next_multiple_of(HEADER_LEN)
+            .ok_or_else(|| io::Error::other(format!("size {size} for {path:?} is out of range")))?;
+        pos = pos.checked_add(padded_size)
+            .ok_or_else(|| io::Error::other(format!("pos overflow: {pos} + {padded_size}")))?;
+
+        let data_bytes = input.get(data_start .. data_end)
+            .ok_or_else(|| io::Error::other(format!(
+                "not enough bytes for file {path:?}: end {data_end} >= len {}", input.len())))?;
+
         if path == Path::new("index.cbor") {
             assert!(index.is_none(), "duplicate crate.json in archive?");
-            index = Some(serde_cbor::from_reader(entry)?);
+            index = Some(serde_cbor::from_slice(data_bytes)?);
         } else if path == Path::new("crate.json") {
             assert!(json_offset.is_none(), "duplicate crate.json in archive?");
-            assert!(entry.header().size()? == entry.header().entry_size()?,
-                "crate.json is a sparse file (unsupported)");
-            json_offset = Some(entry.raw_file_position());
+            json_offset = Some(data_start);
         }
     }
 
-    let index = index.unwrap_or_else(|| panic!("index.cbor not found in archive"));
-    let json_offset = json_offset.unwrap_or_else(|| panic!("crate.json not found in archive"));
+    let index = index
+        .ok_or_else(|| io::Error::other("index.cbor not found in archive"))?;
+    let json_offset = json_offset
+        .ok_or_else(|| io::Error::other("crate.json not found in archive"))?;
 
     Ok((index, json_offset))
 }
