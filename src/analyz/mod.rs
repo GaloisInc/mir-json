@@ -1106,14 +1106,28 @@ fn emit_instance<'tcx>(
                             return Ok(());
                         }
                     }
+                    ty_inst
                 },
-                // These variants are unsupported by the `mir_shims` query, which backs
+                // Virtual shims are unsupported by the `mir_shims` query, which backs
                 // `instance_mir`.
-                ty::InstanceKind::Virtual(..) |
-                ty::InstanceKind::Intrinsic(..) => return Ok(()),
-                _ => {},
+                ty::InstanceKind::Virtual(..) => return Ok(()),
+                // Intrinsics are also unsupported by `instance_mir`, but for intrinsics that have
+                // fallback bodies, we can use a fake `InstanceKind::Item` to get it to emit the
+                // intrinsic as a normal function using the fallback body.
+                ty::InstanceKind::Intrinsic(def_id) => {
+                    let Some(intrin) = tcx.intrinsic(def_id) else { return Ok(()) };
+                    if intrin.must_be_overridden {
+                        // `must_be_overridden` means the intrinsic has no fallback body.
+                        return Ok(());
+                    }
+                    // Same as `ty_inst`, but replace `InstanceKind::Intrinsic` with `Item`.
+                    ty::Instance {
+                        def: ty::InstanceKind::Item(def_id),
+                        args: ty_inst.args,
+                    }
+                },
+                _ => ty_inst,
             }
-            ty_inst
         },
         // We don't generate MIR for `ClosureFnPointer` shims.  Instead, we generate code in
         // crucible-mir to implement this shim.
