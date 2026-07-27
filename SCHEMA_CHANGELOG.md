@@ -3,6 +3,16 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 12
+
+  * Instance: `CloneShim.callees` is now emitted as `Ty?[]`.
+    Elements are `null` when instance resolution yielded no callee.
+  * Variant: the `discr` field has been **removed** from variant output.
+  * Operand: New variant `RuntimeChecks`.
+  * InlineType: New variant `Pat`.
+  * CastKind: New nullary variant `Subtype`.
+  * `PointerCoercion.ClosureFnPointer` now has a `safety` field
+
 ## 11
 
 Add `size` and `align` fields to `dyn Trait` vtables.
