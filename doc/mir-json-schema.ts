@@ -257,7 +257,7 @@ type Instance =
  | { kind: "Virtual", trait_id: DefId, index: number, item_id: DefId }
  | { kind: "ClosureOnceShim", call_once: DefId, args: Ty[] }
  | { kind: "DropGlue", ty: Ty?, def_id: DefId, args: Ty[] }
- | { kind: "CloneShim", ty: Ty, callees: DefId?[], def_id: DefId, args: Ty[] }
+ | { kind: "CloneShim", ty: Ty, callees: DefId[], def_id: DefId, args: Ty[] }
  | { kind: "ClosureFnPointerShim", call_mut: DefId }
  | { kind: "Unsupported" }
 

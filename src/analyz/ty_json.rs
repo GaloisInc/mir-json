@@ -429,22 +429,22 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 };
                 let callees = sub_tys.into_iter()
                     .map(|ty| {
-                        let inst = ty::Instance::try_resolve(
+                        let mb_inst = ty::Instance::try_resolve(
                             mir.tcx,
                             ty::TypingEnv::fully_monomorphized(),
                             did,
                             mir.tcx.mk_args(&[ty.into()]),
-                        ).unwrap_or_else(|_| {
-                            panic!("failed to resolve instance: {:?}, {:?}", did, ty);
-                        });
-                        if let Some(inst) = inst {
-                            // Add the callee to `used.insances`, so we'll emit code for it even if
-                            // it's otherwise unused.  If `inst` is itself a `CloneShim`, its own
-                            // callees will be visited when generating the "intrinsics" entry for
-                            // `inst`.
-                            mir.used.instances.insert(inst.clone().into());
-                        }
-                        inst.map(|i| inst_id_str(mir.tcx, i))
+                        );
+                        let inst = match mb_inst {
+                            Ok(Some(inst)) => inst,
+                            _ => panic!("failed to resolve instance: {:?}, {:?}", did, ty),
+                        };
+                        // Add the callee to `used.instances`, so we'll emit code for it even if
+                        // it's otherwise unused.  If `inst` is itself a `CloneShim`, its own
+                        // callees will be visited when generating the "intrinsics" entry for
+                        // `inst`.
+                        mir.used.instances.insert(inst.clone().into());
+                        inst_id_str(mir.tcx, inst)
                     }).collect::<Vec<_>>();
                 json!({
                     "kind": "CloneShim",

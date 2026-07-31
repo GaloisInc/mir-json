@@ -5,8 +5,7 @@ versioned separately.)
 
 ## 12
 
-  * Instance: `CloneShim.callees` is now emitted as `Ty?[]`.
-    Elements are `null` when instance resolution yielded no callee.
+  * Instance: `ClosureShim` has been renamed to `CloneShim`.
   * Variant: the `discr` field has been **removed** from variant output.
   * Operand: New variant `RuntimeChecks`.
   * InlineType: New variant `Pat`.
