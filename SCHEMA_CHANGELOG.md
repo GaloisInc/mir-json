@@ -3,6 +3,15 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 12
+
+  * Instance: `ClosureShim` has been renamed to `CloneShim`.
+  * Variant: the `discr` field has been **removed** from variant output.
+  * Operand: New variant `RuntimeChecks`.
+  * InlineType: New variant `Pat`.
+  * CastKind: New nullary variant `Subtype`.
+  * `PointerCoercion.ClosureFnPointer` now has a `safety` field
+
 ## 11
 
 Add `size` and `align` fields to `dyn Trait` vtables.

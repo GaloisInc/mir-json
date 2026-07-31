@@ -69,7 +69,7 @@ jobs:
 
     - name: Validate schema
       env:
-        VER: 1.1
+        VER: 1.2
         OS_TAG: ${{ matrix.os }}
         ARCH_TAG: ${{ runner.arch }}
       run: .github/ci.sh validate_json_schema
