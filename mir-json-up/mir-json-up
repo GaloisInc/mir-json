@@ -107,7 +107,7 @@ build_mir_json() {
     cargo +"${MIR_JSON_RUST_TOOLCHAIN}" build -r --target "${TARGET_TRIPLET}" --target-dir "${MIR_JSON_BIN_DIR}" --locked
     PATH="${MIR_JSON_BIN_DIR}/${TARGET_TRIPLET}/release:$PATH"
     echo $PATH
-    mir-json-translate-libs
+    mir-json-translate-libs --target "${TARGET_TRIPLET}"
     if [[ $? == 0 ]]; then
         if [[ -e "${MIR_JSON_RLIBS_DIR}" ]]; then
             rm -rfv "${MIR_JSON_RLIBS_DIR}"
@@ -184,6 +184,7 @@ display_help() {
     echo "   --target-triplet     Target triplet to use (default is the output of cc -dumpmachine)"
     echo "Commands:"
     echo "  mir-json-up check     Check if all requirements are in place for building 'mir-json'"
+    echo "  mir-json-up help      Display this help"
     echo "  mir-json-up init      Install 'mir-json-up'"
     echo "  mir-json-up install   Download and build a specific version of 'mir-json' for a specific target"
     echo "  mir-json-up list      List all version/target 'mir-json' combinations installed"
