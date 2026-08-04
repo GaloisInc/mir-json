@@ -21,6 +21,7 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::hash::Hash;
 use std::io::{self, Write, Cursor, BufWriter};
 use std::path::Path;
 
@@ -48,6 +49,9 @@ pub struct CrateIndex {
 
     /// The schema version in use. (See also `SCHEMA_VER`.)
     pub version: u64,
+
+    /// Mapping from the names of crates the current crate depends on to their Svh hashes as Strings.
+    pub svh_hashes: HashMap<String, String>
 }
 
 /// Metadata about a single item.
@@ -239,7 +243,7 @@ impl EmitterState {
         if is_test { self.tests.insert(name_id); }
     }
 
-    pub fn finish(self) -> CrateIndex {
+    pub fn finish(self, svh_hashes: HashMap<String, String>) -> CrateIndex {
         let names = self.intern.into_names();
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
@@ -264,7 +268,7 @@ impl EmitterState {
 
         let version = SCHEMA_VER;
 
-        CrateIndex { names, items, roots, tests, version }
+        CrateIndex { names, items, roots, tests, version, svh_hashes }
     }
 }
 
@@ -354,12 +358,12 @@ impl<W: Write> Emitter<W> {
         Ok(())
     }
 
-    pub fn finish(self) -> CrateIndex {
-        self.state.finish()
+    pub fn finish(self, svh_hashes: HashMap<String, String>) -> CrateIndex {
+        self.state.finish(svh_hashes)
     }
 }
 
-pub fn write_indexed_crate<W>(out: W, j: &JsonValue) -> serde_cbor::Result<()>
+pub fn write_indexed_crate<W>(out: W, j: &JsonValue, svh_hashes: HashMap<String, String>) -> serde_cbor::Result<()>
 where W: Write + Send + 'static {
     // Serialize the two files to byte arrays.  This is needed so their lengths will be known when
     // creating the archive.
@@ -367,7 +371,7 @@ where W: Write + Send + 'static {
     let mut emitter = Emitter::new(&mut json_buf);
     emitter.emit_crate(j)?;
 
-    let index = emitter.finish();
+    let index = emitter.finish(svh_hashes);
     let index_buf = serde_cbor::to_vec(&index)?;
 
     let mut tar = tar::Builder::new(out);
@@ -555,10 +559,10 @@ impl<W: Write> StreamingEmitter<W> {
         Ok(se)
     }
 
-    pub fn finish(mut self) -> io::Result<(W, CrateIndex)> {
+    pub fn finish(mut self, svh_hashes: HashMap<String, String>) -> io::Result<(W, CrateIndex)> {
         // TODO: expose this through a method on Emitter rather than reaching into its internal
         // state.
-        let index = self.inner.state.finish();
+        let index = self.inner.state.finish(svh_hashes);
         write!(self.inner.writer, "]")?;
         Ok((self.inner.writer.w, index))
     }
@@ -617,8 +621,8 @@ pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
     Ok(MirStream { emitter })
 }
 
-pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
-    let (json_entry, index) = ms.emitter.finish()?;
+pub fn finish_streaming(ms: MirStream, svh_hashes: HashMap<String, String>) -> serde_cbor::Result<()> {
+    let (json_entry, index) = ms.emitter.finish(svh_hashes)?;
     let tar = json_entry.finish_entry()?;
     let mut index_entry = tar.start_entry(make_tar_entry("index.cbor")?)?;
     serde_cbor::to_writer(&mut index_entry, &index)?;

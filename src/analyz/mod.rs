@@ -12,6 +12,7 @@ use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
+use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::iter;
@@ -1366,6 +1367,7 @@ pub struct AnalysisData<O> {
     pub mir_path: PathBuf,
     pub extern_mir_paths: Vec<PathBuf>,
     pub output: O,
+    pub svh_hashes: Option<HashMap<String, String>>
 }
 
 /// Analyze the crate currently being compiled.  Returns `Ok(Some(data))` upon successfully writing
@@ -1396,7 +1398,13 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     };
     let mut out = mk_output(&mir_path)?;
 
+    let mut svh_hashes = HashMap::new();
     for &cnum in tcx.crates(()) {
+        svh_hashes.insert(
+            tcx.crate_name(cnum).to_string(),
+            tcx.crate_hash(cnum).to_string() 
+        );
+
         let src = tcx.used_crate_source(cnum);
         let it = src.dylib.iter()
             .chain(src.rlib.iter())
@@ -1451,7 +1459,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     // references them, but we check again here just in case.
     emit_new_defs(&mut ms, &mut out)?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out, svh_hashes: Some(svh_hashes) }))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
@@ -1459,7 +1467,7 @@ pub fn analyze_nonstreaming<'tcx>(
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
-    let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
+    let AnalysisData { mir_path, extern_mir_paths, output: out, svh_hashes } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
@@ -1481,9 +1489,9 @@ pub fn analyze_nonstreaming<'tcx>(
     tcx.sess.dcx().note(
         format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
-    lib_util::write_indexed_crate(file, &j)?;
+    lib_util::write_indexed_crate(file, &j, svh_hashes.unwrap())?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: (), svh_hashes: None}))
 }
 
 pub fn analyze_streaming<'tcx>(
@@ -1491,12 +1499,12 @@ pub fn analyze_streaming<'tcx>(
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
-    let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
+    let AnalysisData { mir_path, extern_mir_paths, output, svh_hashes } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
-    lib_util::finish_streaming(output)?;
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
+    lib_util::finish_streaming(output, svh_hashes.unwrap())?;
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () , svh_hashes: None}))
 }
 
 pub use self::analyze_streaming as analyze;
