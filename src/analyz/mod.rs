@@ -12,7 +12,7 @@ use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
-use std::collections::HashMap;
+use std::collections::{HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::iter;
@@ -1367,7 +1367,7 @@ pub struct AnalysisData<O> {
     pub mir_path: PathBuf,
     pub extern_mir_paths: Vec<PathBuf>,
     pub output: O,
-    pub svh_hashes: Option<HashMap<String, String>>
+    pub svh_hashes: Option<HashSet<(String, String)>>
 }
 
 /// Analyze the crate currently being compiled.  Returns `Ok(Some(data))` upon successfully writing
@@ -1398,11 +1398,11 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     };
     let mut out = mk_output(&mir_path)?;
 
-    let mut svh_hashes = HashMap::new();
+    let mut svh_hashes = HashSet::new();
     for &cnum in tcx.crates(()) {
-        svh_hashes.insert(
+        svh_hashes.insert((
             tcx.crate_name(cnum).to_string(),
-            tcx.crate_hash(cnum).to_string() 
+            tcx.crate_hash(cnum).to_string() )
         );
 
         let src = tcx.used_crate_source(cnum);

@@ -51,7 +51,7 @@ pub struct CrateIndex {
     pub version: u64,
 
     /// Mapping from the names of crates the current crate depends on to their Svh hashes as Strings.
-    pub svh_hashes: HashMap<String, String>
+    pub svh_hashes: HashSet<(String, String)>
 }
 
 /// Metadata about a single item.
@@ -243,7 +243,7 @@ impl EmitterState {
         if is_test { self.tests.insert(name_id); }
     }
 
-    pub fn finish(self, svh_hashes: HashMap<String, String>) -> CrateIndex {
+    pub fn finish(self, svh_hashes: HashSet<(String, String)>) -> CrateIndex {
         let names = self.intern.into_names();
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
@@ -358,12 +358,12 @@ impl<W: Write> Emitter<W> {
         Ok(())
     }
 
-    pub fn finish(self, svh_hashes: HashMap<String, String>) -> CrateIndex {
+    pub fn finish(self, svh_hashes: HashSet<(String, String)>) -> CrateIndex {
         self.state.finish(svh_hashes)
     }
 }
 
-pub fn write_indexed_crate<W>(out: W, j: &JsonValue, svh_hashes: HashMap<String, String>) -> serde_cbor::Result<()>
+pub fn write_indexed_crate<W>(out: W, j: &JsonValue, svh_hashes: HashSet<(String, String)>) -> serde_cbor::Result<()>
 where W: Write + Send + 'static {
     // Serialize the two files to byte arrays.  This is needed so their lengths will be known when
     // creating the archive.
@@ -559,7 +559,7 @@ impl<W: Write> StreamingEmitter<W> {
         Ok(se)
     }
 
-    pub fn finish(mut self, svh_hashes: HashMap<String, String>) -> io::Result<(W, CrateIndex)> {
+    pub fn finish(mut self, svh_hashes: HashSet<(String, String)>) -> io::Result<(W, CrateIndex)> {
         // TODO: expose this through a method on Emitter rather than reaching into its internal
         // state.
         let index = self.inner.state.finish(svh_hashes);
@@ -621,7 +621,7 @@ pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
     Ok(MirStream { emitter })
 }
 
-pub fn finish_streaming(ms: MirStream, svh_hashes: HashMap<String, String>) -> serde_cbor::Result<()> {
+pub fn finish_streaming(ms: MirStream, svh_hashes: HashSet<(String, String)>) -> serde_cbor::Result<()> {
     let (json_entry, index) = ms.emitter.finish(svh_hashes)?;
     let tar = json_entry.finish_entry()?;
     let mut index_entry = tar.start_entry(make_tar_entry("index.cbor")?)?;
