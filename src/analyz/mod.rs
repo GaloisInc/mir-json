@@ -26,7 +26,7 @@ mod to_json;
 mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
-use lib_util::{self, JsonOutput, EntryKind};
+use lib_util::{self, JsonOutput, EntryKind, SvhHash};
 use schema_ver::SCHEMA_VER;
 
 use log::debug;
@@ -1367,7 +1367,8 @@ pub struct AnalysisData<O> {
     pub mir_path: PathBuf,
     pub extern_mir_paths: Vec<PathBuf>,
     pub output: O,
-    pub svh_hashes: Option<HashSet<(String, String)>>
+    pub root_hash: Option<SvhHash>,
+    pub dep_hashes: Option<HashSet<SvhHash>>
 }
 
 /// Analyze the crate currently being compiled.  Returns `Ok(Some(data))` upon successfully writing
@@ -1397,10 +1398,12 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         },
     };
     let mut out = mk_output(&mir_path)?;
+    let root_hash = SvhHash::new(tcx.crate_name(LOCAL_CRATE).to_string(),tcx.crate_hash(LOCAL_CRATE).to_string());
 
-    let mut svh_hashes = HashSet::new();
+
+    let mut dep_hashes = HashSet::new();
     for &cnum in tcx.crates(()) {
-        svh_hashes.insert((
+        dep_hashes.insert(SvhHash::new(
             tcx.crate_name(cnum).to_string(),
             tcx.crate_hash(cnum).to_string() )
         );
@@ -1459,7 +1462,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     // references them, but we check again here just in case.
     emit_new_defs(&mut ms, &mut out)?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out, svh_hashes: Some(svh_hashes) }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out, dep_hashes: Some(dep_hashes), root_hash: Some(root_hash) }))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
@@ -1467,7 +1470,7 @@ pub fn analyze_nonstreaming<'tcx>(
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
-    let AnalysisData { mir_path, extern_mir_paths, output: out, svh_hashes } = match opt_ad {
+    let AnalysisData { mir_path, extern_mir_paths, output: out, dep_hashes, root_hash } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
@@ -1489,9 +1492,9 @@ pub fn analyze_nonstreaming<'tcx>(
     tcx.sess.dcx().note(
         format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
-    lib_util::write_indexed_crate(file, &j, svh_hashes.unwrap())?;
+    lib_util::write_indexed_crate(file, &j, dep_hashes.unwrap(), root_hash.unwrap())?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: (), svh_hashes: None}))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: (), dep_hashes: None, root_hash: None}))
 }
 
 pub fn analyze_streaming<'tcx>(
@@ -1499,13 +1502,14 @@ pub fn analyze_streaming<'tcx>(
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
-    let AnalysisData { mir_path, extern_mir_paths, output, svh_hashes } = match opt_ad {
+    let AnalysisData { mir_path, extern_mir_paths, output, dep_hashes, root_hash } = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
-    lib_util::finish_streaming(output, svh_hashes.unwrap())?;
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () , svh_hashes: None}))
+    lib_util::finish_streaming(output, dep_hashes.unwrap(), root_hash.unwrap())?;
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () , dep_hashes: None, root_hash: None}))
 }
+
 
 pub use self::analyze_streaming as analyze;
 pub use analyz::to_json::ExportStyle;
