@@ -39,8 +39,10 @@ core_impls! {
     u32, symbolic_u32;
     u64, symbolic_u64;
     u128, symbolic_u128;
+    f16, symbolic_f16;
     f32, symbolic_f32;
     f64, symbolic_f64;
+    f128, symbolic_f128;
 }
 
 
