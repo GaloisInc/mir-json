@@ -1,5 +1,6 @@
 use core::array;
 use core::num::{NonZero, Saturating, Wrapping, ZeroablePrimitive};
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use crate::crucible_assume_unreachable;
@@ -173,6 +174,14 @@ impl<T: Symbolic, E: Symbolic> Symbolic for Result<T, E> {
         }
     }
 }
+
+
+impl<T: Symbolic> Symbolic for Box<T> {
+    fn symbolic(desc: &str) -> Self {
+        Box::new(T::symbolic(desc))
+    }
+}
+
 
 pub trait BoundedSymbolic: Sized {
     /// Create a new symbolic value of this type for all lengths that do not exceed `N`.
