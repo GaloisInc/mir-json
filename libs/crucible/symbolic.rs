@@ -39,6 +39,8 @@ core_impls! {
     u32, symbolic_u32;
     u64, symbolic_u64;
     u128, symbolic_u128;
+    f32, symbolic_f32;
+    f64, symbolic_f64;
 }
 
 
@@ -146,4 +148,24 @@ impl<T: Symbolic + ZeroablePrimitive> Symbolic for NonZero<T> {
 pub fn prefix<'a, T>(xs: &'a [T]) -> &'a [T] {
     let len = usize::symbolic_where("prefix_len", |&n| n < xs.len());
     &xs[..len]
+}
+
+impl<T: Symbolic> Symbolic for Option<T> {
+    fn symbolic(desc: &str) -> Option<T> {
+        if bool::symbolic(desc) {
+            Some(T::symbolic(desc))
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Symbolic, E: Symbolic> Symbolic for Result<T, E> {
+    fn symbolic(desc: &str) -> Result<T, E> {
+        if bool::symbolic(desc) {
+            Ok(T::symbolic(desc))
+        } else {
+            Err(E::symbolic(desc))
+        }
+    }
 }
