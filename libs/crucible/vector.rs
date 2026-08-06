@@ -27,11 +27,11 @@ impl<T> Vector<T> {
         unimplemented!("Vector::len")
     }
 
-    pub fn push(self, x: T) -> Self {
+    pub fn push(self, _x: T) -> Self {
         unimplemented!("Vector::push")
     }
 
-    pub fn push_front(self, x: T) -> Self {
+    pub fn push_front(self, _x: T) -> Self {
         unimplemented!("Vector::push_front")
     }
 
@@ -51,15 +51,15 @@ impl<T> Vector<T> {
         unimplemented!("Vector::as_mut_slice")
     }
 
-    pub fn concat(self, other: Self) -> Self {
+    pub fn concat(self, _other: Self) -> Self {
         unimplemented!("Vector::concat")
     }
 
-    pub fn split_at(self, idx: usize) -> (Self, Self) {
+    pub fn split_at(self, _idx: usize) -> (Self, Self) {
         unimplemented!("Vector::split_at")
     }
 
-    pub fn copy_from_slice(slice: &[T]) -> Self
+    pub fn copy_from_slice(_slice: &[T]) -> Self
     where T: Copy {
         unimplemented!("Vector::copy_from_slice")
     }
@@ -76,7 +76,7 @@ impl<T> Vector<T> {
         v
     }
 
-    pub fn replicate(x: T, n: usize) -> Self
+    pub fn replicate(_x: T, _n: usize) -> Self
     where T: Copy {
         unimplemented!("Vector::replicate")
     }

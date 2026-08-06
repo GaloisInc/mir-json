@@ -1,7 +1,6 @@
 use core::cmp::Ordering;
-use core::intrinsics;
 use core::marker::PhantomData;
-use core::ops::{Neg, Not, Add, Sub, Mul, Div, Rem, BitAnd, BitOr, BitXor, Shl, Shr};
+use core::ops::{Not, Add, Sub, Mul, Div, Rem, BitAnd, BitOr, BitXor, Shl, Shr};
 
 use crate::symbolic::Symbolic;
 
@@ -58,7 +57,7 @@ impl<S: Size> Bv<S> {
 /// at the Crucible level, which is the case for both `Bv` and primitive integer types.  (Note that
 /// this still zero-extends when used on signed integers: `convert::<i8, i16>(-1)` return `255`,
 /// not `-1`.)
-pub fn convert<T, U>(x: T) -> U {
+pub fn convert<T, U>(_x: T) -> U {
     unimplemented!()
 }
 
@@ -144,7 +143,7 @@ macro_rules! impl_binops {
         $(
             impl<S: Size> $Op<Bv<S>> for Bv<S> {
                 type Output = Bv<S>;
-                fn $op(self, other: Bv<S>) -> Bv<S> {
+                fn $op(self, _other: Bv<S>) -> Bv<S> {
                     unimplemented!()
                 }
             }
@@ -158,7 +157,7 @@ macro_rules! impl_shift_ops {
             // Crucible shift ops require the shift amount and value use the same bitvector width,
             // so we convert `usize` to the right `Bv` type before calling the real shift function.
 
-            fn $op<S: Size>(x: Bv<S>, y: Bv<S>) -> Bv<S> {
+            fn $op<S: Size>(_x: Bv<S>, _y: Bv<S>) -> Bv<S> {
                 unimplemented!()
             }
 
@@ -194,15 +193,15 @@ impl_shift_ops! {
 
 
 impl<S: Size> Bv<S> {
-    pub fn overflowing_add(self, other: Bv<S>) -> (Bv<S>, bool) {
+    pub fn overflowing_add(self, _other: Bv<S>) -> (Bv<S>, bool) {
         unimplemented!()
     }
 
-    pub fn overflowing_sub(self, other: Bv<S>) -> (Bv<S>, bool) {
+    pub fn overflowing_sub(self, _other: Bv<S>) -> (Bv<S>, bool) {
         unimplemented!()
     }
 
-    pub fn overflowing_mul(self, other: Bv<S>) -> (Bv<S>, bool) {
+    pub fn overflowing_mul(self, _other: Bv<S>) -> (Bv<S>, bool) {
         unimplemented!()
     }
 
@@ -221,7 +220,7 @@ impl<S: Size> Clone for Bv<S> {
 impl<S: Size> Copy for Bv<S> {}
 
 impl<S: Size> PartialEq<Bv<S>> for Bv<S> {
-    fn eq(&self, other: &Bv<S>) -> bool {
+    fn eq(&self, _other: &Bv<S>) -> bool {
         unimplemented!()
     }
 }
@@ -253,6 +252,6 @@ impl<S: Size> Symbolic for Bv<S> {
 }
 
 // Override hooks for constructing symbolic bitvectors.
-fn make_symbolic_128(desc: &str) -> Bv<_128> { unimplemented!() }
-fn make_symbolic_256(desc: &str) -> Bv<_256> { unimplemented!() }
-fn make_symbolic_512(desc: &str) -> Bv<_512> { unimplemented!() }
+fn make_symbolic_128(_desc: &str) -> Bv<_128> { unimplemented!() }
+fn make_symbolic_256(_desc: &str) -> Bv<_256> { unimplemented!() }
+fn make_symbolic_512(_desc: &str) -> Bv<_512> { unimplemented!() }

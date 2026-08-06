@@ -5,24 +5,24 @@
 // preemption point MUST be read only. It is always safe to
 // pass `false`.
 #[unstable(feature = "crucible_intrinsics", issue = "none")]
-pub fn sched_yield<T>(ro: bool, x: *const T) {}
+pub fn sched_yield<T>(_ro: bool, _x: *const T) {}
 
 // Signal a lock acquisition. Modeling this inside Crucible
 // is more efficient than on top of lower level primitives.
 #[unstable(feature = "crucible_intrinsics", issue = "none")]
-pub fn mutex_lock<T>(x: *const T) {}
+pub fn mutex_lock<T>(_x: *const T) {}
 
 // Signal a lock release. Modeling this inside Crucible
 // is more efficient than on top of lower level primitives.
 #[unstable(feature = "crucible_intrinsics", issue = "none")]
-pub fn mutex_unlock<T>(x: *const T) {}
+pub fn mutex_unlock<T>(_x: *const T) {}
 
 // Signal to block until thread `thid` has terminated.
-pub fn join<T>(thid : u64) -> T {
+pub fn join<T>(_thid : u64) -> T {
     panic!("crucible::concurrency::join should never be executed!")
 }
 
-fn thread_exit<T>(f:T) {}
+fn thread_exit<T>(_f:T) {}
 
 /**
 Funny game we're playing here:
