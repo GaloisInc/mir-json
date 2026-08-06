@@ -265,6 +265,13 @@ pub fn box_assume_init_into_vec_unsafe<T, const N: usize>(
     unsafe { (b.assume_init() as Box<[T]>).into_vec() }
 }
 
+#[stable(feature = "crucible", since = "1.92.0")]
+impl<T: crucible::Symbolic> crucible::Symbolic for Box<T> {
+    fn symbolic(desc: &str) -> Self {
+        Box::new(T::symbolic(desc))
+    }
+}
+
 impl<T> Box<T> {
     /// Allocates memory on the heap and then places `x` into it.
     ///

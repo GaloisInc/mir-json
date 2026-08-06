@@ -2,6 +2,8 @@
 #![feature(allow_internal_unstable)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
+#![feature(f16)]
+#![feature(f128)]
 #![feature(nonzero_internals)]
 #![feature(tuple_trait)]
 #![feature(type_alias_impl_trait)]
@@ -132,7 +134,7 @@ pub fn concretize<T>(x: T) -> T {
 }
 
 /// Install `g` as an override for `f`.
-pub fn override_<F, G>(f: F, g: G) {
+pub fn override_<F, G>(_f: F, _g: G) {
     unimplemented!("crucible::override_");
 }
 
@@ -141,20 +143,20 @@ pub fn override_<F, G>(f: F, g: G) {
 /// Due to the way crux-mir explores paths through the program, these prints may execute in an
 /// unusual order.  For example, `if cond { print_str("foo") } else { print_str("bar") }` may print
 /// both `foo` and `bar` in some cases.
-pub fn print_str(s: &str) {
+pub fn print_str(_s: &str) {
     unimplemented!("print_str");
 }
 
 /// Print a what4 expression to stderr.  `T` must have a primitive/base type for its Crucible
 /// representation.
-pub fn dump_what4<T>(desc: &str, x: T) {
+pub fn dump_what4<T>(_desc: &str, _x: T) {
     unimplemented!("dump_what4");
 }
 
 /// Print a Crucible `RegValue` to stderr.  Most `TypeRepr`s used by crucible-mir are supported,
 /// but not all; if `T` uses an unsupported `TypeRepr`, this may print `[unsupported]` or throw an
 /// error.
-pub fn dump_rv<T>(desc: &str, x: T) {
+pub fn dump_rv<T>(_desc: &str, _x: T) {
     unimplemented!("dump_rv");
 }
 

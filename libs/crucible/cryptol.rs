@@ -1,11 +1,9 @@
-use core::cell::UnsafeCell;
-
 /// Load a Cryptol definition.  `module_path` must be the path to a Cryptol module file, and `name`
 /// must be an identifier defined within that module.  The type parameter `F` must be a function
 /// pointer type matching the type of the Cryptol definition.  For example, if the Cryptol
 /// definition has type `[8] -> [8] -> [8]`, then `F` must be `fn(u8, u8) -> u8`, `fn(i8, i8) ->
 /// u8`, or some similar combination.
-pub fn load<F>(module_path: &str, name: &str) -> F {
+pub fn load<F>(_module_path: &str, _name: &str) -> F {
     unimplemented!("cryptol::load")
 }
 
@@ -14,13 +12,13 @@ pub fn load<F>(module_path: &str, name: &str) -> F {
 /// signature must match the signature of the Cryptol function.  For example, if the Cryptol
 /// definition has type `[8] -> [8] -> [8]`, then `f` must have the signature `fn(u8, u8) -> u8`,
 /// `fn(i8, i8) -> u8`, or some similar combination.
-pub fn override_<F>(f: F, module_path: &str, name: &str) {
+pub fn override_<F>(_f: F, _module_path: &str, _name: &str) {
     unimplemented!("cryptol::override")
 }
 
 /// Mark the given Cryptol name to be treated as uninterpreted for the duration
 /// of the current test.
-pub fn uninterp(name: &str) {
+pub fn uninterp(_name: &str) {
     unimplemented!("cryptol::uninterp")
 }
 

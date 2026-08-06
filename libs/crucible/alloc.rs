@@ -4,20 +4,20 @@ use core::mem;
 use core::ptr::NonNull;
 
 /// Allocate an array of `len` elements of type `T`.  The array begins uninitialized.
-pub fn allocate<T>(len: usize) -> *mut T {
+pub fn allocate<T>(_len: usize) -> *mut T {
     unimplemented!("allocate")
 }
 
 /// Allocate an array of `len` elements of type `T`.  The array initially contains all zeros.  This
 /// fails if `crux-mir` doesn't know how to zero-initialize `T`.
-pub fn allocate_zeroed<T>(len: usize) -> *mut T {
+pub fn allocate_zeroed<T>(_len: usize) -> *mut T {
     unimplemented!("allocate_zeroed")
 }
 
 /// Reallocate the array at `*ptr` to contain `new_len` elements. Accessing this
 /// array via the `ptr` parameter, rather than the newly-returned pointer, is
 /// unspecified behavior.
-pub fn reallocate<T>(ptr: *mut T, new_len: usize) -> *mut T {
+pub fn reallocate<T>(_ptr: *mut T, _new_len: usize) -> *mut T {
     unimplemented!("reallocate")
 }
 
@@ -58,7 +58,7 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
             ))
         }
     }
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+    unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
         // No-op.  crucible-mir currently doesn't track deallocation.
     }
 
@@ -82,7 +82,7 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let old_len = size_to_len::<T>(old_layout.size());
+        let _old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
         let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
         let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());
@@ -90,9 +90,9 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
     }
     unsafe fn grow_zeroed(
         &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
+        _ptr: NonNull<u8>,
+        _old_layout: Layout,
+        _new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
         panic!("crucible does not yet support Allocator::grow_zeroed")
     }
@@ -102,7 +102,7 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let old_len = size_to_len::<T>(old_layout.size());
+        let _old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
         let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
         let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());

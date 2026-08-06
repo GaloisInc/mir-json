@@ -12,7 +12,7 @@ use core::task::{Context, Poll, Waker};
 ///   assertion failure.
 /// * `I` - The zero-based index of the closure argument to access. This must be a
 ///   compile-time constant (statically known), as dynamic runtime indexes are not supported.
-pub fn coroutine_field<T, U, const I: usize>(coroutine: *const T) -> *const U {
+pub fn coroutine_field<T, U, const I: usize>(_coroutine: *const T) -> *const U {
     unimplemented!("coroutine_field requires crux-mir override")
 }
 

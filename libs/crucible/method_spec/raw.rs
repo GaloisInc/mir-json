@@ -18,14 +18,14 @@ pub struct MethodSpec(u8);
 
 // We only have `libcore` available, so we can't return `String` here.  Instead, the override for
 // this function within `crux-mir` will construct and leak a `str`.
-pub fn spec_pretty_print(ms: MethodSpec) -> &'static str {
+pub fn spec_pretty_print(_ms: MethodSpec) -> &'static str {
     "(unknown MethodSpec)"
 }
 
 /// Enable using `ms` in place of calls to the actual function.  The function to override is
 /// determined by the `F` type parameter of `builder_new` during the construction of the
 /// `MethodSpec`.
-pub fn spec_enable(ms: MethodSpec) {
+pub fn spec_enable(_ms: MethodSpec) {
 }
 
 
