@@ -342,6 +342,7 @@ into the main commit for that patch, and then the *Update* line can be removed.
   treated as no-ops.
 
 * Implement `Symbolic` trait for `Box` (last applied: August 6, 2026)
+
   Because the `alloc` crate depends on the `crucible` crate, we implement it
   by patching the `alloc` crate.
 
