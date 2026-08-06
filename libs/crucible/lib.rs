@@ -6,6 +6,8 @@
 #![feature(tuple_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(unboxed_closures)]
+#![feature(f16)]
+#![feature(f128)]
 #![no_std]
 
 pub mod bitvector;
