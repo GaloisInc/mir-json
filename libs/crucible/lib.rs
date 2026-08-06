@@ -2,12 +2,12 @@
 #![feature(allow_internal_unstable)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
+#![feature(f16)]
+#![feature(f128)]
 #![feature(nonzero_internals)]
 #![feature(tuple_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(unboxed_closures)]
-#![feature(f16)]
-#![feature(f128)]
 #![no_std]
 
 pub mod bitvector;
