@@ -232,7 +232,7 @@ impl<S: Size> PartialOrd<Bv<S>> for Bv<S> {
         Some(self.cmp(other))
     }
 
-    fn lt(&self, other: &Bv<S>) -> bool {
+    fn lt(&self, _other: &Bv<S>) -> bool {
         unimplemented!()
     }
 }

@@ -723,7 +723,7 @@ pub trait ByteOrder:
     /// assert_eq!(e, LittleEndian::read_f32(&buf));
     /// ```
     #[inline]
-    fn read_f32(buf: &[u8]) -> f32 {
+    fn read_f32(_buf: &[u8]) -> f32 {
         unimplemented!()
     }
 
@@ -746,7 +746,7 @@ pub trait ByteOrder:
     /// assert_eq!(phi, LittleEndian::read_f64(&buf));
     /// ```
     #[inline]
-    fn read_f64(buf: &[u8]) -> f64 {
+    fn read_f64(_buf: &[u8]) -> f64 {
         unimplemented!()
     }
 
@@ -947,7 +947,7 @@ pub trait ByteOrder:
     /// assert_eq!(e, LittleEndian::read_f32(&buf));
     /// ```
     #[inline]
-    fn write_f32(buf: &mut [u8], n: f32) {
+    fn write_f32(_buf: &mut [u8], _n: f32) {
         unimplemented!()
     }
 
@@ -970,7 +970,7 @@ pub trait ByteOrder:
     /// assert_eq!(phi, LittleEndian::read_f64(&buf));
     /// ```
     #[inline]
-    fn write_f64(buf: &mut [u8], n: f64) {
+    fn write_f64(_buf: &mut [u8], _n: f64) {
         unimplemented!()
     }
 
@@ -1205,7 +1205,7 @@ pub trait ByteOrder:
     /// assert_eq!(numbers_given, numbers_got);
     /// ```
     #[inline]
-    fn read_f32_into(src: &[u8], dst: &mut [f32]) {
+    fn read_f32_into(_src: &[u8], _dst: &mut [f32]) {
         unimplemented!()
     }
 
@@ -1263,7 +1263,7 @@ pub trait ByteOrder:
     /// assert_eq!(numbers_given, numbers_got);
     /// ```
     #[inline]
-    fn read_f64_into(src: &[u8], dst: &mut [f64]) {
+    fn read_f64_into(_src: &[u8], _dst: &mut [f64]) {
         unimplemented!()
     }
 
@@ -1559,7 +1559,7 @@ pub trait ByteOrder:
     /// LittleEndian::read_f32_into(&bytes, &mut numbers_got);
     /// assert_eq!(numbers_given, numbers_got);
     /// ```
-    fn write_f32_into(src: &[f32], dst: &mut [u8]) {
+    fn write_f32_into(_src: &[f32], _dst: &mut [u8]) {
         unimplemented!()
     }
 
@@ -1585,7 +1585,7 @@ pub trait ByteOrder:
     /// LittleEndian::read_f64_into(&bytes, &mut numbers_got);
     /// assert_eq!(numbers_given, numbers_got);
     /// ```
-    fn write_f64_into(src: &[f64], dst: &mut [u8]) {
+    fn write_f64_into(_src: &[f64], _dst: &mut [u8]) {
         unimplemented!()
     }
 
@@ -2084,12 +2084,12 @@ impl ByteOrder for BigEndian {
     }
 
     #[inline]
-    fn from_slice_f32(numbers: &mut [f32]) {
+    fn from_slice_f32(_numbers: &mut [f32]) {
         unimplemented!()
     }
 
     #[inline]
-    fn from_slice_f64(numbers: &mut [f64]) {
+    fn from_slice_f64(_numbers: &mut [f64]) {
         unimplemented!()
     }
 }
@@ -2238,12 +2238,12 @@ impl ByteOrder for LittleEndian {
     }
 
     #[inline]
-    fn from_slice_f32(numbers: &mut [f32]) {
+    fn from_slice_f32(_numbers: &mut [f32]) {
         unimplemented!()
     }
 
     #[inline]
-    fn from_slice_f64(numbers: &mut [f64]) {
+    fn from_slice_f64(_numbers: &mut [f64]) {
         unimplemented!()
     }
 }

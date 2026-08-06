@@ -12,7 +12,7 @@ pub fn load<F>(_module_path: &str, _name: &str) -> F {
 /// signature must match the signature of the Cryptol function.  For example, if the Cryptol
 /// definition has type `[8] -> [8] -> [8]`, then `f` must have the signature `fn(u8, u8) -> u8`,
 /// `fn(i8, i8) -> u8`, or some similar combination.
-pub fn override_<F>(f: F, _module_path: &str, _name: &str) {
+pub fn override_<F>(_f: F, _module_path: &str, _name: &str) {
     unimplemented!("cryptol::override")
 }
 
