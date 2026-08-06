@@ -341,6 +341,10 @@ into the main commit for that patch, and then the *Update* line can be removed.
   with the `unsupported` configuration, where all parking-related functions are
   treated as no-ops.
 
+* Implement `Symbolic` trait for `Box` (last applied: August 6, 2026)
+  Because the `alloc` crate depends on the `crucible` crate, we implement it
+  by patching the `alloc` crate.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
