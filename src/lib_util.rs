@@ -25,6 +25,8 @@ use std::hash::Hash;
 use std::io::{self, Write, Cursor, BufWriter};
 use std::path::Path;
 
+
+use serde::ser;
 use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
@@ -33,10 +35,17 @@ use tar;
 use crate::schema_ver::SCHEMA_VER;
 use crate::tar_stream::{TarStream, TarEntryStream};
 
-#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
 pub struct SvhHash{
+    /// The name of crate
     pub name: String,
+    /// The Svh Hash of that crate as a string
     pub hash: String,
+}
+impl std::fmt::Display for SvhHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Crate< name: {}, Svh Hash: {} >", self.name, self.hash)
+    }
 }
 
 impl SvhHash{
@@ -60,7 +69,7 @@ pub struct CrateIndex {
 
     /// The schema version in use. (See also `SCHEMA_VER`.)
     pub version: u64,
-    /// The current crate's name and svh hash
+    /// The current crate's [`SvhHash`]
     pub root_hash: SvhHash,
     /// Mapping from the names of crates the current crate depends on to their Svh hashes as Strings.
     /// The [`SvhHash`] struct consist of a tuple of a crate name and its hash
@@ -643,4 +652,40 @@ pub fn finish_streaming(ms: MirStream, svh_hashes: HashSet<SvhHash>, root_hash: 
     let mut w = tar.finish()?;
     w.flush()?;
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct DependencyError {
+    root_hash: SvhHash,
+    dependency_hashes: Vec<SvhHash>,
+}
+
+impl std::fmt::Display for DependencyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "The crate {} depends on {:#?} which was not provided as an input to the linker", self.root_hash, self.dependency_hashes)
+    }
+}
+
+impl std::error::Error for DependencyError {}
+
+/// Function that checks if the crate dependencies were provided as inputs to the linker
+pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError>{
+    let mut linker_inputs: HashSet<SvhHash>  = HashSet::new();
+    for index in crate_indices{
+        linker_inputs.insert(index.root_hash.clone());
+    }
+    for index in crate_indices{
+        let diff: Vec<SvhHash> = index.dep_hashes.difference(&linker_inputs).map(|hash|hash.clone()).collect();
+        if diff.len() != 0 {
+            return Err(DependencyError{root_hash: index.root_hash.clone(), dependency_hashes: diff});
+        }
+    }
+    return Ok(());
+}
+
+
+impl From<DependencyError> for serde_cbor::Error {
+    fn from(error: DependencyError) -> Self {
+        ser::Error::custom(error.to_string())
+    }
 }
