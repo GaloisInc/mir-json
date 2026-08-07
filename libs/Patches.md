@@ -346,6 +346,17 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Because the `alloc` crate depends on the `crucible` crate, we implement it
   by patching the `alloc` crate.
 
+* Simplify optimized implementations of `fill` on slices (last applied: August 6, 2026)
+
+  The `fill` method on slices is implemented using a `SpecFill` trait under the
+  hood, and there exist optimized `SpecFill` impls for `[u8]`, `[u16]`, etc.
+  that are implemented in terms of the `write_bytes` and
+  `is_val_statically_known` intrinsics, neither of which `crucible-mir`
+  currently supports (see https://github.com/GaloisInc/crucible/issues/1510 and
+  https://github.com/GaloisInc/crucible/issues/1847, respectively). We remove
+  these optimized `SpecFill` impls in favor of generic ones that are slower but
+  easier for `crucible-mir` to simulate.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
