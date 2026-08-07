@@ -2,6 +2,7 @@ use rustc_abi::FieldsShape;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hashes::Hash64;
 use rustc_hir as hir;
+use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
@@ -1487,6 +1488,10 @@ fn try_render_opty_upvars<'tcx>(
     Some(upvar_vals)
 }
 
+/// Produce a `"kind": "constant"` JSON entry with all fields except `name`
+/// filled in. Callers are responsible for setting `name`: `intern_alloc`
+/// lets `AllocIntern::insert` mint an anonymous `{{alloc}}` id, while
+/// `render_static_body` supplies the static's real name.
 fn make_allocation_body<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
@@ -1499,15 +1504,16 @@ fn make_allocation_body<'tcx>(
         mir: &mut MirState<'_, 'tcx>,
         icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
         d: &MPlaceTy<'tcx>,
+        is_mut: bool,
     ) -> serde_json::Value {
         let rty = d.layout.ty;
         let rlayout = mir.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
         let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
-        let rendered = try_render_opty(mir, icx, &mpty.into());
+        let rendered = render_opty(mir, icx, &mpty.into());
 
         json!({
             "kind": "constant",
-            "mutable": false,
+            "mutable": is_mut,
             "ty": rty.to_json(mir),
             "rendered": rendered,
         })
@@ -1587,14 +1593,35 @@ fn make_allocation_body<'tcx>(
             },
             ty::TyKind::Dynamic(ref preds, _) => {
                 let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
-                return do_default(mir, icx, &unpacked_d);
+                return do_default(mir, icx, &unpacked_d, false);
             },
             _ => ()
         }
     }
 
     // Default case
-    return do_default(mir, icx, d);
+    return do_default(mir, icx, d, is_mut);
+}
+
+/// Look up an anonymous allocation in the intern table, rendering and
+/// inserting it on first sight. Returns the JSON reference (its interned
+/// `{{alloc}}` name) that downstream should use to point at it.
+fn intern_alloc<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    ca: interpret::ConstAllocation<'tcx>,
+    ty: ty::Ty<'tcx>,
+    d: &MPlaceTy<'tcx>,
+    is_mut: bool,
+) -> serde_json::Value {
+    let def_id_str = match mir.allocs.get(ca, ty) {
+        Some(alloc_id) => alloc_id.to_owned(),
+        None => {
+            let body = make_allocation_body(mir, icx, d, is_mut);
+            mir.allocs.insert(mir.tcx, ca, ty, body)
+        }
+    };
+    def_id_str.to_json(mir)
 }
 
 fn try_render_ref_opty<'tcx>(
@@ -1628,20 +1655,33 @@ fn try_render_ref_opty<'tcx>(
     let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
 
     let def_id_json = match alloc {
-        interpret::GlobalAlloc::Static(def_id) =>
-            def_id.to_json(mir),
-        interpret::GlobalAlloc::Memory(ca) => {
-            let ty = op_ty.layout.ty;
-            let def_id_str = match mir.allocs.get(ca, ty) {
-                Some(alloc_id) => alloc_id.to_owned(),
-                None => {
-                    // create the allocation
-                    let body = make_allocation_body(mir, icx, &d, is_mut);
-                    mir.allocs.insert(tcx, ca, ty, body)
-                }
-            };
-            def_id_str.to_json(mir)
+        interpret::GlobalAlloc::Static(def_id) => {
+            if matches!(tcx.def_kind(def_id), DefKind::Static { nested: true, .. }) {
+                // Nested statics have no name of their own that downstream can
+                // refer to, so we handle them the same way as `GlobalAlloc::Memory`:
+                // render the initializer here and intern it under an anonymous name,
+                // using the surrounding pointer's pointee type.
+
+                // Rustc does not emit thread-local nested statics.
+                debug_assert!(
+                    !tcx.is_thread_local_static(def_id),
+                    "nested static {:?} is thread-local — rustc invariant violated",
+                    def_id,
+                );
+
+                let ca = tcx.eval_static_initializer(def_id).unwrap_or_else(|e|
+                    panic!(
+                        "eval_static_initializer failed for nested static {:?}: {:?}",
+                        def_id, e,
+                    )
+                );
+                intern_alloc(mir, icx, ca, op_ty.layout.ty, &d, is_mut)
+            } else {
+                def_id.to_json(mir)
+            }
         }
+        interpret::GlobalAlloc::Memory(ca) =>
+            intern_alloc(mir, icx, ca, op_ty.layout.ty, &d, is_mut),
         interpret::GlobalAlloc::TypeId {..} => {
             return raw_ptr(offset);
         }
@@ -1715,6 +1755,49 @@ fn try_render_ref_opty<'tcx>(
         "kind": "static_ref",
         "def_id": def_id_json,
     }));
+}
+
+/// Evaluate a static's initializer and render it as a complete
+/// `kind: "constant"` JSON entry ready to be emitted.
+pub fn render_static_body<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    def_id: DefId,
+    ty: ty::Ty<'tcx>,
+    name: String,
+    is_mut: bool,
+) -> serde_json::Value {
+    use rustc_const_eval::interpret::{CtfeProvenance, Pointer};
+
+    let tcx = mir.tcx;
+    let ca = tcx.eval_static_initializer(def_id).unwrap_or_else(|e|
+        panic!(
+            "eval_static_initializer failed for {:?} ({:?}): {:?}",
+            def_id, tcx.def_kind(def_id), e,
+        )
+    );
+
+    let mut icx = interpret::InterpCx::new(
+        tcx,
+        tcx.def_span(def_id),
+        ty::TypingEnv::fully_monomorphized(),
+        RenderConstMachine::new(),
+    );
+
+    let layout = tcx.layout_of(
+        ty::TypingEnv::fully_monomorphized().as_query_input(ty),
+    ).unwrap();
+
+    // Mint a fresh AllocId for this ConstAllocation. This is distinct from
+    // whatever AllocId rustc uses for this static internally, but this is okay
+    // because we only use the interned ConstAllocation and not the AllocId
+    // to identify the allocation (such as in AllocIntern keys).
+    let alloc_id = tcx.reserve_and_set_memory_alloc(ca);
+    let ptr = Pointer::new(CtfeProvenance::from(alloc_id), Size::ZERO);
+    let mpty = icx.ptr_to_mplace(ptr.into(), layout);
+
+    let mut j = make_allocation_body(mir, &mut icx, &mpty, is_mut);
+    j["name"] = name.into();
+    j
 }
 
 pub fn as_opty<'tcx>(

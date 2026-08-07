@@ -5,7 +5,7 @@
 
 /// The MIR JSON format
 type MIR = {
-  version: 12,
+  version: 13,
   fns: Fn[],
   adts: Adt[],
   statics: Static[],
@@ -192,9 +192,11 @@ type Layout = {
 // -----------------------------------------------------------------------------
 
 /// Globals
+///
+/// Both ordinary and thread-local statics are represented uniformly with
+/// `kind: "constant"`.
 type Static =
     { kind: "constant", name: DefId, ty: Ty, mutable: boolean, rendered: ConstVal }
-  | { kind: "body",     name: DefId, ty: Ty, mutable: boolean }
 
 
 // -----------------------------------------------------------------------------
