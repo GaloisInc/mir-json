@@ -1403,10 +1403,13 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
 
     let mut dep_hashes = HashSet::new();
     for &cnum in tcx.crates(()) {
-        dep_hashes.insert(SvhHash::new(
+
+        // Exclude proc_macro crates
+        if ! tcx.crate_dep_kind(cnum).macros_only(){        
+            dep_hashes.insert(SvhHash::new(
             tcx.crate_name(cnum).to_string(),
-            tcx.crate_hash(cnum).to_string() )
-        );
+            tcx.crate_hash(cnum).to_string())
+        );}
 
         let src = tcx.used_crate_source(cnum);
         let it = src.dylib.iter()
