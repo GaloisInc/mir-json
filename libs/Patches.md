@@ -357,6 +357,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   these optimized `SpecFill` impls in favor of generic ones that are slower but
   easier for `crucible-mir` to simulate.
 
+* Simplify optimized implementation of `str::from_utf8` (last applied: August 12, 2026)
+
+  `str::from_utf8`'s actual implementation relies on an optimization that
+  computes pointer alignment, but `crucible-mir`'s memory model is currently
+  too high-level to model this. We remove the optimization in favor of a slower
+  (but still correct) implementation.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
