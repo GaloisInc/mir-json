@@ -1,7 +1,6 @@
 //! Operations related to UTF-8 validation.
 
 use super::Utf8Error;
-use crate::intrinsics::const_eval_select;
 
 /// Returns the initial codepoint accumulator for the first byte.
 /// The first byte is special, only want bottom 5 bits for width 2, 4 bits
@@ -111,36 +110,12 @@ where
     Some(ch)
 }
 
-const NONASCII_MASK: usize = usize::repeat_u8(0x80);
-
-/// Returns `true` if any byte in the word `x` is nonascii (>= 128).
-#[inline]
-const fn contains_nonascii(x: usize) -> bool {
-    (x & NONASCII_MASK) != 0
-}
-
 /// Walks through `v` checking that it's a valid UTF-8 sequence,
 /// returning `Ok(())` in that case, or, if it is invalid, `Err(err)`.
 #[inline(always)]
-#[rustc_allow_const_fn_unstable(const_eval_select)] // fallback impl has same behavior
 pub(super) const fn run_utf8_validation(v: &[u8]) -> Result<(), Utf8Error> {
     let mut index = 0;
     let len = v.len();
-
-    const USIZE_BYTES: usize = size_of::<usize>();
-
-    let ascii_block_size = 2 * USIZE_BYTES;
-    let blocks_end = if len >= ascii_block_size { len - ascii_block_size + 1 } else { 0 };
-    // Below, we safely fall back to a slower codepath if the offset is `usize::MAX`,
-    // so the end-to-end behavior is the same at compiletime and runtime.
-    let align = const_eval_select!(
-        @capture { v: &[u8] } -> usize:
-        if const {
-            usize::MAX
-        } else {
-            v.as_ptr().align_offset(USIZE_BYTES)
-        }
-    );
 
     while index < len {
         let old_offset = index;
@@ -216,34 +191,8 @@ pub(super) const fn run_utf8_validation(v: &[u8]) -> Result<(), Utf8Error> {
             }
             index += 1;
         } else {
-            // Ascii case, try to skip forward quickly.
-            // When the pointer is aligned, read 2 words of data per iteration
-            // until we find a word containing a non-ascii byte.
-            if align != usize::MAX && align.wrapping_sub(index).is_multiple_of(USIZE_BYTES) {
-                let ptr = v.as_ptr();
-                while index < blocks_end {
-                    // SAFETY: since `align - index` and `ascii_block_size` are
-                    // multiples of `USIZE_BYTES`, `block = ptr.add(index)` is
-                    // always aligned with a `usize` so it's safe to dereference
-                    // both `block` and `block.add(1)`.
-                    unsafe {
-                        let block = ptr.add(index) as *const usize;
-                        // break if there is a nonascii byte
-                        let zu = contains_nonascii(*block);
-                        let zv = contains_nonascii(*block.add(1));
-                        if zu || zv {
-                            break;
-                        }
-                    }
-                    index += ascii_block_size;
-                }
-                // step from the point where the wordwise loop stopped
-                while index < len && v[index] < 128 {
-                    index += 1;
-                }
-            } else {
-                index += 1;
-            }
+            // ASCII characters are always valid.
+            index += 1;
         }
     }
 
