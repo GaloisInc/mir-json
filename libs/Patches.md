@@ -159,6 +159,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   The actual implementations use pointer casts that Crucible can't handle.
 
+* Simplify optimized implementation of `str::from_utf8` (last applied: September 21, 2026)
+
+  `str::from_utf8`'s actual implementation relies on an optimization that
+  computes pointer alignment, but `crucible-mir`'s memory model is currently
+  too high-level to model this. We remove the optimization in favor of a slower
+  (but still correct) implementation.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
