@@ -669,12 +669,12 @@ impl std::fmt::Display for DependencyError {
 impl std::error::Error for DependencyError {}
 
 /// Function that checks if the crate dependencies were provided as inputs to the linker
-pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError>{
+pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError> {
     let mut linker_inputs: HashSet<SvhHash>  = HashSet::new();
-    for index in crate_indices{
+    for index in crate_indices {
         linker_inputs.insert(index.root_hash.clone());
     }
-    for index in crate_indices{
+    for index in crate_indices {
         let diff: Vec<SvhHash> = index.dep_hashes.difference(&linker_inputs).map(|hash|hash.clone()).collect();
         if diff.len() != 0 {
             return Err(DependencyError{root_hash: index.root_hash.clone(), dependency_hashes: diff});
