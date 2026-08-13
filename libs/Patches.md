@@ -268,12 +268,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   See also the "`{Arc,Rc}::{from,into}_inner_raw`" below.
 
-* Use `Arc::{from,into}_inner_raw` in `Thread` implementation (last applied: June 12, 2026)
-
-  This avoids issues with `thread::current()`, which creates a `Thread` handle
-  on first use and stores it as `*const ()` in a thread-local variable for
-  later use.
-
 * Don't use a `union` in `LazyLock`'s internals (last applied June 12, 2026)
 
   The internals of `std::sync::LazyLock` use a `union` value to distinguish
