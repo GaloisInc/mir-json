@@ -174,13 +174,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `core::ptr::without_provenance`, which uses an int-to-pointer transmute
   instead.
 
-* Remove the use of `ptr::from_raw_parts` from `ptr::null` (last applied: June 10, 2026)
-
-  The `ptr::from_raw_parts` function implicitly performs a pointer cast through
-  the `AggregateKind::RawPtr` intrinsic, which crucible-mir does not support for
-  non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
-  `ptr::null` and `ptr::null_mut`.
-
 * Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
 
   The actual implementations use pointer casts that Crucible can't handle.
