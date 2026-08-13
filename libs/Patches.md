@@ -327,6 +327,20 @@ patch. Alternatively, if you choose to deviate from the note, make sure to do
 so after carefully considering why deviating is the right choice, and consider
 updating the note in the process.
 
+## Mark hook functions as `#[inline(never)]`
+
+We want to ensure that custom hook functions (e.g.,
+`crucible_null_hook`) are always present in generated MIR code,
+regardless of whether or not optimizations are applied. In some cases, it may
+not suffice to compile the code containing the hook functions without
+optimizations (as `mir-json-translate-libs` currently does), as `rustc` can
+still inline code that is contained in a different compilation unit. (See
+[#153](https://github.com/GaloisInc/mir-json/issues/153) for an example where
+this actually happened.)
+
+As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
+ensure that they persist when optimizations are applied.
+
 ## Avoid raw pointer comparisons
 
 We avoid using `PartialOrd`-based comparisons with raw pointers values, e.g.,
