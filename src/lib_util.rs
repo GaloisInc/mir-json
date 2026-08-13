@@ -24,7 +24,8 @@ use std::fs::File;
 use std::hash::Hash;
 use std::io::{self, Write, Cursor, BufWriter};
 use std::path::Path;
-
+use rustc_middle::ty::{ TyCtxt};
+use rustc_span::def_id::CrateNum;
 
 use serde::ser;
 use serde_json::Value as JsonValue;
@@ -36,23 +37,49 @@ use crate::schema_ver::SCHEMA_VER;
 use crate::tar_stream::{TarStream, TarEntryStream};
 
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
-pub struct SvhHash{
-    /// The name of crate
+pub struct UniqueCrateId{
+    /// The name of the crate (regardless of crate aliases)
     pub name: String,
-    /// The Svh Hash of that crate as a string
+    /// A unique identifier for this crate that is based on the
+    /// Strict Version Hash (SVH). See how this struct is constructed
+    /// for more details.
     pub hash: String,
 }
-impl std::fmt::Display for SvhHash {
+impl std::fmt::Display for UniqueCrateId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Crate< name: {}, Svh Hash: {} >", self.name, self.hash)
     }
 }
 
-impl SvhHash{
-    pub fn new( name: String,hash: String) -> Self {
-        SvhHash { name, hash }
+impl UniqueCrateId{
+    pub fn new( tcx: TyCtxt, cnum: CrateNum) -> Self {
+        //  Note that crate aliases demarking different versions of the
+        //  same crate will have the same crate name but different crate
+        //  hashes.  
+        UniqueCrateId {    
+            name: tcx.crate_name(cnum).to_string(),
+            hash: tcx.crate_hash(cnum).to_string() 
+        }
     }
 }
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CrateDependencies{
+    /// The crate's unique identifier 
+    root_hash:UniqueCrateId,
+    /// A hashset of unique identifiers for the crate's dependencies
+    dep_hashes: HashSet<UniqueCrateId>
+}
+
+impl CrateDependencies{
+    pub fn new( root_hash:UniqueCrateId, dep_hashes: HashSet<UniqueCrateId>) -> Self { 
+        CrateDependencies {             
+            root_hash,
+            dep_hashes
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateIndex {
     /// Name table.  Contains every string in the crate that looks like it might be an item name.
@@ -69,12 +96,21 @@ pub struct CrateIndex {
 
     /// The schema version in use. (See also `SCHEMA_VER`.)
     pub version: u64,
-    /// The current crate's [`SvhHash`]
-    pub root_hash: SvhHash,
-    /// Mapping from the names of crates the current crate depends on to their Svh hashes as Strings.
-    /// The [`SvhHash`] struct consist of a tuple of a crate name and its hash
-    pub dep_hashes: HashSet<SvhHash>
+    /// Extra information that allows us to uniquely identify this crate and
+    /// it's dependencies
+    pub extra_data: CrateDependencies,
 }
+
+impl CrateIndex{
+    pub fn root_hash(&self) -> UniqueCrateId{
+        self.extra_data.root_hash.clone()
+    }
+    pub fn dep_hashes(&self) -> HashSet<UniqueCrateId>{
+        self.extra_data.dep_hashes.clone()
+    }
+}
+
+    
 
 /// Metadata about a single item.
 ///
@@ -265,7 +301,7 @@ impl EmitterState {
         if is_test { self.tests.insert(name_id); }
     }
 
-    pub fn finish(self, dep_hashes: HashSet<SvhHash>, root_hash: SvhHash) -> CrateIndex {
+    pub fn finish(self, extra_data: CrateDependencies) -> CrateIndex {
         let names = self.intern.into_names();
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
@@ -290,7 +326,7 @@ impl EmitterState {
 
         let version = SCHEMA_VER;
 
-        CrateIndex { names, items, roots, tests, version, root_hash, dep_hashes }
+        CrateIndex { names, items, roots, tests, version, extra_data}
     }
 }
 
@@ -380,12 +416,12 @@ impl<W: Write> Emitter<W> {
         Ok(())
     }
 
-    pub fn finish(self, dep_hashes: HashSet<SvhHash>, root_hash: SvhHash) -> CrateIndex {
-        self.state.finish(dep_hashes, root_hash)
+    pub fn finish(self, extra_data: CrateDependencies) -> CrateIndex {
+        self.state.finish(extra_data)
     }
 }
 
-pub fn write_indexed_crate<W>(out: W, j: &JsonValue, dep_hashes: HashSet<SvhHash>, root_hash: SvhHash) -> serde_cbor::Result<()>
+pub fn write_indexed_crate<W>(out: W, j: &JsonValue, extra_data: CrateDependencies) -> serde_cbor::Result<()>
 where W: Write + Send + 'static {
     // Serialize the two files to byte arrays.  This is needed so their lengths will be known when
     // creating the archive.
@@ -393,7 +429,7 @@ where W: Write + Send + 'static {
     let mut emitter = Emitter::new(&mut json_buf);
     emitter.emit_crate(j)?;
 
-    let index = emitter.finish(dep_hashes, root_hash);
+    let index = emitter.finish(extra_data);
     let index_buf = serde_cbor::to_vec(&index)?;
 
     let mut tar = tar::Builder::new(out);
@@ -581,10 +617,10 @@ impl<W: Write> StreamingEmitter<W> {
         Ok(se)
     }
 
-    pub fn finish(mut self, svh_hashes: HashSet<SvhHash>, root_hash: SvhHash) -> io::Result<(W, CrateIndex)> {
+    pub fn finish(mut self, extra_data: CrateDependencies) -> io::Result<(W, CrateIndex)> {
         // TODO: expose this through a method on Emitter rather than reaching into its internal
         // state.
-        let index = self.inner.state.finish(svh_hashes, root_hash);
+        let index = self.inner.state.finish(extra_data);
         write!(self.inner.writer, "]")?;
         Ok((self.inner.writer.w, index))
     }
@@ -643,8 +679,8 @@ pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
     Ok(MirStream { emitter })
 }
 
-pub fn finish_streaming(ms: MirStream, svh_hashes: HashSet<SvhHash>, root_hash: SvhHash) -> serde_cbor::Result<()> {
-    let (json_entry, index) = ms.emitter.finish(svh_hashes, root_hash)?;
+pub fn finish_streaming(ms: MirStream, extra_data: CrateDependencies) -> serde_cbor::Result<()> {
+    let (json_entry, index) = ms.emitter.finish(extra_data)?;
     let tar = json_entry.finish_entry()?;
     let mut index_entry = tar.start_entry(make_tar_entry("index.cbor")?)?;
     serde_cbor::to_writer(&mut index_entry, &index)?;
@@ -656,8 +692,8 @@ pub fn finish_streaming(ms: MirStream, svh_hashes: HashSet<SvhHash>, root_hash: 
 
 #[derive(Debug)]
 pub struct DependencyError {
-    root_hash: SvhHash,
-    dependency_hashes: Vec<SvhHash>,
+    root_hash: UniqueCrateId,
+    dependency_hashes: Vec<UniqueCrateId>,
 }
 
 impl std::fmt::Display for DependencyError {
@@ -670,14 +706,14 @@ impl std::error::Error for DependencyError {}
 
 /// Function that checks if the crate dependencies were provided as inputs to the linker
 pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError> {
-    let mut linker_inputs: HashSet<SvhHash>  = HashSet::new();
+    let mut linker_inputs: HashSet<UniqueCrateId>  = HashSet::new();
     for index in crate_indices {
-        linker_inputs.insert(index.root_hash.clone());
+        linker_inputs.insert(index.root_hash());
     }
     for index in crate_indices {
-        let diff: Vec<SvhHash> = index.dep_hashes.difference(&linker_inputs).map(|hash|hash.clone()).collect();
+        let diff: Vec<UniqueCrateId> = index.dep_hashes().difference(&linker_inputs).map(|hash|hash.clone()).collect();
         if diff.len() != 0 {
-            return Err(DependencyError{root_hash: index.root_hash.clone(), dependency_hashes: diff});
+            return Err(DependencyError{root_hash: index.root_hash(), dependency_hashes: diff});
         }
     }
     return Ok(());
@@ -686,6 +722,23 @@ pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), Dependency
 
 impl From<DependencyError> for serde_cbor::Error {
     fn from(error: DependencyError) -> Self {
+        ser::Error::custom(error.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct EmptyCrateDependenciesError;
+
+impl std::fmt::Display for EmptyCrateDependenciesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "The CrateDependencies struct that uniquely identifies a crate and its independencies was not provided!")
+    }
+}
+
+impl std::error::Error for EmptyCrateDependenciesError {}
+
+impl From<EmptyCrateDependenciesError> for serde_cbor::Error {
+    fn from(error: EmptyCrateDependenciesError) -> Self {
         ser::Error::custom(error.to_string())
     }
 }
