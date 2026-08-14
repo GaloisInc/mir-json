@@ -66,6 +66,11 @@ impl UniqueCrateId{
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateDependencies{
     /// The crate's unique identifier 
+    /// 
+    /// Note that when we perform the validation check to see if all
+    /// listed crate dependencies have been passed to the linker, the
+    /// root_hash below allows us to track which crates were passed as inputs to the 
+    /// linker.
     root_hash:UniqueCrateId,
     /// A hashset of unique identifiers for the crate's dependencies
     dep_hashes: HashSet<UniqueCrateId>
