@@ -51,6 +51,36 @@ impl std::fmt::Display for UniqueCrateId {
     }
 }
 
+/*
+Note [Crate aliases]
+~~~~~~~~~~~~~~~~~~~~~
+
+Imagine for instance that you are doing something like this in your toml in say crux-mir's example-1:
+```
+[dependencies]
+
+generic-array-1 = {package = "generic-array", version = "1.4.4"}
+generic-array-2 = {package = "generic-array", version = "0.4"}
+```
+
+and then including them as
+
+```
+use generic_array_1::*;
+use generic_array_2::*;
+```
+
+Then these are translated into the following in the MIR file:
+
+{'dep_hashes': [
+        {'hash': 'b8ac3e84cb7ef863117d4a913e976710',
+               'name': 'generic_array'},
+        {'hash': '7b0428ba33d86c7150ce93427cfd1e59',
+         'name': 'generic_array'},
+]}
+
+i.e. the original crate name is conserved (rather than the crate alias), and each version has a different svh hash.
+*/
 impl UniqueCrateId{
     pub fn new( tcx: TyCtxt, cnum: CrateNum) -> Self {
         //  Note that crate aliases demarking different versions of the
