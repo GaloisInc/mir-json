@@ -1369,6 +1369,70 @@ pub struct AnalysisData<O> {
     pub output: O,
 }
 
+/*
+Note [CrateDepKind::MacrosOnly]
+~~~~~~~~~~~~~~~~~~~~~
+In what follows, we store the crate dependencies of the current crate for later linker 
+related validation and exclude crates flagged as CrateDepKind::MacrosOnly.
+The CrateDepKind enum has some misleading documentation about what is considered a 
+CrateDepKind::MacrosOnly crate. The documentation says:
+
+    "A dependency that is only used for its macros."
+
+This is actually slightly inaccurate. CrateDepKind::MacrosOnly is dedicated to proc_macro crates,
+rather than other crates where the user only imports macros, those being flagged as CrateDepKind::Unconditional. 
+
+In order to test this, we created a crate called hello_world that looked like this:
+
+```
+#[macro_export]
+macro_rules! foo {
+    ($msg:expr) => {
+        $msg
+    };
+}
+
+pub fn add_one(x: usize) -> usize{
+    return x + 1;
+}
+```
+
+Then I added the following to crux-mir's example-1:
+
+```
+use hello_world::foo;
+
+/// Find-first-set (fast implementation)
+pub fn ffs_fast(mut i: u32) -> u32 {
+    foo!("hello");
+    let mut n = 1;
+    if (i & 0xffff) == 0 { n += 16; i >>= 16; }
+    if (i & 0x00ff) == 0 { n +=  8; i >>=  8; }
+    if (i & 0x000f) == 0 { n +=  4; i >>=  4; }
+    if (i & 0x0003) == 0 { n +=  2; i >>=  2; }
+    if i != 0 {
+        return n + ((i.wrapping_add(1)) & 0x01);
+    } else {
+        return 0;
+    }
+}
+
+/// Find-first-set (reference implementation)
+pub fn ffs_ref(word: u32) -> u32 {
+    foo!("hello");
+    for i in 0 .. 32 {
+        if word & (1 << i) != 0 {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+```
+The hello_world crate was flagged as CrateDepKind::Unconditional by the function below.
+For more information on why we exclude proc_macro crates to begin with, please checkou the
+note over lib_util::check_dependencies.
+*/
+
 /// Analyze the crate currently being compiled.  Returns `Ok(Some(data))` upon successfully writing
 /// the crate MIR, returns `Ok(None)` when there is no need to write out MIR (namely, when `comp`
 /// is not producing an `Exe` output), and returns `Err(e)` on I/O or serialization errors.
