@@ -43,21 +43,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
   The actual implementation uses a pointer cast that Crucible can't handle.
 
-* Add a hook for the cast in `std::slice::as_chunks_unchecked(_mut)` (last applied June 9, 2026)
-
-  These functions convert `&[T]` to `&[[T; N]]`, which internally involves a
-  cast from `*const T` to `*const [T; N]` that the current crux-mir memory
-  model doesn't support in general.  This patch adds a hook for the cast so we
-  can implement it using crux-mir's new `AggregateAsChunks_RefPath` feature,
-  which is a special case designed specifically for `<[_]>::as_chunks`.
-
-  Given this capability the following functions are then rewritten in terms of
-  `as_chunks_unchecked(_mut)`: `first_chunk(_mut)`, `split_first_chunk(_mut)`,
-  `last_chunk(_mut)`, `split_last_chunk(_mut)`, `slice::as(_mut)_array`.
-
-  See also the "Limitations of zero-length arrays and
-  `slice::as_chunks_unchecked(_mut)`" note below.
-
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: June 9, 2026)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
@@ -189,13 +174,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `core::ptr::without_provenance`, which uses an int-to-pointer transmute
   instead.
 
-* Remove the use of `ptr::from_raw_parts` from `ptr::null` (last applied: June 10, 2026)
-
-  The `ptr::from_raw_parts` function implicitly performs a pointer cast through
-  the `AggregateKind::RawPtr` intrinsic, which crucible-mir does not support for
-  non-slice types. This patch removes direct calls to `ptr::from_raw_parts` from
-  `ptr::null` and `ptr::null_mut`.
-
 * Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
 
   The actual implementations use pointer casts that Crucible can't handle.
@@ -226,14 +204,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   Crux's version is not suitable for doing actual timing (it hard-codes the
   time to a fixed date), but it does simulate much more easily than the actual
   implementation.
-
-* Replace `{*mut,NonNull}::cast` with `transmute` in `RawVec` initialization (last applied: June 10, 2026)
-
-  `RawVec` casts `*mut T` to `*mut u8` to store it with the type erased, and
-  casts back later before dereferencing.  When `T = [u8; N]`, Crucible handles
-  the `*mut [u8; N]` to `*mut u8` cast by inserting an indexing projection,
-  which is unwanted here and results in an invalid reference after casting
-  back.
 
 * Always use regular `sleep` in `std::sys::thread::unix::sleep_until` (last applied: June 10, 2026)
 
@@ -272,22 +242,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   storage.  Crucible doesn't support untyped `malloc`, so this patch switches
   back to using the global allocator instead.  We already don't support custom
   global allocators, so this shouldn't cause any problems.
-
-* Add `{Arc,Rc}::{from,into}_inner_raw` API functions (last applied: June 12, 2026)
-
-  `crucible-mir` is not currently able to simulate the
-  `{Arc,Rc}::{from,into}_raw` functions, as they rely on non-trivial pointer
-  offsets plus read from type-casted pointers.
-  `{Arc,Rc}::{from,into}_inner_raw` offer alternatives with very similar types,
-  but which are implemented in a Crucible-friendly way.
-
-  See also the "`{Arc,Rc}::{from,into}_inner_raw`" below.
-
-* Use `Arc::{from,into}_inner_raw` in `Thread` implementation (last applied: June 12, 2026)
-
-  This avoids issues with `thread::current()`, which creates a `Thread` handle
-  on first use and stores it as `*const ()` in a thread-local variable for
-  later use.
 
 * Don't use a `union` in `LazyLock`'s internals (last applied June 12, 2026)
 
@@ -387,36 +341,6 @@ this actually happened.)
 As a safeguard, we mark all custom hook functions as `#[inline(never)]` to
 ensure that they persist when optimizations are applied.
 
-## Limitations of zero-length arrays and `slice::as_chunks_unchecked(_mut)`
-
-One of the reasons why we override `slice::as_chunks_unchecked(_mut)` is so
-that we can guarantee that the input reference aliases the output reference.
-Currently, this requires custom overrides in `crucible-mir` to accomplish.
-Moreover, we can define many similar-looking functions in terms of
-`slice::as_chunks_unchecked(_mut)`, which allows us to get away with only
-defining two custom overrides.
-
-Unfortunately, this approach has a notable drawback. We define functions such
-as `slice::as(_mut)_array` in terms of `slice::as_chunks_unchecked(_mut)`, but
-while the former functions work for arrays of any length, the latter functions
-have a precondition that the array length is non-zero. This means that if we
-call `slice::as(_mut)_array` with an array length of zero, then we cannot call
-`slice::as_chunks_unchecked(_mut)` and must use a different approach.
-
-One possible way to go about this would be to give `slice::as(_mut)_array` and
-friends additional custom overrides to handle the length-0 cases. This is
-doable, but it would be annoying to maintain, given that we would need to add a
-significant amount of additional special-casing. What's more, we are planning
-to remove these special cases later once the migration to `MirAggregate` is
-finished (see https://github.com/GaloisInc/crucible/issues/1499), so it feels
-wasteful to invest in this kind of solution.
-
-We instead adopt a less correct but much cheaper solution: when the array
-length is zero, simply return `&[]` or `&mut []`. This sort of output reference
-will _not_ alias the input reference, but since the output has no actual
-elements, the lack of aliasing is hard to observe. As such, this compromise is
-likely fine for most use cases.
-
 ## Avoid raw pointer comparisons
 
 We avoid using `PartialOrd`-based comparisons with raw pointers values, e.g.,
@@ -450,54 +374,3 @@ Using the `PartialEq` impl for raw pointers works better in a `crucible-mir`
 context. Instead of raising a simulation error, `crucible-mir` will simply
 return `False` when checking if a `MirReference_Integer` is equal to a valid
 `MirReference`.
-
-## `{Arc,Rc}::{from,into}_inner_raw`
-
-`crucible-mir` is not currently able to simulate the
-`{Arc,Rc}::{from,into}_raw` functions. This is because they subtract a constant
-offset from a `*T` pointer in order to obtain a pointer of type
-`*ArcInner<T>`/`*RcInner<T>`. This sort of pointer arithmetic is permitted in
-Rust, but `crucible-mir`'s memory model is not yet sophisticated enough to
-support this.
-
-As a workaround, we offer `{Arc,Rc}::{from,into}_inner_raw` API functions,
-which work directly on `*ArcInner<T>`/`*RcInner<T>` pointers instead of `*T`
-pointers, thereby avoiding the need for problematic pointer casts. This is not
-a perfect solution, as these functions will not work as drop-in replacements
-for `{Arc,Rc}::{from,into}_raw` in all situations due to the differences in
-types. Where they _do_ work as drop-in replacements are situations where a call
-to `{Arc,Rc}::into_raw` is followed by another call to `{Arc,Rc}::from_raw`,
-without reading the intermediate raw pointer in between. For instance, in the
-following example (taken from the [documentation for
-`Arc::from_raw`](https://doc.rust-lang.org/1.91.0/std/sync/struct.Arc.html#method.from_raw)):
-
-```rs
-use std::sync::Arc;
-
-let x = Arc::new("hello".to_owned());
-let x_ptr = Arc::into_raw(x);
-
-unsafe {
-    // Convert back to an `Arc` to prevent leak.
-    let x = Arc::from_raw(x_ptr);
-    assert_eq!(&*x, "hello");
-
-    // Further calls to `Arc::from_raw(x_ptr)` would be memory-unsafe.
-}
-```
-
-The calls to `Arc::{from,into}_raw` can be replaced with
-`Arc::{from,into}_inner_raw` with no change in functionality. This sort of
-pattern occurs fairly often in practice, so it is worth having at least some
-support for it. For example, the internals of `std::thread` also construct
-`Arc` values in a very similar fashion, so we also patch `std::thread` to use
-`Arc::{from,into}_inner_raw`.
-
-(An API design note: because `{Arc,Rc}::{from,into}_inner_raw` are exposed as
-part of the public API, we must also expose the (previously internal)
-`ArcInner` and `RcInner` types as a consequence.)
-
-Once `crucible-mir` finishes migrating to use `MirAggregate` (see
-https://github.com/GaloisInc/crucible/issues/1499), it should be able to
-simulate `{Arc,Rc}::{from,into}_raw` properly, which would allow us to remove
-`{Arc,Rc}::{from,into}_inner_raw`.
