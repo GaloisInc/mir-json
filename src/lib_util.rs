@@ -705,6 +705,25 @@ impl std::fmt::Display for DependencyError {
 impl std::error::Error for DependencyError {}
 
 /// Function that checks if the crate dependencies were provided as inputs to the linker
+
+
+/*
+Note [Excluding proc macro crates]
+~~~~~~~~~~~~~~~~~~~~~
+(Courtesy of @spernsteiner)
+
+We exclude proc macro crates in the check below because they are not linked into the final artifact.
+In general, since proc macro crates are always compiled for the host architecture rather than the target 
+architecture (which may be different, even if in practice it's usually the same), 
+they can't be linked into target-architecture build outputs (and anyway there's no need, 
+since the proc macro code only runs at compile time).
+
+
+For example, suppose you have crate foo that depends on my_proc_macros and bar (a normal, non-proc-macro crate).  
+If you're on an amd64 machine and cross-compiling for wasm, then Cargo will build bar for wasm so it can be
+linked into the final wasm output, but it will build my_proc_macros for amd64 so the code from that crate 
+can be loaded and run while compiling foo (which happens on your amd64 build machine). 
+*/
 pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError> {
     let mut linker_inputs: HashSet<UniqueCrateId>  = HashSet::new();
     for index in crate_indices {
