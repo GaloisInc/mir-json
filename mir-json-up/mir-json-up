@@ -41,8 +41,10 @@ require_rust_component() {
     fi
 }
 
-# Need 'git' to download 'mir-json', 'cc' to run the compiler,
-# and 'rustup' to handle Rust dependencies.
+# Need 'git' to download 'mir-json', 'cc' to run the compiler
+# (the 'mir-json' build will fail for lack of a linker if a
+# C compiler is not installed), and 'rustup' to handle Rust
+# dependencies.
 check_tools() {
     require_tool cc "a C compiler"
     require_tool git "Git"
