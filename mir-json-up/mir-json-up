@@ -222,10 +222,15 @@ check_general_prerequisites() {
             echo "Checking out source repository for mir-json ${MIR_JSON_VERSION}" 1>&2
             get_mir_json_src "${MIR_JSON_VERSION}"
        fi
-    fi
-    if [[ ! -d "$(get_mir_json_src_dir ${MIR_JSON_VERSION})" ]]; then
-        echo "mir-json ${MIR_JSON_VERSION} not checked out" 1>&2
-        exit 1
+        if [[ ! -d "$(get_mir_json_src_dir ${MIR_JSON_VERSION})" ]]; then
+            echo "mir-json ${MIR_JSON_VERSION} failed to check out" 1>&2
+            exit 1
+        fi
+    else
+        if [[ ! -d "$(get_mir_json_src_dir ${MIR_JSON_VERSION})" ]]; then
+            echo "mir-json ${MIR_JSON_VERSION} not checked out" 1>&2
+            exit 1
+        fi
     fi
 }
 
