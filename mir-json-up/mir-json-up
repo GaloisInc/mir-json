@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 
 set -e
+IFS='
+'
 
 require_tool() {
     local TOOL_EXEC="$1"
     local TOOL_NAME="$2"
     set +e
-    TOOL_PATH=$(which "${TOOL_EXEC}")
+    local TOOL_PATH=$(which "${TOOL_EXEC}")
     if [[ "$?" != 0 ]]; then
-        echo "This script requires ${TOOL_NAME}"
+        echo "This script requires ${TOOL_NAME}" 1>&2
         exit 1
     fi
     set -e
@@ -16,10 +18,14 @@ require_tool() {
 
 require_rust_toolchain() {
     local RUST_TOOLCHAIN="${1:-${MIR_JSON_RUST_TOOLCHAIN}}"
+    # If 'rustup toolchain list' is run in any directory containing
+    # a 'rust-toolchain.toml' file, it will automatically install the
+    # toolchain named therein. To prevent this, change to a directory
+    # with no 'rust-toolchain.toml' file.
     pushd "${MIR_JSON_INSTALL_DIR}" > /dev/null
     if [[ $(rustup toolchain list | grep "${RUST_TOOLCHAIN}") == "" ]]; then
-        echo "Building mir-json requires the Rust toolchain ${RUST_TOOLCHAIN}; install it with"
-        echo "  rustup toolchain install ${RUST_TOOLCHAIN}"
+        echo "Building mir-json requires the Rust toolchain ${RUST_TOOLCHAIN}; install it with" 1>&2
+        echo "  rustup toolchain install ${RUST_TOOLCHAIN}" 1>&2
         exit 1
     fi
     popd > /dev/null
@@ -29,8 +35,8 @@ require_rust_component() {
     local COMPONENT_NAME="$1"
     require_rust_toolchain "${MIR_JSON_RUST_TOOLCHAIN}"
     if [[ $(rustup component list --toolchain "${MIR_JSON_RUST_TOOLCHAIN}" --installed | grep -c "^${COMPONENT_NAME}") == 0 ]]; then
-        echo "Building mir-json requires the Rust component ${COMPONENT_NAME}; install it with"
-        echo "  rustup component add --toolchain \"${MIR_JSON_RUST_TOOLCHAIN}\" ${COMPONENT_NAME}"
+        echo "Building mir-json requires the Rust component ${COMPONENT_NAME}; install it with" 1>&2
+        echo "  rustup component add --toolchain \"${MIR_JSON_RUST_TOOLCHAIN}\" ${COMPONENT_NAME}" 1>&2
         exit 1
     fi
 }
@@ -46,8 +52,8 @@ check_tools() {
 check_rust_toolchain() {
     require_rust_toolchain "${MIR_JSON_RUST_TOOLCHAIN}"
     if [[ $(rustup target list --installed | grep "${TARGET_TRIPLET}") == "" ]]; then
-        echo "Target ${TARGET_TRIPLET} not installed; install with"
-        echo "  rustup target add ${TARGET_TRIPLET}"
+        echo "Target ${TARGET_TRIPLET} not installed; install with" 1>&2
+        echo "  rustup target add ${TARGET_TRIPLET}" 1>&2
         exit 1
     fi
 }
@@ -57,6 +63,21 @@ get_toolchain_dir() {
     local TOOLCHAIN="${2:-${MIR_JSON_RUST_TOOLCHAIN}}"
     local TARGET="${3:-${TARGET_TRIPLET}}"
     echo "${MIR_JSON_INSTALL_DIR}/toolchains/${VERSION}/${TOOLCHAIN}/${TARGET}"
+}
+
+toolchain_is_default() {
+    local TOOLCHAIN_DIR="${1:-$(get_toolchain_dir)}"
+
+    if [[ -f "${MIR_JSON_INSTALL_DIR}/default/id" ]]; then
+        ACTIVE_TOOLCHAIN=$(cat "${MIR_JSON_INSTALL_DIR}/default/id")
+        if [[ "${ACTIVE_TOOLCHAIN}" == "${TOOLCHAIN_DIR#${MIR_JSON_INSTALL_DIR}/toolchains/}" ]]; then
+            echo -n "0"
+        else
+            echo -n "1"
+        fi
+    else
+        echo -n "1"
+    fi
 }
 
 get_mir_json_src_dir() {
@@ -72,6 +93,7 @@ get_mir_json_src() {
     if ! [[ -d mir-json ]]; then
         git clone https://github.com/GaloisInc/mir-json.git
     fi
+    cp mir-json/rust-toolchain.toml .
     cd mir-json
     set +e
     if [[ $(git show-ref refs/tags/"${MIR_JSON_VERSION}") == "" ]]; then
@@ -82,13 +104,19 @@ get_mir_json_src() {
     popd > /dev/null
 }
 
+cleanup_mir_json_src() {
+    local VERSION="${1:-${MIR_JSON_VERSION}}"
+    local MIR_JSON_SRC_DIR=$(get_mir_json_src_dir "$VERSION")
+    rm -rf "${MIR_JSON_SRC_DIR}/mir-json"
+}
+
 create_installation_dir() {
     if [[ -d "${MIR_JSON_INSTALL_DIR}/default/bin" ]]; then
           rm -rf "${MIR_JSON_INSTALL_DIR}/default/bin"
     fi
     mkdir -p "${MIR_JSON_INSTALL_DIR}/default/bin"
     pushd "${MIR_JSON_INSTALL_DIR}/default/bin" > /dev/null
-    ln -s ../../mir-json-up
+    ln -s ../../mir-json-up mir-json-up
     if [[ ! -e "${MIR_JSON_INSTALL_DIR}/mir-json-up" ]]; then
          cp "${SCRIPT_FILE}" "${MIR_JSON_INSTALL_DIR}/mir-json-up"
     fi
@@ -104,10 +132,11 @@ create_default_symlinks() {
         rm -rf "${MIR_JSON_INSTALL_DIR}/default"
     fi
     create_installation_dir
-    echo "${TOOLCHAIN_DIR}" > "${MIR_JSON_INSTALL_DIR}/default/id"
+    local TOOLCHAINS_DIR="${MIR_JSON_INSTALL_DIR}/toolchains/"
+    echo -n "${TOOLCHAIN_DIR#${TOOLCHAINS_DIR}}" > "${MIR_JSON_INSTALL_DIR}/default/id"
     pushd "${MIR_JSON_INSTALL_DIR}/default/bin" > /dev/null
-    for execFile in $(find "${MIR_JSON_BIN_DIR}" -maxdepth 1 -type f); do
-        if [[ -x "${execFile}" ]]; then
+    for execFile in "${MIR_JSON_BIN_DIR}"/*; do
+        if [[ -f "${execFile}" && -x "${execFile}" ]]; then
             ln -s "${execFile}"
         fi
     done
@@ -125,13 +154,15 @@ build_mir_json() {
     cargo +"${MIR_JSON_RUST_TOOLCHAIN}" build -r --target "${TARGET_TRIPLET}" --target-dir "${MIR_JSON_BIN_DIR}" --locked
     PATH="${MIR_JSON_BIN_DIR}/${TARGET_TRIPLET}/release:$PATH"
     mir-json-translate-libs --target "${TARGET_TRIPLET}"
-    if [[ $? == 0 ]]; then
+    if [[ $? ]]; then
         if [[ -e "${MIR_JSON_RLIBS_DIR}" ]]; then
             rm -rfv "${MIR_JSON_RLIBS_DIR}"
         fi
-        cp -RL rlibs "${MIR_JSON_RLIBS_DIR}"
+        tar cf rlibs.tar rlibs
+        pushd "$(get_toolchain_dir)" > /dev/null
+        tar xf "${MIR_JSON_SRC_DIR}/mir-json/rlibs.tar"
     fi
-    if [[ ! -d "${MIR_JSON_INSTALL_DIR}/default/bin/mir-json" ]]; then
+    if [[ ! -f "${MIR_JSON_INSTALL_DIR}/default/bin/mir-json" ]]; then
         create_default_symlinks "$(get_toolchain_dir)"
     fi
     popd > /dev/null
@@ -140,11 +171,15 @@ build_mir_json() {
 get_toolchain_from_mir_json_version() {
     local VERSION="${1:-${MIR_JSON_VERSION}}"
     local MIR_JSON_SRC_DIR=$(get_mir_json_src_dir "${VERSION}")
-    echo $(cat "${MIR_JSON_SRC_DIR}/mir-json/rust-toolchain.toml" | grep "^channel = " | cut -f 2 -d '"')
+    echo $(cat "${MIR_JSON_SRC_DIR}/rust-toolchain.toml" | grep "^channel = " | cut -f 2 -d '"')
 }
 
 get_target_triplet_from_toolchain() {
     local RUST_TOOLCHAIN="${1:-${MIR_JSON_RUST_TOOLCHAIN}}"
+    # If 'rustup toolchain list' is run in any directory containing
+    # a 'rust-toolchain.toml' file, it will automatically install the
+    # toolchain named therein. To prevent this, change to a directory
+    # with no 'rust-toolchain.toml' file.
     pushd "${MIR_JSON_INSTALL_DIR}" > /dev/null
     if [[ $(rustup toolchain list | grep "${RUST_TOOLCHAIN}") != "" ]]; then
         echo $(rustc +"${RUST_TOOLCHAIN}" --print host-tuple)
@@ -162,7 +197,7 @@ check_installation_dir() {
        fi
     fi
     if [[ ! -d "${MIR_JSON_INSTALL_DIR}" ]]; then
-       echo "Install directory ${MIR_JSON_INSTALL_DIR} does not exist"
+       echo "Install directory ${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
        exit 1
     fi
 }
@@ -177,12 +212,12 @@ check_general_prerequisites() {
     MIR_JSON_VERSION="${MIR_JSON_VERSION:-master}"
     if [[ ! -d "$(get_mir_json_src_dir ${MIR_JSON_VERSION})" ]]; then
        if [[ $INITIALIZE_IF_MISSING == 0 ]]; then
-            echo "Checking out source repository for mir-json ${MIR_JSON_VERSION}"
+            echo "Checking out source repository for mir-json ${MIR_JSON_VERSION}" 1>&2
             get_mir_json_src "${MIR_JSON_VERSION}"
        fi
     fi
     if [[ ! -d "$(get_mir_json_src_dir ${MIR_JSON_VERSION})" ]]; then
-        echo "mir-json ${MIR_JSON_VERSION} not checked out"
+        echo "mir-json ${MIR_JSON_VERSION} not checked out" 1>&2
         exit 1
     fi
 }
@@ -209,7 +244,7 @@ case ":\${PATH}:" in
    *:"${MIR_JSON_INSTALL_DIR}/default/bin":*)
        ;;
    *)
-       export PATH="${MIR_JSON_INSTALL_DIR}/default/bin:$PATH"
+       export PATH="${MIR_JSON_INSTALL_DIR}/default/bin:\${PATH}"
 esac
 export CRUX_RUST_LIBRARY_PATH="${MIR_JSON_INSTALL_DIR}/default/rlibs"
 EOF
@@ -218,53 +253,84 @@ EOF
 display_help() {
     case "$1" in
         run)
-            echo "Usage: mir-json-up run [--] command-line"
-            echo "   Run the given command line within the active 'mir-json' version/target combination"
+            cat 1>&2 << EOM
+Usage: mir-json-up run [--] command-line"
+Run the given command line within the active 'mir-json' version/target combination
+EOM
             ;;
         *)
-            echo "Usage: mir-json-up [--install-dir DIR] [--mir-json-version GIT-REF]"
-            echo "         [--mir-json-rust-toolchain RUST-TOOLCHAIN] [--target-triplet TRIPLET] command"
-            echo "Options:"
-            echo "   --install-dir        Directory holding the 'mir-json-up' installation"
-            echo "                            (default \$HOME/.mir-json-up)"
-            echo "   --mir-json-version   Git reference for the version of 'mir-json' to use/install"
-            echo "                            (default 'master')"
-            echo "   --mir-json-rust-toolchain     Rust toolchain to use (default 'nightly-2025-09-14')"
-            echo "   --target-triplet     Target triplet to use (default is the output of cc -dumpmachine)"
-            echo "Commands:"
-            echo "  mir-json-up check     Check if all requirements are in place for building 'mir-json'"
-            echo "  mir-json-up help      Display this help (add a command name for command-specific help)"
-            echo "  mir-json-up init      Install 'mir-json-up'"
-            echo "  mir-json-up install   Download and build a specific version of 'mir-json' for a specific target"
-            echo "  mir-json-up list      List all version/target 'mir-json' combinations installed"
-            echo "  mir-json-up remove    Remove the given 'mir-json' version/target combination"
-            echo "  mir-json-up run       Run a command within the active 'mir-json' version/target combination"
-            echo "  mir-json-up set       Set the active 'mir-json' version/target combination"
+            cat 1>&2 << EOM
+Usage: mir-json-up [--install-dir DIR] [--mir-json-version GIT-REF]
+         [--mir-json-rust-toolchain RUST-TOOLCHAIN] [--target-triplet TRIPLET] command
+Options:
+   --install-dir                 Directory holding the 'mir-json-up' installation
+                                    (default \$HOME/.mir-json-up)
+   --mir-json-version            Git reference for the version of 'mir-json' to use/install
+                                    (default 'master')
+   --mir-json-rust-toolchain     Rust toolchain to use (default is determined from the
+                                    'mir-json' version)
+   --target-triplet              Target triplet to use (default is derived from the Rust toolchain)
+Commands:"
+  mir-json-up check              Check if all requirements are in place for building 'mir-json'
+  mir-json-up help               Display this help (add a command name for command-specific help)
+  mir-json-up init               Install 'mir-json-up'
+  mir-json-up install            Download and build a specific version of 'mir-json' for a specific target
+  mir-json-up list               List all version/target 'mir-json' combinations installed
+  mir-json-up remove             Remove the given 'mir-json' version/target combination
+  mir-json-up run                Run a command within the active 'mir-json' version/target combination
+  mir-json-up set                Set the active 'mir-json' version/target combination
+EOM
             ;;
     esac
 }
 
-SCRIPT_FILE=$(realpath "$0")
+SCRIPT_FILE=$0
 
 while (( "$#" )); do
     case "$1" in
         "--install-dir")
+            if [[ $# < 2 ]]; then
+                echo "--install-dir requires an argument" 1>&2
+                exit 1
+            fi
             MIR_JSON_INSTALL_DIR="$2"
             shift 2
             ;;
         "--mir-json-version")
+            if [[ $# < 2 ]]; then
+                echo "--mir-json-version requires an argument" 1>&2
+                exit 1
+            fi
             MIR_JSON_VERSION="$2"
             shift 2
             ;;
         "--mir-json-rust-toolchain")
+            if [[ $# < 2 ]]; then
+                echo "--mir-json-rust-toolchain requires an argument" 1>&2
+                exit 1
+            fi
             MIR_JSON_RUST_TOOLCHAIN="$2"
             shift 2
             ;;
         "--target-triplet")
+            if [[ $# < 2 ]]; then
+                echo "--target-triplet requires an argument" 1>&2
+                exit 1
+            fi
             TARGET_TRIPLET="$2"
             shift 2
             ;;
         check|init|install|list|remove|run|set)
+            COMMAND="$1"
+            shift 1
+            if [[ "$1" != "" ]]; then
+                display_help "$COMMAND"
+                echo "Command '$COMMAND' does not accept positional arguments" 1>&2
+                exit 1
+            fi
+            break
+            ;;
+        run)
             COMMAND="$1"
             shift 1
             if [[ "$1" == "--" ]]; then
@@ -278,7 +344,8 @@ while (( "$#" )); do
             exit 0
             ;;
         *)
-            echo "Invalid command: $1"
+            display_help
+            echo "Invalid command: $1" 1>&2
             exit 1
             ;;
     esac
@@ -299,45 +366,62 @@ case "$COMMAND" in
     init)
         check_installation_dir 0
         build_env
-        echo "Successfully initialized mir-json-up"
-	    echo "To configure a shell, run or insert the following into your initialization script:"
-        echo "  . ${MIR_JSON_INSTALL_DIR}/env"
+        echo "Successfully initialized mir-json-up" 1>&2
+	    echo "To configure a shell, run or insert the following into your initialization script:" 1>&2
+        echo "  . ${MIR_JSON_INSTALL_DIR}/env" 1>&2
         ;;
     install)
         check_all_prerequisites 0
         if [[ ! -d "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist"
+            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
             exit 1
         fi
         get_mir_json_src
         build_mir_json
+        cleanup_mir_json_src
         ;;
     list)
         check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist"
+            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
             exit 1
         fi
         cd "${MIR_JSON_INSTALL_DIR}/toolchains"
-        find */*/* -maxdepth 0 -type d
+        for toolchain in $(ls -1d */*/* | grep -v "[*]/[*]/[*]"); do
+            echo -n "$toolchain"
+            if [[ -f "${MIR_JSON_INSTALL_DIR}/default/id" ]]; then
+                ACTIVE_TOOLCHAIN=$(cat "${MIR_JSON_INSTALL_DIR}/default/id")
+                if [[ "${ACTIVE_TOOLCHAIN}" == "${toolchain}" ]]; then
+                    echo " (active)"
+                else
+                    echo ""
+                fi
+            else
+                echo ""
+            fi
+        done
         ;;
     remove)
         check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist"
+            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
             exit 1
         fi
         TOOLCHAIN_DIR="$(get_toolchain_dir)"
+        if [[ $(toolchain_is_default "$TOOLCHAIN_DIR") == 0 ]]; then
+            echo "Cannot remove the active version" 1>&2
+            exit 1
+        fi
         rm -rf "${TOOLCHAIN_DIR}"
         ;;
     run)
         check_all_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}/env" ]]; then
-            echo "Cannot run before building: ${MIR_JSON_INSTALL_DIR}/env does not exist"
+            echo "Cannot run before building: ${MIR_JSON_INSTALL_DIR}/env does not exist" 1>&2
             exit 1
         fi
         . "${MIR_JSON_INSTALL_DIR}/env"
-        $@
+        "$@"
         ;;
     set)
         check_all_prerequisites
@@ -348,7 +432,8 @@ case "$COMMAND" in
         exit 1
         ;;
     *)
-        echo "Invalid command: ${COMMAND}"
+        display_help
+        echo "Invalid command: ${COMMAND}" 1>&2
         exit 1
         ;;
 esac
