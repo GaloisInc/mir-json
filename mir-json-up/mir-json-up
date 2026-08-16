@@ -128,6 +128,11 @@ create_default_symlinks() {
     local MIR_JSON_BIN_DIR="${TOOLCHAIN_DIR}/bin/${TARGET_TRIPLET}/release"
     local MIR_JSON_RLIBS_DIR="${TOOLCHAIN_DIR}/rlibs"
 
+    if [[ ! -d "${TOOLCHAIN_DIR}" ]]; then
+        echo "Cannot set active toolchain: ${TOOLCHAIN_DIR} does not exist"
+        exit 1
+    fi
+
     if [[ -d "${MIR_JSON_INSTALL_DIR}/default" ]]; then
         rm -rf "${MIR_JSON_INSTALL_DIR}/default"
     fi
