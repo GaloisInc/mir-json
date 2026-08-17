@@ -779,20 +779,3 @@ impl From<DependencyError> for serde_cbor::Error {
         ser::Error::custom(error.to_string())
     }
 }
-
-#[derive(Debug)]
-pub struct EmptyCrateDependenciesError;
-
-impl std::fmt::Display for EmptyCrateDependenciesError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "The CrateDependencies struct that uniquely identifies a crate and its independencies was not provided!")
-    }
-}
-
-impl std::error::Error for EmptyCrateDependenciesError {}
-
-impl From<EmptyCrateDependenciesError> for serde_cbor::Error {
-    fn from(error: EmptyCrateDependenciesError) -> Self {
-        ser::Error::custom(error.to_string())
-    }
-}

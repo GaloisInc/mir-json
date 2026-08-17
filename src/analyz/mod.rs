@@ -26,7 +26,7 @@ mod to_json;
 mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
-use lib_util::{self, JsonOutput, EntryKind, UniqueCrateId, CrateDependencies, EmptyCrateDependenciesError};
+use lib_util::{self, JsonOutput, EntryKind, UniqueCrateId, CrateDependencies};
 use schema_ver::SCHEMA_VER;
 
 use log::debug;
@@ -1440,12 +1440,12 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
     mk_output: F,
-) -> Result<(Option<AnalysisData<O>>, Option<CrateDependencies>), serde_cbor::Error> {
+) -> Result<Option<(AnalysisData<O>, CrateDependencies)>, serde_cbor::Error> {
     let mut extern_mir_paths = Vec::new();
 
     let outputs = tcx.output_filenames(());
     if !outputs.outputs.contains_key(&OutputType::Exe) {
-        return Ok((None, None));
+        return Ok(None);
     }
     let out_path = rustc_session::output::out_filename(
         tcx.sess,
@@ -1525,20 +1525,18 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     // references them, but we check again here just in case.
     emit_new_defs(&mut ms, &mut out)?;
     let extra_data = CrateDependencies::new(root_hash, dep_hashes);
-    Ok((Some(AnalysisData { mir_path, extern_mir_paths, output: out}), Some(extra_data)))
+    Ok(Some((AnalysisData { mir_path, extern_mir_paths, output: out}, extra_data)))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
     tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let (opt_ad, extra_data_option) = analyze_inner(tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
-    let AnalysisData { mir_path, extern_mir_paths, output: out} = match opt_ad {
+    let opt_ad = analyze_inner(tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
+    let (AnalysisData { mir_path, extern_mir_paths, output: out}, extra_data) = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
-
-    let extra_data= extra_data_option.ok_or(EmptyCrateDependenciesError)?;
 
     let total_items = out.fns.len() + out.adts.len() + out.statics.len() + out.vtables.len() +
         out.traits.len() + out.intrinsics.len();
@@ -1566,12 +1564,11 @@ pub fn analyze_streaming<'tcx>(
     tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let (opt_ad, extra_data_option)  = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
-    let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
+    let opt_ad  = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
+    let (AnalysisData { mir_path, extern_mir_paths, output }, extra_data) = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
-    let extra_data: CrateDependencies= extra_data_option.ok_or(EmptyCrateDependenciesError)?;
 
     lib_util::finish_streaming(output, extra_data)?;
     Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: ()}))
