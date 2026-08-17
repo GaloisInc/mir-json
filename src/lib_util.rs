@@ -21,9 +21,13 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::hash::Hash;
 use std::io::{self, Write, Cursor, BufWriter};
 use std::path::Path;
+use rustc_middle::ty::{ TyCtxt};
+use rustc_span::def_id::CrateNum;
 
+use serde::ser;
 use serde_json::Value as JsonValue;
 use serde_cbor;
 use serde_json;
@@ -31,6 +35,85 @@ use tar;
 
 use crate::schema_ver::SCHEMA_VER;
 use crate::tar_stream::{TarStream, TarEntryStream};
+
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
+pub struct UniqueCrateId{
+    /// The name of the crate (regardless of crate aliases)
+    pub name: String,
+    /// A unique identifier for this crate that is based on the
+    /// Strict Version Hash (SVH). See how this struct is constructed
+    /// for more details.
+    pub hash: String,
+}
+impl std::fmt::Display for UniqueCrateId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Crate< name: {}, Svh Hash: {} >", self.name, self.hash)
+    }
+}
+
+/*
+Note [Crate aliases]
+~~~~~~~~~~~~~~~~~~~~~
+
+Imagine for instance that you are doing something like this in your toml in say crux-mir's example-1:
+```
+[dependencies]
+
+generic-array-1 = {package = "generic-array", version = "1.4.4"}
+generic-array-2 = {package = "generic-array", version = "0.4"}
+```
+
+and then including them as
+
+```
+use generic_array_1::*;
+use generic_array_2::*;
+```
+
+Then these are translated into the following in the MIR file:
+
+{'dep_hashes': [
+        {'hash': 'b8ac3e84cb7ef863117d4a913e976710',
+               'name': 'generic_array'},
+        {'hash': '7b0428ba33d86c7150ce93427cfd1e59',
+         'name': 'generic_array'},
+]}
+
+i.e. the original crate name is conserved (rather than the crate alias), and each version has a different svh hash.
+*/
+impl UniqueCrateId{
+    pub fn new( tcx: TyCtxt, cnum: CrateNum) -> Self {
+        //  Note that crate aliases demarking different versions of the
+        //  same crate will have the same crate name but different crate
+        //  hashes.  
+        UniqueCrateId {    
+            name: tcx.crate_name(cnum).to_string(),
+            hash: tcx.crate_hash(cnum).to_string() 
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CrateDependencies{
+    /// The crate's unique identifier 
+    /// 
+    /// Note that when we perform the validation check to see if all
+    /// listed crate dependencies have been passed to the linker, the
+    /// root_hash below allows us to track which crates were passed as inputs to the 
+    /// linker.
+    root_hash:UniqueCrateId,
+    /// A hashset of unique identifiers for the crate's dependencies
+    dep_hashes: HashSet<UniqueCrateId>
+}
+
+impl CrateDependencies{
+    pub fn new( root_hash:UniqueCrateId, dep_hashes: HashSet<UniqueCrateId>) -> Self { 
+        CrateDependencies {             
+            root_hash,
+            dep_hashes
+        }
+    }
+}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateIndex {
@@ -48,7 +131,21 @@ pub struct CrateIndex {
 
     /// The schema version in use. (See also `SCHEMA_VER`.)
     pub version: u64,
+    /// Extra information that allows us to uniquely identify this crate and
+    /// it's dependencies
+    pub extra_data: CrateDependencies,
 }
+
+impl CrateIndex{
+    pub fn root_hash(&self) -> UniqueCrateId{
+        self.extra_data.root_hash.clone()
+    }
+    pub fn dep_hashes(&self) -> HashSet<UniqueCrateId>{
+        self.extra_data.dep_hashes.clone()
+    }
+}
+
+    
 
 /// Metadata about a single item.
 ///
@@ -239,7 +336,7 @@ impl EmitterState {
         if is_test { self.tests.insert(name_id); }
     }
 
-    pub fn finish(self) -> CrateIndex {
+    pub fn finish(self, extra_data: CrateDependencies) -> CrateIndex {
         let names = self.intern.into_names();
 
         let mut items = HashMap::with_capacity(self.dep_map.len());
@@ -264,7 +361,7 @@ impl EmitterState {
 
         let version = SCHEMA_VER;
 
-        CrateIndex { names, items, roots, tests, version }
+        CrateIndex { names, items, roots, tests, version, extra_data}
     }
 }
 
@@ -354,12 +451,12 @@ impl<W: Write> Emitter<W> {
         Ok(())
     }
 
-    pub fn finish(self) -> CrateIndex {
-        self.state.finish()
+    pub fn finish(self, extra_data: CrateDependencies) -> CrateIndex {
+        self.state.finish(extra_data)
     }
 }
 
-pub fn write_indexed_crate<W>(out: W, j: &JsonValue) -> serde_cbor::Result<()>
+pub fn write_indexed_crate<W>(out: W, j: &JsonValue, extra_data: CrateDependencies) -> serde_cbor::Result<()>
 where W: Write + Send + 'static {
     // Serialize the two files to byte arrays.  This is needed so their lengths will be known when
     // creating the archive.
@@ -367,7 +464,7 @@ where W: Write + Send + 'static {
     let mut emitter = Emitter::new(&mut json_buf);
     emitter.emit_crate(j)?;
 
-    let index = emitter.finish();
+    let index = emitter.finish(extra_data);
     let index_buf = serde_cbor::to_vec(&index)?;
 
     let mut tar = tar::Builder::new(out);
@@ -555,10 +652,10 @@ impl<W: Write> StreamingEmitter<W> {
         Ok(se)
     }
 
-    pub fn finish(mut self) -> io::Result<(W, CrateIndex)> {
+    pub fn finish(mut self, extra_data: CrateDependencies) -> io::Result<(W, CrateIndex)> {
         // TODO: expose this through a method on Emitter rather than reaching into its internal
         // state.
-        let index = self.inner.state.finish();
+        let index = self.inner.state.finish(extra_data);
         write!(self.inner.writer, "]")?;
         Ok((self.inner.writer.w, index))
     }
@@ -617,8 +714,8 @@ pub fn start_streaming(path: &Path) -> io::Result<MirStream> {
     Ok(MirStream { emitter })
 }
 
-pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
-    let (json_entry, index) = ms.emitter.finish()?;
+pub fn finish_streaming(ms: MirStream, extra_data: CrateDependencies) -> serde_cbor::Result<()> {
+    let (json_entry, index) = ms.emitter.finish(extra_data)?;
     let tar = json_entry.finish_entry()?;
     let mut index_entry = tar.start_entry(make_tar_entry("index.cbor")?)?;
     serde_cbor::to_writer(&mut index_entry, &index)?;
@@ -626,4 +723,59 @@ pub fn finish_streaming(ms: MirStream) -> serde_cbor::Result<()> {
     let mut w = tar.finish()?;
     w.flush()?;
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct DependencyError {
+    root_hash: UniqueCrateId,
+    dependency_hashes: Vec<UniqueCrateId>,
+}
+
+impl std::fmt::Display for DependencyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "The crate {} depends on {:#?} which was not provided as an input to the linker", self.root_hash, self.dependency_hashes)
+    }
+}
+
+impl std::error::Error for DependencyError {}
+
+/// Function that checks if the crate dependencies were provided as inputs to the linker
+
+
+/*
+Note [Excluding proc macro crates]
+~~~~~~~~~~~~~~~~~~~~~
+(Courtesy of @spernsteiner)
+
+We exclude proc macro crates in the check below because they are not linked into the final artifact.
+In general, since proc macro crates are always compiled for the host architecture rather than the target 
+architecture (which may be different, even if in practice it's usually the same), 
+they can't be linked into target-architecture build outputs (and anyway there's no need, 
+since the proc macro code only runs at compile time).
+
+
+For example, suppose you have crate foo that depends on my_proc_macros and bar (a normal, non-proc-macro crate).  
+If you're on an amd64 machine and cross-compiling for wasm, then Cargo will build bar for wasm so it can be
+linked into the final wasm output, but it will build my_proc_macros for amd64 so the code from that crate 
+can be loaded and run while compiling foo (which happens on your amd64 build machine). 
+*/
+pub fn check_dependencies(crate_indices: &[CrateIndex]) -> Result<(), DependencyError> {
+    let mut linker_inputs: HashSet<UniqueCrateId>  = HashSet::new();
+    for index in crate_indices {
+        linker_inputs.insert(index.root_hash());
+    }
+    for index in crate_indices {
+        let diff: Vec<UniqueCrateId> = index.dep_hashes().difference(&linker_inputs).map(|hash|hash.clone()).collect();
+        if diff.len() != 0 {
+            return Err(DependencyError{root_hash: index.root_hash(), dependency_hashes: diff});
+        }
+    }
+    return Ok(());
+}
+
+
+impl From<DependencyError> for serde_cbor::Error {
+    fn from(error: DependencyError) -> Self {
+        ser::Error::custom(error.to_string())
+    }
 }

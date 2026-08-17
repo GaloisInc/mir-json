@@ -4,8 +4,9 @@ use std::io::{self, Write};
 use serde_cbor;
 use serde_json;
 
-use crate::lib_util::{self, CrateIndex, InternTable, EntryKind, StringId};
+use crate::lib_util::{self, CrateIndex, EntryKind, InternTable, StringId, check_dependencies};
 use crate::schema_ver::SCHEMA_VER;
+
 
 
 fn read_crates(
@@ -96,6 +97,8 @@ where W: Write {
     let (roots, tests) = collect_roots(&indexes, &translate);
     check_matching_versions(&indexes)?;
 
+    // Check if the crate dependencies were provided as inputs to the linker
+    check_dependencies(&indexes)?;
 
     let mut seen_names = HashSet::new();
     let mut worklist = roots.clone();

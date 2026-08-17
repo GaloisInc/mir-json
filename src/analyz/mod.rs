@@ -12,6 +12,7 @@ use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
 use rustc_span::symbol::{Symbol, Ident};
 use rustc_abi::{self, ExternAbi};
+use std::collections::{HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
 use std::iter;
@@ -25,7 +26,7 @@ mod to_json;
 mod ty_json;
 use analyz::to_json::*;
 use analyz::ty_json::*;
-use lib_util::{self, JsonOutput, EntryKind};
+use lib_util::{self, JsonOutput, EntryKind, UniqueCrateId, CrateDependencies};
 use schema_ver::SCHEMA_VER;
 
 use log::debug;
@@ -1368,6 +1369,70 @@ pub struct AnalysisData<O> {
     pub output: O,
 }
 
+/*
+Note [CrateDepKind::MacrosOnly]
+~~~~~~~~~~~~~~~~~~~~~
+In what follows, we store the crate dependencies of the current crate for later linker 
+related validation and exclude crates flagged as CrateDepKind::MacrosOnly.
+The CrateDepKind enum has some misleading documentation about what is considered a 
+CrateDepKind::MacrosOnly crate. The documentation says:
+
+    "A dependency that is only used for its macros."
+
+This is actually slightly inaccurate. CrateDepKind::MacrosOnly is dedicated to proc_macro crates,
+rather than other crates where the user only imports macros, those being flagged as CrateDepKind::Unconditional. 
+
+In order to test this, we created a crate called hello_world that looked like this:
+
+```
+#[macro_export]
+macro_rules! foo {
+    ($msg:expr) => {
+        $msg
+    };
+}
+
+pub fn add_one(x: usize) -> usize{
+    return x + 1;
+}
+```
+
+Then I added the following to crux-mir's example-1:
+
+```
+use hello_world::foo;
+
+/// Find-first-set (fast implementation)
+pub fn ffs_fast(mut i: u32) -> u32 {
+    foo!("hello");
+    let mut n = 1;
+    if (i & 0xffff) == 0 { n += 16; i >>= 16; }
+    if (i & 0x00ff) == 0 { n +=  8; i >>=  8; }
+    if (i & 0x000f) == 0 { n +=  4; i >>=  4; }
+    if (i & 0x0003) == 0 { n +=  2; i >>=  2; }
+    if i != 0 {
+        return n + ((i.wrapping_add(1)) & 0x01);
+    } else {
+        return 0;
+    }
+}
+
+/// Find-first-set (reference implementation)
+pub fn ffs_ref(word: u32) -> u32 {
+    foo!("hello");
+    for i in 0 .. 32 {
+        if word & (1 << i) != 0 {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+```
+The hello_world crate was flagged as CrateDepKind::Unconditional by the function below.
+For more information on why we exclude proc_macro crates to begin with, please checkou the
+note over lib_util::check_dependencies.
+*/
+
 /// Analyze the crate currently being compiled.  Returns `Ok(Some(data))` upon successfully writing
 /// the crate MIR, returns `Ok(None)` when there is no need to write out MIR (namely, when `comp`
 /// is not producing an `Exe` output), and returns `Err(e)` on I/O or serialization errors.
@@ -1375,7 +1440,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
     mk_output: F,
-) -> Result<Option<AnalysisData<O>>, serde_cbor::Error> {
+) -> Result<Option<(AnalysisData<O>, CrateDependencies)>, serde_cbor::Error> {
     let mut extern_mir_paths = Vec::new();
 
     let outputs = tcx.output_filenames(());
@@ -1395,8 +1460,17 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
         },
     };
     let mut out = mk_output(&mir_path)?;
+    let root_hash = UniqueCrateId::new(tcx,LOCAL_CRATE);
 
+
+    let mut dep_hashes = HashSet::new();
     for &cnum in tcx.crates(()) {
+        // Exclude proc_macro crates from the hashset of dependencies.
+        // See Note [CrateDepKind::MacrosOnly].
+        if !tcx.crate_dep_kind(cnum).macros_only() {        
+            dep_hashes.insert(UniqueCrateId::new(tcx, cnum));
+        }
+
         let src = tcx.used_crate_source(cnum);
         let it = src.dylib.iter()
             .chain(src.rlib.iter())
@@ -1450,8 +1524,8 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     // Any referenced types should normally be emitted immediately after the entry that
     // references them, but we check again here just in case.
     emit_new_defs(&mut ms, &mut out)?;
-
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: out }))
+    let extra_data = CrateDependencies::new(root_hash, dep_hashes);
+    Ok(Some((AnalysisData { mir_path, extern_mir_paths, output: out}, extra_data)))
 }
 
 pub fn analyze_nonstreaming<'tcx>(
@@ -1459,7 +1533,7 @@ pub fn analyze_nonstreaming<'tcx>(
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
     let opt_ad = analyze_inner(tcx, export_style, |_| { Ok(lib_util::Output::default()) })?;
-    let AnalysisData { mir_path, extern_mir_paths, output: out } = match opt_ad {
+    let (AnalysisData { mir_path, extern_mir_paths, output: out}, extra_data) = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
@@ -1481,22 +1555,23 @@ pub fn analyze_nonstreaming<'tcx>(
     tcx.sess.dcx().note(
         format!("Indexing MIR ({} items)...", total_items));
     let file = File::create(&mir_path)?;
-    lib_util::write_indexed_crate(file, &j)?;
+    lib_util::write_indexed_crate(file, &j, extra_data)?;
 
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: ()}))
 }
 
 pub fn analyze_streaming<'tcx>(
     tcx: TyCtxt<'tcx>,
     export_style: ExportStyle,
 ) -> Result<Option<AnalysisData<()>>, serde_cbor::Error> {
-    let opt_ad = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
-    let AnalysisData { mir_path, extern_mir_paths, output } = match opt_ad {
+    let opt_ad  = analyze_inner(tcx, export_style, lib_util::start_streaming)?;
+    let (AnalysisData { mir_path, extern_mir_paths, output }, extra_data) = match opt_ad {
         Some(x) => x,
         None => return Ok(None),
     };
-    lib_util::finish_streaming(output)?;
-    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: () }))
+
+    lib_util::finish_streaming(output, extra_data)?;
+    Ok(Some(AnalysisData { mir_path, extern_mir_paths, output: ()}))
 }
 
 pub use self::analyze_streaming as analyze;
