@@ -1466,9 +1466,10 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     let mut dep_hashes = HashSet::new();
     for &cnum in tcx.crates(()) {
         // Exclude proc_macro crates from the hashset of dependencies.
-        // See note above for more info.
-        if ! tcx.crate_dep_kind(cnum).macros_only(){        
-            dep_hashes.insert(UniqueCrateId::new( tcx, cnum));}
+        // See Note [CrateDepKind::MacrosOnly].
+        if !tcx.crate_dep_kind(cnum).macros_only() {        
+            dep_hashes.insert(UniqueCrateId::new(tcx, cnum));
+        }
 
         let src = tcx.used_crate_source(cnum);
         let it = src.dylib.iter()
