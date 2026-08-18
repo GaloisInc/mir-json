@@ -194,6 +194,12 @@ into the main commit for that patch, and then the *Update* line can be removed.
   intrinsic. To prevent this function from throwing translation errors, we have
   it return a constant dummy location.
 
+* Use architecture-generic `memchr` implementations (last applied: September 21, 2026)
+
+  The `memchr` crate uses inline assembly that is specialized for particular
+  architectures (e.g., x86-64 and AArch64), which `crucible-mir` does not
+  support. We instead fall back to a generic `memchr` implementation that works
+  on all architectures.
 # Notes
 
 This section contains more detailed notes about why certain patches are written
