@@ -318,6 +318,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   too high-level to model this. We remove the optimization in favor of a slower
   (but still correct) implementation.
 
+* Use architecture-generic `memchr` implementations (last applied: August 18, 2026)
+
+  The `memchr` crate uses inline assembly that is specialized for particular
+  architectures (e.g., x86-64 and AArch64), which `crucible-mir` does not
+  support. We instead fall back to a generic `memchr` implementation that works
+  on all architectures.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
