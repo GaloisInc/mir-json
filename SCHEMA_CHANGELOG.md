@@ -8,6 +8,8 @@ versioned separately.)
   * Static: the `kind: "body"` variant has been **removed**. All statics now
     carry a pre-evaluated `rendered` value. Both ordinary and thread-local
     statics use `kind: "constant"`.
+  * Changes the `union` kind of `ConstVal` to have a variant and value
+    associated with it.
 
 ## 12
 

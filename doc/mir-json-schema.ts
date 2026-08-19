@@ -282,7 +282,7 @@ type ConstVal =
   | { kind: "strbody", len: number, elements: number[] }
   | { kind: "struct",  fields: ConstVal[] }
   | { kind: "enum", variant: number, fields: ConstVal[] }
-  | { kind: "union" }
+  | { kind: "union", variant: number, val: ConstVal }
   | { kind: "fndef", def_id: DefId }
   | { kind: "static_ref", def_id: DefId }
   | { kind: "zst" }
