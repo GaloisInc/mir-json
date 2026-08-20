@@ -1241,14 +1241,24 @@ pub fn render_opty<'tcx>(
             RenderErr::Mismatch => panic!("Unexpexpected type mismatch"),
             RenderErr::Unsupported =>
                 json!({
-                    "kind": "unsupported_const",
+                    "kind": "unsupported",
                     "debug_val": format!("{:?}", op_ty),
                 })
         }
     })
 }
 
-pub enum RenderErr { Mismatch, Unsupported }
+
+/// Errors that may occur while interpreting bytes as a value of a specific type
+pub enum RenderErr {
+    /// Indicates that the bytes do not match the given type
+    Mismatch,
+
+    /// Indicates that we encountered a type that we don't know how to process
+    Unsupported
+}
+
+/// The result may fail due to rendering errors
 pub type Partial<T> = Result<T, RenderErr>;
 
 fn check_mismatch<'tcx,T>(x: InterpResult<'tcx,T>) -> Partial<T> {
@@ -1510,8 +1520,8 @@ pub fn try_render_opty<'tcx>(
             let new_op_ty = check_mismatch(op_ty.transmute(inner_ty_and_layout, icx))?;
             return try_render_opty(mir, icx, &new_op_ty);
         },
-        ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {  // XXX: is this differnt from Err::Unsupported?
-            json!({"kind": "unsupported"})
+        ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
+            return Err(RenderErr::Unsupported)
         },
     })
 }
