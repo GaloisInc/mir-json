@@ -1384,7 +1384,7 @@ pub fn try_render_opty<'tcx>(
                     // If there are multiple with the same size we pick the
                     // first one.
                     if let Some((_,cur_sz,_)) = field_val {
-                       if cur_sz >= sz { continue }
+                        if cur_sz >= sz { continue }
                     }
                     match try_render_opty(mir, icx, &field) {
                         Ok(v) => field_val = Some((field_idx,sz,v)),
@@ -1393,11 +1393,11 @@ pub fn try_render_opty<'tcx>(
                     }
                 }
                 match field_val {
-                  None => return Err(RenderErr::Mismatch),
-                  Some((idx,_,val)) => {
-                    let js: serde_json::Value = val.into();
-                    json!({"kind": "union", "variant": idx.as_u32(), "val": js })
-                  }
+                    None => return Err(RenderErr::Mismatch),
+                    Some((idx,_,val)) => {
+                        let js: serde_json::Value = val.into();
+                        json!({"kind": "union", "variant": idx.as_u32(), "val": js })
+                    }
                 }
             },
         },
