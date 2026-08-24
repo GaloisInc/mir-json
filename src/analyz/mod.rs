@@ -876,7 +876,7 @@ fn emit_trait<'tcx>(
 }
 
 
-/// Emit all statics defined in the current crate.
+/// Emit all statics defined in the current crate. Extern statics are not exported.
 fn emit_statics(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
     let parts = ms.tcx.collect_and_partition_mono_items(());
     for cgu in parts.codegen_units {
@@ -909,65 +909,34 @@ const X: &[u64] = &[42];
 static Y: &[&[u64]] = &[&X];
 
 When compiling this code, a nested static is created for the `&X` portion of
-`Y`'s body.
-
-Nested statics are treated very specially in the compiler, and they are not
-given types like other static items have. This doesn't cause issues for the
-flat "bytes and pointers" memory representation that rustc uses for the
-contents of allocations, but it is incompatible with the current crucible-mir
-memory model. The crucible-mir memory model requires a structured, typed
-representation of values, which we can extract from a flat allocation only if
-we know the correct type to extract into. Because nested statics don't
-explicitly store their types anywhere, our only hope of supporting them would
-be to stumble upon a reference to the same allocation in some other context
-where we do know the expected type.
-
-Thankfully, we can get away without needing to emit any entries for nested
-static items. This is because nested statics don't actually exist in the body
-of a static item itself. Rather, they are created as a side effect of
-evaluating the body down to a ConstAllocation, and the final ConstAllocation
-may reference those nested statics. (See
+`Y`'s body. See
 https://github.com/GaloisInc/mir-json/issues/129#issuecomment-3387602092 for a
-more thorough exploration of how nested static items arise during compilation.)
-mir-json, on the other hand, emits the MIR *body*, and to the best of our
-understanding, the MIR body exists prior to the creation of any nested statics.
-As a result, the emitted JSON for the MIR body won't reference nested statics
-at all.
+more thorough exploration of how nested static items arise during compilation.
 
-Implementation-wise, this means that we simply skip over any `MonoItem` that
-corresponds to a `Static` item with `nested: true`.
+Nested statics are treated specially in the compiler, and they are not given
+types like ordinary static items have. This is a problem for our renderer,
+which needs a structured, typed representation of each value. Instead of
+emitting nested statics as top-level entries in the `statics` table, we
+render them inline at the reference site: when `try_render_ref_opty` finds
+that a pointer points at a nested-static allocation, it evaluates that
+static's initializer and interns it under an anonymous `{{alloc}}` name,
+using the surrounding pointer's pointee type to drive the render.
+
+As a result, we skip any `MonoItem` here that corresponds to a `Static` with
+`nested: true` — those items are reached (and emitted) through their
+referring static rather than in their own right.
 */
 
+/// Emit a single static as a `kind: "constant"` entry in the `statics`
+/// table, evaluating and rendering its initializer via
+/// [`render_static_body`].
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
     let tcx = ms.tcx;
     let name = def_id_str(tcx, def_id);
+    let ty = tcx.type_of(def_id).instantiate_identity();
+    let is_mut = tcx.is_mutable_static(def_id);
 
-    // let mir = tcx.optimized_mir(def_id);
-    let mir = tcx.mir_for_ctfe(def_id);
-    emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), tcx.is_mutable_static(def_id))?;
-
-    for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-        emit_promoted(ms, out, &name, idx, mir)?;
-    }
-
-    Ok(())
-}
-
-/// Add a new static declaration to `out.statics`.
-fn emit_static_decl<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    out: &mut impl JsonOutput,
-    name: &str,
-    ty: ty::Ty<'tcx>,
-    mutable: bool,
-) -> io::Result<()> {
-    let j = json!({
-        "name": name,
-        "ty": ty.to_json(ms),
-        "mutable": mutable,
-        "kind": "body",
-    });
+    let j = render_static_body(ms, def_id, ty, name, is_mut);
     out.emit(EntryKind::Static, j)?;
     emit_new_defs(ms, out)
 }
@@ -1144,31 +1113,6 @@ fn emit_instance<'tcx>(
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(ty_inst), mir)?;
 
-    if let ty::InstanceKind::Item(def_id) = ty_inst.def {
-        for (idx, mir) in tcx.promoted_mir(def_id).iter_enumerated() {
-            let mir = ty_inst.instantiate_mir_and_normalize_erasing_regions(
-                tcx,
-                ty::TypingEnv::fully_monomorphized(),
-                ty::EarlyBinder::bind(mir.clone()),
-            );
-            let mir = tcx.arena.alloc(mir);
-            emit_promoted(ms, out, &name, idx, mir)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn emit_promoted<'tcx>(
-    ms: &mut MirState<'_, 'tcx>,
-    out: &mut impl JsonOutput,
-    parent: &str,
-    idx: mir::Promoted,
-    mir: &'tcx Body<'tcx>,
-) -> io::Result<()> {
-    let name = format!("{}::{{{{promoted}}}}[{}]", parent, idx.as_usize());
-    emit_fn(ms, out, &name, None, mir)?;
-    emit_static_decl(ms, out, &name, mir.return_ty(), false)?;
     Ok(())
 }
 

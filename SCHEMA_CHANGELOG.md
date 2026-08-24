@@ -3,6 +3,14 @@ The following document describes the changes to the JSON schema that
 as a changelog for the code in the `mir-json` tools themselves, which are
 versioned separately.)
 
+## 13
+
+  * Static: the `kind: "body"` variant has been **removed**. All statics now
+    carry a pre-evaluated `rendered` value. Both ordinary and thread-local
+    statics use `kind: "constant"`.
+  * Changes the `union` kind of `ConstVal` to have a variant and value
+    associated with it.
+
 ## 12
 
   * Instance: `ClosureShim` has been renamed to `CloneShim`.

@@ -2,6 +2,7 @@ use rustc_abi::FieldsShape;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_hashes::Hash64;
 use rustc_hir as hir;
+use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
@@ -1235,29 +1236,58 @@ pub fn render_opty<'tcx>(
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
 ) -> serde_json::Value {
-    try_render_opty(mir, icx, op_ty).unwrap_or_else(|| {
-        json!({
-            "kind": "unsupported_const",
-            "debug_val": format!("{:?}", op_ty),
-        })
+    try_render_opty(mir, icx, op_ty).unwrap_or_else(|err| {
+        match err {
+            RenderErr::Mismatch => panic!("Unexpexpected type mismatch"),
+            RenderErr::Unsupported =>
+                json!({
+                    "kind": "unsupported",
+                    "debug_val": format!("{:?}", op_ty),
+                })
+        }
     })
+}
+
+
+/// Errors that may occur while interpreting bytes as a value of a specific type
+pub enum RenderErr {
+    /// Indicates that the bytes do not match the given type
+    Mismatch,
+
+    /// Indicates that we encountered a type that we don't know how to process
+    Unsupported
+}
+
+/// The result may fail due to rendering errors
+pub type Partial<T> = Result<T, RenderErr>;
+
+fn check_mismatch<'tcx,T>(x: InterpResult<'tcx,T>) -> Partial<T> {
+  match x.discard_err() {
+    None => Err(RenderErr::Mismatch),
+    Some(x) => Ok(x)
+  }
+}
+
+fn alloc_from_prov<'tcx>(tcx: TyCtxt<'tcx>, mb_prov: Option<interpret::CtfeProvenance>) -> Partial<interpret::GlobalAlloc<'tcx>> {
+    let prov = mb_prov.ok_or(RenderErr::Mismatch)?;
+    tcx.try_get_global_alloc(prov.alloc_id()).ok_or(RenderErr::Mismatch)
 }
 
 pub fn try_render_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
-) -> Option<serde_json::Value> {
+) -> Partial<serde_json::Value> {
     let ty = op_ty.layout.ty;
     let layout = op_ty.layout.layout;
     let tcx = mir.tcx;
 
-    Some(match *ty.kind() {
+    Ok(match *ty.kind() {
         ty::TyKind::Bool |
         ty::TyKind::Char |
         ty::TyKind::Uint(_) =>
         {
-            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
 
@@ -1274,7 +1304,7 @@ pub fn try_render_opty<'tcx>(
             })
         }
         ty::TyKind::Int(_i) => {
-            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
             let mut val = bits as i128;
@@ -1294,7 +1324,7 @@ pub fn try_render_opty<'tcx>(
             })
         }
         ty::TyKind::Float(fty) => {
-            let s = icx.read_immediate(op_ty).unwrap().to_scalar();
+            let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
             let val_str = match fty {
                 ty::FloatTy::F16 => s.to_f16().unwrap().to_string(),
@@ -1337,13 +1367,13 @@ pub fn try_render_opty<'tcx>(
                     // We uphold `read_discriminant`'s precondition that the
                     // enum must be inhabited via the `is_uninhabited` check
                     // above.
-                    let variant_idx = icx.read_discriminant(op_ty).unwrap();
-                    let val = icx.project_downcast(op_ty, variant_idx).unwrap();
+                    let variant_idx = check_mismatch(icx.read_discriminant(op_ty))?;
+                    let val = check_mismatch(icx.project_downcast(op_ty, variant_idx))?;
                     let mut field_vals = Vec::with_capacity(val.layout.fields.count());
                     for idx in 0 .. val.layout.fields.count() {
                         let field_opty =
-                            icx.project_field(&val, FieldIdx::from_usize(idx)).unwrap();
-                        field_vals.push(try_render_opty(mir, icx,  &field_opty)?);
+                            check_mismatch(icx.project_field(&val, FieldIdx::from_usize(idx)))?;
+                        field_vals.push(try_render_opty(mir, icx, &field_opty)?);
                     }
 
                     json!({
@@ -1354,7 +1384,31 @@ pub fn try_render_opty<'tcx>(
                 }
             },
             ty::AdtKind::Union => {
-                json!({"kind": "union"})
+                let variant = adt_def.non_enum_variant();
+                let mut field_val = None;
+                for field_idx in variant.fields.indices() {
+                    let field = check_mismatch(icx.project_field(op_ty, field_idx))?;
+                    let sz    = field.layout.size;
+
+                    // We are looking for the largest interpretation that works
+                    // If there are multiple with the same size we pick the
+                    // first one.
+                    if let Some((_,cur_sz,_)) = field_val {
+                        if cur_sz >= sz { continue }
+                    }
+                    match try_render_opty(mir, icx, &field) {
+                        Ok(v) => field_val = Some((field_idx,sz,v)),
+                        Err(RenderErr::Mismatch) => (),
+                        Err(RenderErr::Unsupported) => return Err(RenderErr::Unsupported)
+                    }
+                }
+                match field_val {
+                    None => return Err(RenderErr::Mismatch),
+                    Some((idx,_,val)) => {
+                        let js: serde_json::Value = val.into();
+                        json!({"kind": "union", "variant": idx.as_u32(), "val": js })
+                    }
+                }
             },
         },
 
@@ -1363,9 +1417,9 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Array(ety, sz) => {
             let sz = get_const_usize(tcx, sz);
             let mut vals = Vec::with_capacity(sz);
-            let mut iter = icx.project_array_fields(op_ty).unwrap();
+            let mut iter = check_mismatch(icx.project_array_fields(op_ty))?;
             while let Some((_, field)) = iter.next(icx).unwrap() {
-                let f_json = try_render_opty(mir, icx, &field);
+                let f_json = try_render_opty(mir, icx, &field)?;
                 vals.push(f_json);
             }
 
@@ -1379,18 +1433,18 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
 
         // similar to ref in some ways
-        ty::TyKind::RawPtr(pty, mutability) =>
-            try_render_ref_opty(mir, icx, op_ty, pty, mutability)?,
+        ty::TyKind::RawPtr(_, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, mutability)?,
 
-        ty::TyKind::Ref(_, rty, mutability) =>
-            try_render_ref_opty(mir, icx, op_ty, rty, mutability)?,
+        ty::TyKind::Ref(_, _, mutability) =>
+            try_render_ref_opty(mir, icx, op_ty, mutability)?,
 
         ty::TyKind::FnDef(_, _) |
         ty::TyKind::Never => json!({"kind": "zst"}),
 
         ty::TyKind::FnPtr(_sig_tys, _hdr) => {
-            let ptr = icx.read_pointer(op_ty).unwrap();
-            let alloc = tcx.try_get_global_alloc(ptr.provenance?.alloc_id())?;
+            let ptr = check_mismatch(icx.read_pointer(op_ty))?;
+            let alloc = alloc_from_prov(tcx, ptr.provenance)?;
             match alloc {
                 interpret::GlobalAlloc::Function { instance } => {
                     let expected_abi = ty.fn_sig(tcx).abi();
@@ -1442,8 +1496,8 @@ pub fn try_render_opty<'tcx>(
             let mut vals = Vec::with_capacity(elts.len());
             for i in 0..elts.len() {
                 let fld: interpret::OpTy<'tcx> =
-                    icx.project_field(op_ty, FieldIdx::from_usize(i)).unwrap();
-                vals.push(render_opty(mir, icx, &fld));
+                    check_mismatch(icx.project_field(op_ty, FieldIdx::from_usize(i)))?;
+                vals.push(try_render_opty(mir, icx, &fld)?);
             }
             json!({
                 "kind": "tuple",
@@ -1463,11 +1517,11 @@ pub fn try_render_opty<'tcx>(
         ty::TyKind::Pat(ty, _) => {
             let inner_ty_and_layout = mir.tcx.layout_of(
                 ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
-            let new_op_ty = op_ty.transmute(inner_ty_and_layout, icx).unwrap();
+            let new_op_ty = check_mismatch(op_ty.transmute(inner_ty_and_layout, icx))?;
             return try_render_opty(mir, icx, &new_op_ty);
         },
         ty::TyKind::UnsafeBinder(_unsafe_binder_inner) => {
-            json!({"kind": "unsupported"})
+            return Err(RenderErr::Unsupported)
         },
     })
 }
@@ -1477,20 +1531,23 @@ fn try_render_opty_upvars<'tcx>(
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
     upvars_count: usize,
-) -> Option<Vec<serde_json::Value>> {
+) -> Partial<Vec<serde_json::Value>> {
     let mut upvar_vals = Vec::with_capacity(upvars_count);
     for idx in 0 .. upvars_count {
         let upvar_opty =
             icx.project_field(op_ty, FieldIdx::from_usize(idx)).unwrap();
         upvar_vals.push(try_render_opty(mir, icx, &upvar_opty)?);
     }
-    Some(upvar_vals)
+    Ok(upvar_vals)
 }
 
+/// Produce a `"kind": "constant"` JSON entry with all fields except `name`
+/// filled in. Callers are responsible for setting `name`: `intern_alloc`
+/// lets `AllocIntern::insert` mint an anonymous `{{alloc}}` id, while
+/// `render_static_body` supplies the static's real name.
 fn make_allocation_body<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
-    rty: ty::Ty<'tcx>,
     d: &MPlaceTy<'tcx>,
     is_mut: bool,
 ) -> serde_json::Value {
@@ -1499,16 +1556,17 @@ fn make_allocation_body<'tcx>(
     fn do_default<'tcx>(
         mir: &mut MirState<'_, 'tcx>,
         icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
-        rty: ty::Ty<'tcx>,
         d: &MPlaceTy<'tcx>,
+        is_mut: bool,
     ) -> serde_json::Value {
+        let rty = d.layout.ty;
         let rlayout = mir.tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(rty)).unwrap();
         let mpty: MPlaceTy = d.offset_with_meta(Size::ZERO, OffsetMode::Inbounds, d.meta(), rlayout, icx).unwrap();
-        let rendered = try_render_opty(mir, icx, &mpty.into());
+        let rendered = render_opty(mir, icx, &mpty.into());
 
         json!({
             "kind": "constant",
-            "mutable": false,
+            "mutable": is_mut,
             "ty": rty.to_json(mir),
             "rendered": rendered,
         })
@@ -1543,7 +1601,7 @@ fn make_allocation_body<'tcx>(
             })
         }
 
-        match *rty.kind() {
+        match *d.layout.ty.kind() {
             // Special cases for references to unsized types. Currently, the
             // following are supported:
             //
@@ -1569,7 +1627,7 @@ fn make_allocation_body<'tcx>(
                 let mut elt_values = Vec::with_capacity(slice_len as usize);
                 for idx in 0..slice_len {
                     let elt = icx.project_index(&d.clone().into(), idx).unwrap();
-                    elt_values.push(try_render_opty(mir, icx, &elt));
+                    elt_values.push(render_opty(mir, icx, &elt));
                 }
                 // corresponding array type for contents
                 let aty = ty::Ty::new_array(tcx, slice_ty, slice_len);
@@ -1588,68 +1646,101 @@ fn make_allocation_body<'tcx>(
             },
             ty::TyKind::Dynamic(ref preds, _) => {
                 let unpacked_d = unpack_dyn_place(icx, d, preds).unwrap();
-                return do_default(mir, icx, unpacked_d.layout.ty, &unpacked_d);
+                return do_default(mir, icx, &unpacked_d, false);
             },
             _ => ()
         }
     }
 
     // Default case
-    return do_default(mir, icx, rty, d);
+    return do_default(mir, icx, d, is_mut);
+}
+
+/// Look up an anonymous allocation in the intern table, rendering and
+/// inserting it on first sight. Returns the JSON reference (its interned
+/// `{{alloc}}` name) that downstream should use to point at it.
+fn intern_alloc<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
+    ca: interpret::ConstAllocation<'tcx>,
+    ty: ty::Ty<'tcx>,
+    d: &MPlaceTy<'tcx>,
+    is_mut: bool,
+) -> serde_json::Value {
+    let def_id_str = match mir.allocs.get(ca, ty) {
+        Some(alloc_id) => alloc_id.to_owned(),
+        None => {
+            let body = make_allocation_body(mir, icx, d, is_mut);
+            mir.allocs.insert(mir.tcx, ca, ty, body)
+        }
+    };
+    def_id_str.to_json(mir)
 }
 
 fn try_render_ref_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
-    rty: ty::Ty<'tcx>,
     mutability: hir::Mutability,
-) -> Option<serde_json::Value> {
+) -> Partial<serde_json::Value> {
     let tcx = mir.tcx;
 
-    fn raw_ptr(offset: Size) -> Option<serde_json::Value> {
-        Some(json!({
+    fn raw_ptr(offset: Size) -> Partial<serde_json::Value> {
+        Ok(json!({
             "kind": "raw_ptr",
             "val": offset.bytes().to_string(),
         }))
     }
 
     // Special case for nullptr
-    let val = icx.read_immediate(op_ty).unwrap();
-    let mplace = icx.ref_to_mplace(&val).unwrap();
+    let val = check_mismatch(icx.read_immediate(op_ty))?;
+    let mplace = check_mismatch(icx.ref_to_mplace(&val))?;
     let (prov, offset) = mplace.ptr().into_raw_parts();
     if prov.is_none() {
         assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
         return raw_ptr(offset);
     }
 
-    let d = icx.deref_pointer(op_ty).unwrap();
+    let d = check_mismatch(icx.deref_pointer(op_ty))?;
     let is_mut = mutability == hir::Mutability::Mut;
 
     let (prov, d_offset) = d.ptr().into_raw_parts();
-    let alloc = tcx.try_get_global_alloc(prov?.alloc_id())?;
+    let alloc = alloc_from_prov(tcx,prov)?;
 
     let def_id_json = match alloc {
-        interpret::GlobalAlloc::Static(def_id) =>
-            def_id.to_json(mir),
-        interpret::GlobalAlloc::Memory(ca) => {
-            let ty = op_ty.layout.ty;
-            let def_id_str = match mir.allocs.get(ca, ty) {
-                Some(alloc_id) => alloc_id.to_owned(),
-                None => {
-                    // create the allocation
-                    let body = make_allocation_body(mir, icx, rty, &d, is_mut);
-                    mir.allocs.insert(tcx, ca, ty, body)
-                }
-            };
-            def_id_str.to_json(mir)
+        interpret::GlobalAlloc::Static(def_id) => {
+            if matches!(tcx.def_kind(def_id), DefKind::Static { nested: true, .. }) {
+                // Nested statics have no name of their own that downstream can
+                // refer to, so we handle them the same way as `GlobalAlloc::Memory`:
+                // render the initializer here and intern it under an anonymous name,
+                // using the surrounding pointer's pointee type.
+
+                // Rustc does not emit thread-local nested statics.
+                debug_assert!(
+                    !tcx.is_thread_local_static(def_id),
+                    "nested static {:?} is thread-local — rustc invariant violated",
+                    def_id,
+                );
+
+                let ca = tcx.eval_static_initializer(def_id).unwrap_or_else(|e|
+                    panic!(
+                        "eval_static_initializer failed for nested static {:?}: {:?}",
+                        def_id, e,
+                    )
+                );
+                intern_alloc(mir, icx, ca, op_ty.layout.ty, &d, is_mut)
+            } else {
+                def_id.to_json(mir)
+            }
         }
+        interpret::GlobalAlloc::Memory(ca) =>
+            intern_alloc(mir, icx, ca, op_ty.layout.ty, &d, is_mut),
         interpret::GlobalAlloc::TypeId {..} => {
             return raw_ptr(offset);
         }
         _ =>
             // Give up
-            return None
+            return Err(RenderErr::Unsupported)
     };
 
     // TODO(#241): Lift this restriction.
@@ -1680,11 +1771,11 @@ fn try_render_ref_opty<'tcx>(
         // * Trait objects (&dyn Trait)
         //
         // These special cases and the ones in make_allocation_body above should be kept in sync.
-        match *rty.kind() {
+        match *d.layout.ty.kind() {
             ty::TyKind::Str | ty::TyKind::Slice(_) =>
-                return Some(do_slice(icx, &d, def_id_json)),
+                return Ok(do_slice(icx, &d, def_id_json)),
             ty::TyKind::Adt(adt_def, _) if tcx.is_lang_item(adt_def.did(), LangItem::CStr) =>
-                return Some(do_slice(icx, &d, def_id_json)),
+                return Ok(do_slice(icx, &d, def_id_json)),
             ty::TyKind::Dynamic(ref preds, _) => {
                 let self_ty = unpack_dyn_ty(icx, &d, preds).unwrap();
                 let vtable_desc = preds.principal().map(|pred| pred.with_self_ty(tcx, self_ty));
@@ -1692,7 +1783,7 @@ fn try_render_ref_opty<'tcx>(
                     Some(vtable_desc) => {
                         mir.used.vtables.insert(vtable_desc);
                         let ti = TraitInst::from_dynamic_predicates(tcx, preds);
-                        return Some(json!({
+                        return Ok(json!({
                             "kind": "trait_object",
                             "def_id": def_id_json,
                             "trait_id": trait_inst_id_str(tcx, &ti),
@@ -1704,7 +1795,7 @@ fn try_render_ref_opty<'tcx>(
                         // the trait bounds are auto traits. We do not
                         // currently support computing vtables for these sorts
                         // of trait objects (see #239).
-                        return Some(json!({
+                        return Ok(json!({
                             "kind": "unsupported",
                         }))
                 }
@@ -1713,10 +1804,53 @@ fn try_render_ref_opty<'tcx>(
         }
     }
 
-    return Some(json!({
+    return Ok(json!({
         "kind": "static_ref",
         "def_id": def_id_json,
     }));
+}
+
+/// Evaluate a static's initializer and render it as a complete
+/// `kind: "constant"` JSON entry ready to be emitted.
+pub fn render_static_body<'tcx>(
+    mir: &mut MirState<'_, 'tcx>,
+    def_id: DefId,
+    ty: ty::Ty<'tcx>,
+    name: String,
+    is_mut: bool,
+) -> serde_json::Value {
+    use rustc_const_eval::interpret::{CtfeProvenance, Pointer};
+
+    let tcx = mir.tcx;
+    let ca = tcx.eval_static_initializer(def_id).unwrap_or_else(|e|
+        panic!(
+            "eval_static_initializer failed for {:?} ({:?}): {:?}",
+            def_id, tcx.def_kind(def_id), e,
+        )
+    );
+
+    let mut icx = interpret::InterpCx::new(
+        tcx,
+        tcx.def_span(def_id),
+        ty::TypingEnv::fully_monomorphized(),
+        RenderConstMachine::new(),
+    );
+
+    let layout = tcx.layout_of(
+        ty::TypingEnv::fully_monomorphized().as_query_input(ty),
+    ).unwrap();
+
+    // Mint a fresh AllocId for this ConstAllocation. This is distinct from
+    // whatever AllocId rustc uses for this static internally, but this is okay
+    // because we only use the interned ConstAllocation and not the AllocId
+    // to identify the allocation (such as in AllocIntern keys).
+    let alloc_id = tcx.reserve_and_set_memory_alloc(ca);
+    let ptr = Pointer::new(CtfeProvenance::from(alloc_id), Size::ZERO);
+    let mpty = icx.ptr_to_mplace(ptr.into(), layout);
+
+    let mut j = make_allocation_body(mir, &mut icx, &mpty, is_mut);
+    j["name"] = name.into();
+    j
 }
 
 pub fn as_opty<'tcx>(
