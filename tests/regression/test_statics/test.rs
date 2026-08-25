@@ -51,7 +51,7 @@ pub union Mix {
 // Z0 has a value which is half from one of the union and half from the other
 pub static Z0: Mix = {
     let mut u = Mix { f1: (true, 99) };
-    u.f2.0 = 99; // overwrite through *the other* union, but only half the value
+    u.f2.0 = 99; // overwrite through *the other* union variant, but only half the value
     u
 };
 
