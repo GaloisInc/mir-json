@@ -294,7 +294,7 @@ type ConstVal =
   | { kind: "coroutine_closure", upvars: ConstVal[] }
   | { kind: "fn_ptr", "def_id": DefId }
   | { kind: "trait_object", def_id: DefId, trait_id: DefId, vtable: DefId }
-  | { kind: "unsupported" }
+  | { kind: "unsupported", debug_val: string }
 
 
 
