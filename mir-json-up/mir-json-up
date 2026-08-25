@@ -171,7 +171,7 @@ build_mir_json() {
         mkdir rlibs
         cd rlibs
         tar xf "${MIR_JSON_SRC_DIR}/mir-json/rlibs.tar"
-        popd
+        popd > /dev/null
     fi
     if [[ ! -f "${MIR_JSON_INSTALL_DIR}/default/bin/mir-json" ]]; then
         create_default_symlinks "$(get_toolchain_dir)"
