@@ -1415,7 +1415,8 @@ pub fn try_render_opty<'tcx>(
             },
         },
 
-        ty::TyKind::Foreign(_) => return Err(RenderErr::Unsupported), // can't do this
+        // `Foreign` probably can't occur here, since it's unsized
+        ty::TyKind::Foreign(_) => return Err(RenderErr::Unsupported),
         
         ty::TyKind::Str => unreachable!("str type should not occur here"),
 
