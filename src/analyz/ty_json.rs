@@ -1748,7 +1748,7 @@ fn try_render_ref_opty<'tcx>(
             return raw_ptr(offset);
         }
         _ =>
-            // Give up.  We return a Mismatch, because we exepected a data
+            // Give up.  We return a Mismatch, because we expected a data
             // pointer but we got a function or vtable one.
             return Err(RenderErr::Mismatch)
     };
