@@ -6,7 +6,7 @@ use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_index::Idx;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
-use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::mono::MonoItem;
 use rustc_session;
 use rustc_session::config::{OutputType, OutFileName};
 use rustc_span::Span;
@@ -282,10 +282,28 @@ fn closure_fn_ptr_callee_for_cast<'tcx>(
 impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
-            &mir::Rvalue::Use(ref op) => {
+            &mir::Rvalue::Use(ref op, _) => {
                 json!({
                     "kind": "Use",
                     "usevar": op.to_json(mir)
+                })
+            }
+            &mir::Rvalue::Reborrow(_, _, ref place) => {
+                // "Creates a bitwise copy of the indicated place with the same type (if Mut) or
+                // its CoerceShared target type (if Not)."  We treat this as an ordinary copy.
+                // This is not quite right in the `CoerceShared` case, since the type might change,
+                // but we assume for now that the type is similar enough to have the same Crucible
+                // representation.  (Note there's no method on the `CoerceShared` trait, so any
+                // conversion must be straightforward enough to be built into the compiler.)
+                //
+                // TODO: look at the rustc CoerceShared test cases to validate this assumption
+                // FIXME: preserve the Copy/Reborrow distinction in json?
+                json!({
+                    "kind": "Use",
+                    "usevar": {
+                        "kind": "Copy",
+                        "data": place.to_json(mir),
+                    }
                 })
             }
             &mir::Rvalue::Repeat(ref op, s) => {
@@ -539,10 +557,6 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::StorageDead(l) => {
                 json!({"kind": "StorageDead", "sdvar": local_json(mir, l)})
             }
-            &mir::StatementKind::Retag { .. } => {
-                // TODO
-                json!({"kind": "Retag"})
-            }
             &mir::StatementKind::PlaceMention(ref pl) => {
                 json!({
                     "kind": "PlaceMention",
@@ -648,10 +662,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref target,
                 unwind: _,
                 replace: _,
-                // it seems like drop and async_fut are only used by the
-                // experimental async_drop feature, so we ignore them for now
+                // `drop` is "Cleanup to be done if the coroutine is dropped at this suspend point
+                // (for async drop)."  crux-mir doesn't support the experimental async_drop
+                // feature, so we ignore this field for now.
                 drop: _,
-                async_fut: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.tcx).ty;
                 json!({
@@ -813,7 +827,7 @@ fn emit_trait<'tcx>(
     // this extra method in `ty_json::adjust_method_index`.
     if let Some(tref) = trait_ref {
         let dyn_ty = tref.self_ty();
-        let drop_inst = ty::Instance::resolve_drop_in_place(tcx, dyn_ty);
+        let drop_inst = ty::Instance::resolve_drop_glue(tcx, dyn_ty);
         let drop_def_id = drop_inst.def.def_id();
         let drop_args = drop_inst.args;
         let drop_sig = tcx.instantiate_and_normalize_erasing_regions(
@@ -933,7 +947,9 @@ referring static rather than in their own right.
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
     let tcx = ms.tcx;
     let name = def_id_str(tcx, def_id);
-    let ty = tcx.type_of(def_id).instantiate_identity();
+    // `static` items are required to be non-generic, so the binder returned by `type_of` doesn't
+    // actually bind anything.
+    let ty = tcx.type_of(def_id).skip_binder();
     let is_mut = tcx.is_mutable_static(def_id);
 
     let j = render_static_body(ms, def_id, ty, name, is_mut);
@@ -956,7 +972,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
 /// may also call `out.add_root` if this is a top-level crate.
 fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let is_top_level = ms.tcx.sess.psess.config.iter()
+    let is_top_level = ms.tcx.sess.config.iter()
         .any(|&(key, _)| key.as_str() == "crux_top_level");
 
     if is_top_level {
@@ -1108,7 +1124,7 @@ fn emit_instance<'tcx>(
     let mir: Body = ty_inst.instantiate_mir_and_normalize_erasing_regions(
         tcx,
         ty::TypingEnv::fully_monomorphized(),
-        ty::EarlyBinder::bind(tcx.instance_mir(ty_inst.def).clone()),
+        ty::EarlyBinder::bind(tcx, tcx.instance_mir(ty_inst.def).clone()),
     );
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(ty_inst), mir)?;
@@ -1164,7 +1180,7 @@ fn build_vtable_items<'tcx>(
     // it manually. We adjust `InstanceKind::Virtual` indices to account for
     // this extra method in `ty_json::adjust_method_index`.
     let concrete_ty = trait_ref.self_ty();
-    let drop_inst = ty::Instance::resolve_drop_in_place(tcx, concrete_ty);
+    let drop_inst = ty::Instance::resolve_drop_glue(tcx, concrete_ty);
     let drop_def_id = drop_inst.def.def_id();
     let drop_args = drop_inst.args;
     parts.push(json!({
@@ -1293,14 +1309,14 @@ fn inst_abi<'tcx>(
             let ty = tcx.type_of(def_id).skip_binder();
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
-                    ty.fn_sig(tcx).skip_binder().abi,
+                    ty.fn_sig(tcx).skip_binder().abi(),
                 ty::TyKind::Closure(_, _) |
                 ty::TyKind::CoroutineClosure(_, _) => ExternAbi::RustCall,
                 _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
-        ty::InstanceKind::FnPtrShim(..) => ExternAbi::RustCall,
+        ty::InstanceKind::Shim(ty::ShimKind::ClosureOnce { .. }) => ExternAbi::RustCall,
+        ty::InstanceKind::Shim(ty::ShimKind::FnPtr(..)) => ExternAbi::RustCall,
         _ => ExternAbi::Rust,
     }
 }
@@ -1528,21 +1544,20 @@ fn make_attr(key: &str, value: &str) -> ast::Attribute {
                 item: ast::AttrItem {
                     unsafety: ast::Safety::Default,
                     path: ast::Path::from_ident(Ident::from_str(key)),
-                    args: ast::AttrItemKind::Unparsed(ast::AttrArgs::Delimited(
-                        ast::DelimArgs {
-                            dspan: tokenstream::DelimSpan::dummy(),
-                            delim: token::Delimiter::Parenthesis,
-                            tokens: iter::once(
-                                tokenstream::TokenTree::token_alone(
-                                    token::TokenKind::Ident(
-                                        Symbol::intern(value),
-                                        token::IdentIsRaw::No,
-                                    ),
-                                    Span::default(),
+                    args: ast::AttrArgs::Delimited(ast::DelimArgs {
+                        dspan: tokenstream::DelimSpan::dummy(),
+                        delim: token::Delimiter::Parenthesis,
+                        tokens: iter::once(
+                            tokenstream::TokenTree::token_alone(
+                                token::TokenKind::Ident(
+                                    Symbol::intern(value),
+                                    token::IdentIsRaw::No,
                                 ),
-                            ).collect(),
-                        })),
-                    tokens: None,
+                                Span::default(),
+                            ),
+                        ).collect(),
+                    }),
+                    span: Span::default(),
                 },
                 tokens: None,
             })),
