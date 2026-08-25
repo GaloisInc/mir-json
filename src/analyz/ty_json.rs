@@ -1244,6 +1244,7 @@ pub fn render_opty<'tcx>(
         // unusual union values (e.g., half one side of the union, half the
         // other, which apparently is fine in stable Rust at the moment),
         // we may get a mismatch.
+        // For example, see `Mix/Z0` in `tests/regression/test_statics/test.rs`.
         json!({
             "kind": "unsupported",
             "debug_val": format!("{:?}", op_ty),
@@ -1296,16 +1297,16 @@ pub fn try_render_opty<'tcx>(
     Ok(match *ty.kind() {
         ty::TyKind::Bool => {
             let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
+            check_mismatch(s.to_bool())?;
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
-            if !(bits == 0 || bits == 1) { return Err(RenderErr::Mismatch) }
             scalar_const("bool", size, bits)
         },
         ty::TyKind::Char => {
             let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
+            check_mismatch(s.to_char())?;
             let size = layout.size();
-            let bits = s.to_u32().unwrap();
-            char::from_u32(bits).ok_or(RenderErr::Mismatch)?;
+            let bits = s.to_bits(size).unwrap();
             scalar_const("char", size, bits)
         },
         ty::TyKind::Uint(k) =>
