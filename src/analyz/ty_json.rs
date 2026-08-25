@@ -1,10 +1,10 @@
 use rustc_abi::FieldsShape;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hash::{StableHash, StableHasher};
 use rustc_hashes::Hash64;
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
-use rustc_hir::lang_items::LangItem;
+use rustc_hir::attrs::lang_items::LangItem;
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir;
 use rustc_middle::ty::CoroutineArgsExt;
@@ -15,11 +15,9 @@ use rustc_const_eval::interpret::{
 use rustc_middle::ty;
 use rustc_middle::ty::{AdtKind, TyCtxt, TypeVisitableExt};
 use rustc_middle::ty::util::IntTypeExt;
-use rustc_middle::ich::StableHashingContext;
 use rustc_abi::{Align, ExternAbi, FieldIdx, Size};
 use rustc_span::DUMMY_SP;
 use serde_json;
-use std::usize;
 
 use analyz::merge;
 use analyz::to_json::*;
@@ -151,13 +149,13 @@ pub fn ext_def_id_str<'tcx, T>(
     prefix: &str,
     extra: T,
 ) -> String
-where T: for<'a> HashStable<StableHashingContext<'a>> {
+where T: StableHash {
     let base = def_id_str(tcx, def_id);
 
     // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
     let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
         let mut hasher = StableHasher::new();
-        extra.hash_stable(&mut hcx, &mut hasher);
+        extra.stable_hash(&mut hcx, &mut hasher);
         hasher.finish()
     });
     format!("{}::{}{:016x}[0]", base, prefix, hash)
@@ -187,45 +185,49 @@ pub fn inst_id_str<'tcx>(
         FnInst::Real(inst) => {
             let args = tcx.normalize_erasing_regions(
                 ty::TypingEnv::fully_monomorphized(),
-                inst.args,
+                // FIXME: is it correct to use `Unnormalized` here?
+                ty::Unnormalized::new(inst.args),
             );
             assert!(!args.has_erasable_regions());
             assert!(!args.has_param());
             match inst.def {
                 ty::InstanceKind::Item(def_id) |
-                ty::InstanceKind::Intrinsic(def_id) => {
+                ty::InstanceKind::Intrinsic(def_id) |
+                ty::InstanceKind::LlvmIntrinsic(def_id) => {
                     if args.len() == 0 {
                         def_id_str(tcx, def_id)
                     } else {
                         ext_def_id_str(tcx, def_id, "_inst", args)
                     }
                 },
-                ty::InstanceKind::VTableShim(def_id) =>
-                    ext_def_id_str(tcx, def_id, "_vtshim", args),
-                ty::InstanceKind::ReifyShim(def_id, _reason) =>
-                    ext_def_id_str(tcx, def_id, "_reify", args),
                 ty::InstanceKind::Virtual(def_id, idx) =>
                     ext_def_id_str(tcx, def_id, &format!("_virt{}_", idx), args),
-                ty::InstanceKind::DropGlue(def_id, _) =>
+                ty::InstanceKind::Shim(ty::ShimKind::VTable(def_id)) =>
+                    ext_def_id_str(tcx, def_id, "_vtshim", args),
+                ty::InstanceKind::Shim(ty::ShimKind::Reify(def_id, _reason)) =>
+                    ext_def_id_str(tcx, def_id, "_reify", args),
+                ty::InstanceKind::Shim(ty::ShimKind::DropGlue(def_id, _)) =>
                     ext_def_id_str(tcx, def_id, "_drop", args),
-                ty::InstanceKind::FnPtrShim(def_id, _) =>
+                ty::InstanceKind::Shim(ty::ShimKind::FnPtr(def_id, _)) =>
                     ext_def_id_str(tcx, def_id, "_fnptr", args),
-                ty::InstanceKind::ClosureOnceShim { call_once: def_id, .. } =>
+                ty::InstanceKind::Shim(ty::ShimKind::ClosureOnce { call_once: def_id, .. }) =>
                     ext_def_id_str(tcx, def_id, "_callonce", args),
-                ty::InstanceKind::CloneShim(def_id, _) =>
+                ty::InstanceKind::Shim(ty::ShimKind::Clone(def_id, _)) =>
                     ext_def_id_str(tcx, def_id, "_shim", args),
-                ty::InstanceKind::ConstructCoroutineInClosureShim {
+                ty::InstanceKind::Shim(ty::ShimKind::ConstructCoroutineInClosure {
                     coroutine_closure_def_id, ..
-                } => ext_def_id_str(tcx, coroutine_closure_def_id, "_corocallonce", args),
-                ty::InstanceKind::ThreadLocalShim(def_id) =>
+                }) => ext_def_id_str(tcx, coroutine_closure_def_id, "_corocallonce", args),
+                ty::InstanceKind::Shim(ty::ShimKind::ThreadLocal(def_id)) =>
                     ext_def_id_str(tcx, def_id, "_threadlocal", args),
-                ty::InstanceKind::FutureDropPollShim(def_id, _proxy_cor_ty, _impl_cor_ty) =>
+                ty::InstanceKind::Shim(ty::ShimKind::FutureDropPoll(def_id, _proxy_cor_ty, _impl_cor_ty)) =>
                     ext_def_id_str(tcx, def_id, "_futuredroppoll", args),
-                ty::InstanceKind::FnPtrAddrShim(def_id, _ty) =>
-                    ext_def_id_str(tcx, def_id, "_fnptraddr", args),
-                ty::InstanceKind::AsyncDropGlueCtorShim(def_id, _ty) =>
+                ty::InstanceKind::Shim(ty::ShimKind::FnPtrAsPtr(def_id, _ty)) =>
+                    ext_def_id_str(tcx, def_id, "_fnptrasptr", args),
+                ty::InstanceKind::Shim(ty::ShimKind::FnPtrFromPtr(def_id, _ty)) =>
+                    ext_def_id_str(tcx, def_id, "_fnptrfromptr", args),
+                ty::InstanceKind::Shim(ty::ShimKind::AsyncDropGlueCtor(def_id, _ty)) =>
                     ext_def_id_str(tcx, def_id, "_asyncdropgluector", args),
-                ty::InstanceKind::AsyncDropGlue(def_id, _ty) =>
+                ty::InstanceKind::Shim(ty::ShimKind::AsyncDropGlue(def_id, _ty)) =>
                     ext_def_id_str(tcx, def_id, "_asyncdropglue", args),
             }
         },
@@ -286,8 +288,8 @@ pub fn get_drop_fn_name<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     ty: ty::Ty<'tcx>,
 ) -> Option<String> {
-    let inst = ty::Instance::resolve_drop_in_place(mir.tcx, ty);
-    if let ty::InstanceKind::DropGlue(_, None) = inst.def {
+    let inst = ty::Instance::resolve_drop_glue(mir.tcx, ty);
+    if let ty::InstanceKind::Shim(ty::ShimKind::DropGlue(_, None)) = inst.def {
         // `None` instead of a `Ty` indicates this drop glue is a no-op.
         return None;
     }
@@ -339,7 +341,8 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         let args = mir.tcx.normalize_erasing_regions(
             ty::TypingEnv::fully_monomorphized(),
-            self.args,
+            // FIXME: is it correct to use `Unnormalized` here?
+            ty::Unnormalized::new(self.args),
         );
 
         match self.def {
@@ -348,22 +351,24 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::Intrinsic(did) => json!({
+            // FIXME: preserve the Intrinsic/LlvmIntrinsic distinction in json?
+            ty::InstanceKind::Intrinsic(did) |
+            ty::InstanceKind::LlvmIntrinsic(did) => json!({
                 "kind": "Intrinsic",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::VTableShim(did) => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::VTable(did)) => json!({
                 "kind": "VTableShim",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::ReifyShim(did, _reason) => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::Reify(did, _reason)) => json!({
                 "kind": "ReifyShim",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::FnPtrShim(did, ty) => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::FnPtr(did, ty)) => json!({
                 "kind": "FnPtrShim",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
@@ -394,18 +399,18 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "index": adjust_method_index(mir.tcx, tref, idx),
                 })
             },
-            ty::InstanceKind::ClosureOnceShim { call_once, .. } => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::ClosureOnce { call_once, .. }) => json!({
                 "kind": "ClosureOnceShim",
                 "call_once": call_once.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            ty::InstanceKind::DropGlue(did, ty) => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::DropGlue(did, ty)) => json!({
                 "kind": "DropGlue",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
                 "ty": ty.to_json(mir),
             }),
-            ty::InstanceKind::CloneShim(did, ty) => {
+            ty::InstanceKind::Shim(ty::ShimKind::Clone(did, ty)) => {
                 // We try to keep the cases in this `match` expression in sync
                 // with the cases in rustc's `build_clone_shim` function (see
                 // https://doc.rust-lang.org/1.86.0/nightly-rustc/src/rustc_mir_transform/shim.rs.html#432-455).
@@ -455,22 +460,13 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                     "callees": callees.to_json(mir),
                 })
             },
-            ty::InstanceKind::ConstructCoroutineInClosureShim { .. } => json!({
-                "kind": "Unsupported",
-            }),
-            ty::InstanceKind::ThreadLocalShim(_def_id) => json!({
-                "kind": "Unsupported",
-            }),
-            ty::InstanceKind::FutureDropPollShim(_def_id, _proxy_cor_ty, _impl_cor_ty) => json!({
-                "kind": "Unsupported",
-            }),
-            ty::InstanceKind::FnPtrAddrShim(_def_id, _ty) => json!({
-                "kind": "Unsupported",
-            }),
-            ty::InstanceKind::AsyncDropGlueCtorShim(_def_id, _ty) => json!({
-                "kind": "Unsupported",
-            }),
-            ty::InstanceKind::AsyncDropGlue(_def_id, _ty) => json!({
+            ty::InstanceKind::Shim(ty::ShimKind::ConstructCoroutineInClosure { .. }) |
+            ty::InstanceKind::Shim(ty::ShimKind::ThreadLocal(..)) |
+            ty::InstanceKind::Shim(ty::ShimKind::FutureDropPoll(..)) |
+            ty::InstanceKind::Shim(ty::ShimKind::FnPtrAsPtr(..)) |
+            ty::InstanceKind::Shim(ty::ShimKind::FnPtrFromPtr(..)) |
+            ty::InstanceKind::Shim(ty::ShimKind::AsyncDropGlueCtor(..)) |
+            ty::InstanceKind::Shim(ty::ShimKind::AsyncDropGlue(..)) => json!({
                 "kind": "Unsupported",
             }),
         }
@@ -548,7 +544,8 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::FnDef(defid, ref args) => {
-                let name = get_fn_def_name(mir, defid, args);
+                // FIXME: not sure what the binder on `args` is for
+                let name = get_fn_def_name(mir, defid, args.skip_binder());
                 json!({
                     "kind": "FnDef",
                     "defid": name,
@@ -586,7 +583,7 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                     }).collect::<Vec<_>>(),
                 })
             }
-            &ty::TyKind::Alias(ty::AliasTyKind::Projection, _) => unreachable!(
+            &ty::TyKind::Alias(_, ty::Alias { kind: ty::AliasTyKind::Projection { .. }, .. }) => unreachable!(
                 "no TyKind::Alias with AliasTyKind Projection should remain after monomorphization"
             ),
             &ty::TyKind::FnPtr(ref sig_tys, ref hdr) => {
@@ -620,10 +617,6 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
             &ty::TyKind::CoroutineWitness(_, _) => {
                 // TODO
                 json!({"kind": "CoroutineWitness"})
-            }
-            &ty::TyKind::Alias(ty::AliasTyKind::Opaque, _) => {
-                // TODO
-                json!({"kind": "Alias"})
             }
             &ty::TyKind::Pat(ty, _) => {
                 // Don't serialize the pattern, since it's not used in crucible-mir.  All values of
@@ -701,7 +694,7 @@ pub fn coroutine_args<'tcx>(
     let co_layout = tcx.instantiate_and_normalize_erasing_regions(
         args,
         ty::TypingEnv::fully_monomorphized(),
-        ty::EarlyBinder::bind(co_layout.clone()),
+        ty::EarlyBinder::bind(tcx, co_layout.clone()),
     );
     json!({
         // Discriminant, upvar, and saved-local types
@@ -739,7 +732,7 @@ impl<'tcx> ToJson<'tcx> for ty::FnSig<'tcx> {
         json!({
             "inputs": input_jsons,
             "output": self.output().to_json(ms),
-            "abi": self.abi.to_json(ms),
+            "abi": self.abi().to_json(ms),
         })
     }
 }
@@ -757,7 +750,16 @@ impl<'tcx> ToJson<'tcx> for ty::AliasTerm<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         json!({
             "args": self.args.to_json(ms),
-            "def_id": self.def_id.to_json(ms)
+            "def_id": match self.kind {
+                ty::AliasTermKind::ProjectionTy { def_id } |
+                ty::AliasTermKind::InherentTy { def_id } |
+                ty::AliasTermKind::OpaqueTy { def_id } |
+                ty::AliasTermKind::FreeTy { def_id } |
+                ty::AliasTermKind::AnonConst { def_id } |
+                ty::AliasTermKind::ProjectionConst { def_id } |
+                ty::AliasTermKind::FreeConst { def_id } |
+                ty::AliasTermKind::InherentConst { def_id } => def_id.to_json(ms),
+            }
         })
     }
 }
@@ -820,16 +822,16 @@ impl<'tcx> ToJson<'tcx> for ty::ExistentialPredicate<'tcx> {
 }
 
 
-impl<'tcx> ToJson<'tcx> for ty::GenericPredicates<'tcx> {
+impl<'tcx> ToJson<'tcx> for ty::GenericClauses<'tcx> {
     fn to_json(&self, ms: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         fn gather_preds<'tcx>(
             ms: &mut MirState<'_, 'tcx>,
-            preds: &ty::GenericPredicates<'tcx>,
+            preds: &ty::GenericClauses<'tcx>,
             dest: &mut Vec<serde_json::Value>,
         ) {
-            dest.extend(preds.predicates.iter().map(|p| p.0.to_json(ms)));
+            dest.extend(preds.clauses.iter().map(|p| p.0.to_json(ms)));
             if let Some(parent_id) = preds.parent {
-                let parent_preds = ms.tcx.predicates_of(parent_id);
+                let parent_preds = ms.tcx.clauses_of(parent_id);
                 gather_preds(ms, &parent_preds, dest);
             }
         }
@@ -1003,6 +1005,20 @@ mod machine {
             )).into()
         }
 
+        fn call_llvm_intrinsic(
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _instance: ty::Instance<'tcx>,
+            _args: &[OpTy<'tcx, Self::Provenance>],
+            _destination: &PlaceTy<'tcx, Self::Provenance>,
+            _target: Option<mir::BasicBlock>,
+        ) -> InterpResult<'tcx> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported(
+                    "call_llvm_intrinsic".into(),
+                ),
+            )).into()
+        }
+
         fn check_fn_target_features(
             _ecx: &InterpCx<'tcx, Self>,
             _instance: ty::Instance<'tcx>,
@@ -1048,6 +1064,63 @@ mod machine {
 
         fn float_fuse_mul_add(_ecx: &InterpCx<'tcx, Self>) -> bool {
             false
+        }
+
+        fn atomic_load(
+            _ecx: &InterpCx<'tcx, Self>,
+            _place: &MPlaceTy<'tcx, Self::Provenance>,
+            _ordering: ty::AtomicOrdering,
+        ) -> InterpResult<'tcx, Scalar<Self::Provenance>> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported("atomic_load".into()),
+            )).into()
+        }
+
+        fn atomic_store(
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _place: &MPlaceTy<'tcx, Self::Provenance>,
+            _val: &ImmTy<'tcx, Self::Provenance>,
+            _ordering: ty::AtomicOrdering,
+        ) -> InterpResult<'tcx> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported("atomic_store".into()),
+            )).into()
+        }
+
+        fn atomic_rmw(
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _place: &MPlaceTy<'tcx, Self::Provenance>,
+            _op: AtomicRmwOp,
+            _operand: &ImmTy<'tcx, Self::Provenance>,
+            _ordering: ty::AtomicOrdering,
+        ) -> InterpResult<'tcx, Scalar<Self::Provenance>> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported("atomic_rmw".into()),
+            )).into()
+        }
+
+        fn atomic_compare_exchange(
+            _ecx: &mut InterpCx<'tcx, Self>,
+            _place: &MPlaceTy<'tcx, Self::Provenance>,
+            _expected_old: &ImmTy<'tcx, Self::Provenance>,
+            _new: &ImmTy<'tcx, Self::Provenance>,
+            _can_fail_spuriously: bool,
+            _success_ordering: ty::AtomicOrdering,
+            _failure_ordering: ty::AtomicOrdering,
+        ) -> InterpResult<'tcx, (Scalar<Self::Provenance>, bool)> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported("atomic_compare_exchange".into()),
+            )).into()
+        }
+
+        fn atomic_fence(
+            _ecx: &InterpCx<'tcx, Self>,
+            _ordering: ty::AtomicOrdering,
+            _singlethread: bool,
+        ) -> InterpResult<'tcx> {
+            Err(InterpErrorKind::Unsupported(
+                UnsupportedOpInfo::Unsupported("atomic_fence".into()),
+            )).into()
         }
 
         fn runtime_checks(
@@ -1694,7 +1767,7 @@ fn try_render_ref_opty<'tcx>(
 
     // Special case for nullptr
     let val = check_mismatch(icx.read_immediate(op_ty))?;
-    let mplace = check_mismatch(icx.ref_to_mplace(&val))?;
+    let mplace = check_mismatch(icx.imm_ptr_to_mplace(&val))?;
     let (prov, offset) = mplace.ptr().into_raw_parts();
     if prov.is_none() {
         assert!(!mplace.meta().has_meta(), "not expecting meta for nullptr");
@@ -2095,7 +2168,7 @@ fn unpack_dyn_ty<'tcx>(
         matches!(mplace.layout.ty.kind(), ty::Dynamic(_, _)),
         "`unpack_dyn_ty` only makes sense on `dyn*` types"
     );
-    let vtable = mplace.meta().unwrap_meta().to_pointer(icx)?;
+    let vtable = mplace.meta().unwrap_meta().to_pointer(icx);
     icx.get_ptr_vtable_ty(vtable, Some(expected_trait))
 }
 

@@ -1,5 +1,5 @@
 use rustc_abi::ExternAbi;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hash::{StableHash, StableHasher};
 use rustc_hashes::Hash64;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::def::CtorKind;
@@ -133,8 +133,13 @@ impl<'tcx> TraitInst<'tcx> {
         let mut pending = vec![trait_ref.def_id];
         all_super_traits.insert(trait_ref);
         while let Some(def_id) = pending.pop() {
-            let super_preds = tcx.explicit_super_predicates_of(def_id);
-            for &(ref pred, _) in super_preds.skip_binder() {
+            let super_preds = tcx.explicit_super_clauses_of(def_id);
+            // FIXME is this correct?
+            // old version:  for &(ref pred, _) in super_preds.skip_binder() {
+            for (pred, _) in super_preds
+                .iter_identity_copied()
+                .map(ty::Unnormalized::skip_norm_wip)
+            {
                 // The use of `Binder::dummy` here is inspired by the following
                 // code in rustc:
                 // https://github.com/rust-lang/rust/blob/08de25c4ea16d7ecc3ceeb093d4f343a2be30df5/compiler/rustc_trait_selection/src/traits/vtable.rs#L127
@@ -154,7 +159,7 @@ impl<'tcx> TraitInst<'tcx> {
                     ty::ClauseKind::TypeOutlives(..) => continue,
                     _ => panic!("unexpected predicate kind: {:?}", pred),
                 };
-                assert_eq!(tpred.polarity, ty::PredicatePolarity::Positive);
+                assert_eq!(tpred.polarity, ty::ClausePolarity::Positive);
                 if all_super_traits.insert(tpred.trait_ref) {
                     pending.push(tpred.trait_ref.def_id);
                 }
@@ -170,10 +175,16 @@ impl<'tcx> TraitInst<'tcx> {
         for super_trait_ref in all_super_traits {
             for ai in tcx.associated_items(super_trait_ref.def_id).in_definition_order() {
                 if let ty::AssocKind::Type {..} = ai.kind {
-                    let proj_ty = ty::Ty::new_projection(tcx, ai.def_id, super_trait_ref.args);
+                    let proj_ty = ty::Ty::new_projection(
+                        tcx,
+                        ty::IsRigid::No,
+                        ai.def_id,
+                        super_trait_ref.args,
+                    );
                     let actual_ty = tcx.normalize_erasing_regions(
                         ty::TypingEnv::fully_monomorphized(),
-                        proj_ty,
+                        // FIXME: is it correct to use `Unnormalized` here?
+                        ty::Unnormalized::new(proj_ty),
                     );
                     let ex_super_trait_ref_args = ty::ExistentialTraitRef::erase_self_ty(tcx, super_trait_ref).args;
                     projs.push(ty::ExistentialProjection::new(
@@ -290,7 +301,7 @@ fn ty_unique_id<'tcx>(tcx: TyCtxt<'tcx>, ty: ty::Ty) -> String {
         // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
         let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
             let mut hasher = StableHasher::new();
-            ty.hash_stable(&mut hcx, &mut hasher);
+            ty.stable_hash(&mut hcx, &mut hasher);
             hasher.finish()
         });
         format!("ty::{}::{:016x}", kind_str, hash)
@@ -309,7 +320,7 @@ fn const_unique_id<'tcx>(tcx: TyCtxt<'tcx>, c: ty::Const<'tcx>) -> String {
     // Based on librustc_codegen_utils/symbol_names/legacy.rs get_symbol_hash
     let hash: Hash64 = tcx.with_stable_hashing_context(|mut hcx| {
         let mut hasher = StableHasher::new();
-        c.hash_stable(&mut hcx, &mut hasher);
+        c.stable_hash(&mut hcx, &mut hasher);
         hasher.finish()
     });
     format!("ty::Const::{:016x}", hash)
@@ -548,6 +559,7 @@ impl<'a> ToJson<'_> for AssertMessage<'a> {
                     )
                 }
                 AssertKind::NullPointerDereference => write!(s, "null pointer dereference occurred"),
+                AssertKind::NullReferenceConstructed => write!(s, "null reference constructed"),
                 AssertKind::InvalidEnumConstruction(source) => {
                     write!(s, "trying to construct an enum from an invalid value {source:?}")
                 }
@@ -684,6 +696,8 @@ impl ToJson<'_> for ExternAbi {
             ExternAbi::RiscvInterruptM => json!({ "kind": "RiscvInterruptM" }),
             ExternAbi::RiscvInterruptS => json!({ "kind": "RiscvInterruptS" }),
             ExternAbi::RustPreserveNone => json!({ "kind": "RustPreserveNone" }),
+            ExternAbi::RustTail => json!({ "kind": "RustTail" }),
+            ExternAbi::Swift => json!({ "kind": "Swift" }),
         }
     }
 }
@@ -776,6 +790,12 @@ impl ToJson<'_> for CastKind {
             CastKind::PtrToPtr => json!({ "kind": "PtrToPtr" }),
             CastKind::FnPtrToPtr => json!({ "kind": "FnPtrToPtr" }),
             CastKind::Transmute => json!({ "kind": "Transmute" }),
+            // "A special transmute used by elaborated `box` deref's to turn the inner pointer into
+            // a raw pointer. This is almost equivalent to a regular transmute except that if the
+            // input would not be valid as `Box<T>`, the cast is UB. Backends that do not care
+            // about UB detection can treat this like a regular transmute."
+            // FIXME: preserve the Transmute/BoxDerefTransmute distinction in json?
+            CastKind::BoxDerefTransmute => json!({ "kind": "Transmute" }),
             CastKind::Subtype => json!({ "kind": "Subtype" }),
         }
     }
