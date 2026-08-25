@@ -89,3 +89,36 @@ expect_static_matches "::FN_PTR" '{
 expect_json_contains \
   '.fns[] | select(.name | test("::fn_ptr_target$"))' \
   test.linked-mir.json
+
+# Union with a mixed payload: no variant covers the whole value.
+expect_static_matches "::Z0" '{
+  "kind": "constant",
+  "mutable": false,
+  "rendered": { "kind": "unsupported" }
+}'
+
+# Function pointer with a non-trivial signature.
+expect_static_matches "::Z1" '{
+  "kind": "constant",
+  "mutable": false,
+  "rendered": { "kind": "fn_ptr" }
+}'
+
+# `*const ()` field holding a transmuted function pointer.
+expect_static_matches "::Z2" '{
+  "kind": "constant",
+  "mutable": false,
+  "rendered": { "kind": "unsupported" }
+}'
+
+# Union used to inject an arbitrary bit pattern into a fn-pointer slot.
+expect_static_matches "::Z3" '{
+  "kind": "constant",
+  "mutable": false,
+  "rendered": { "kind": "unsupported" }
+}'
+
+# The callee referenced by Z1/Z2 must appear in `fns`.
+expect_json_contains \
+  '.fns[] | select(.name | test("::f$"))' \
+  test.linked-mir.json

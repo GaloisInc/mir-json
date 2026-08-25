@@ -43,8 +43,50 @@ pub static mut MUT_ARR: [u32; 3] = [1, 2, 3];
 fn fn_ptr_target() -> u32 { 100 }
 pub static FN_PTR: fn() -> u32 = fn_ptr_target;
 
+pub union Mix {
+  f1: (bool, u8),
+  f2: (u8, bool),
+}
+
+// Z0 has a value which is half from one of the union and half from the other
+pub static Z0: Mix = {
+    let mut u = Mix { f1: (true, 99) };
+    u.f2.0 = 99; // overwrite through *the other* union, but only half the value
+    u
+};
+
+// Some function, so we can initialize function pointers.
+fn f(arg: i32) -> i32 { arg }
+
+// `Z1` points to `f`
+pub static Z1: fn(i32) -> i32 = f;
+
+pub struct T(*const());
+unsafe impl Sync for T {}
+
+// `Z2` is a const*() pointer that points to a function
+pub static Z2: T = {
+   let f1 = f as fn(i32) -> i32;
+   T(unsafe { core::mem::transmute(f1) })
+};
+
+
+pub union U { cast: fn(u32) -> u32 }
+
+// We can use a union to circumvent value expectations:
+// here's how we can make a function pointer, which has the value 8.
+// Without the union `rust` reports "undefined behavior".
+pub static Z3: U = {
+    U { cast: unsafe { core::mem::transmute((&8u8) as *const u8) } }
+};
+
 // Force each static to be used so it appears in mono items.
 pub fn touch_all() -> u32 {
+    let _a       = &Z0;
+    let _a       = &Z1;
+    let T(_a)    = Z2;
+    let _a       = unsafe { Z3.cast };
+
     let mut_val = unsafe { MUT_STATIC };
     let mut_arr_val = unsafe { MUT_ARR[0] };
     ORDINARY
