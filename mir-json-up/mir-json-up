@@ -95,7 +95,6 @@ get_mir_json_src() {
     if ! [[ -d mir-json ]]; then
         git clone https://github.com/GaloisInc/mir-json.git
     fi
-    cp mir-json/rust-toolchain.toml .
     cd mir-json
     set +e
     if [[ $(git show-ref refs/tags/"${MIR_JSON_VERSION}") == "" ]]; then
@@ -103,6 +102,7 @@ get_mir_json_src() {
     fi
     set -e
     git checkout "${MIR_JSON_VERSION}"
+    cp rust-toolchain.toml ..
     popd > /dev/null
 }
 
@@ -161,13 +161,17 @@ build_mir_json() {
     cargo +"${MIR_JSON_RUST_TOOLCHAIN}" build -r --target "${TARGET_TRIPLET}" --target-dir "${MIR_JSON_BIN_DIR}" --locked
     PATH="${MIR_JSON_BIN_DIR}/${TARGET_TRIPLET}/release:$PATH"
     mir-json-translate-libs --target "${TARGET_TRIPLET}"
-    if [[ $? ]]; then
+    if [ $? = 0 ]; then
         if [[ -e "${MIR_JSON_RLIBS_DIR}" ]]; then
-            rm -rfv "${MIR_JSON_RLIBS_DIR}"
+            rm -rf "${MIR_JSON_RLIBS_DIR}"
         fi
-        tar cf rlibs.tar rlibs
+        cd rlibs
+        tar cf "${MIR_JSON_SRC_DIR}/mir-json/rlibs.tar" .
         pushd "$(get_toolchain_dir)" > /dev/null
+        mkdir rlibs
+        cd rlibs
         tar xf "${MIR_JSON_SRC_DIR}/mir-json/rlibs.tar"
+        popd
     fi
     if [[ ! -f "${MIR_JSON_INSTALL_DIR}/default/bin/mir-json" ]]; then
         create_default_symlinks "$(get_toolchain_dir)"
@@ -385,7 +389,7 @@ case "$COMMAND" in
     install)
         check_all_prerequisites 0
         if [[ ! -d "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
+            echo "${MIR_JSON_INSTALL_DIR} does not exist; run 'mir-json-up init' to initialize" 1>&2
             exit 1
         fi
         get_mir_json_src
@@ -395,7 +399,7 @@ case "$COMMAND" in
     list)
         check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
+            echo "${MIR_JSON_INSTALL_DIR} does not exist; run 'mir-json-up init' to initialize" 1>&2
             exit 1
         fi
         if [[ ! -d "${MIR_JSON_INSTALL_DIR}/toolchains" || -z $(ls -A "${MIR_JSON_INSTALL_DIR}/toolchains") ]]; then
@@ -419,7 +423,7 @@ case "$COMMAND" in
     remove)
         check_general_prerequisites
         if [[ ! -e "${MIR_JSON_INSTALL_DIR}" ]]; then
-            echo "${MIR_JSON_INSTALL_DIR} does not exist" 1>&2
+            echo "${MIR_JSON_INSTALL_DIR} does not exist; run 'mir-json-up init' to initialize" 1>&2
             exit 1
         fi
         TOOLCHAIN_DIR="$(get_toolchain_dir)"
