@@ -64,7 +64,7 @@ pub static Z1: fn(i32) -> i32 = f;
 pub struct T(*const());
 unsafe impl Sync for T {}
 
-// `Z2` is a const*() pointer that points to a function
+// `Z2` is a *const() pointer that points to a function
 pub static Z2: T = {
    let f1 = f as fn(i32) -> i32;
    T(unsafe { core::mem::transmute(f1) })
