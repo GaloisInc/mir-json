@@ -75,7 +75,7 @@ pub union U { cast: fn(u32) -> u32 }
 
 // We can use a union to circumvent value expectations:
 // here's how we can make a function pointer, which has the value 8.
-// Without the union `rust` reports "undefined behavior".
+// Without the union `rustc` reports "undefined behavior".
 pub static Z3: U = {
     U { cast: unsafe { core::mem::transmute((&8u8) as *const u8) } }
 };
