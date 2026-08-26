@@ -1060,6 +1060,7 @@ fn emit_instance<'tcx>(
     inst: FnInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.tcx;
+    inst.assert_invariants(tcx);
 
     let name = inst_id_str(tcx, inst);
 
