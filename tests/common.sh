@@ -47,7 +47,7 @@ expect_static_matches() {
   actual=$(jq --arg n "$suffix" \
     '.statics[]
        | select(.name | endswith($n))
-       | del(.name, .ty, .rendered.def_id, .rendered.element_ty)' \
+       | del(.name, .ty, .rendered.def_id, .rendered.element_ty, .rendered.debug_val)' \
     "$file")
 
   if [[ -z "$actual" ]]; then

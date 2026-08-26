@@ -1236,25 +1236,29 @@ pub fn render_opty<'tcx>(
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
     op_ty: &interpret::OpTy<'tcx>,
 ) -> serde_json::Value {
-    try_render_opty(mir, icx, op_ty).unwrap_or_else(|err| {
-        match err {
-            RenderErr::Mismatch => panic!("Unexpexpected type mismatch"),
-            RenderErr::Unsupported =>
-                json!({
-                    "kind": "unsupported",
-                    "debug_val": format!("{:?}", op_ty),
-                })
-        }
+    try_render_opty(mir, icx, op_ty).unwrap_or_else(|_err| {
+        // We report "unsupported" even when we encounter "mismatch".  The reason
+        // is that the constraints on what can be stored in unions in Rust
+        // is pretty lax at the moment, but we actually look for well-formed
+        // values in the union alternatives.  So if we encounter one of the
+        // unusual union values (e.g., half one side of the union, half the
+        // other, which apparently is fine in stable Rust at the moment),
+        // we may get a mismatch.
+        // For example, see `Mix/Z0` in `tests/regression/test_statics/test.rs`.
+        json!({
+            "kind": "unsupported",
+            "debug_val": format!("{:?}", op_ty),
+        })
     })
 }
 
 
 /// Errors that may occur while interpreting bytes as a value of a specific type
 pub enum RenderErr {
-    /// Indicates that the bytes do not match the given type
+    /// Indicates that the bytes do not match the given type.
     Mismatch,
 
-    /// Indicates that we encountered a type that we don't know how to process
+    /// Indicates that we encountered a type that we don't know how to process.
     Unsupported
 }
 
@@ -1273,6 +1277,14 @@ fn alloc_from_prov<'tcx>(tcx: TyCtxt<'tcx>, mb_prov: Option<interpret::CtfeProve
     tcx.try_get_global_alloc(prov.alloc_id()).ok_or(RenderErr::Mismatch)
 }
 
+fn scalar_const<T: ToString>(tag: &str, size: Size, bits: T) -> serde_json::Value {
+    json!({
+        "kind": tag.to_string(),
+        "size": size.bytes(),
+        "val": bits.to_string(),
+    })
+}
+
 pub fn try_render_opty<'tcx>(
     mir: &mut MirState<'_, 'tcx>,
     icx: &mut interpret::InterpCx<'tcx, RenderConstMachine<'tcx>>,
@@ -1283,27 +1295,31 @@ pub fn try_render_opty<'tcx>(
     let tcx = mir.tcx;
 
     Ok(match *ty.kind() {
-        ty::TyKind::Bool |
-        ty::TyKind::Char |
-        ty::TyKind::Uint(_) =>
+        ty::TyKind::Bool => {
+            let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
+            check_mismatch(s.to_bool())?;
+            let size = layout.size();
+            let bits = s.to_bits(size).unwrap();
+            scalar_const("bool", size, bits)
+        },
+        ty::TyKind::Char => {
+            let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
+            check_mismatch(s.to_char())?;
+            let size = layout.size();
+            let bits = s.to_bits(size).unwrap();
+            scalar_const("char", size, bits)
+        },
+        ty::TyKind::Uint(k) =>
         {
             let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
-
-            json!({
-                "kind": match *ty.kind() {
-                    ty::TyKind::Bool => "bool",
-                    ty::TyKind::Char => "char",
-                    ty::TyKind::Uint(ty::UintTy::Usize) => "usize",
-                    ty::TyKind::Uint(_) => "uint",
-                    _ => unreachable!(),
-                },
-                "size": size.bytes(),
-                "val": bits.to_string(),
-            })
+            match k {
+                ty::UintTy::Usize => scalar_const("usize",size,bits),
+                _                 => scalar_const("uint", size,bits)
+            }
         }
-        ty::TyKind::Int(_i) => {
+        ty::TyKind::Int(k) => {
             let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
             let bits = s.to_bits(size).unwrap();
@@ -1312,32 +1328,20 @@ pub fn try_render_opty<'tcx>(
                 // Sign-extend to 128 bits
                 val |= -1_i128 << size.bits();
             }
-
-            json!({
-                "kind": match *ty.kind() {
-                    ty::TyKind::Int(ty::IntTy::Isize) => "isize",
-                    ty::TyKind::Int(_) => "int",
-                    _ => unreachable!(),
-                },
-                "size": size.bytes(),
-                "val": val.to_string(),
-            })
+            match k {
+                ty::IntTy::Isize => scalar_const("isize", size, val),
+                _ => scalar_const("int", size, val)
+            }
         }
         ty::TyKind::Float(fty) => {
             let s = check_mismatch(icx.read_immediate(op_ty))?.to_scalar();
             let size = layout.size();
-            let val_str = match fty {
-                ty::FloatTy::F16 => s.to_f16().unwrap().to_string(),
-                ty::FloatTy::F32 => s.to_f32().unwrap().to_string(),
-                ty::FloatTy::F64 => s.to_f64().unwrap().to_string(),
-                ty::FloatTy::F128 => s.to_f128().unwrap().to_string(),
-            };
-
-            json!({
-                "kind": "float",
-                "size": size.bytes(),
-                "val": val_str,
-            })
+            match fty {
+                ty::FloatTy::F16  => scalar_const("float", size, s.to_f16().unwrap()),
+                ty::FloatTy::F32  => scalar_const("float", size, s.to_f32().unwrap()),
+                ty::FloatTy::F64  => scalar_const("float", size, s.to_f64().unwrap()),
+                ty::FloatTy::F128 => scalar_const("float", size, s.to_f128().unwrap()),
+            }
         }
         ty::TyKind::Adt(adt_def, _args) => match adt_def.adt_kind() {
             ty::AdtKind::Struct => {
@@ -1412,8 +1416,11 @@ pub fn try_render_opty<'tcx>(
             },
         },
 
-        ty::TyKind::Foreign(_) => todo!("foreign is unimplemented"), // can't do this
+        // `Foreign` probably can't occur here, since it's unsized
+        ty::TyKind::Foreign(_) => return Err(RenderErr::Unsupported),
+        
         ty::TyKind::Str => unreachable!("str type should not occur here"),
+
         ty::TyKind::Array(ety, sz) => {
             let sz = get_const_usize(tcx, sz);
             let mut vals = Vec::with_capacity(sz);
@@ -1468,7 +1475,9 @@ pub fn try_render_opty<'tcx>(
                         "def_id": inst_id_str(tcx, instance),
                     })
                 },
-                _ => unreachable!("Function pointer doesn't point to a function"),
+
+                // Function pointer doesn't point to a function
+                _ => return Err(RenderErr::Unsupported) 
             }
         }
         ty::TyKind::Dynamic(_, _) => unreachable!("dynamic should not occur here"),
@@ -1489,8 +1498,9 @@ pub fn try_render_opty<'tcx>(
                 "upvars": upvar_vals,
             })
         }
-        ty::TyKind::Coroutine(_, _) => todo!("coroutine not supported yet"), // not supported in haskell
-        ty::TyKind::CoroutineWitness(_, _) => todo!("coroutinewitness not supported yet"), // not supported in haskell
+
+        ty::TyKind::Coroutine(_, _) => return Err(RenderErr::Unsupported),
+        ty::TyKind::CoroutineWitness(_, _) => return Err(RenderErr::Unsupported),
 
         ty::TyKind::Tuple(elts) => {
             let mut vals = Vec::with_capacity(elts.len());
@@ -1739,8 +1749,9 @@ fn try_render_ref_opty<'tcx>(
             return raw_ptr(offset);
         }
         _ =>
-            // Give up
-            return Err(RenderErr::Unsupported)
+            // Give up.  We return a Mismatch, because we expected a data
+            // pointer but we got a function or vtable one.
+            return Err(RenderErr::Mismatch)
     };
 
     // TODO(#241): Lift this restriction.
@@ -1795,9 +1806,7 @@ fn try_render_ref_opty<'tcx>(
                         // the trait bounds are auto traits. We do not
                         // currently support computing vtables for these sorts
                         // of trait objects (see #239).
-                        return Ok(json!({
-                            "kind": "unsupported",
-                        }))
+                        return Err(RenderErr::Unsupported)
                 }
             },
             _ => (),
