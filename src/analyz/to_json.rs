@@ -6,7 +6,7 @@ use rustc_hir::def::CtorKind;
 use rustc_hir::{CoroutineDesugaring,CoroutineKind,Mutability,Safety};
 use rustc_index::{IndexVec, Idx};
 use rustc_middle::mir::{AssertKind, AssertMessage, BasicBlock, BinOp, Body, CastKind, CoercionSource, interpret, UnOp, RuntimeChecks};
-use rustc_middle::ty::{self, Binder, FloatTy, IntTy, TyCtxt, UintTy};
+use rustc_middle::ty::{self, Binder, FloatTy, IntTy, TyCtxt, TypeVisitableExt, UintTy};
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
 use rustc_span::Spanned;
@@ -89,6 +89,25 @@ pub enum FnInst<'tcx> {
     /// to be made explicit.  The `Instance` is the `call_mut` method that the shim should dispatch
     /// to; this may be a `ClosureOnceShim`.
     ClosureFnPointer(ty::Instance<'tcx>),
+}
+
+impl<'tcx> FnInst<'tcx> {
+    pub fn assert_invariants(&self, tcx: TyCtxt<'tcx>) {
+        let inst = match *self {
+            FnInst::Real(inst) |
+            FnInst::ClosureFnPointer(inst) => inst,
+        };
+
+        assert!(!inst.has_escaping_bound_vars(),
+            "FnInst has escaping bound variables: {:?}", self);
+        assert!(!inst.has_infer(),
+            "FnInst has inference variables: {:?}", self);
+        assert!(!inst.has_param(),
+            "FnInst has generic parameters: {:?}", self);
+        assert!(!inst.has_erasable_regions(),
+            "FnInst has non-erased regions: {:?}", self);
+        tcx.assert_fully_normalized(ty::TypingEnv::fully_monomorphized(), inst);
+    }
 }
 
 impl<'tcx> From<ty::Instance<'tcx>> for FnInst<'tcx> {
