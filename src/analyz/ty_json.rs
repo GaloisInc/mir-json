@@ -183,11 +183,7 @@ pub fn inst_id_str<'tcx>(
 ) -> String {
     match inst.into() {
         FnInst::Real(inst) => {
-            let args = tcx.normalize_erasing_regions(
-                ty::TypingEnv::fully_monomorphized(),
-                // FIXME: is it correct to use `Unnormalized` here?
-                ty::Unnormalized::new(inst.args),
-            );
+            let args = inst.args;
             assert!(!args.has_erasable_regions());
             assert!(!args.has_param());
             match inst.def {
@@ -339,11 +335,7 @@ impl<'tcx> ToJson<'tcx> for FnInst<'tcx> {
 
 impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
-        let args = mir.tcx.normalize_erasing_regions(
-            ty::TypingEnv::fully_monomorphized(),
-            // FIXME: is it correct to use `Unnormalized` here?
-            ty::Unnormalized::new(self.args),
-        );
+        let args = self.args;
 
         match self.def {
             ty::InstanceKind::Item(did) => json!({
