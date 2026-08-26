@@ -1499,8 +1499,8 @@ pub fn try_render_opty<'tcx>(
             })
         }
 
-        ty::TyKind::Coroutine(_, _) => return Err(RenderErr::Unsupported), // not supported in haskell
-        ty::TyKind::CoroutineWitness(_, _) => return Err(RenderErr::Unsupported), // not supported in haskell
+        ty::TyKind::Coroutine(_, _) => return Err(RenderErr::Unsupported),
+        ty::TyKind::CoroutineWitness(_, _) => return Err(RenderErr::Unsupported),
 
         ty::TyKind::Tuple(elts) => {
             let mut vals = Vec::with_capacity(elts.len());
