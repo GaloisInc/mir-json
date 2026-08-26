@@ -11,6 +11,7 @@ use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::bug;
 use rustc_span::Spanned;
 use rustc_span::symbol::Symbol;
+use rustc_type_ir::elaborate;
 use serde_json;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
@@ -129,42 +130,21 @@ impl<'tcx> TraitInst<'tcx> {
         tcx: TyCtxt<'tcx>,
         trait_ref: ty::TraitRef<'tcx>,
     ) -> TraitInst<'tcx> {
-        let mut all_super_traits = HashSet::new();
-        let mut pending = vec![trait_ref.def_id];
-        all_super_traits.insert(trait_ref);
-        while let Some(def_id) = pending.pop() {
-            let super_preds = tcx.explicit_super_clauses_of(def_id);
-            // FIXME is this correct?
-            // old version:  for &(ref pred, _) in super_preds.skip_binder() {
-            for (pred, _) in super_preds
-                .iter_identity_copied()
-                .map(ty::Unnormalized::skip_norm_wip)
-            {
-                // The use of `Binder::dummy` here is inspired by the following
-                // code in rustc:
-                // https://github.com/rust-lang/rust/blob/08de25c4ea16d7ecc3ceeb093d4f343a2be30df5/compiler/rustc_trait_selection/src/traits/vtable.rs#L127
-                // This works because `trait_ref` should contain no bound
-                // variables.
-                let pred = pred.instantiate_supertrait(tcx, Binder::dummy(trait_ref));
-                let tpred = match tcx.instantiate_bound_regions_with_erased(pred.kind()) {
-                    // Corresponds to `where Foo: Bar`. Get the `Bar` trait.
-                    ty::ClauseKind::Trait(x) => x,
-                    // Corresponds to `where <Foo as Bar>::Assoc == T`. This
-                    // should also be accompanied by a `ClauseKind::Trait`
-                    // representing `Foo: Bar`, which is handled above. As such,
-                    // it is safe to skip this case.
-                    ty::ClauseKind::Projection(..) => continue,
-                    // Corresponds to `where Foo: 'r`. There is no supertrait
-                    // involved here, so just skip this case.
-                    ty::ClauseKind::TypeOutlives(..) => continue,
-                    _ => panic!("unexpected predicate kind: {:?}", pred),
-                };
-                assert_eq!(tpred.polarity, ty::ClausePolarity::Positive);
-                if all_super_traits.insert(tpred.trait_ref) {
-                    pending.push(tpred.trait_ref.def_id);
-                }
-            }
-        }
+        let typing_env = ty::TypingEnv::fully_monomorphized();
+        let trait_ref = tcx.normalize_erasing_regions(
+            typing_env,
+            ty::Unnormalized::new(trait_ref),
+        );
+        let all_super_traits = elaborate::supertraits(tcx, Binder::dummy(trait_ref))
+            .map(|poly_trait_ref| {
+                let trait_ref =
+                    tcx.instantiate_bound_regions_with_erased(poly_trait_ref);
+                tcx.normalize_erasing_regions(
+                    typing_env,
+                    ty::Unnormalized::new(trait_ref),
+                )
+            })
+            .collect::<HashSet<_>>();
         let mut all_super_traits = all_super_traits.into_iter().collect::<Vec<_>>();
         all_super_traits.sort_by_key(|super_trait_ref| {
             let def_id = super_trait_ref.def_id;
