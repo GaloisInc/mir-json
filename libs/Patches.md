@@ -297,6 +297,8 @@ into the main commit for that patch, and then the *Update* line can be removed.
 
 * Implement `Symbolic` trait for `Box` (last applied: August 6, 2026)
 
+  *Update* (September 1, 2026): Also implement BoundedSymbolic for Vec and String.
+
   Because the `alloc` crate depends on the `crucible` crate, we implement it
   by patching the `alloc` crate.
 

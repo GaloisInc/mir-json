@@ -27,8 +27,8 @@ pub mod symbolic;
 
 pub use self::alloc::TypedAllocator;
 
-// Re-export the `Symbolic` trait, which is used to create symbolic values.
-pub use self::symbolic::Symbolic;
+// Re-export the `Symbolic` and `BoundedSymbolic` traits, which are used to create symbolic values.
+pub use self::symbolic::{Symbolic, BoundedSymbolic};
 
 /// Assert that a condition holds.  During symbolic testing, `crux-mir` will search for an
 /// assignment to the symbolic variables that violates an assertion.
