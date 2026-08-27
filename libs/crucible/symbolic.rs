@@ -171,3 +171,17 @@ impl<T: Symbolic, E: Symbolic> Symbolic for Result<T, E> {
         }
     }
 }
+
+pub trait BoundedSymbolic: Sized {
+    /// Create a new symbolic value of this type for all lengths that do not exceed `N`.
+    /// `desc` is used to refer to this symbolic value when printing counterexamples.
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self;
+
+    /// Create a new symbolic value of this type, subject to constraints, for all lengths that do
+    /// not exceed `N`.  The result is a symbolic value of this type on which `f` returns `true`.
+    fn bounded_symbolic_where<const N: usize, F: FnOnce(&Self) -> bool>(desc: &str, f: F) -> Self {
+        let x = Self::bounded_symbolic::<N>(desc);
+        super::crucible_assume!(f(&x));
+        x
+    }
+}
