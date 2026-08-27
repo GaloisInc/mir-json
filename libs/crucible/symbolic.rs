@@ -171,3 +171,13 @@ impl<T: Symbolic, E: Symbolic> Symbolic for Result<T, E> {
         }
     }
 }
+
+pub trait BoundedSymbolic: Sized {
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self;
+
+    fn bounded_symbolic_where<const N: usize, F: FnOnce(&Self) -> bool>(desc: &str, f: F) -> Self {
+        let x = Self::bounded_symbolic::<N>(desc);
+        super::crucible_assume!(f(&x));
+        x
+    }
+}

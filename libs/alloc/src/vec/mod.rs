@@ -444,6 +444,18 @@ pub struct Vec<T, #[unstable(feature = "allocator_api", issue = "32838")] A: All
 // Inherent methods
 ////////////////////////////////////////////////////////////////////////////////
 
+#[stable(feature = "crucible", since = "1.92.0")]
+impl<T: crucible::Symbolic> crucible::BoundedSymbolic for Vec<T> {
+    /// Create a new symbolic `Vec<T>` with possible lengths bounded by the specified constant.
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self {
+        let array = <[T; N] as crucible::Symbolic>::symbolic(desc);
+        let mut vec = Vec::from(array);
+        let n = <usize as crucible::Symbolic>::symbolic_where("n", |n| n <= &N);
+        vec.truncate(n);
+        vec
+    }
+}
+
 impl<T> Vec<T> {
     /// Constructs a new, empty `Vec<T>`.
     ///
