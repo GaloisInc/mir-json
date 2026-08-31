@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
+# Remove space from IFS to avoid splitting filenames that contain spaces.
 IFS='
 '
 
@@ -131,7 +132,7 @@ create_default_symlinks() {
     local MIR_JSON_RLIBS_DIR="${TOOLCHAIN_DIR}/rlibs"
 
     if [[ ! -d "${TOOLCHAIN_DIR}" ]]; then
-        echo "Cannot set active toolchain: ${TOOLCHAIN_DIR} does not exist"
+        echo "Cannot set active toolchain: ${TOOLCHAIN_DIR} does not exist" 1>&2
         exit 1
     fi
 
