@@ -412,6 +412,19 @@ pub struct FromUtf8Error {
 #[derive(Debug)]
 pub struct FromUtf16Error(());
 
+#[stable(feature = "crucible", since = "1.92.0")]
+impl crucible::BoundedSymbolic for String {
+    /// Create a new symbolic `String` of valid utf8 code points.
+    /// The possible lengths of the symbolic string are bounded by the specified constant.
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self {
+        let vec = <Vec<u8> as crucible::BoundedSymbolic>::bounded_symbolic::<N>(desc);
+        // Uses optimized str::from_utf8
+        let result = str::from_utf8(vec.as_slice());
+        crucible::crucible_assume!(result.is_ok());
+        result.unwrap().to_string()
+    }
+}
+
 impl String {
     /// Creates a new empty `String`.
     ///
