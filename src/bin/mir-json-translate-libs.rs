@@ -430,6 +430,9 @@ fn main() {
             clap::Arg::new("generate").long("generate").help(
                 "Print a shell script instead of actually running the build",
             ),
+            clap::Arg::new("docs").long("docs").help(
+                "Generate documentation for Crucible-related libraries"
+            ),
             clap::Arg::new("debug")
                 .long("debug")
                 .help("Emit debug output on stderr"),
@@ -465,6 +468,7 @@ fn main() {
     };
     let target_triple = arg_matches.value_of("target").unwrap();
     let generate_only = arg_matches.is_present("generate");
+    let make_docs = arg_matches.is_present("docs");
     let debug_enabled = arg_matches.is_present("debug");
     let keep_temp_build = arg_matches.is_present("keep-temp-build");
     let new_sources_dir = arg_matches
@@ -842,126 +846,179 @@ fn main() {
         .strip_prefix(out_dir)
         .expect("out_dir should be prefix of rlibs_dir");
     if generate_only {
-        let rlibs_symlink = escape(rlibs_symlink.into_string().into());
+        let rlibs_symlink = escape(rlibs_symlink.clone().into_string().into());
         let rel_rlibs_dir = escape(rel_rlibs_dir.as_str().into());
         println!(
             "if [ ! -d {} ]; then ln -s {} {}; fi",
             rlibs_symlink, rel_rlibs_dir, rlibs_symlink
         );
     } else if !rlibs_symlink.is_dir() {
-        unix::fs::symlink(rel_rlibs_dir, rlibs_symlink)
+        unix::fs::symlink(rel_rlibs_dir, &rlibs_symlink)
             .expect("creating rlibs symlink should succeed");
     }
 
-    let mir_json_invocations = custom_graph
-        .sequence_libs()
-        .into_iter()
-        .map(|lib| CmdInvocation {
-            program: "mir-json".into(),
-            args: {
-                let mut args = vec![
-                    lib.target.src_path.into(),
-                    "--edition".into(),
-                    lib.target.edition.to_string(),
-                    "--crate-name".into(),
-                    lib.target.crate_name.into(),
-                ];
-                for cfg in lib.target.cfgs {
-                    args.push("--cfg".into());
-                    args.push(cfg);
+    
+    let mut tool_invocations = vec![];
+    for lib in custom_graph.sequence_libs() {
+            
+        let mut args = vec![
+            lib.target.src_path.into(),
+            "--edition".into(),
+            lib.target.edition.to_string(),
+            "--crate-name".into(),
+            lib.target.crate_name.clone().into(),
+        ];
+            
+        for cfg in lib.target.cfgs {
+            args.push("--cfg".into());
+            args.push(cfg);
+        }
+        for (extern_name, real_name) in lib.dependencies {
+            args.push("--extern".into());
+            args.push(format!(
+                "{}={}",
+                extern_name,
+                rlibs_dir.join(format!("lib{}.rlib", real_name))
+            ));
+        }
+        args.push("--target".into());
+        args.push(target_triple.into());
+        args.push("-L".into());
+        args.push(rlibs_dir.to_string());
+        args.push("--out-dir".into());
+        args.push(rlibs_dir.to_string());
+        args.push("--crate-type".into());
+        args.push("rlib".into());
+        args.push("--remap-path-prefix".into());
+        args.push(format!("{}=.", cwd));
+        // Stdlib crates need `-Z force-unstable-if-unmarked` to make
+        // stability attributes work properly.  But the extra libs must
+        // not be built with this flag, since the flag makes everything
+        // unstable by default, requiring users to use
+        // `#[feature(rustc_private)]`.
+        if lib.target.is_stdlib {
+            args.push("-Z".into());
+            args.push("force-unstable-if-unmarked".into());
+        }
+        // `-Z ub-checks` generates code that uses unsupported casts,
+        // such as pointer-to-integer casts in alignment checks.
+        args.push("-Z".into());
+        args.push("ub-checks=false".into());
+        for linked_path in lib.target.linked_paths {
+            args.push("-L".into());
+            args.push(linked_path.into());
+        }
+        for linked_lib in lib.target.linked_libs {
+            args.push("-l".into());
+            args.push(linked_lib.into());
+        }
+        // Don't let deny lints cause builds to fail
+        args.push("--cap-lints".into());
+        args.push("warn".into());
+
+        if make_docs {
+            tool_invocations.push(
+                CmdInvocation {
+                    program: "rustc".into(),
+                    args: args.clone(),
+                    env: lib.target.env.clone(),
                 }
-                for (extern_name, real_name) in lib.dependencies {
-                    args.push("--extern".into());
-                    args.push(format!(
-                        "{}={}",
-                        extern_name,
-                        rlibs_dir.join(format!("lib{}.rlib", real_name))
-                    ));
-                }
-                args.push("--target".into());
-                args.push(target_triple.into());
-                args.push("-L".into());
-                args.push(rlibs_dir.to_string());
-                args.push("--out-dir".into());
-                args.push(rlibs_dir.to_string());
-                args.push("--crate-type".into());
-                args.push("rlib".into());
-                args.push("--remap-path-prefix".into());
-                args.push(format!("{}=.", cwd));
-                // Stdlib crates need `-Z force-unstable-if-unmarked` to make
-                // stability attributes work properly.  But the extra libs must
-                // not be built with this flag, since the flag makes everything
-                // unstable by default, requiring users to use
-                // `#[feature(rustc_private)]`.
-                if lib.target.is_stdlib {
-                    args.push("-Z".into());
-                    args.push("force-unstable-if-unmarked".into());
-                }
-                // `-Z ub-checks` generates code that uses unsupported casts,
-                // such as pointer-to-integer casts in alignment checks.
+            );
+            
+            if lib.target.crate_name == EXTRA_LIB_CRUCIBLE.into() {
                 args.push("-Z".into());
-                args.push("ub-checks=false".into());
-                for linked_path in lib.target.linked_paths {
-                    args.push("-L".into());
-                    args.push(linked_path.into());
+                args.push("unstable-options".into());
+                if let Some(i) = args.iter().position(|arg| arg == "--out-dir") {
+                    args[i+1] = format!("{}/doc", args[i+1]);
                 }
-                for linked_lib in lib.target.linked_libs {
-                    args.push("-l".into());
-                    args.push(linked_lib.into());
+                tool_invocations.push(
+                    CmdInvocation {
+                        program: "rustdoc".into(),
+                        args: args,
+                        env: lib.target.env,
+                    }
+                );
+            }
+
+        } else {
+            tool_invocations.push(
+                CmdInvocation {
+                    program: "mir-json".into(),
+                    args: args,
+                    env: lib.target.env,
                 }
-                // Don't let deny lints cause builds to fail
-                args.push("--cap-lints".into());
-                args.push("warn".into());
-                args
-            },
-            env: lib.target.env,
-        })
-        // Special case: crucible_proc_macros is a proc-macro crate that we
-        // build with cargo and copy into place.  This saves us from having to
-        // handle its syn/quote dependencies ourselves.
-        .chain([
-            CmdInvocation {
-                program: "cargo".into(),
-                args: vec![
-                    "build".into(),
-                    "--release".into(),
-                    "--manifest-path".into(),
-                    custom_sources_dir
-                        .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
-                        .join("Cargo.toml")
-                        .into(),
-                ],
-                env: vec![],
-            },
-            CmdInvocation {
-                program: "cp".into(),
-                args: vec![
-                    custom_sources_dir
-                        .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
-                        .join("target")
-                        .join("release")
-                        .join(format!("lib{}", EXTRA_LIB_CRUCIBLE_PROC_MACROS))
-                        .with_extension(PROC_MACRO_EXTENSION)
-                        .into(),
-                    rlibs_dir.to_string(),
-                ],
-                env: vec![],
-            },
-        ]);
+            )
+        }
+
+       
+    }
+
+    // Special case: crucible_proc_macros is a proc-macro crate that we
+    // build with cargo and copy into place.  This saves us from having to
+    // handle its syn/quote dependencies ourselves.
+    tool_invocations.push(
+        CmdInvocation {
+            program: "cargo".into(),
+            args: vec![
+                "build".into(),
+                "--release".into(),
+                "--manifest-path".into(),
+                custom_sources_dir
+                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                    .join("Cargo.toml")
+                    .into(),
+            ],
+            env: vec![],
+        });
+    
+    tool_invocations.push(
+        CmdInvocation {
+            program: "cp".into(),
+            args: vec![
+                custom_sources_dir
+                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                    .join("target")
+                    .join("release")
+                    .join(format!("lib{}", EXTRA_LIB_CRUCIBLE_PROC_MACROS))
+                    .with_extension(PROC_MACRO_EXTENSION)
+                    .into(),
+                rlibs_dir.to_string(),
+            ],
+            env: vec![],
+        },
+        );
+
+    if make_docs {
+        tool_invocations.push(
+        CmdInvocation {
+            program: "cargo".into(),
+            args: vec![
+                "doc".into(),
+                "--target-dir".into(),
+                rlibs_symlink.into_string(),
+                "--manifest-path".into(),
+                custom_sources_dir
+                    .join(EXTRA_LIB_CRUCIBLE_PROC_MACROS)
+                    .join("Cargo.toml")
+                    .into(),
+            ],
+            env: vec![],
+        });
+    }
 
     // Run mir-json.
     if generate_only {
         eprintln!("Generating translation steps...");
-        for inv in mir_json_invocations {
+        for inv in tool_invocations {
             println!("{}", inv);
         }
     } else {
-        for inv in mir_json_invocations {
+        for inv in tool_invocations {
             eprintln!("Executing: {}", inv);
             let status =
-                inv.as_command().status().expect("mir-json should run");
+                inv.as_command().status().expect(&format!("{} should run", inv.program));
             if !status.success() {
-                panic!("mir-json exited with {}", status);
+                panic!("{} exited with {}", inv.program, status);
             }
         }
     }
