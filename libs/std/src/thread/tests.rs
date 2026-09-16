@@ -152,11 +152,11 @@ where
 {
     let (tx, rx) = channel();
 
-    let x: Box<_> = Box::new(1);
-    let x_in_parent = (&*x) as *const i32 as usize;
+    let x: Box<i32> = Box::new(1);
+    let x_in_parent = (&raw const *x).addr();
 
     spawnfn(Box::new(move || {
-        let x_in_child = (&*x) as *const i32 as usize;
+        let x_in_child = (&raw const *x).addr();
         tx.send(x_in_child).unwrap();
     }));
 
@@ -331,6 +331,15 @@ fn test_park_timeout_unpark_called_other_thread() {
 #[test]
 fn sleep_ms_smoke() {
     thread::sleep(Duration::from_millis(2));
+}
+
+#[test]
+fn sleep_until_elapsed() {
+    // UNIX's `clock_nanosleep` doesn't like timeouts that are too far back.
+    // Test that `sleep_until` returns immediately instead of panicking.
+    // Going 10 years back should be enough to trigger any errors.
+    let earlier = Instant::now() - Duration::from_secs(10 * 365 * 24 * 3600);
+    thread::sleep_until(earlier);
 }
 
 #[test]

@@ -178,13 +178,7 @@ impl<'a> Location<'a> {
     #[track_caller]
     #[inline]
     pub const fn caller() -> &'static Location<'static> {
-        static DUMMY_LOCATION: Location<'static> = Location {
-            filename: NonNull::from_ref("dummy.rs"),
-            line: 0,
-            col: 0,
-            _filename: PhantomData,
-        };
-        &DUMMY_LOCATION
+        crate::intrinsics::caller_location()
     }
 
     /// Returns the name of the source file from which the panic originated.

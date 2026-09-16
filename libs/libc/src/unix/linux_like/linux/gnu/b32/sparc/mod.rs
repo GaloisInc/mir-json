@@ -86,8 +86,8 @@ s! {
         pub st_mtime_nsec: c_long,
         pub st_ctime: crate::time_t,
         pub st_ctime_nsec: c_long,
-        __glibc_reserved4: c_ulong,
-        __glibc_reserved5: c_ulong,
+        __glibc_reserved4: Padding<c_ulong>,
+        __glibc_reserved5: Padding<c_ulong>,
     }
 
     pub struct stat64 {
@@ -108,8 +108,8 @@ s! {
         pub st_mtime_nsec: c_long,
         pub st_ctime: crate::time_t,
         pub st_ctime_nsec: c_long,
-        __glibc_reserved4: c_ulong,
-        __glibc_reserved5: c_ulong,
+        __glibc_reserved4: Padding<c_ulong>,
+        __glibc_reserved5: Padding<c_ulong>,
     }
 
     pub struct statfs64 {
@@ -137,7 +137,7 @@ s! {
         pub f_ffree: u64,
         pub f_favail: u64,
         pub f_fsid: c_ulong,
-        __f_unused: c_int,
+        __f_unused: Padding<c_int>,
         pub f_flag: c_ulong,
         pub f_namemax: c_ulong,
         __f_spare: [c_int; 6],
@@ -195,8 +195,8 @@ s! {
         pub msg_qbytes: crate::msglen_t,
         pub msg_lspid: crate::pid_t,
         pub msg_lrpid: crate::pid_t,
-        __glibc_reserved4: c_ulong,
-        __glibc_reserved5: c_ulong,
+        __glibc_reserved4: Padding<c_ulong>,
+        __glibc_reserved5: Padding<c_ulong>,
     }
 }
 
@@ -849,7 +849,6 @@ pub const SYS_fsconfig: c_long = 431;
 pub const SYS_fsmount: c_long = 432;
 pub const SYS_fspick: c_long = 433;
 pub const SYS_pidfd_open: c_long = 434;
-// Reserved in the kernel, but not actually implemented yet
 pub const SYS_clone3: c_long = 435;
 pub const SYS_close_range: c_long = 436;
 pub const SYS_openat2: c_long = 437;

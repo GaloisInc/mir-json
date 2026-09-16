@@ -7,51 +7,13 @@ use crate::sync::Once;
 use crate::{fmt, ptr};
 
 // We use the state of a Once as discriminant value. Upon creation, the state is
-// "incomplete" and `F` contains the initialization closure. In the first call to
-// `call_once`, `F` is taken and run. If it succeeds, `Value` is set and the state
+// "incomplete" and `f` contains the initialization closure. In the first call to
+// `call_once`, `f` is taken and run. If it succeeds, `value` is set and the state
 // is changed to "complete". If it panics, the Once is poisoned, so none of the
-// two variants is initialized.
-enum Data<T, F> {
-    Value(ManuallyDrop<T>),
-    F(ManuallyDrop<F>),
-}
-
-// Field accessors for `Value` and `F`. These will panic if the indicated
-// variant is not used, so use these with caution!
-
-fn data_value<T, F>(data: Data<T, F>) -> ManuallyDrop<T> {
-    match data {
-        Data::Value(value) => value,
-        Data::F(_) => panic!("Expected Data::Value, encountered Data::F"),
-    }
-}
-
-fn data_value_ref<T, F>(data: &Data<T, F>) -> &ManuallyDrop<T> {
-    match data {
-        Data::Value(value) => value,
-        Data::F(_) => panic!("Expected Data::Value, encountered Data::F"),
-    }
-}
-
-fn data_value_mut<T, F>(data: &mut Data<T, F>) -> &mut ManuallyDrop<T> {
-    match data {
-        Data::Value(value) => value,
-        Data::F(_) => panic!("Expected Data::Value, encountered Data::F"),
-    }
-}
-
-fn data_f<T, F>(data: Data<T, F>) -> ManuallyDrop<F> {
-    match data {
-        Data::F(f) => f,
-        Data::Value(_) => panic!("Expected Data::F, encountered Data::Value"),
-    }
-}
-
-fn data_f_mut<T, F>(data: &mut Data<T, F>) -> &mut ManuallyDrop<F> {
-    match data {
-        Data::F(f) => f,
-        Data::Value(_) => panic!("Expected Data::F, encountered Data::Value"),
-    }
+// two fields is initialized.
+union Data<T, F> {
+    value: ManuallyDrop<T>,
+    f: ManuallyDrop<F>,
 }
 
 /// A value which is initialized on the first access.
@@ -140,7 +102,7 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
     #[stable(feature = "lazy_cell", since = "1.80.0")]
     #[rustc_const_stable(feature = "lazy_cell", since = "1.80.0")]
     pub const fn new(f: F) -> LazyLock<T, F> {
-        LazyLock { once: Once::new(), data: UnsafeCell::new(Data::F(ManuallyDrop::new(f))) }
+        LazyLock { once: Once::new(), data: UnsafeCell::new(Data { f: ManuallyDrop::new(f) }) }
     }
 
     /// Consumes this `LazyLock` returning the stored value.
@@ -175,10 +137,10 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
                 let data = unsafe { ptr::read(&this.data) }.into_inner();
                 match state {
                     OnceExclusiveState::Incomplete => {
-                        Err(ManuallyDrop::into_inner(data_f(data)))
+                        Err(ManuallyDrop::into_inner(unsafe { data.f }))
                     }
                     OnceExclusiveState::Complete => {
-                        Ok(ManuallyDrop::into_inner(data_value(data)))
+                        Ok(ManuallyDrop::into_inner(unsafe { data.value }))
                     }
                     OnceExclusiveState::Poisoned => unreachable!(),
                 }
@@ -227,22 +189,22 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
 
             // SAFETY: We always poison if the initializer panics (then we never check the data),
             // or set the data on success.
-            let f = unsafe { ManuallyDrop::take(data_f_mut(this.data.get_mut())) };
+            let f = unsafe { ManuallyDrop::take(&mut this.data.get_mut().f) };
             // INVARIANT: Initiated from mutable reference, don't drop because we read it.
             let guard = PoisonOnPanic(this);
             let data = f();
-            *guard.0.data.get_mut() = Data::Value(ManuallyDrop::new(data));
+            guard.0.data.get_mut().value = ManuallyDrop::new(data);
             guard.0.once.set_state(OnceExclusiveState::Complete);
             core::mem::forget(guard);
             // SAFETY: We put the value there above.
-            data_value_mut(this.data.get_mut())
+            unsafe { &mut this.data.get_mut().value }
         }
 
         let state = this.once.state();
         match state {
             OnceExclusiveState::Poisoned => panic_poisoned(),
             // SAFETY: The `Once` states we completed the initialization.
-            OnceExclusiveState::Complete => data_value_mut(this.data.get_mut()),
+            OnceExclusiveState::Complete => unsafe { &mut this.data.get_mut().value },
             // SAFETY: The state is `Incomplete`.
             OnceExclusiveState::Incomplete => unsafe { really_init_mut(this) },
         }
@@ -284,9 +246,9 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
 
             // SAFETY: `call_once` only runs this closure once, ever.
             let data = unsafe { &mut *this.data.get() };
-            let f = unsafe { ManuallyDrop::take(data_f_mut(data)) };
+            let f = unsafe { ManuallyDrop::take(&mut data.f) };
             let value = f();
-            *data = Data::Value(ManuallyDrop::new(value));
+            data.value = ManuallyDrop::new(value);
         });
 
         // SAFETY:
@@ -296,7 +258,7 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
         // * the closure was not called, but a previous call initialized `value`.
         // * the closure was not called because the Once is poisoned, which we handled above.
         // So `value` has definitely been initialized and will not be modified again.
-        data_value_ref(unsafe { &*this.data.get() })
+        unsafe { &(*this.data.get()).value }
     }
 }
 
@@ -324,7 +286,7 @@ impl<T, F> LazyLock<T, F> {
         match state {
             // SAFETY:
             // The closure has been run successfully, so `value` has been initialized.
-            OnceExclusiveState::Complete => Some(data_value_mut(this.data.get_mut())),
+            OnceExclusiveState::Complete => Some(unsafe { &mut this.data.get_mut().value }),
             _ => None,
         }
     }
@@ -351,7 +313,7 @@ impl<T, F> LazyLock<T, F> {
             // SAFETY:
             // The closure has been run successfully, so `value` has been initialized
             // and will not be modified again.
-            Some(data_value_ref(unsafe { &*this.data.get() }))
+            Some(unsafe { &(*this.data.get()).value })
         } else {
             None
         }
@@ -363,10 +325,10 @@ impl<T, F> Drop for LazyLock<T, F> {
     fn drop(&mut self) {
         match self.once.state() {
             OnceExclusiveState::Incomplete => unsafe {
-                ManuallyDrop::drop(data_f_mut(self.data.get_mut()))
+                ManuallyDrop::drop(&mut self.data.get_mut().f)
             },
             OnceExclusiveState::Complete => unsafe {
-                ManuallyDrop::drop(data_value_mut(self.data.get_mut()))
+                ManuallyDrop::drop(&mut self.data.get_mut().value)
             },
             OnceExclusiveState::Poisoned => {}
         }
@@ -413,7 +375,8 @@ impl<T, F: FnOnce() -> T> DerefMut for LazyLock<T, F> {
 }
 
 #[stable(feature = "lazy_cell", since = "1.80.0")]
-impl<T: Default> Default for LazyLock<T> {
+#[rustc_const_unstable(feature = "const_default", issue = "143894")]
+const impl<T: Default> Default for LazyLock<T> {
     /// Creates a new lazy value using `Default` as the initializing function.
     #[inline]
     fn default() -> LazyLock<T> {
@@ -433,7 +396,7 @@ impl<T: fmt::Debug, F> fmt::Debug for LazyLock<T, F> {
     }
 }
 
-#[stable(feature = "from_wrapper_impls", since = "CURRENT_RUSTC_VERSION")]
+#[stable(feature = "from_wrapper_impls", since = "1.96.0")]
 impl<T, F> From<T> for LazyLock<T, F> {
     /// Constructs a `LazyLock` that starts already initialized
     /// with the provided value.
@@ -441,7 +404,7 @@ impl<T, F> From<T> for LazyLock<T, F> {
     fn from(value: T) -> Self {
         LazyLock {
             once: Once::new_complete(),
-            data: UnsafeCell::new(Data::Value(ManuallyDrop::new(value))),
+            data: UnsafeCell::new(Data { value: ManuallyDrop::new(value) }),
         }
     }
 }

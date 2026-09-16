@@ -22,10 +22,20 @@
     reason = "internal details of the thread_local macro",
     issue = "none"
 )]
+#![deny(
+    clippy::arithmetic_side_effects,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::unimplemented,
+    reason = "TLS accesses must not call the global allocator, including via panic (#160930)"
+)]
 
 cfg_select! {
     any(
-        all(target_family = "wasm", not(target_feature = "atomics")),
+        all(target_family = "wasm", not(target_feature = "atomics"), not(target_env = "p3")),
         target_os = "uefi",
         target_os = "zkvm",
         target_os = "trusty",
@@ -42,8 +52,8 @@ cfg_select! {
     }
     _ => {
         mod os;
-        pub use os::{Storage, thread_local_inner, value_align};
         pub(crate) use os::{LocalPointer, local_pointer};
+        pub use os::{Storage, thread_local_inner, value_align};
     }
 }
 
@@ -54,30 +64,81 @@ cfg_select! {
 /// destructor for each variable. On these platforms, we keep track of the
 /// destructors ourselves and register (through the [`guard`] module) only a
 /// single callback that runs all of the destructors in the list.
-#[cfg(all(target_thread_local, not(all(target_family = "wasm", not(target_feature = "atomics")))))]
+#[cfg(all(
+    target_thread_local,
+    not(all(target_family = "wasm", not(target_feature = "atomics"), not(target_env = "p3")))
+))]
 pub(crate) mod destructors {
-    mod list;
-    pub(super) use list::register;
-    pub(crate) use list::run;
+    cfg_select! {
+        any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "fuchsia",
+            target_os = "redox",
+            target_os = "hurd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ) => {
+            mod linux_like;
+            mod list;
+            pub(super) use linux_like::register;
+            pub(super) use list::run;
+        }
+        _ => {
+            mod list;
+            pub(super) use list::register;
+            pub(crate) use list::run;
+        }
+    }
 }
 
 /// This module provides a way to schedule the execution of the destructor list
 /// and the [runtime cleanup](crate::rt::thread_cleanup) function. Calling `enable`
-/// should ensure that these functions are called at the right times.
+/// sets up the current thread to ensure that these functions are called at the right times.
 pub(crate) mod guard {
-    // Crucible: always use the WASM implementation, which is a no-op.
-    pub(crate) fn enable() {
-        // FIXME: Right now there is no concept of "thread exit" on
-        // wasm, but this is likely going to show up at some point in
-        // the form of an exported symbol that the wasm runtime is going
-        // to be expected to call. For now we just leak everything, but
-        // if such a function starts to exist it will probably need to
-        // iterate the destructor list with these functions:
-        #[cfg(all(target_family = "wasm", target_feature = "atomics"))]
-        #[allow(unused)]
-        use super::destructors::run;
-        #[allow(unused)]
-        use crate::rt::thread_cleanup;
+    cfg_select! {
+        all(target_thread_local, target_vendor = "apple") => {
+            mod apple;
+            pub(crate) use apple::enable;
+        }
+        target_os = "windows" => {
+            mod windows;
+            pub(crate) use windows::enable;
+        }
+        any(
+            all(target_family = "wasm", not(target_env = "p3")),
+            target_os = "uefi",
+            target_os = "zkvm",
+            target_os = "trusty",
+            target_os = "vexos",
+        ) => {
+            pub(crate) fn enable() {
+                // FIXME: Right now there is no concept of "thread exit" on
+                // wasm, but this is likely going to show up at some point in
+                // the form of an exported symbol that the wasm runtime is going
+                // to be expected to call. For now we just leak everything, but
+                // if such a function starts to exist it will probably need to
+                // iterate the destructor list with these functions:
+                #[cfg(all(target_family = "wasm", target_feature = "atomics"))]
+                #[allow(unused)]
+                use super::destructors::run;
+                #[allow(unused)]
+                use crate::rt::thread_cleanup;
+            }
+        }
+        any(target_os = "hermit", target_os = "xous") => {
+            // `std` is the only runtime, so it just calls the destructor functions
+            // itself when the time comes.
+            pub(crate) fn enable() {}
+        }
+        target_os = "solid_asp3" => {
+            mod solid;
+            pub(crate) use solid::enable;
+        }
+        _ => {
+            mod key;
+            pub(crate) use key::enable;
+        }
     }
 }
 
@@ -90,23 +151,19 @@ pub(crate) mod guard {
 pub(crate) mod key {
     cfg_select! {
         any(
-            all(
-                not(target_vendor = "apple"),
-                not(target_family = "wasm"),
-                target_family = "unix",
-            ),
+            all(not(target_vendor = "apple"), not(target_family = "wasm"), target_family = "unix"),
             all(not(target_thread_local), target_vendor = "apple"),
             target_os = "teeos",
-            all(target_os = "wasi", target_env = "p1", target_feature = "atomics"),
+            all(target_os = "wasi", target_env = "p3"),
         ) => {
             mod racy;
             mod unix;
             #[cfg(test)]
             mod tests;
             pub(super) use racy::LazyKey;
-            pub(super) use unix::{Key, set};
             #[cfg(any(not(target_thread_local), test))]
             pub(super) use unix::get;
+            pub(super) use unix::{Key, set};
             use unix::{create, destroy};
         }
         all(not(target_thread_local), target_os = "windows") => {
@@ -138,9 +195,9 @@ pub(crate) mod key {
             mod racy;
             #[cfg(test)]
             mod tests;
-            pub(super) use racy::LazyKey;
             pub(super) use moto_rt::tls::{Key, get, set};
             use moto_rt::tls::{create, destroy};
+            pub(super) use racy::LazyKey;
         }
         _ => {}
     }

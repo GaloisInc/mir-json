@@ -3,9 +3,10 @@ mod tests;
 
 use hashbrown::hash_set as base;
 
+use super::map::map_try_reserve_error;
 use crate::alloc::{Allocator, Global};
 use crate::borrow::Borrow;
-use crate::collections::{TryReserveError, TryReserveErrorKind};
+use crate::collections::TryReserveError;
 use crate::fmt;
 use crate::hash::{BuildHasher, Hash, RandomState};
 use crate::iter::{Chain, FusedIterator};
@@ -175,6 +176,15 @@ impl<T, A: Allocator> HashSet<T, RandomState, A> {
     ///
     /// The hash set is initially created with a capacity of 0, so it will not allocate until it
     /// is first inserted into.
+    /// # Examples
+    ///
+    /// ```
+    /// # #![feature(allocator_api)]
+    /// use std::alloc::Global;
+    /// use std::collections::HashSet;
+    ///
+    /// let set: HashSet<i32> = HashSet::new_in(Global);
+    /// ```
     #[inline]
     #[must_use]
     #[unstable(feature = "allocator_api", issue = "32838")]
@@ -191,9 +201,11 @@ impl<T, A: Allocator> HashSet<T, RandomState, A> {
     /// # Examples
     ///
     /// ```
+    /// # #![feature(allocator_api)]
     /// use std::collections::HashSet;
-    /// let set: HashSet<i32> = HashSet::with_capacity(10);
-    /// assert!(set.capacity() >= 10);
+    /// use std::alloc::Global;
+    ///
+    /// let set: HashSet<i32> = HashSet::with_capacity_in(10, Global);
     /// ```
     #[inline]
     #[must_use]
@@ -281,6 +293,18 @@ impl<T, S, A: Allocator> HashSet<T, S, A> {
     ///
     /// The `hash_builder` passed should implement the [`BuildHasher`] trait for
     /// the `HashSet` to be useful, see its documentation for details.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![feature(allocator_api)]
+    /// use std::alloc::Global;
+    /// use std::collections::HashSet;
+    /// use std::hash::RandomState;
+    ///
+    /// let s = RandomState::new();
+    /// let set: HashSet<i32> = HashSet::with_hasher_in(s, Global);
+    /// ```
     #[inline]
     #[must_use]
     #[unstable(feature = "allocator_api", issue = "32838")]
@@ -302,6 +326,18 @@ impl<T, S, A: Allocator> HashSet<T, S, A> {
     ///
     /// The `hash_builder` passed should implement the [`BuildHasher`] trait for
     /// the `HashSet` to be useful, see its documentation for details.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![feature(allocator_api)]
+    /// use std::alloc::Global;
+    /// use std::collections::HashSet;
+    /// use std::hash::RandomState;
+    ///
+    /// let s = RandomState::new();
+    /// let set: HashSet<i32> = HashSet::with_capacity_and_hasher_in(10, s, Global);
+    /// ```
     #[inline]
     #[must_use]
     #[unstable(feature = "allocator_api", issue = "32838")]
@@ -1240,7 +1276,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_default", issue = "143894")]
-impl<T, S> const Default for HashSet<T, S>
+const impl<T, S> Default for HashSet<T, S>
 where
     S: [const] Default,
 {
@@ -2514,17 +2550,5 @@ fn assert_covariance() {
     }
     fn drain<'new>(d: Drain<'static, &'static str>) -> Drain<'new, &'new str> {
         d
-    }
-}
-
-#[inline]
-fn map_try_reserve_error(err: hashbrown::TryReserveError) -> TryReserveError {
-    match err {
-        hashbrown::TryReserveError::CapacityOverflow => {
-            TryReserveErrorKind::CapacityOverflow.into()
-        }
-        hashbrown::TryReserveError::AllocError { layout } => {
-            TryReserveErrorKind::AllocError { layout, non_exhaustive: () }.into()
-        }
     }
 }
