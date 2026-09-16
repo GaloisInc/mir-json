@@ -288,22 +288,15 @@ impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
                     "usevar": op.to_json(mir)
                 })
             }
-            &mir::Rvalue::Reborrow(_, _, ref place) => {
-                // "Creates a bitwise copy of the indicated place with the same type (if Mut) or
-                // its CoerceShared target type (if Not)."  We treat this as an ordinary copy.
-                // This is not quite right in the `CoerceShared` case, since the type might change,
-                // but we assume for now that the type is similar enough to have the same Crucible
-                // representation.  (Note there's no method on the `CoerceShared` trait, so any
-                // conversion must be straightforward enough to be built into the compiler.)
-                //
-                // TODO: look at the rustc CoerceShared test cases to validate this assumption
-                // FIXME: preserve the Copy/Reborrow distinction in json?
+            &mir::Rvalue::Reborrow(target_ty, _, ref place) => {
+                // Coerce the value at `place` to `target_ty`.  As of 2026-08-24, `CoerceShared`
+                // can drop fields (maybe only ZST fields?) and can convert between structs of
+                // different reprs (including transparent <-> non-transparent) during the coercion,
+                // so we can't rely on the source and target types having the same Crucible repr.
                 json!({
-                    "kind": "Use",
-                    "usevar": {
-                        "kind": "Copy",
-                        "data": place.to_json(mir),
-                    }
+                    "kind": "Reborrow",
+                    "place": place.to_json(mir),
+                    "target_ty": target_ty.to_json(mir),
                 })
             }
             &mir::Rvalue::Repeat(ref op, s) => {
@@ -949,7 +942,7 @@ fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> i
     let name = def_id_str(tcx, def_id);
     // `static` items are required to be non-generic, so the binder returned by `type_of` doesn't
     // actually bind anything.
-    let ty = tcx.type_of(def_id).skip_binder();
+    let ty = tcx.type_of(def_id).no_bound_vars().unwrap();
     let is_mut = tcx.is_mutable_static(def_id);
 
     let j = render_static_body(ms, def_id, ty, name, is_mut);

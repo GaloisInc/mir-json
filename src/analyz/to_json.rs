@@ -182,7 +182,6 @@ impl<'tcx> TraitInst<'tcx> {
                     );
                     let actual_ty = tcx.normalize_erasing_regions(
                         ty::TypingEnv::fully_monomorphized(),
-                        // FIXME: is it correct to use `Unnormalized` here?
                         ty::Unnormalized::new(proj_ty),
                     );
                     let ex_super_trait_ref_args = ty::ExistentialTraitRef::erase_self_ty(tcx, super_trait_ref).args;
@@ -793,8 +792,7 @@ impl ToJson<'_> for CastKind {
             // a raw pointer. This is almost equivalent to a regular transmute except that if the
             // input would not be valid as `Box<T>`, the cast is UB. Backends that do not care
             // about UB detection can treat this like a regular transmute."
-            // FIXME: preserve the Transmute/BoxDerefTransmute distinction in json?
-            CastKind::BoxDerefTransmute => json!({ "kind": "Transmute" }),
+            CastKind::BoxDerefTransmute => json!({ "kind": "BoxDerefTransmute" }),
             CastKind::Subtype => json!({ "kind": "Subtype" }),
         }
     }
