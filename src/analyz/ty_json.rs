@@ -343,10 +343,13 @@ impl<'tcx> ToJson<'tcx> for ty::Instance<'tcx> {
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
-            // FIXME: preserve the Intrinsic/LlvmIntrinsic distinction in json?
-            ty::InstanceKind::Intrinsic(did) |
-            ty::InstanceKind::LlvmIntrinsic(did) => json!({
+            ty::InstanceKind::Intrinsic(did) => json!({
                 "kind": "Intrinsic",
+                "def_id": did.to_json(mir),
+                "args": args.to_json(mir),
+            }),
+            ty::InstanceKind::LlvmIntrinsic(did) => json!({
+                "kind": "LlvmIntrinsic",
                 "def_id": did.to_json(mir),
                 "args": args.to_json(mir),
             }),
@@ -536,8 +539,10 @@ impl<'tcx> ToJson<'tcx> for ty::Ty<'tcx> {
                 })
             }
             &ty::TyKind::FnDef(defid, ref args) => {
-                // FIXME: not sure what the binder on `args` is for
-                let name = get_fn_def_name(mir, defid, args.skip_binder());
+                // The binder on `args` is a late-region binder, which gets erased during
+                // monomorphization, so it should never bind anything at this point.
+                let args = args.as_ref().no_bound_vars().unwrap();
+                let name = get_fn_def_name(mir, defid, args);
                 json!({
                     "kind": "FnDef",
                     "defid": name,
