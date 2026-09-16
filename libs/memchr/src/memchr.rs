@@ -506,7 +506,30 @@ unsafe fn memchr_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::One::new(needle).find_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        // x86_64 does CPU feature detection at runtime in order to use AVX2
+        // instructions even when the `avx2` feature isn't enabled at compile
+        // time. This function also handles using a fallback if neither AVX2
+        // nor SSE2 (unusual) are available.
+        crate::arch::x86_64::memchr::memchr_raw(needle, start, end)
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memchr_raw(needle, start, end)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memchr_raw(needle, start, end)
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::One::new(needle).find_raw(start, end)
+    }
 }
 
 /// memrchr, but using raw pointers to represent the haystack.
@@ -520,7 +543,26 @@ unsafe fn memrchr_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::One::new(needle).rfind_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::memrchr_raw(needle, start, end)
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memrchr_raw(needle, start, end)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memrchr_raw(needle, start, end)
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::One::new(needle).rfind_raw(start, end)
+    }
 }
 
 /// memchr2, but using raw pointers to represent the haystack.
@@ -535,8 +577,27 @@ unsafe fn memchr2_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::Two::new(needle1, needle2)
-        .find_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::memchr2_raw(needle1, needle2, start, end)
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memchr2_raw(needle1, needle2, start, end)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memchr2_raw(needle1, needle2, start, end)
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::Two::new(needle1, needle2)
+            .find_raw(start, end)
+    }
 }
 
 /// memrchr2, but using raw pointers to represent the haystack.
@@ -551,8 +612,29 @@ unsafe fn memrchr2_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::Two::new(needle1, needle2)
-        .rfind_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::memrchr2_raw(needle1, needle2, start, end)
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memrchr2_raw(needle1, needle2, start, end)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memrchr2_raw(
+            needle1, needle2, start, end,
+        )
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::Two::new(needle1, needle2)
+            .rfind_raw(start, end)
+    }
 }
 
 /// memchr3, but using raw pointers to represent the haystack.
@@ -568,8 +650,33 @@ unsafe fn memchr3_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::Three::new(needle1, needle2, needle3)
-        .find_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::memchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::Three::new(needle1, needle2, needle3)
+            .find_raw(start, end)
+    }
 }
 
 /// memrchr3, but using raw pointers to represent the haystack.
@@ -585,8 +692,33 @@ unsafe fn memrchr3_raw(
     start: *const u8,
     end: *const u8,
 ) -> Option<*const u8> {
-    crate::arch::all::memchr::Three::new(needle1, needle2, needle3)
-        .rfind_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::memrchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::memrchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::memrchr3_raw(
+            needle1, needle2, needle3, start, end,
+        )
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::Three::new(needle1, needle2, needle3)
+            .rfind_raw(start, end)
+    }
 }
 
 /// Count all matching bytes, but using raw pointers to represent the haystack.
@@ -596,7 +728,26 @@ unsafe fn memrchr3_raw(
 /// Pointers must be valid. See `One::count_raw`.
 #[inline]
 unsafe fn count_raw(needle: u8, start: *const u8, end: *const u8) -> usize {
-    crate::arch::all::memchr::One::new(needle).count_raw(start, end)
+    #[cfg(target_arch = "x86_64")]
+    {
+        crate::arch::x86_64::memchr::count_raw(needle, start, end)
+    }
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        crate::arch::wasm32::memchr::count_raw(needle, start, end)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        crate::arch::aarch64::memchr::count_raw(needle, start, end)
+    }
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        target_arch = "aarch64"
+    )))]
+    {
+        crate::arch::all::memchr::One::new(needle).count_raw(start, end)
+    }
 }
 
 #[cfg(test)]

@@ -87,7 +87,9 @@ macro_rules! prelude {
             pub(crate) use core::prelude::v1::derive;
             #[allow(unused_imports)]
             pub(crate) use core::{
+                assert,
                 cfg,
+                debug_assert,
                 fmt,
                 hash,
                 iter,
@@ -106,7 +108,17 @@ macro_rules! prelude {
             };
 
             #[allow(unused_imports)]
+            #[cfg(any(target_os = "linux", target_os = "android", target_os = "l4re"))]
+            pub(crate) use crate::types::u32_cast_ioctl;
+            #[allow(unused_imports)]
             pub(crate) use crate::types::{
+                replace_array_items,
+                u16_cast_short,
+                u32_cast_int,
+                u32_cast_long,
+                u8_slice_cast_char_slice,
+                ulong_cast_int,
+                ulong_cast_uint,
                 CEnumRepr,
                 Padding,
             };
@@ -135,8 +147,10 @@ macro_rules! prelude {
     };
 }
 
-/// Implement `Clone` and `Copy` for a struct, as well as `Debug`, `Eq`, `Hash`, and
-/// `PartialEq` if the `extra_traits` feature is enabled.
+/// Implement `Clone`, `Copy`, and `Debug` for one or more structs, as well as `PartialEq`, `Eq`,
+/// and `Hash` if the `extra_traits` feature is enabled.
+///
+/// Also mark the type with `repr(C)`.
 ///
 /// Use [`s_no_extra_traits`] for structs where the `extra_traits` feature does not
 /// make sense, and for unions.
@@ -153,53 +167,52 @@ macro_rules! s {
     );
 
     (it: $(#[$attr:meta])* $pub:vis struct $i:ident { $($field:tt)* }) => (
-        __item! {
-            #[repr(C)]
-            #[::core::prelude::v1::derive(
-                ::core::clone::Clone,
-                ::core::marker::Copy,
-                ::core::fmt::Debug,
-            )]
-            #[cfg_attr(
-                feature = "extra_traits",
-                ::core::prelude::v1::derive(Eq, Hash, PartialEq)
-            )]
-            #[allow(deprecated)]
-            $(#[$attr])*
-            $pub struct $i { $($field)* }
-        }
+        #[repr(C)]
+        #[::core::prelude::v1::derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+            ::core::fmt::Debug,
+        )]
+        #[cfg_attr(
+            feature = "extra_traits",
+            ::core::prelude::v1::derive(PartialEq, Eq, Hash)
+        )]
+        #[allow(deprecated)]
+        $(#[$attr])*
+        $pub struct $i { $($field)* }
     );
 }
 
-/// Implement `Clone` and `Copy` for a tuple struct, as well as `Debug`, `Eq`, `Hash`,
-/// and `PartialEq` if the `extra_traits` feature is enabled.
+/// Implement `Clone`, `Copy`, and `Debug` for a tuple struct, as well as `PartialEq`, `Eq`,
+/// and `Hash` if the `extra_traits` feature is enabled.
 ///
-/// This is the same as [`s`] but works for tuple structs.
+/// Unlike `s!`, this does *not* mark the type with `repr(C)`. Users should provide their own
+/// `repr` attribute via `$attr` as necessary.
 macro_rules! s_paren {
     ($(
         $(#[$attr:meta])*
-        pub struct $i:ident ( $($field:tt)* );
+        $pub:vis struct $i:ident ( $($field:tt)* );
     )*) => ($(
-        __item! {
-            #[cfg_attr(
-                feature = "extra_traits",
-                ::core::prelude::v1::derive(Eq, Hash, PartialEq)
-            )]
-            #[::core::prelude::v1::derive(
-                ::core::clone::Clone,
-                ::core::marker::Copy,
-                ::core::fmt::Debug,
-            )]
-            $(#[$attr])*
-            pub struct $i ( $($field)* );
-        }
+        #[::core::prelude::v1::derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+            ::core::fmt::Debug,
+        )]
+        #[cfg_attr(
+            feature = "extra_traits",
+            ::core::prelude::v1::derive(PartialEq, Eq, Hash)
+        )]
+        $(#[$attr])*
+        $pub struct $i ( $($field)* );
     )*);
 }
 
-/// Implement `Clone`, `Copy`, and `Debug` since those can be derived, but exclude `PartialEq`,
+/// Implement `Clone`, `Copy`, and `Debug` for one or more structs/unions, but exclude `PartialEq`,
 /// `Eq`, and `Hash`.
 ///
-/// Most items will prefer to use [`s`].
+/// Also mark the type with `repr(C)`.
+///
+/// Most structs will prefer to use [`s`].
 macro_rules! s_no_extra_traits {
     ($(
         $(#[$attr:meta])*
@@ -209,12 +222,13 @@ macro_rules! s_no_extra_traits {
     )*);
 
     (it: $(#[$attr:meta])* $pub:vis union $i:ident { $($field:tt)* }) => (
-        __item! {
-            #[repr(C)]
-            #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-            $(#[$attr])*
-            $pub union $i { $($field)* }
-        }
+        #[repr(C)]
+        #[::core::prelude::v1::derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+        )]
+        $(#[$attr])*
+        $pub union $i { $($field)* }
 
         impl ::core::fmt::Debug for $i {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -224,16 +238,14 @@ macro_rules! s_no_extra_traits {
     );
 
     (it: $(#[$attr:meta])* $pub:vis struct $i:ident { $($field:tt)* }) => (
-        __item! {
-            #[repr(C)]
-            #[::core::prelude::v1::derive(
-                ::core::clone::Clone,
-                ::core::marker::Copy,
-                ::core::fmt::Debug,
-            )]
-            $(#[$attr])*
-            $pub struct $i { $($field)* }
-        }
+        #[repr(C)]
+        #[::core::prelude::v1::derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+            ::core::fmt::Debug,
+        )]
+        $(#[$attr])*
+        $pub struct $i { $($field)* }
     );
 }
 
@@ -246,17 +258,36 @@ macro_rules! s_no_extra_traits {
 macro_rules! extern_ty {
     ($(
         $(#[$attr:meta])*
-        pub enum $i:ident {}
+        $vis:vis type $i:ident;
     )*) => ($(
         $(#[$attr])*
-        // FIXME(1.0): the type is uninhabited so these traits are unreachable and could be
-        // removed.
+        /// This is an extern type ("opaque" or "incomplete" type in C).
+        ///
+        /// <div class="warning">
+        /// This type's current representation allows inspecting some properties, such as via
+        /// <code>size_of</code>, and it is technically possible to construct the type within
+        /// <code>MaybeUninit</code>, However, this <strong>MUST NOT</strong> be relied upon
+        /// because a future version of <code>libc</code> may switch to a proper
+        /// <a href="https://rust-lang.github.io/rfcs/1861-extern-types.html">extern type</a>
+        /// representation when available.
+        /// </div>
+        // ^ unfortunately warning blocks currently don't render markdown so we need to
+        // use raw HTML.
+        //
+        // Representation based on the Nomicon:
+        // <https://doc.rust-lang.org/nomicon/ffi.html#representing-opaque-structs>.
+        //
+        // FIXME(1.0): These traits are unreachable and should be removed.
         #[::core::prelude::v1::derive(
             ::core::clone::Clone,
             ::core::marker::Copy,
             ::core::fmt::Debug,
         )]
-        pub enum $i { }
+        #[repr(C)]
+        $vis struct $i {
+            _data: (),
+            _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+        }
     )*);
 }
 
@@ -268,19 +299,17 @@ macro_rules! e {
         $(#[$attr:meta])*
         pub enum $i:ident { $($field:tt)* }
     )*) => ($(
-        __item! {
-            #[cfg_attr(
-                feature = "extra_traits",
-                ::core::prelude::v1::derive(Eq, Hash, PartialEq)
-            )]
-            #[::core::prelude::v1::derive(
-                ::core::clone::Clone,
-                ::core::marker::Copy,
-                ::core::fmt::Debug,
-            )]
-            $(#[$attr])*
-            pub enum $i { $($field)* }
-        }
+        #[cfg_attr(
+            feature = "extra_traits",
+            ::core::prelude::v1::derive(Eq, Hash, PartialEq)
+        )]
+        #[::core::prelude::v1::derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+            ::core::fmt::Debug,
+        )]
+        $(#[$attr])*
+        pub enum $i { $($field)* }
     )*);
 }
 
@@ -297,14 +326,14 @@ macro_rules! c_enum {
     // Matcher for multiple enums
     ($(
         $(#[repr($repr:ty)])?
-        pub enum $($ty_name:ident)? $(#$anon:ident)? {
-            $($vis:vis $variant:ident $(= $value:expr)?,)+
+        $vis:vis enum $($ty_name:ident)? $(#$anon:ident)? {
+            $($field_vis:vis $variant:ident $(= $value:expr)?,)+
         }
     )+) => {
         $(c_enum!(@single;
             $(#[repr($repr)])?
-            pub enum $($ty_name)? $(#$anon)? {
-                $($vis $variant $(= $value)?,)+
+            $vis enum $($ty_name)? $(#$anon)? {
+                $($field_vis $variant $(= $value)?,)+
             }
         );)+
     };
@@ -312,31 +341,31 @@ macro_rules! c_enum {
     // Matcher for a single enum
     (@single;
         $(#[repr($repr:ty)])?
-        pub enum $ty_name:ident {
-            $($vis:vis $variant:ident $(= $value:expr)?,)+
+        $vis:vis enum $ty_name:ident {
+            $($field_vis:vis $variant:ident $(= $value:expr)?,)+
         }
     ) => {
-        pub type $ty_name = c_enum!(@ty $($repr)?);
+        $vis type $ty_name = c_enum!(@ty $($repr)?);
         c_enum! {
             @variant;
             ty: $ty_name;
             default: 0;
-            variants: [$($vis $variant $(= $value)?,)+]
+            variants: [$($field_vis $variant $(= $value)?,)+]
         }
     };
 
     // Matcher for a single anonymous enum
     (@single;
         $(#[repr($repr:ty)])?
-        pub enum #anon {
-            $($vis:vis $variant:ident $(= $value:expr)?,)+
+        $vis:vis enum #anon {
+            $($field_vis:vis $variant:ident $(= $value:expr)?,)+
         }
     ) => {
         c_enum! {
             @variant;
             ty: c_enum!(@ty $($repr)?);
             default: 0;
-            variants: [$($vis $variant $(= $value)?,)+]
+            variants: [$($field_vis $variant $(= $value)?,)+]
         }
     };
 
@@ -347,11 +376,11 @@ macro_rules! c_enum {
         ty: $ty_name:ty;
         default: $default_val:expr;
         variants: [
-            $vis:vis $variant:ident $(= $value:expr)?,
+            $field_vis:vis $variant:ident $(= $value:expr)?,
             $($tail:tt)*
         ]
     ) => {
-        $vis const $variant: $ty_name = {
+        $field_vis const $variant: $ty_name = {
             #[allow(unused_variables)]
             let r = $default_val;
             $(let r = $value;)?
@@ -377,15 +406,14 @@ macro_rules! c_enum {
 macro_rules! f {
     ($(
         $(#[$attr:meta])*
-        // Less than ideal hack to match either `fn` or `const fn`.
-        pub $(fn $i:ident)? $(const fn $const_i:ident)?
-        ($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
+        pub $(const $($const_dummy:literal)?)? unsafe
+        fn $i:ident ($($arg:ident: $argty:ty),* $(,)?) -> $ret:ty
             $body:block
     )+) => {$(
         #[inline]
         $(#[$attr])*
-        pub $(unsafe extern "C" fn $i)? $(const unsafe extern "C" fn $const_i)?
-        ($($arg: $argty),*) -> $ret
+        pub $(const $($const_dummy)?)? unsafe extern "C"
+        fn $i ($($arg: $argty),*) -> $ret
             $body
     )+};
 }
@@ -394,23 +422,16 @@ macro_rules! f {
 macro_rules! safe_f {
     ($(
         $(#[$attr:meta])*
-        // Less than ideal hack to match either `fn` or `const fn`.
-        pub $(fn $i:ident)? $(const fn $const_i:ident)?
-        ($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
+        pub $(const $($const_dummy:literal)?)? safe
+        fn $i:ident ($($arg:ident: $argty:ty),* $(,)?) -> $ret:ty
             $body:block
     )+) => {$(
         #[inline]
         $(#[$attr])*
-        pub $(extern "C" fn $i)? $(const extern "C" fn $const_i)?
-        ($($arg: $argty),*) -> $ret
+        pub $(const $($const_dummy)?)? extern "C"
+        fn $i ($($arg: $argty),*) -> $ret
             $body
     )+};
-}
-
-macro_rules! __item {
-    ($i:item) => {
-        $i
-    };
 }
 
 // This macro is used to deprecate items that should be accessed via the mach2 crate
@@ -452,14 +473,16 @@ macro_rules! deprecated_mach {
 macro_rules! offset_of {
     ($Ty:path, $field:ident) => {{
         // Taken from bytemuck, avoids accidentally calling on deref
-        #[allow(clippy::unneeded_field_pattern)]
+        #[allow(clippy::unneeded_wildcard_pattern)]
         let $Ty { $field: _, .. };
         let data = core::mem::MaybeUninit::<$Ty>::uninit();
         let ptr = data.as_ptr();
+        // nested unsafe, see f!
+        #[allow(unused_unsafe)]
         // SAFETY: computed address is inbounds since we have a stack alloc for T
         let fptr = unsafe { core::ptr::addr_of!((*ptr).$field) };
         let off = (fptr as usize).checked_sub(ptr as usize).unwrap();
-        assert!(off <= core::mem::size_of::<$Ty>());
+        core::assert!(off <= core::mem::size_of::<$Ty>());
         off
     }};
 }
@@ -486,6 +509,13 @@ mod tests {
                 ANON1,
                 ANON2,
             }
+
+            // No visibility required.
+            enum #anon {
+                ANON3,
+                ANON4,
+                ANON5,
+            }
         }
 
         assert_eq!(TypeId::of::<e>(), TypeId::of::<CEnumRepr>());
@@ -497,6 +527,11 @@ mod tests {
         assert_eq!(ANON0, 0 as CEnumRepr);
         assert_eq!(ANON1, 1 as CEnumRepr);
         assert_eq!(ANON2, 2 as CEnumRepr);
+
+        assert_eq!(type_id_of_val(&ANON3), TypeId::of::<CEnumRepr>());
+        assert_eq!(ANON3, 0 as CEnumRepr);
+        assert_eq!(ANON4, 1 as CEnumRepr);
+        assert_eq!(ANON5, 2 as CEnumRepr);
     }
 
     #[test]
@@ -656,5 +691,10 @@ mod macro_checks {
             pub a: u32,
             b: f32,
         }
+    }
+
+    extern_ty! {
+        type Foo;
+        pub type Bar;
     }
 }

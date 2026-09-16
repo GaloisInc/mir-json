@@ -3,8 +3,6 @@
 
 #![allow(missing_debug_implementations)]
 
-pub mod crux;
-
 cfg_select! {
     unix => {
         mod unix;

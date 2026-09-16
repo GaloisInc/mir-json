@@ -1,6 +1,8 @@
+use crate::cmp::BytewiseEq;
+
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<[U; N]> for [T; N]
+const impl<T, U, const N: usize> PartialEq<[U; N]> for [T; N]
 where
     T: [const] PartialEq<U>,
 {
@@ -16,7 +18,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<[U]> for [T; N]
+const impl<T, U, const N: usize> PartialEq<[U]> for [T; N]
 where
     T: [const] PartialEq<U>,
 {
@@ -38,7 +40,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<[U; N]> for [T]
+const impl<T, U, const N: usize> PartialEq<[U; N]> for [T]
 where
     T: [const] PartialEq<U>,
 {
@@ -60,7 +62,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<&[U]> for [T; N]
+const impl<T, U, const N: usize> PartialEq<&[U]> for [T; N]
 where
     T: [const] PartialEq<U>,
 {
@@ -76,7 +78,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<[U; N]> for &[T]
+const impl<T, U, const N: usize> PartialEq<[U; N]> for &[T]
 where
     T: [const] PartialEq<U>,
 {
@@ -92,7 +94,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<&mut [U]> for [T; N]
+const impl<T, U, const N: usize> PartialEq<&mut [U]> for [T; N]
 where
     T: [const] PartialEq<U>,
 {
@@ -108,7 +110,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T, U, const N: usize> const PartialEq<[U; N]> for &mut [T]
+const impl<T, U, const N: usize> PartialEq<[U; N]> for &mut [T]
 where
     T: [const] PartialEq<U>,
 {
@@ -128,7 +130,7 @@ where
 
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T: [const] Eq, const N: usize> const Eq for [T; N] {}
+const impl<T: [const] Eq, const N: usize> Eq for [T; N] {}
 
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
 const trait SpecArrayEq<Other, const N: usize>: Sized {
@@ -137,11 +139,24 @@ const trait SpecArrayEq<Other, const N: usize>: Sized {
 }
 
 #[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
-impl<T: [const] PartialEq<Other>, Other, const N: usize> const SpecArrayEq<Other, N> for T {
+const impl<T: [const] PartialEq<Other>, Other, const N: usize> SpecArrayEq<Other, N> for T {
     default fn spec_eq(a: &[Self; N], b: &[Other; N]) -> bool {
         a[..] == b[..]
     }
     default fn spec_ne(a: &[Self; N], b: &[Other; N]) -> bool {
         a[..] != b[..]
+    }
+}
+
+#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
+const impl<T: [const] BytewiseEq<U>, U, const N: usize> SpecArrayEq<U, N> for T {
+    fn spec_eq(a: &[T; N], b: &[U; N]) -> bool {
+        // SAFETY: Arrays are compared element-wise, and don't add any padding
+        // between elements, so when the elements are `BytewiseEq`, we can
+        // compare the entire array at once.
+        unsafe { crate::intrinsics::raw_eq(a, crate::mem::transmute(b)) }
+    }
+    fn spec_ne(a: &[T; N], b: &[U; N]) -> bool {
+        !Self::spec_eq(a, b)
     }
 }

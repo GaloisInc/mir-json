@@ -102,13 +102,13 @@ macro_rules! compress {
 macro_rules! load_int_le {
     ($buf:expr, $i:expr, $int_ty:ident) => {{
         debug_assert!($i + size_of::<$int_ty>() <= $buf.len());
-        let mut data = [0u8; size_of::<$int_ty>()];
+        let mut data = 0 as $int_ty;
         ptr::copy_nonoverlapping(
             $buf.as_ptr().add($i),
-            data.as_mut_slice().as_mut_ptr(),
+            &mut data as *mut _ as *mut u8,
             size_of::<$int_ty>(),
         );
-        <$int_ty>::from_ne_bytes(data).to_le()
+        data.to_le()
     }};
 }
 
@@ -340,7 +340,7 @@ impl<S: Sip> Clone for Hasher<S> {
 }
 
 #[rustc_const_unstable(feature = "const_default", issue = "143894")]
-impl<S: Sip> const Default for Hasher<S> {
+const impl<S: Sip> Default for Hasher<S> {
     /// Creates a `Hasher<S>` with the two initial keys set to 0.
     #[inline]
     fn default() -> Hasher<S> {
