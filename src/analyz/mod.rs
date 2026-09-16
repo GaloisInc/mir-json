@@ -1106,6 +1106,8 @@ fn emit_instance<'tcx>(
                         args: ty_inst.args,
                     }
                 },
+                // `LlvmIntrinsic`s never have fallback bodies, so always return `Ok(())`.
+                ty::InstanceKind::LlvmIntrinsic(..) => return Ok(()),
                 _ => ty_inst,
             }
         },
