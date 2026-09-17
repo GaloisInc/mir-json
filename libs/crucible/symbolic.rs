@@ -1,5 +1,7 @@
 use core::array;
 use core::num::{NonZero, Saturating, Wrapping, ZeroablePrimitive};
+use alloc::string::String;
+use alloc::vec::Vec;
 use crate::crucible_assume_unreachable;
 
 
@@ -185,3 +187,32 @@ pub trait BoundedSymbolic: Sized {
         x
     }
 }
+
+impl BoundedSymbolic for String {
+    /// Create a new symbolic `String` of valid utf8 code points.
+    /// The possible byte-lengths of the symbolic string are bounded by the specified constant.
+    ///
+    /// The character set can be further restricted using `bounded_symbolic_where`. For example,
+    ///
+    /// ```
+    /// String::bounded_symbolic_where::<N, _>("s", |s| s.is_ascii())
+    /// ```
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self {
+        let vec = <Vec<u8> as BoundedSymbolic>::bounded_symbolic::<N>(desc);
+        let result = String::from_utf8(vec);
+        super::crucible_assume!(result.is_ok());
+        result.unwrap()
+    }
+}
+
+impl<T: Symbolic> BoundedSymbolic for Vec<T> {
+    /// Create a new symbolic `Vec<T>` with possible lengths bounded by the specified constant.
+    fn bounded_symbolic<const N: usize>(desc: &str) -> Self {
+        let array = <[T; N] as Symbolic>::symbolic(desc);
+        let mut vec = Vec::from(array);
+        let n = <usize as Symbolic>::symbolic_where("n", |n| n <= &N);
+        vec.truncate(n);
+        vec
+    }
+}
+
