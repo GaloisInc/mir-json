@@ -266,6 +266,7 @@ impl CustomUnitGraph {
     }
 
     /// Get a mutable reference to an existing unit with the given crate name.
+    #[expect(dead_code)]
     fn get_unit_mut(&mut self, crate_name: &CrateName) -> &mut CustomUnit {
         self.units
             .iter_mut()
@@ -736,6 +737,7 @@ fn main() {
     let dep_core = custom_graph.get_unit_as_dep("core".into());
     let dep_compiler_builtins =
         custom_graph.get_unit_as_dep("compiler_builtins".into());
+    let dep_alloc = custom_graph.get_unit_as_dep("alloc".into());
     let dep_std = custom_graph.get_unit_as_dep("std".into());
 
     // Add crucible
@@ -756,14 +758,13 @@ fn main() {
             env: vec![],
             is_stdlib: false,
         },
-        vec![dep_compiler_builtins.clone(), dep_core.clone()],
+        vec![
+            dep_core.clone(),
+            dep_compiler_builtins.clone(),
+            dep_alloc.clone(),
+            dep_std.clone(),
+        ],
     );
-
-    // Add crucible as a dependency of alloc
-    custom_graph
-        .get_unit_mut(&"alloc".into())
-        .dependencies
-        .push(dep_crucible.clone());
 
     // Add int512
     custom_graph.push_unit_as_root(CustomUnit {

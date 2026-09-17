@@ -3314,7 +3314,7 @@ impl<T, A: Allocator> Weak<T, A> {
 }
 
 pub(crate) fn is_dangling<T: ?Sized>(ptr: *const T) -> bool {
-    crucible::ptr::compare_usize(ptr, usize::MAX)
+    core::crucible::ptr::compare_usize(ptr, usize::MAX)
 }
 
 /// Helper type to allow accessing the reference counts without
