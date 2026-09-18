@@ -822,6 +822,11 @@ fn main() {
         dependencies: vec![dep_core, dep_std, dep_compiler_builtins],
     });
 
+    if generate_only {
+        println!("#!/bin/bash");
+        println!("set -euxo pipefail");
+    }
+
     // Create the necessary output directories.
     eprintln!("Setting up sysroot...");
     for subdir in ["bin", "etc", "lib", "libexec", "share"] {
