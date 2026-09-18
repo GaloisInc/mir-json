@@ -1,4 +1,4 @@
-use core::alloc::{self, Layout, AllocError};
+use core::alloc::{self, AllocError, Layout};
 use core::marker::PhantomData;
 use core::mem;
 use core::ptr::NonNull;
@@ -79,7 +79,7 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         let _old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
         let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
-        let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());
+        let new_nonnull: NonNull<u8> = unsafe { NonNull::new_unchecked(new_ptr.cast::<u8>()) };
         Ok(NonNull::slice_from_raw_parts(new_nonnull, new_len))
     }
     unsafe fn grow_zeroed(
@@ -99,7 +99,7 @@ unsafe impl<T> alloc::Allocator for TypedAllocator<T> {
         let _old_len = size_to_len::<T>(old_layout.size());
         let new_len = size_to_len::<T>(new_layout.size());
         let new_ptr: *mut T = reallocate(ptr.as_ptr().cast::<T>(), new_len);
-        let new_nonnull: NonNull<u8> = NonNull::new_unchecked(new_ptr.cast::<u8>());
+        let new_nonnull: NonNull<u8> = unsafe { NonNull::new_unchecked(new_ptr.cast::<u8>()) };
         Ok(NonNull::slice_from_raw_parts(new_nonnull, new_len))
     }
 }
