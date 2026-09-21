@@ -249,6 +249,12 @@ fn vtable_descriptor_for_cast<'tcx>(
             // vtable descriptor cast.
             if unequal_fields_count == 1 { vtable } else { None }
         },
+
+        // Look through pattern types.  We ignore the pattern parts for these.
+        (ty::TyKind::Pat(old_inner_ty, _), ty::TyKind::Pat(new_inner_ty, _)) => {
+            vtable_descriptor_for_cast(mir, kind, old_inner_ty, new_inner_ty)
+        },
+
         _ => None,
     }
 }
