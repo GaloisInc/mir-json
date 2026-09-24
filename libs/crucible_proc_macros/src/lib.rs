@@ -8,7 +8,10 @@ use std::mem;
 use syn::fold::{self, Fold};
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote};
-use syn::{Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, Generics, GenericParam, Ident, Item, ItemFn, Path};
+use syn::{
+    Attribute, Data, DeriveInput, Expr, ExprBlock, ExprCall, ExprMacro, Fields, GenericParam,
+    Generics, Ident, Item, ItemFn, Path,
+};
 
 #[derive(Clone)]
 struct Folder {
@@ -429,6 +432,191 @@ pub fn symbolic_derive(input: TokenStream) -> TokenStream {
 
     debug!("output = {}", tokens);
     tokens.into()
+}
+
+/// Adds support for `#[cfg_attr(crux, derive(BoundedSymbolic))]`
+///
+/// This generates an implementation of the BoundedSymbolic trait that
+/// constructs symbolic values for all fields of the data type. In the
+/// case of enumerations, all variants can be returned. Unions are not
+/// supported.
+///
+/// By default, all fields will be constructed using the Symbolic trait
+/// unless that field is tagged with `#[bounded]` in which case the
+/// BoundedSymbolic trait will be used instead, bounding the size of
+/// the symbolic field by a specified constant.
+///
+/// Note that, due to the complexities involved in implementing a
+/// "perfect derive", this macro does not support raw type parameters
+/// tagged with `#[bounded]`. Raw type parameters must implement
+/// Symbolic instead.
+///
+/// For example, this is accepted:
+///
+/// ```rust
+/// #[derive(BoundedSymbolic)]
+/// struct Foo<T> {
+///     #[bounded]
+///     some_field: Vec<T>,
+/// }
+/// ```
+///
+/// while this results in a compile error:
+///
+/// ```rust
+/// #[derive(BoundedSymbolic)]
+/// struct Foo<T> {
+///     #[bounded]
+///     some_field: T,
+/// }
+/// ```
+#[proc_macro_derive(BoundedSymbolic, attributes(bounded))]
+pub fn bounded_symbolic_derive(input: TokenStream) -> TokenStream {
+    // See Note [Logger initialization]
+    let _ = env_logger::try_init();
+
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let name = &input.ident;
+
+    let body = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => {
+                let assignments = fields.named.iter().map(|field| {
+                    let ident = field.ident.as_ref().unwrap();
+                    let constructor = create_bounded_symbolic_type_constructor(field);
+                    quote! {
+                        #ident: #constructor
+                    }
+                });
+
+                quote! {
+                    Self {
+                        #(#assignments),*
+                    }
+                }
+            }
+
+            Fields::Unnamed(fields) => {
+                let assignments = fields.unnamed.iter().map(|field|
+                    create_bounded_symbolic_type_constructor(field)
+                );
+
+                quote! {
+                    Self(
+                        #(#assignments),*
+                    )
+                }
+            }
+
+            Fields::Unit => {
+                quote! {
+                    Self
+                }
+            }
+        },
+
+        Data::Enum(data_enum) => {
+            let variants: Vec<_> = data_enum.variants.iter().collect();
+            let arms = variants.iter().enumerate().map(|(i, v)| {
+                let vname = &v.ident;
+                match &v.fields {
+                    Fields::Named(fields_named) => {
+                        let field_inits = fields_named.named.iter().map(|field| {
+                            let fname = &field.ident;
+                            let constructor = create_bounded_symbolic_type_constructor(field);
+                            quote! {
+                                #fname: #constructor
+                            }
+                        });
+                        quote! { #i => Self::#vname { #( #field_inits, )* } }
+                    }
+                    Fields::Unnamed(fields_unnamed) => {
+                        let field_inits = fields_unnamed.unnamed.iter().map(|field|
+                            create_bounded_symbolic_type_constructor(field)
+                        );
+                        quote! { #i => Self::#vname( #( #field_inits, )* ) }
+                    }
+                    Fields::Unit => {
+                        quote! { #i => Self::#vname }
+                    }
+                }
+            });
+
+            quote! {
+                {
+                    let variant: usize = crucible::Symbolic::symbolic("variant");
+                    match variant {
+                        #( #arms, )*
+                        _ => crucible::crucible_assume_unreachable!(),
+                    }
+                }
+            }
+        }
+
+        Data::Union(_) => panic!("Unions are not supported by derive(BoundedSymbolic)"),
+    };
+
+    let generics = add_symbolic_trait_bounds(input.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let tokens = quote! {
+        #[cfg(crux)]
+        impl #impl_generics BoundedSymbolic for #name #ty_generics #where_clause {
+            fn bounded_symbolic<const N: usize>(desc: &str) -> Self {
+                #body
+            }
+        }
+    };
+
+    debug!("output = {}", tokens);
+    tokens.into()
+}
+
+/// Return a type constructor for a given field within a struct/enum deriving
+/// the BoundedSymbolic trait.
+/// Return a constructor using the `BoundedSymbolic` trait if the field is tagged
+/// with `#[bounded]` otherwise return a constructor using the `Symbolic` trait.
+fn create_bounded_symbolic_type_constructor(field: &syn::Field) -> proc_macro2::TokenStream {
+    let ty = &field.ty;
+    match has_bounded_attr(field) {
+        Ok(false) => {
+            quote! { <#ty as Symbolic>::symbolic(desc) }
+        }
+        Ok(true) => {
+            quote! { <#ty as BoundedSymbolic>::bounded_symbolic::<N>(desc) }
+        }
+        Err(error) => return error.to_compile_error(),
+    }
+}
+
+/// Return whether a field has a `#[bounded]` attribute.
+/// Return an error if there are duplicate `#[bounded]` attributes or the attribute contains arguments.
+fn has_bounded_attr(field: &syn::Field) -> syn::Result<bool> {
+    let bounded_attrs: Vec<syn::Attribute> = field
+        .attrs
+        .iter()
+        .filter(|attr| attr.path.is_ident("bounded"))
+        .cloned()
+        .collect();
+
+    match bounded_attrs.as_slice() {
+        [] => Ok(false),
+        [attr] => {
+            if attr.tokens.is_empty() {
+                Ok(true)
+            } else {
+                Err(syn::Error::new_spanned(
+                    attr,
+                    "expected #[bounded] without arguments",
+                ))
+            }
+        }
+        [_, duplicate, ..] => Err(syn::Error::new_spanned(
+            duplicate,
+            "multiple #[bounded] attributes are not allowed",
+        )),
+    }
 }
 
 /*
