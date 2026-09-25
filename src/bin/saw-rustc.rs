@@ -6,9 +6,10 @@ extern crate rustc_driver;
 extern crate rustc_session;
 
 use std::env;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{self, Command};
 use rustc_session::config::host_tuple;
 
 fn main() {
@@ -32,10 +33,21 @@ fn main() {
         PathBuf::from("mir-json-rustc-wrapper")
     };
 
-    let e = Command::new(&wrapper_path)
-        .args(&args)
+    let mut cmd = Command::new(&wrapper_path);
+    cmd.args(&args)
         .env("EXPORT_ALL", "true")
-        .env("MIR_JSON_BUILD_TARGET", "saw")
-        .exec();
-    unreachable!("exec failed: {:?}", e);
+        .env("MIR_JSON_BUILD_TARGET", "saw");
+
+    #[cfg(unix)]
+    {
+        let e = cmd.exec();
+        unreachable!("exec failed: {:?}", e);
+    }
+
+    #[cfg(windows)]
+    {
+        let status = cmd.status()
+            .unwrap_or_else(|e| { eprintln!("error executing {:?}: {}", wrapper_path, e); process::exit(1); });
+        process::exit(status.code().unwrap_or(1));
+    }
 }
