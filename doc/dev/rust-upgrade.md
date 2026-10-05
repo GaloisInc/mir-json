@@ -167,7 +167,8 @@
     - `int512.rs`
     - `bytes.rs`
     - `byteorder`
-    - `core/src/crucible`
+    - `core/src/crucible/`
+    - `alloc/src/crucible/`
 
     Copy these over from `libs-old` to `libs`. Also copy over `Patches.md`.
 
