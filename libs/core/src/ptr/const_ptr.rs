@@ -167,6 +167,7 @@ impl<T: PointeeSized> *const T {
     /// [`with_exposed_provenance`]: with_exposed_provenance
     #[inline(always)]
     #[stable(feature = "exposed_provenance", since = "1.84.0")]
+    #[expect(implicit_provenance_casts, reason = "this *is* the replacement")]
     pub fn expose_provenance(self) -> usize {
         self.cast::<()>() as usize
     }
@@ -313,6 +314,10 @@ impl<T: PointeeSized> *const T {
     }
 
     #[doc = include_str!("./docs/offset.md")]
+    ///
+    /// Consider using [`wrapping_offset`](#method.wrapping_offset) instead if these constraints are
+    /// difficult to satisfy. The only advantage of this method is that it
+    /// enables more aggressive compiler optimizations.
     ///
     /// # Examples
     ///
@@ -546,9 +551,8 @@ impl<T: PointeeSized> *const T {
     /// needed for `const`-compatibility: the distance between pointers into *different* allocated
     /// objects is not known at compile-time. However, the requirement also exists at
     /// runtime and may be exploited by optimizations. If you wish to compute the difference between
-    /// pointers that are not guaranteed to be from the same allocation, use `(self as isize -
-    /// origin as isize) / size_of::<T>()`.
-    // FIXME: recommend `addr()` instead of `as usize` once that is stable.
+    /// pointers that are not guaranteed to be from the same allocation, use
+    /// `(self.addr() as isize - origin.addr() as isize) / size_of::<T>()`.
     ///
     /// [`add`]: #method.add
     /// [allocation]: crate::ptr#allocation
@@ -591,7 +595,7 @@ impl<T: PointeeSized> *const T {
     /// ```
     #[stable(feature = "ptr_offset_from", since = "1.47.0")]
     #[rustc_const_stable(feature = "const_ptr_offset_from", since = "1.65.0")]
-    #[inline]
+    #[inline(always)]
     #[cfg_attr(miri, track_caller)] // even without panics, this helps for Miri backtraces
     pub const unsafe fn offset_from(self, origin: *const T) -> isize
     where
@@ -794,6 +798,10 @@ impl<T: PointeeSized> *const T {
 
     #[doc = include_str!("./docs/add.md")]
     ///
+    /// Consider using [`wrapping_add`](#method.wrapping_add) instead if these constraints are
+    /// difficult to satisfy. The only advantage of this method is that it
+    /// enables more aggressive compiler optimizations.
+    ///
     /// # Examples
     ///
     /// ```
@@ -867,38 +875,11 @@ impl<T: PointeeSized> *const T {
         unsafe { self.cast::<u8>().add(count).with_metadata_of(self) }
     }
 
-    /// Subtracts an unsigned offset from a pointer.
+    #[doc = include_str!("./docs/sub.md")]
     ///
-    /// This can only move the pointer backward (or not move it). If you need to move forward or
-    /// backward depending on the value, then you might want [`offset`](#method.offset) instead
-    /// which takes a signed offset.
-    ///
-    /// `count` is in units of T; e.g., a `count` of 3 represents a pointer
-    /// offset of `3 * size_of::<T>()` bytes.
-    ///
-    /// # Safety
-    ///
-    /// If any of the following conditions are violated, the result is Undefined Behavior:
-    ///
-    /// * The offset in bytes, `count * size_of::<T>()`, computed on mathematical integers (without
-    ///   "wrapping around"), must fit in an `isize`.
-    ///
-    /// * If the computed offset is non-zero, then `self` must be [derived from][crate::ptr#provenance] a pointer to some
-    ///   [allocation], and the entire memory range between `self` and the result must be in
-    ///   bounds of that allocation. In particular, this range must not "wrap around" the edge
-    ///   of the address space.
-    ///
-    /// Allocations can never be larger than `isize::MAX` bytes, so if the computed offset
-    /// stays in bounds of the allocation, it is guaranteed to satisfy the first requirement.
-    /// This implies, for instance, that `vec.as_ptr().add(vec.len())` (for `vec: Vec<T>`) is always
-    /// safe.
-    ///
-    /// Consider using [`wrapping_sub`] instead if these constraints are
+    /// Consider using [`wrapping_sub`](#method.wrapping_sub) instead if these constraints are
     /// difficult to satisfy. The only advantage of this method is that it
     /// enables more aggressive compiler optimizations.
-    ///
-    /// [`wrapping_sub`]: #method.wrapping_sub
-    /// [allocation]: crate::ptr#allocation
     ///
     /// # Examples
     ///
@@ -1033,6 +1014,7 @@ impl<T: PointeeSized> *const T {
     #[stable(feature = "pointer_methods", since = "1.26.0")]
     #[must_use = "returns a new pointer rather than modifying its argument"]
     #[rustc_const_stable(feature = "const_ptr_offset", since = "1.61.0")]
+    #[allow(clippy::ptr_offset_with_cast)]
     #[inline(always)]
     pub const fn wrapping_add(self, count: usize) -> Self
     where
@@ -1145,7 +1127,7 @@ impl<T: PointeeSized> *const T {
     /// [`ptr::read`]: crate::ptr::read()
     #[stable(feature = "pointer_methods", since = "1.26.0")]
     #[rustc_const_stable(feature = "const_ptr_read", since = "1.71.0")]
-    #[inline]
+    #[inline(always)]
     #[track_caller]
     pub const unsafe fn read(self) -> T
     where
@@ -1166,9 +1148,10 @@ impl<T: PointeeSized> *const T {
     ///
     /// [`ptr::read_volatile`]: crate::ptr::read_volatile()
     #[stable(feature = "pointer_methods", since = "1.26.0")]
-    #[inline]
+    #[rustc_const_unstable(feature = "const_volatile", issue = "159094")]
+    #[inline(always)]
     #[track_caller]
-    pub unsafe fn read_volatile(self) -> T
+    pub const unsafe fn read_volatile(self) -> T
     where
         T: Sized,
     {
@@ -1186,7 +1169,7 @@ impl<T: PointeeSized> *const T {
     /// [`ptr::read_unaligned`]: crate::ptr::read_unaligned()
     #[stable(feature = "pointer_methods", since = "1.26.0")]
     #[rustc_const_stable(feature = "const_ptr_read", since = "1.71.0")]
-    #[inline]
+    #[inline(always)]
     #[track_caller]
     pub const unsafe fn read_unaligned(self) -> T
     where
@@ -1206,7 +1189,7 @@ impl<T: PointeeSized> *const T {
     /// [`ptr::copy`]: crate::ptr::copy()
     #[rustc_const_stable(feature = "const_intrinsic_copy", since = "1.83.0")]
     #[stable(feature = "pointer_methods", since = "1.26.0")]
-    #[inline]
+    #[inline(always)]
     #[track_caller]
     pub const unsafe fn copy_to(self, dest: *mut T, count: usize)
     where
@@ -1226,7 +1209,7 @@ impl<T: PointeeSized> *const T {
     /// [`ptr::copy_nonoverlapping`]: crate::ptr::copy_nonoverlapping()
     #[rustc_const_stable(feature = "const_intrinsic_copy", since = "1.83.0")]
     #[stable(feature = "pointer_methods", since = "1.26.0")]
-    #[inline]
+    #[inline(always)]
     #[track_caller]
     pub const unsafe fn copy_to_nonoverlapping(self, dest: *mut T, count: usize)
     where
@@ -1384,11 +1367,11 @@ impl<T> *const T {
     ///
     /// ```rust
     /// #![feature(ptr_cast_slice)]
+    ///
     /// // create a slice pointer when starting out with a pointer to the first element
     /// let x = [5, 6, 7];
-    /// let raw_pointer = x.as_ptr();
-    /// let slice = raw_pointer.cast_slice(3);
-    /// assert_eq!(unsafe { &*slice }[2], 7);
+    /// let raw_slice = x.as_ptr().cast_slice(3);
+    /// assert_eq!(unsafe { &*raw_slice }[2], 7);
     /// ```
     ///
     /// You must ensure that the pointer is valid and not null before dereferencing
@@ -1437,7 +1420,7 @@ impl<T> *const [T] {
     /// let slice: *const [i8] = ptr::slice_from_raw_parts(ptr::null(), 3);
     /// assert_eq!(slice.len(), 3);
     /// ```
-    #[inline]
+    #[inline(always)]
     #[stable(feature = "slice_ptr_len", since = "1.79.0")]
     #[rustc_const_stable(feature = "const_slice_ptr_len", since = "1.79.0")]
     pub const fn len(self) -> usize {
@@ -1474,7 +1457,7 @@ impl<T> *const [T] {
     /// let slice: *const [i8] = ptr::slice_from_raw_parts(ptr::null(), 3);
     /// assert_eq!(slice.as_ptr(), ptr::null());
     /// ```
-    #[inline]
+    #[inline(always)]
     #[unstable(feature = "slice_ptr_get", issue = "74265")]
     pub const fn as_ptr(self) -> *const T {
         self as *const T
@@ -1499,9 +1482,10 @@ impl<T> *const [T] {
     /// Returns a raw pointer to an element or subslice, without doing bounds
     /// checking.
     ///
-    /// Calling this method with an out-of-bounds index or when `self` is not dereferenceable
+    /// Calling this method with an [out-of-bounds index] or when `self` is not dereferenceable
     /// is *[undefined behavior]* even if the resulting pointer is not used.
     ///
+    /// [out-of-bounds index]: #method.add
     /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
     ///
     /// # Examples
@@ -1517,7 +1501,7 @@ impl<T> *const [T] {
     /// ```
     #[unstable(feature = "slice_ptr_get", issue = "74265")]
     #[rustc_const_unstable(feature = "const_index", issue = "143775")]
-    #[inline]
+    #[inline(always)]
     pub const unsafe fn get_unchecked<I>(self, index: I) -> *const I::Output
     where
         I: [const] SliceIndex<[T]>,
@@ -1562,7 +1546,7 @@ impl<T, const N: usize> *const [T; N] {
     /// let arr: *const [i8; 3] = ptr::null();
     /// assert_eq!(arr.as_ptr(), ptr::null());
     /// ```
-    #[inline]
+    #[inline(always)]
     #[unstable(feature = "array_ptr_get", issue = "119834")]
     pub const fn as_ptr(self) -> *const T {
         self as *const T
@@ -1593,7 +1577,7 @@ impl<T, const N: usize> *const [T; N] {
     note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
 )]
 impl<T: PointeeSized> PartialEq for *const T {
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn eq(&self, other: &*const T) -> bool {
         *self == *other
@@ -1635,31 +1619,31 @@ impl<T: PointeeSized> Ord for *const T {
     note = "see issue #53020 <https://github.com/rust-lang/rust/issues/53020> for more information"
 )]
 impl<T: PointeeSized> PartialOrd for *const T {
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn partial_cmp(&self, other: &*const T) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn lt(&self, other: &*const T) -> bool {
         *self < *other
     }
 
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn le(&self, other: &*const T) -> bool {
         *self <= *other
     }
 
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn gt(&self, other: &*const T) -> bool {
         *self > *other
     }
 
-    #[inline]
+    #[inline(always)]
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn ge(&self, other: &*const T) -> bool {
         *self >= *other

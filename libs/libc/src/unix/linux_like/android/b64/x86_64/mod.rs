@@ -3,8 +3,6 @@ use crate::prelude::*;
 
 pub type wchar_t = i32;
 pub type greg_t = i64;
-pub type __u64 = c_ulonglong;
-pub type __s64 = c_longlong;
 
 s! {
     pub struct stat {
@@ -151,7 +149,7 @@ s! {
         pub mxcr_mask: c_uint,
         pub st_space: [c_uint; 32],
         pub xmm_space: [c_uint; 64],
-        padding: [c_uint; 24],
+        padding: Padding<[c_uint; 24]>,
     }
 }
 

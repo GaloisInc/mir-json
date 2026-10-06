@@ -11,8 +11,6 @@ pub type nlink_t = u64;
 pub type blksize_t = i64;
 pub type greg_t = i64;
 pub type suseconds_t = i64;
-pub type __u64 = c_ulonglong;
-pub type __s64 = c_longlong;
 
 s! {
     // FIXME(1.0): This should not implement `PartialEq`
@@ -301,7 +299,7 @@ s! {
         pub mxcr_mask: c_uint,
         pub st_space: [c_uint; 32],
         pub xmm_space: [c_uint; 64],
-        padding: [c_uint; 24],
+        padding: Padding<[c_uint; 24]>,
     }
 
     pub struct ucontext_t {
@@ -512,7 +510,7 @@ pub const EPROTO: c_int = 71;
 pub const EDOTDOT: c_int = 73;
 
 pub const SA_NODEFER: c_int = 0x40000000;
-pub const SA_RESETHAND: c_int = 0x80000000;
+pub const SA_RESETHAND: c_int = u32_cast_int(0x80000000);
 pub const SA_RESTART: c_int = 0x10000000;
 pub const SA_NOCLDSTOP: c_int = 0x00000001;
 

@@ -2,8 +2,6 @@ use crate::off64_t;
 use crate::prelude::*;
 
 pub type wchar_t = u32;
-pub type __u64 = c_ulonglong;
-pub type __s64 = c_longlong;
 
 s! {
     pub struct stat {
@@ -78,7 +76,7 @@ s! {
     }
 
     pub struct user_fpsimd_struct {
-        pub vregs: [crate::__uint128_t; 32],
+        pub vregs: [u128; 32],
         pub fpsr: u32,
         pub fpcr: u32,
     }

@@ -265,16 +265,6 @@ impl CustomUnitGraph {
         }
     }
 
-    /// Get a mutable reference to an existing unit with the given crate name.
-    fn get_unit_mut(&mut self, crate_name: &CrateName) -> &mut CustomUnit {
-        self.units
-            .iter_mut()
-            .find(|u| u.target.is_target_lib_with_crate_name(crate_name))
-            .unwrap_or_else(|| {
-                panic!("library {} should be in unit graph", crate_name)
-            })
-    }
-
     /// Add a new unit and return a [UnitGraphDependency] referring to it.
     fn push_unit_as_dep(
         &mut self,
@@ -736,6 +726,7 @@ fn main() {
     let dep_core = custom_graph.get_unit_as_dep("core".into());
     let dep_compiler_builtins =
         custom_graph.get_unit_as_dep("compiler_builtins".into());
+    let dep_alloc = custom_graph.get_unit_as_dep("alloc".into());
     let dep_std = custom_graph.get_unit_as_dep("std".into());
 
     // Add crucible
@@ -756,14 +747,13 @@ fn main() {
             env: vec![],
             is_stdlib: false,
         },
-        vec![dep_compiler_builtins.clone(), dep_core.clone()],
+        vec![
+            dep_core.clone(),
+            dep_compiler_builtins.clone(),
+            dep_alloc.clone(),
+            dep_std.clone(),
+        ],
     );
-
-    // Add crucible as a dependency of alloc
-    custom_graph
-        .get_unit_mut(&"alloc".into())
-        .dependencies
-        .push(dep_crucible.clone());
 
     // Add int512
     custom_graph.push_unit_as_root(CustomUnit {
@@ -821,6 +811,11 @@ fn main() {
         }),
         dependencies: vec![dep_core, dep_std, dep_compiler_builtins],
     });
+
+    if generate_only {
+        println!("#!/bin/bash");
+        println!("set -euxo pipefail");
+    }
 
     // Create the necessary output directories.
     eprintln!("Setting up sysroot...");

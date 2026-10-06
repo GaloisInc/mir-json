@@ -12,7 +12,12 @@ use crate::mem::{self, DropGuard, ManuallyDrop};
 use crate::num::NonZero;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 use crate::sys::weak::dlsym;
-#[cfg(any(target_os = "solaris", target_os = "illumos", target_os = "nto",))]
+#[cfg(any(
+    target_os = "solaris",
+    target_os = "illumos",
+    target_os = "nto",
+    target_os = "qnx",
+))]
 use crate::sys::weak::weak;
 use crate::thread::ThreadInit;
 use crate::time::Duration;
@@ -155,6 +160,8 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
             target_os = "aix",
             target_vendor = "apple",
             target_os = "cygwin",
+            target_os = "redox",
+            target_os = "wasi",
         ) => {
             #[allow(unused_assignments)]
             #[allow(unused_mut)]
@@ -174,7 +181,7 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
                         // none was explicitly set.
                         // In that case we use the sysconf fallback.
                         if let Some(count) = NonZero::new(count) {
-                            return Ok(count)
+                            return Ok(count);
                         }
                     }
                 }
@@ -191,10 +198,10 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
             }
         }
         any(
-           target_os = "freebsd",
-           target_os = "dragonfly",
-           target_os = "openbsd",
-           target_os = "netbsd",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
         ) => {
             use crate::ptr;
 
@@ -208,7 +215,8 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
                         -1,
                         size_of::<libc::cpuset_t>(),
                         &mut set,
-                    ) == 0 {
+                    ) == 0
+                    {
                         let count = libc::CPU_COUNT(&set) as usize;
                         if count > 0 {
                             return Ok(NonZero::new_unchecked(count));
@@ -223,7 +231,12 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
                     let set = libc::_cpuset_create();
                     if !set.is_null() {
                         let mut count: usize = 0;
-                        if libc::pthread_getaffinity_np(libc::pthread_self(), libc::_cpuset_size(set), set) == 0 {
+                        if libc::pthread_getaffinity_np(
+                            libc::pthread_self(),
+                            libc::_cpuset_size(set),
+                            set,
+                        ) == 0
+                        {
                             for i in 0..libc::cpuid_t::MAX {
                                 match libc::_cpuset_isset(i, set) {
                                     -1 => break,
@@ -271,21 +284,26 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
 
             Ok(unsafe { NonZero::new_unchecked(cpus as usize) })
         }
-        target_os = "nto" => {
-            unsafe {
-                use libc::_syspage_ptr;
-                if _syspage_ptr.is_null() {
-                    Err(io::const_error!(io::ErrorKind::NotFound, "no syspage available"))
-                } else {
-                    let cpus = (*_syspage_ptr).num_cpu;
-                    NonZero::new(cpus as usize)
-                        .ok_or(io::Error::UNKNOWN_THREAD_COUNT)
-                }
+        any(target_os = "nto", target_os = "qnx") => unsafe {
+            use libc::_syspage_ptr;
+            if _syspage_ptr.is_null() {
+                Err(io::const_error!(io::ErrorKind::NotFound, "no syspage available"))
+            } else {
+                let cpus = (*_syspage_ptr).num_cpu;
+                NonZero::new(cpus as usize).ok_or(io::Error::UNKNOWN_THREAD_COUNT)
             }
-        }
+        },
         any(target_os = "solaris", target_os = "illumos") => {
             let mut cpus = 0u32;
-            if unsafe { libc::pset_info(libc::PS_MYID, core::ptr::null_mut(), &mut cpus, core::ptr::null_mut()) } != 0 {
+            if unsafe {
+                libc::pset_info(
+                    libc::PS_MYID,
+                    core::ptr::null_mut(),
+                    &mut cpus,
+                    core::ptr::null_mut(),
+                )
+            } != 0
+            {
                 return Err(io::Error::UNKNOWN_THREAD_COUNT);
             }
             Ok(unsafe { NonZero::new_unchecked(cpus as usize) })
@@ -309,14 +327,17 @@ pub fn available_parallelism() -> io::Result<NonZero<usize>> {
             // expectations than the actual cores availability.
 
             // SAFETY: `vxCpuEnabledGet` always fetches a mask with at least one bit set
-            unsafe{
+            unsafe {
                 let set = libc::vxCpuEnabledGet();
                 Ok(NonZero::new_unchecked(set.count_ones() as usize))
             }
         }
         _ => {
-            // FIXME: implement on Redox, l4re
-            Err(io::const_error!(io::ErrorKind::Unsupported, "getting the number of hardware threads is not supported on the target platform"))
+            // FIXME: implement on l4re
+            Err(io::const_error!(
+                io::ErrorKind::Unsupported,
+                "getting the number of hardware threads is not supported on the target platform"
+            ))
         }
     }
 }
@@ -334,13 +355,15 @@ pub fn current_os_id() -> Option<u64> {
 
             // `libc::gettid` is only available on glibc 2.30+, but the syscall is available
             // since Linux 2.4.11.
-            syscall!(fn gettid() -> libc::pid_t;);
+            syscall!(
+                fn gettid() -> libc::pid_t;
+            );
 
             // SAFETY: FFI call with no preconditions.
             let id: libc::pid_t = unsafe { gettid() };
             Some(id as u64)
         }
-        target_os = "nto" => {
+        any(target_os = "nto", target_os = "qnx") => {
             // SAFETY: FFI call with no preconditions.
             let id: libc::pid_t = unsafe { libc::gettid() };
             Some(id as u64)
@@ -371,11 +394,7 @@ pub fn current_os_id() -> Option<u64> {
             let mut id = 0u64;
             // SAFETY: `thread_id` is a valid pointer, no other preconditions.
             let status: libc::c_int = unsafe { libc::pthread_threadid_np(0, &mut id) };
-            if status == 0 {
-                Some(id)
-            } else {
-                None
-            }
+            if status == 0 { Some(id) } else { None }
         }
         // Other platforms don't have an OS thread ID or don't have a way to access it.
         _ => None,
@@ -385,11 +404,13 @@ pub fn current_os_id() -> Option<u64> {
 #[cfg(any(
     target_os = "linux",
     target_os = "nto",
+    target_os = "qnx",
     target_os = "solaris",
     target_os = "illumos",
     target_os = "vxworks",
     target_os = "cygwin",
     target_vendor = "apple",
+    target_os = "netbsd",
 ))]
 fn truncate_cstr<const MAX_WITH_NUL: usize>(cstr: &CStr) -> [libc::c_char; MAX_WITH_NUL] {
     let mut result = [0; MAX_WITH_NUL];
@@ -461,7 +482,12 @@ pub fn set_name(name: &CStr) {
 
 #[cfg(target_os = "netbsd")]
 pub fn set_name(name: &CStr) {
+    // See https://github.com/NetBSD/src/blob/8d40872b4c550a802379f3b9c22a40212d5e149d/lib/libpthread/pthread.h#L281
+    // FIXME: move to libc.
+    const PTHREAD_MAX_NAMELEN_NP: usize = 32;
+
     unsafe {
+        let name = truncate_cstr::<{ PTHREAD_MAX_NAMELEN_NP }>(name);
         let res = libc::pthread_setname_np(
             libc::pthread_self(),
             c"%s".as_ptr(),
@@ -471,14 +497,14 @@ pub fn set_name(name: &CStr) {
     }
 }
 
-#[cfg(any(target_os = "solaris", target_os = "illumos", target_os = "nto"))]
+#[cfg(any(target_os = "solaris", target_os = "illumos", target_os = "nto", target_os = "qnx"))]
 pub fn set_name(name: &CStr) {
     weak!(
         fn pthread_setname_np(thread: libc::pthread_t, name: *const libc::c_char) -> libc::c_int;
     );
 
     if let Some(f) = pthread_setname_np.get() {
-        #[cfg(target_os = "nto")]
+        #[cfg(any(target_os = "nto", target_os = "qnx"))]
         const THREAD_NAME_MAX: usize = libc::_NTO_THREAD_NAME_MAX as usize;
         #[cfg(any(target_os = "solaris", target_os = "illumos"))]
         const THREAD_NAME_MAX: usize = 32;
@@ -549,12 +575,18 @@ pub fn sleep(dur: Duration) {
             // wasi-libc prior to WebAssembly/wasi-libc#696 has a broken implementation
             // of `nanosleep` which used `CLOCK_REALTIME` even though it is unsupported
             // on WASIp2. Using `clock_nanosleep` directly bypasses the issue.
-            unsafe fn nanosleep(rqtp: *const libc::timespec, rmtp: *mut libc::timespec) -> libc::c_int {
+            unsafe fn nanosleep(
+                rqtp: *const libc::timespec,
+                rmtp: *mut libc::timespec,
+            ) -> libc::c_int {
                 unsafe { libc::clock_nanosleep(crate::sys::time::Instant::CLOCK_ID, 0, rqtp, rmtp) }
             }
         }
         _ => {
-            unsafe fn nanosleep(rqtp: *const libc::timespec, rmtp: *mut libc::timespec) -> libc::c_int {
+            unsafe fn nanosleep(
+                rqtp: *const libc::timespec,
+                rmtp: *mut libc::timespec,
+            ) -> libc::c_int {
                 let r = unsafe { libc::nanosleep(rqtp, rmtp) };
                 // `clock_nanosleep` returns the error number directly, so mimic
                 // that behaviour to make the shared code below simpler.
@@ -570,10 +602,10 @@ pub fn sleep(dur: Duration) {
     // nanosleep will fill in `ts` with the remaining time.
     unsafe {
         while secs > 0 || nsecs > 0 {
-            let mut ts = libc::timespec {
-                tv_sec: cmp::min(libc::time_t::MAX as u64, secs) as libc::time_t,
-                tv_nsec: nsecs,
-            };
+            let mut ts = libc::timespec::default();
+            ts.tv_sec = cmp::min(libc::time_t::MAX as u64, secs) as libc::time_t;
+            ts.tv_nsec = nsecs;
+
             secs -= ts.tv_sec as u64;
             let ts_ptr = &raw mut ts;
             let r = nanosleep(ts_ptr, ts_ptr);
@@ -641,6 +673,16 @@ pub fn sleep_until(deadline: crate::time::Instant) {
     let now = crate::time::Instant::now();
     if let Some(delay) = deadline.checked_duration_since(now) {
         sleep(delay);
+    }
+}
+
+#[cfg(target_os = "fuchsia")]
+pub fn sleep_until(deadline: crate::time::Instant) {
+    use crate::sys::pal::fuchsia::{zx_cvt, zx_nanosleep};
+
+    let deadline = deadline.into_inner().into_deadline();
+    if let Err(error) = zx_cvt(zx_nanosleep(deadline)) {
+        panic!("zx_nanosleep failed: {error}");
     }
 }
 

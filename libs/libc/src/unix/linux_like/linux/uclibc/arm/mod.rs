@@ -2,7 +2,6 @@ use crate::off64_t;
 use crate::prelude::*;
 
 pub type wchar_t = c_uint;
-pub type time_t = c_long;
 
 pub type clock_t = c_long;
 pub type fsblkcnt_t = c_ulong;
@@ -10,7 +9,6 @@ pub type fsfilcnt_t = c_ulong;
 pub type ino_t = c_ulong;
 pub type off_t = c_long;
 pub type pthread_t = c_ulong;
-pub type suseconds_t = c_long;
 
 pub type nlink_t = c_uint;
 pub type blksize_t = c_long;
@@ -18,8 +16,6 @@ pub type blkcnt_t = c_long;
 
 pub type fsblkcnt64_t = u64;
 pub type fsfilcnt64_t = u64;
-pub type __u64 = c_ulonglong;
-pub type __s64 = c_longlong;
 
 s! {
     pub struct cmsghdr {
@@ -153,7 +149,7 @@ s! {
         pub f_ffree: u64,
         pub f_favail: u64,
         pub f_fsid: c_ulong,
-        __f_unused: c_int,
+        __f_unused: Padding<c_int>,
         pub f_flag: c_ulong,
         pub f_namemax: c_ulong,
         __f_spare: [c_int; 6],
