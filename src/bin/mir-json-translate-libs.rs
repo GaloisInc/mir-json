@@ -265,17 +265,6 @@ impl CustomUnitGraph {
         }
     }
 
-    /// Get a mutable reference to an existing unit with the given crate name.
-    #[expect(dead_code)]
-    fn get_unit_mut(&mut self, crate_name: &CrateName) -> &mut CustomUnit {
-        self.units
-            .iter_mut()
-            .find(|u| u.target.is_target_lib_with_crate_name(crate_name))
-            .unwrap_or_else(|| {
-                panic!("library {} should be in unit graph", crate_name)
-            })
-    }
-
     /// Add a new unit and return a [UnitGraphDependency] referring to it.
     fn push_unit_as_dep(
         &mut self,
