@@ -20,6 +20,12 @@ when the next Rust toolchain upgrade is performed, the update can be folded
 into the main commit for that patch, and then the *Update* line can be removed.
 
 
+* Add references to `{core,alloc}::crucible` modules (last applied: October 5, 2026)
+
+  After adding Crucible-specific definitions in `core/src/crucible/` and
+  `alloc/src/crucible/`, we need to add `mod crucible;` to the corresponding
+  `lib.rs` files.
+
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: September 17, 2026)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
