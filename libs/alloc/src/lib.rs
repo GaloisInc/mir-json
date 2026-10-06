@@ -276,6 +276,3 @@ pub mod __export {
     pub use core::format_args;
     pub use core::hint::must_use;
 }
-
-#[unstable(feature = "crucible_intrinsics", issue = "none")]
-pub mod crucible;
