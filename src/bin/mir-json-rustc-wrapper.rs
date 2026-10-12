@@ -51,6 +51,10 @@ struct GetOutputPathCallbacks {
 impl rustc_driver::Callbacks for GetOutputPathCallbacks {
     fn config(&mut self, config: &mut Config) {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
+        // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may
+        // be visible. Even the limited amount of compilation we do will fail
+        // unless we register the `crux` tool beforehand.
+        analyz::register_crux_tool(&mut config.override_queries);
     }
 
     fn after_crate_root_parsing(
@@ -58,10 +62,6 @@ impl rustc_driver::Callbacks for GetOutputPathCallbacks {
         compiler: &Compiler,
         krate: &mut Crate,
     ) -> Compilation {
-        // This phase runs with `--cfg crux`, so some `#[crux::test]` attrs may be visible.  Even
-        // the limited amount of compilation we do will fail without the injected `register_attr`.
-        analyz::inject_attrs(krate);
-
         let sess = &compiler.sess;
         self.crate_name = Some(rustc_interface::passes::get_crate_name(sess, &krate.attrs));
         self.outputs = Some(rustc_interface::util::build_output_filenames(&krate.attrs, sess));
@@ -128,7 +128,6 @@ fn scrub_externs(externs: &mut Externs, use_override_crates: &HashSet<String>) {
     *externs = new_externs;
 }
 
-
 #[derive(Debug, Default)]
 struct MirJsonCallbacks {
     analysis_data: Option<analyz::AnalysisData<()>>,
@@ -139,15 +138,7 @@ struct MirJsonCallbacks {
 impl rustc_driver::Callbacks for MirJsonCallbacks {
     fn config(&mut self, config: &mut Config) {
         scrub_externs(&mut config.opts.externs, &self.use_override_crates);
-    }
-
-    fn after_crate_root_parsing(
-        &mut self,
-        _compiler: &Compiler,
-        krate: &mut Crate,
-    ) -> Compilation {
-        analyz::inject_attrs(krate);
-        Compilation::Continue
+        analyz::register_crux_tool(&mut config.override_queries);
     }
 
     fn after_analysis<'tcx>(

@@ -1,23 +1,23 @@
 #![macro_use]
 
-use rustc_ast::{ast, token, tokenstream, Crate};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_index::Idx;
 use rustc_middle::ty::{self, TyCtxt, List};
 use rustc_middle::mir::{self, Body};
 use rustc_middle::mir::mono::MonoItem;
 use rustc_session;
+use rustc_session::Session;
 use rustc_session::config::{OutputType, OutFileName};
-use rustc_span::Span;
-use rustc_span::symbol::{Symbol, Ident};
+use rustc_session::lint::RegisteredTools;
+use rustc_span::{DUMMY_SP, Ident, Span};
+use rustc_span::symbol::Symbol;
 use rustc_abi::{self, ExternAbi};
 use std::collections::{HashSet};
 use std::fmt::Write as FmtWrite;
 use std::io;
-use std::iter;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use serde_json;
 use serde_cbor;
 
@@ -1521,38 +1521,52 @@ pub fn analyze_streaming<'tcx>(
 pub use self::analyze_streaming as analyze;
 pub use analyz::to_json::ExportStyle;
 
-fn make_attr(key: &str, value: &str) -> ast::Attribute {
-    ast::Attribute {
-        kind: ast::AttrKind::Normal(
-            Box::new(ast::NormalAttr {
-                item: ast::AttrItem {
-                    unsafety: ast::Safety::Default,
-                    path: ast::Path::from_ident(Ident::from_str(key)),
-                    args: ast::AttrItemKind::Unparsed(ast::AttrArgs::Delimited(
-                        ast::DelimArgs {
-                            dspan: tokenstream::DelimSpan::dummy(),
-                            delim: token::Delimiter::Parenthesis,
-                            tokens: iter::once(
-                                tokenstream::TokenTree::token_alone(
-                                    token::TokenKind::Ident(
-                                        Symbol::intern(value),
-                                        token::IdentIsRaw::No,
-                                    ),
-                                    Span::default(),
-                                ),
-                            ).collect(),
-                        })),
-                    tokens: None,
-                },
-                tokens: None,
-            })),
-        id: ast::AttrId::new(0),
-        style: ast::AttrStyle::Inner,
-        span: Span::default(),
-    }
-}
+/// Register the `crux` tool so that mir-json can recognize `crux::test`
+/// attributes in Rust code. Normally, one would register a tool by passing
+/// something akin to
+/// `-Zcrate-attr=feature(register_tool) -Zcrate-attr=register_tool(crux)` in
+/// each `rustc` invocation. This approach has the notable downside that this
+/// uses an unstable Rust feature, which means that `mir-json` would be unable
+/// to compile any code that denies the use of unstable features (e.g., using
+/// `#![forbid(unstable_features)]`).
+///
+/// As a workaround, we register a tool in a more roundabout way by overriding
+/// the appropriate query provider, which doesn't require anything that Rust
+/// considers to be an unstable feature.
+pub fn register_crux_tool(
+    override_queries: &mut Option<fn(&Session, &mut rustc_middle::util::Providers)>,
+) {
+    fn new_override_queries(
+        _sess: &Session,
+        providers: &mut rustc_middle::util::Providers,
+    ) {
+        // Ideally, we would just call the function underlying the default
+        // implementation of `registered_tools` directly within the custom
+        // implementation of `registered_tools` below. Unfortunately, the rustc
+        // API doesn't export the default implementation as part of the public
+        // API. Moreover, `registered_tools` has a `fn` type (i.e., a function
+        // pointer type). This means that we can't close over any local
+        // variables in its definition, since a closure can't be coerced to a
+        // function pointer.
+        //
+        // We work around both issues by digging into the `providers` (which
+        // contains the default implementation of `registered_tools`), storing
+        // the default implementation in a `static` (to permit referencing the
+        // `static` from within the custom implementation without closing over
+        // any local variables), and then calling the default implementation
+        // from within the custom one. It's clunky, but it works.
+        static DEFAULT_REGISTERED_TOOLS: OnceLock<for<'tcx> fn(TyCtxt<'tcx>, ()) -> RegisteredTools> =
+            OnceLock::new();
+        let _ = DEFAULT_REGISTERED_TOOLS.set(providers.queries.registered_tools);
 
-pub fn inject_attrs<'tcx>(krate: &mut Crate) {
-    krate.attrs.push(make_attr("feature", "register_tool"));
-    krate.attrs.push(make_attr("register_tool", "crux"));
+        providers.queries.registered_tools = |tcx, ()| {
+            // Use the default implementation to retrieve the normal set of
+            // registered tools and then insert `crux` into that set.
+            let mut registered_tools = (DEFAULT_REGISTERED_TOOLS.get().unwrap())(tcx, ());
+            registered_tools.insert(Ident::from_str_and_span("crux", DUMMY_SP));
+            registered_tools
+        };
+    }
+
+    *override_queries = Some(new_override_queries);
 }
