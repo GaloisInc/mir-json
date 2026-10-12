@@ -1316,15 +1316,15 @@ pub struct AnalysisData<O> {
 /*
 Note [CrateDepKind::MacrosOnly]
 ~~~~~~~~~~~~~~~~~~~~~
-In what follows, we store the crate dependencies of the current crate for later linker 
+In what follows, we store the crate dependencies of the current crate for later linker
 related validation and exclude crates flagged as CrateDepKind::MacrosOnly.
-The CrateDepKind enum has some misleading documentation about what is considered a 
+The CrateDepKind enum has some misleading documentation about what is considered a
 CrateDepKind::MacrosOnly crate. The documentation says:
 
     "A dependency that is only used for its macros."
 
 This is actually slightly inaccurate. CrateDepKind::MacrosOnly is dedicated to proc_macro crates,
-rather than other crates where the user only imports macros, those being flagged as CrateDepKind::Unconditional. 
+rather than other crates where the user only imports macros, those being flagged as CrateDepKind::Unconditional.
 
 In order to test this, we created a crate called hello_world that looked like this:
 
@@ -1411,7 +1411,7 @@ fn analyze_inner<'tcx, O: JsonOutput, F: FnOnce(&Path) -> io::Result<O>>(
     for &cnum in tcx.crates(()) {
         // Exclude proc_macro crates from the hashset of dependencies.
         // See Note [CrateDepKind::MacrosOnly].
-        if !tcx.crate_dep_kind(cnum).macros_only() {        
+        if !tcx.crate_dep_kind(cnum).macros_only() {
             dep_hashes.insert(UniqueCrateId::new(tcx, cnum));
         }
 
