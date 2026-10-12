@@ -14,9 +14,8 @@ extern crate mir_json;
 
 use mir_json::analyz;
 use mir_json::version;
-use rustc_ast::Crate;
 use rustc_driver::Compilation;
-use rustc_interface::interface::Compiler;
+use rustc_interface::interface::{Compiler, Config};
 use rustc_middle::ty::TyCtxt;
 use std::env;
 
@@ -25,13 +24,8 @@ struct MirJsonCallbacks {
 }
 
 impl rustc_driver::Callbacks for MirJsonCallbacks {
-    fn after_crate_root_parsing(
-        &mut self,
-        _compiler: &Compiler,
-        krate: &mut Crate,
-    ) -> Compilation {
-        analyz::inject_attrs(krate);
-        Compilation::Continue
+    fn config(&mut self, config: &mut Config) {
+        analyz::register_crux_tool(&mut config.override_queries);
     }
 
     /// Called after analysis. Return value instructs the compiler whether to
