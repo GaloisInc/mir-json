@@ -1418,8 +1418,16 @@ pub fn try_render_opty<'tcx>(
 
         // `Foreign` probably can't occur here, since it's unsized
         ty::TyKind::Foreign(_) => return Err(RenderErr::Unsupported),
-        
-        ty::TyKind::Str => unreachable!("str type should not occur here"),
+
+        // The three cases below won't be reachable most of the time, as they
+        // are unsized. It is possible to encounter them when translating a
+        // constant, custom DST, however. We do not yet have a good story for
+        // handling these in the constant-evaluation machinery, so we currently
+        // leave these as unsupported.
+        // See https://github.com/GaloisInc/mir-json/issues/210.
+        ty::TyKind::Str => return Err(RenderErr::Unsupported),
+        ty::TyKind::Slice(_) => return Err(RenderErr::Unsupported),
+        ty::TyKind::Dynamic(_, _) => return Err(RenderErr::Unsupported),
 
         ty::TyKind::Array(ety, sz) => {
             let sz = get_const_usize(tcx, sz);
@@ -1437,7 +1445,6 @@ pub fn try_render_opty<'tcx>(
             })
 
         }
-        ty::TyKind::Slice(_) => unreachable!("slice type should not occur here"),
 
         // similar to ref in some ways
         ty::TyKind::RawPtr(_, mutability) =>
@@ -1477,10 +1484,9 @@ pub fn try_render_opty<'tcx>(
                 },
 
                 // Function pointer doesn't point to a function
-                _ => return Err(RenderErr::Unsupported) 
+                _ => return Err(RenderErr::Unsupported)
             }
         }
-        ty::TyKind::Dynamic(_, _) => unreachable!("dynamic should not occur here"),
 
         ty::TyKind::Closure(_defid, args) => {
             let upvars_count = args.as_closure().upvar_tys().len();
@@ -1754,8 +1760,18 @@ fn try_render_ref_opty<'tcx>(
             return Err(RenderErr::Mismatch)
     };
 
-    // TODO(#241): Lift this restriction.
-    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
+    // Constant references with non-zero offsets are not currently supported.
+    // See https://github.com/GaloisInc/mir-json/issues/241.
+    if d_offset != Size::ZERO {
+        return Ok(json!({
+            "kind": "unsupported",
+            "debug_val": format!(
+                "type: {:?}; offset: {:?}",
+                op_ty,
+                d_offset.bytes(),
+            ),
+        }))
+    }
 
     if !is_mut {
         fn do_slice<'tcx>(
