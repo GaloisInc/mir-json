@@ -1754,8 +1754,18 @@ fn try_render_ref_opty<'tcx>(
             return Err(RenderErr::Mismatch)
     };
 
-    // TODO(#241): Lift this restriction.
-    assert!(d_offset == Size::ZERO, "cannot handle nonzero reference offsets");
+    // Constant references with non-zero offsets are not currently supported.
+    // See https://github.com/GaloisInc/mir-json/issues/241.
+    if d_offset != Size::ZERO {
+        return Ok(json!({
+            "kind": "unsupported",
+            "debug_val": format!(
+                "type: {:?}; offset: {:?}",
+                op_ty,
+                d_offset.bytes(),
+            ),
+        }))
+    }
 
     if !is_mut {
         fn do_slice<'tcx>(
