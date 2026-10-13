@@ -301,7 +301,7 @@ EOM
     esac
 }
 
-SCRIPT_FILE=$0
+SCRIPT_FILE=$(realpath "$0")
 
 while (( "$#" )); do
     case "$1" in
