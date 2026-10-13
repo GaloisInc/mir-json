@@ -1418,7 +1418,7 @@ pub fn try_render_opty<'tcx>(
 
         // `Foreign` probably can't occur here, since it's unsized
         ty::TyKind::Foreign(_) => return Err(RenderErr::Unsupported),
-        
+
         ty::TyKind::Str => unreachable!("str type should not occur here"),
 
         ty::TyKind::Array(ety, sz) => {
@@ -1477,7 +1477,7 @@ pub fn try_render_opty<'tcx>(
                 },
 
                 // Function pointer doesn't point to a function
-                _ => return Err(RenderErr::Unsupported) 
+                _ => return Err(RenderErr::Unsupported)
             }
         }
         ty::TyKind::Dynamic(_, _) => unreachable!("dynamic should not occur here"),
