@@ -325,6 +325,8 @@
     `mir-json` branch. Commit the changes.
 
     In `saw-script`, bump the schema version in `CHANGES.md` and `README.md`.
+    Check `doc/developer/schema-bump.md` for other places you might need to
+    adjust.
     Mention the new supported Rust version in `CHANGES.md`. Update the
     `deps/mir-json` and `deps/crucible` submodules to your latest `mir-json` and
     `crucible` commits respectively. Commit the changes. (If you already updated
@@ -334,15 +336,8 @@
 14. Update `saw-script` test cases for the new schema version.
 
     Make sure you've installed the most updated version of `mir-json` from your
-    branch. In the `saw-script` repo, run `make regen-mir-blobs` in `intTests/`
-    and in `saw-python/tests/saw/test-files/` to re-run `mir-json` and produce
-    JSON files with the new schema version. Also update the alphanumeric
-    identifier disambiguators in
-    [`intTests/test_mir_verify_basic/test.saw`](https://github.com/GaloisInc/saw-script/blob/c49bd9b64c701663bdaab87b42b8bb8e51eec3cc/intTests/test_mir_verify_basic/test.saw#L75-L77)
-    and
-    [`intTests/test2122_typecheck_gap/mir.log.good`](https://github.com/GaloisInc/saw-script/blob/909178acf05c9dd38e643a36cf640670b0ba2ea7/intTests/test2122_typecheck_gap/mir.log.good#L2-L3),
-    which will likely have changed (see
-    [saw-script#2614](https://github.com/GaloisInc/saw-script/issues/2614)).
+    branch, and follow the directions in `doc/developer/schema-bump.md` in
+    the `saw-script` repository.
 
 15. Create pull requests.
 
