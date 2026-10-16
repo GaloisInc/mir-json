@@ -39,10 +39,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   active.  This specifically affects `array::from_fn` and
   `Iterator::next_chunk`.
 
-* Use `crucible_array_from_ref_hook` in `core::array::from_ref` (last applied: June 9, 2026)
-
-  The actual implementation uses a pointer cast that Crucible can't handle.
-
 * Avoid `transmute` in `Layout` and `Alignment` (last applied: June 9, 2026)
 
   `Alignment::new_unchecked` uses `transmute` to convert an integer to an enum
@@ -173,10 +169,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   This switches back to an older upstream implementation that goes through
   `core::ptr::without_provenance`, which uses an int-to-pointer transmute
   instead.
-
-* Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
-
-  The actual implementations use pointer casts that Crucible can't handle.
 
 * Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: June 10, 2026)
 
