@@ -170,10 +170,6 @@ into the main commit for that patch, and then the *Update* line can be removed.
   `core::ptr::without_provenance`, which uses an int-to-pointer transmute
   instead.
 
-* Use hooks in `core::slice::from_ref` and `from_mut` (last applied: June 10, 2026)
-
-  The actual implementations use pointer casts that Crucible can't handle.
-
 * Remove `*T` to `*[T; N]` cast in `[T; N]::try_from(Vec<T, A>)` (last applied: June 10, 2026)
 
   Crucible does not currently support pointer casts from single elements to
