@@ -2,11 +2,11 @@ use crate::prelude::*;
 
 pub type wchar_t = i32;
 
-pub type blkcnt_t = c_ulong;
+pub type blkcnt_t = c_longlong;
 pub type blksize_t = c_long;
 pub type clock_t = c_long;
 pub type clockid_t = c_int;
-pub type dev_t = c_long;
+pub type dev_t = c_ulonglong;
 pub type fsblkcnt_t = c_ulong;
 pub type fsfilcnt_t = c_ulong;
 pub type ino_t = c_ulonglong;
@@ -32,7 +32,7 @@ pub type uid_t = c_int;
 pub type gid_t = c_int;
 
 extern_ty! {
-    pub enum timezone {}
+    pub type timezone;
 }
 
 s! {
@@ -61,7 +61,7 @@ s! {
 
     pub struct sockaddr_storage {
         pub ss_family: crate::sa_family_t,
-        __ss_padding: [u8; 128 - size_of::<sa_family_t>() - size_of::<c_ulong>()],
+        __ss_padding: Padding<[u8; 128 - size_of::<sa_family_t>() - size_of::<c_ulong>()]>,
         __ss_align: c_ulong,
     }
 
@@ -153,7 +153,7 @@ s! {
     #[allow(unpredictable_function_pointer_comparisons)]
     pub struct sigaction {
         pub sa_sigaction: crate::sighandler_t,
-        pub sa_flags: c_ulong,
+        pub sa_flags: c_int,
         pub sa_restorer: Option<extern "C" fn()>,
         pub sa_mask: crate::sigset_t,
     }
@@ -333,6 +333,8 @@ cfg_if! {
 }
 
 // limits.h
+/// Constants may change across releases. See the [usage guidelines](crate#usage-guidelines)
+/// for details.
 pub const PATH_MAX: c_int = 4096;
 
 // fcntl.h
@@ -345,6 +347,11 @@ pub const F_TLOCK: c_int = 2;
 pub const F_TEST: c_int = 3;
 
 pub const AT_FDCWD: c_int = -100;
+pub const AT_SYMLINK_NOFOLLOW: c_int = 0x200;
+pub const AT_REMOVEDIR: c_int = 0x200;
+pub const AT_SYMLINK_FOLLOW: c_int = 0x2000;
+pub const AT_EMPTY_PATH: c_int = 0x4000;
+pub const AT_EACCESS: c_int = 0x400;
 
 // FIXME(redox): relibc {
 pub const RTLD_DEFAULT: *mut c_void = ptr::null_mut();
@@ -353,6 +360,7 @@ pub const RTLD_DEFAULT: *mut c_void = ptr::null_mut();
 // dlfcn.h
 pub const RTLD_LAZY: c_int = 0x0001;
 pub const RTLD_NOW: c_int = 0x0002;
+pub const RTLD_NOLOAD: c_int = 0x0004;
 pub const RTLD_GLOBAL: c_int = 0x0100;
 pub const RTLD_LOCAL: c_int = 0x0000;
 
@@ -502,9 +510,7 @@ pub const F_GETFD: c_int = 1;
 pub const F_SETFD: c_int = 2;
 pub const F_GETFL: c_int = 3;
 pub const F_SETFL: c_int = 4;
-// FIXME(redox): relibc {
-pub const F_DUPFD_CLOEXEC: c_int = crate::F_DUPFD;
-// }
+pub const F_DUPFD_CLOEXEC: c_int = 1030;
 pub const FD_CLOEXEC: c_int = 0x0100_0000;
 pub const O_RDONLY: c_int = 0x0001_0000;
 pub const O_WRONLY: c_int = 0x0002_0000;
@@ -517,6 +523,7 @@ pub const O_SHLOCK: c_int = 0x0010_0000;
 pub const O_EXLOCK: c_int = 0x0020_0000;
 pub const O_ASYNC: c_int = 0x0040_0000;
 pub const O_FSYNC: c_int = 0x0080_0000;
+pub const O_SYNC: c_int = O_FSYNC;
 pub const O_CLOEXEC: c_int = 0x0100_0000;
 pub const O_CREAT: c_int = 0x0200_0000;
 pub const O_TRUNC: c_int = 0x0400_0000;
@@ -530,13 +537,13 @@ pub const O_NOFOLLOW: c_int = -0x8000_0000;
 pub const O_NOCTTY: c_int = 0x00000200;
 
 // locale.h
-pub const LC_ALL: c_int = 0;
-pub const LC_COLLATE: c_int = 1;
-pub const LC_CTYPE: c_int = 2;
-pub const LC_MESSAGES: c_int = 3;
-pub const LC_MONETARY: c_int = 4;
-pub const LC_NUMERIC: c_int = 5;
-pub const LC_TIME: c_int = 6;
+pub const LC_COLLATE: c_int = 0;
+pub const LC_CTYPE: c_int = 1;
+pub const LC_MESSAGES: c_int = 2;
+pub const LC_MONETARY: c_int = 3;
+pub const LC_NUMERIC: c_int = 4;
+pub const LC_TIME: c_int = 5;
+pub const LC_ALL: c_int = 6;
 
 // netdb.h
 pub const AI_PASSIVE: c_int = 0x0001;
@@ -574,7 +581,9 @@ pub const IPV6_MULTICAST_IF: c_int = 17;
 pub const IPV6_MULTICAST_HOPS: c_int = 18;
 pub const IPV6_MULTICAST_LOOP: c_int = 19;
 pub const IPV6_ADD_MEMBERSHIP: c_int = 20;
+pub const IPV6_JOIN_GROUP: c_int = 20;
 pub const IPV6_DROP_MEMBERSHIP: c_int = 21;
+pub const IPV6_LEAVE_GROUP: c_int = 21;
 pub const IPV6_V6ONLY: c_int = 26;
 pub const IP_MULTICAST_IF: c_int = 32;
 pub const IP_MULTICAST_TTL: c_int = 33;
@@ -582,7 +591,7 @@ pub const IP_MULTICAST_LOOP: c_int = 34;
 pub const IP_ADD_MEMBERSHIP: c_int = 35;
 pub const IP_DROP_MEMBERSHIP: c_int = 36;
 pub const IP_TOS: c_int = 1;
-pub const IP_RECVTOS: c_int = 2;
+pub const IP_RECVTOS: c_int = 13;
 pub const IPPROTO_IGMP: c_int = 2;
 pub const IPPROTO_PUP: c_int = 12;
 pub const IPPROTO_IDP: c_int = 22;
@@ -592,9 +601,10 @@ pub const IPPROTO_MAX: c_int = 255;
 
 // netinet/tcp.h
 pub const TCP_NODELAY: c_int = 1;
-// FIXME(redox): relibc {
-pub const TCP_KEEPIDLE: c_int = 1;
-// }
+pub const TCP_MAXSEG: c_int = 2;
+pub const TCP_KEEPIDLE: c_int = 4;
+pub const TCP_KEEPINTVL: c_int = 5;
+pub const TCP_KEEPCNT: c_int = 6;
 
 // poll.h
 pub const POLLIN: c_short = 0x001;
@@ -609,8 +619,14 @@ pub const POLLWRNORM: c_short = 0x100;
 pub const POLLWRBAND: c_short = 0x200;
 
 // pthread.h
-pub const PTHREAD_MUTEX_NORMAL: c_int = 0;
-pub const PTHREAD_MUTEX_RECURSIVE: c_int = 1;
+pub const PTHREAD_MUTEX_DEFAULT: c_int = 0;
+pub const PTHREAD_MUTEX_ERRORCHECK: c_int = 1;
+pub const PTHREAD_MUTEX_NORMAL: c_int = 2;
+pub const PTHREAD_MUTEX_RECURSIVE: c_int = 3;
+
+pub const PTHREAD_MUTEX_ROBUST: c_int = 0;
+pub const PTHREAD_MUTEX_STALLED: c_int = 1;
+
 pub const PTHREAD_MUTEX_INITIALIZER: crate::pthread_mutex_t = crate::pthread_mutex_t {
     bytes: [0; _PTHREAD_MUTEX_SIZE],
 };
@@ -659,14 +675,14 @@ pub const SIGPWR: c_int = 30;
 pub const SIGSYS: c_int = 31;
 pub const NSIG: c_int = 32;
 
-pub const SA_NOCLDWAIT: c_ulong = 0x0000_0002;
-pub const SA_RESTORER: c_ulong = 0x0000_0004; // FIXME(redox): remove after relibc removes it
-pub const SA_SIGINFO: c_ulong = 0x0200_0000;
-pub const SA_ONSTACK: c_ulong = 0x0400_0000;
-pub const SA_RESTART: c_ulong = 0x0800_0000;
-pub const SA_NODEFER: c_ulong = 0x1000_0000;
-pub const SA_RESETHAND: c_ulong = 0x2000_0000;
-pub const SA_NOCLDSTOP: c_ulong = 0x4000_0000;
+pub const SA_NOCLDWAIT: c_int = 0x0000_0002;
+pub const SA_RESTORER: c_int = 0x0000_0004; // FIXME(redox): remove after relibc removes it
+pub const SA_SIGINFO: c_int = 0x0200_0000;
+pub const SA_ONSTACK: c_int = 0x0400_0000;
+pub const SA_RESTART: c_int = 0x0800_0000;
+pub const SA_NODEFER: c_int = 0x1000_0000;
+pub const SA_RESETHAND: c_int = 0x2000_0000;
+pub const SA_NOCLDSTOP: c_int = 0x4000_0000;
 
 // sys/file.h
 pub const LOCK_SH: c_int = 1;
@@ -717,6 +733,8 @@ pub const S_IRWXO: c_int = 0o0007;
 pub const S_IROTH: c_int = 0o0004;
 pub const S_IWOTH: c_int = 0o0002;
 pub const S_IXOTH: c_int = 0o0001;
+pub const UTIME_NOW: c_long = u32_cast_long(0xffffffff);
+pub const UTIME_OMIT: c_long = u32_cast_long(0xfffffffe);
 
 // stdlib.h
 pub const EXIT_SUCCESS: c_int = 0;
@@ -970,8 +988,7 @@ pub const WNOWAIT: c_int = 0x0100_0000;
 
 pub const __WNOTHREAD: c_int = 0x2000_0000;
 pub const __WALL: c_int = 0x4000_0000;
-#[allow(overflowing_literals)]
-pub const __WCLONE: c_int = 0x8000_0000;
+pub const __WCLONE: c_int = u32_cast_int(0x8000_0000);
 
 // time.h
 pub const CLOCK_REALTIME: c_int = 1;
@@ -1090,77 +1107,102 @@ pub const PRIO_PROCESS: c_int = 0;
 pub const PRIO_PGRP: c_int = 1;
 pub const PRIO_USER: c_int = 2;
 
+pub const RENAME_NOREPLACE: c_uint = 1;
+
 f! {
     //sys/socket.h
-    pub const fn CMSG_ALIGN(len: size_t) -> size_t {
+    pub const unsafe fn CMSG_ALIGN(len: size_t) -> size_t {
         (len + size_of::<size_t>() - 1) & !(size_of::<size_t>() - 1)
     }
-    pub const fn CMSG_LEN(length: c_uint) -> c_uint {
+    pub const unsafe fn CMSG_LEN(length: c_uint) -> c_uint {
         (CMSG_ALIGN(size_of::<cmsghdr>()) + length as usize) as c_uint
     }
-    pub const fn CMSG_SPACE(len: c_uint) -> c_uint {
+    pub const unsafe fn CMSG_SPACE(len: c_uint) -> c_uint {
         (CMSG_ALIGN(len as size_t) + CMSG_ALIGN(size_of::<cmsghdr>())) as c_uint
     }
 
     // wait.h
-    pub fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
+    pub unsafe fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
         let fd = fd as usize;
         let size = size_of_val(&(*set).fds_bits[0]) * 8;
         (*set).fds_bits[fd / size] &= !(1 << (fd % size));
         return;
     }
 
-    pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
+    pub unsafe fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
         let fd = fd as usize;
         let size = size_of_val(&(*set).fds_bits[0]) * 8;
         return ((*set).fds_bits[fd / size] & (1 << (fd % size))) != 0;
     }
 
-    pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
+    pub unsafe fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
         let fd = fd as usize;
         let size = size_of_val(&(*set).fds_bits[0]) * 8;
         (*set).fds_bits[fd / size] |= 1 << (fd % size);
         return;
     }
 
-    pub fn FD_ZERO(set: *mut fd_set) -> () {
-        for slot in (*set).fds_bits.iter_mut() {
-            *slot = 0;
-        }
+    pub unsafe fn FD_ZERO(set: *mut fd_set) -> () {
+        (*set).fds_bits.fill(0);
     }
 }
 
 safe_f! {
-    pub const fn WIFSTOPPED(status: c_int) -> bool {
+    pub const safe fn WIFSTOPPED(status: c_int) -> bool {
         (status & 0xff) == 0x7f
     }
 
-    pub const fn WSTOPSIG(status: c_int) -> c_int {
+    pub const safe fn WSTOPSIG(status: c_int) -> c_int {
         (status >> 8) & 0xff
     }
 
-    pub const fn WIFCONTINUED(status: c_int) -> bool {
+    pub const safe fn WIFCONTINUED(status: c_int) -> bool {
         status == 0xffff
     }
 
-    pub const fn WIFSIGNALED(status: c_int) -> bool {
+    pub const safe fn WIFSIGNALED(status: c_int) -> bool {
         ((status & 0x7f) + 1) as i8 >= 2
     }
 
-    pub const fn WTERMSIG(status: c_int) -> c_int {
+    pub const safe fn WTERMSIG(status: c_int) -> c_int {
         status & 0x7f
     }
 
-    pub const fn WIFEXITED(status: c_int) -> bool {
+    pub const safe fn WIFEXITED(status: c_int) -> bool {
         (status & 0x7f) == 0
     }
 
-    pub const fn WEXITSTATUS(status: c_int) -> c_int {
+    pub const safe fn WEXITSTATUS(status: c_int) -> c_int {
         (status >> 8) & 0xff
     }
 
-    pub const fn WCOREDUMP(status: c_int) -> bool {
+    pub const safe fn WCOREDUMP(status: c_int) -> bool {
         (status & 0x80) != 0
+    }
+
+    pub const safe fn makedev(major: c_uint, minor: c_uint) -> dev_t {
+        let major = major as dev_t;
+        let minor = minor as dev_t;
+        let mut dev = 0;
+        dev |= (major & 0x00000fff) << 8;
+        dev |= (major & 0xfffff000) << 32;
+        dev |= (minor & 0x000000ff) << 0;
+        dev |= (minor & 0xffffff00) << 12;
+        dev
+    }
+
+    pub const safe fn major(dev: dev_t) -> c_uint {
+        let mut major = 0;
+        major |= (dev & 0x00000000000fff00) >> 8;
+        major |= (dev & 0xfffff00000000000) >> 32;
+        major as c_uint
+    }
+
+    pub const safe fn minor(dev: dev_t) -> c_uint {
+        let mut minor = 0;
+        minor |= (dev & 0x00000000000000ff) >> 0;
+        minor |= (dev & 0x00000ffffff00000) >> 12;
+        minor as c_uint
     }
 }
 
@@ -1171,8 +1213,10 @@ extern "C" {
 
     // dirent.h
     pub fn dirfd(dirp: *mut crate::DIR) -> c_int;
+    pub fn seekdir(dirp: *mut crate::DIR, loc: c_long);
 
     // unistd.h
+    pub fn faccessat(dirfd: c_int, pathname: *const c_char, mode: c_int, flags: c_int) -> c_int;
     pub fn pipe2(fds: *mut c_int, flags: c_int) -> c_int;
     pub fn getdtablesize() -> c_int;
     pub fn getresgid(
@@ -1274,6 +1318,17 @@ extern "C" {
         result: *mut *mut passwd,
     ) -> c_int;
 
+    // semaphore.h
+    pub fn sem_destroy(sem: *mut sem_t) -> c_int;
+    pub fn sem_init(sem: *mut sem_t, pshared: c_int, value: c_uint) -> c_int;
+    pub fn sem_clockwait(
+        sem: *mut sem_t,
+        clock_id: clockid_t,
+        abstime: *const crate::timespec,
+    ) -> c_int;
+    pub fn sem_timedwait(sem: *mut sem_t, abstime: *const crate::timespec) -> c_int;
+    pub fn sem_getvalue(sem: *mut sem_t, sval: *mut c_int) -> c_int;
+
     // signal.h
     pub fn pthread_sigmask(
         how: c_int,
@@ -1298,6 +1353,15 @@ extern "C" {
     pub fn mkostemp(template: *mut c_char, flags: c_int) -> c_int;
     pub fn mkostemps(template: *mut c_char, suffixlen: c_int, flags: c_int) -> c_int;
     pub fn reallocarray(ptr: *mut c_void, nmemb: size_t, size: size_t) -> *mut c_void;
+
+    // stdio.h
+    pub fn renameat2(
+        olddirfd: c_int,
+        oldpath: *const c_char,
+        newdirfd: c_int,
+        newpath: *const c_char,
+        flags: c_uint,
+    ) -> c_int;
 
     // string.h
     pub fn explicit_bzero(p: *mut c_void, len: size_t);
@@ -1353,6 +1417,13 @@ extern "C" {
 
     // sys/stat.h
     pub fn futimens(fd: c_int, times: *const crate::timespec) -> c_int;
+    pub fn mknodat(dirfd: c_int, pathname: *const c_char, mode: mode_t, dev: dev_t) -> c_int;
+    pub fn utimensat(
+        dirfd: c_int,
+        path: *const c_char,
+        times: *const crate::timespec,
+        flag: c_int,
+    ) -> c_int;
 
     // sys/uio.h
     pub fn preadv(fd: c_int, iov: *const crate::iovec, iovcnt: c_int, offset: off_t) -> ssize_t;
@@ -1365,6 +1436,7 @@ extern "C" {
 
     // time.h
     pub fn gettimeofday(tp: *mut crate::timeval, tz: *mut crate::timezone) -> c_int;
+    pub fn clock_getres(clk_id: crate::clockid_t, tp: *mut crate::timespec) -> c_int;
     pub fn clock_gettime(clk_id: crate::clockid_t, tp: *mut crate::timespec) -> c_int;
     pub fn strftime(
         s: *mut c_char,

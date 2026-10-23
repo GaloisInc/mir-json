@@ -22,6 +22,7 @@ extern crate rustc_monomorphize;
 extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_target;
+extern crate rustc_type_ir;
 
 extern crate log;
 extern crate env_logger;

@@ -1,7 +1,10 @@
+use std::env::VarError;
 use std::process::{
     Command,
     Output,
 };
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::Relaxed;
 use std::{
     env,
     str,
@@ -12,6 +15,8 @@ use std::{
 // make sure to add it to this list as well.
 const ALLOWED_CFGS: &[&str] = &[
     "emscripten_old_stat_abi",
+    // Should be enabled by users if esp-idf (>=6.0) is build with picolibc instead of newlib.
+    "espidf_picolibc",
     "espidf_time32",
     "freebsd10",
     "freebsd11",
@@ -21,13 +26,19 @@ const ALLOWED_CFGS: &[&str] = &[
     "freebsd15",
     // Corresponds to `_FILE_OFFSET_BITS=64` in glibc
     "gnu_file_offset_bits64",
-    // Corresponds to `_TIME_BITS=64` in glibc
+    // Corresponds to `_TIME_BITS=64` in glibc. Also used in x86 Windows with
+    // GNU to expose a 64-bit `time_t`.
     "gnu_time_bits64",
     "libc_deny_warnings",
     // Corresponds to `__USE_TIME_BITS64` in UAPI
     "linux_time_bits64",
     "musl_v1_2_3",
+    // musl v1.2.3+ && 32-bit: time_t is i64, struct layouts change
+    "musl32_time64",
+    // Corresponds to `_REDIR_TIME64` in musl: symbol redirects to __*_time64
+    "musl_redir_time64",
     "vxworks_lt_25_09",
+    "libc_pauthtest",
 ];
 
 // Extra values to allow for check-cfg.
@@ -35,12 +46,12 @@ const CHECK_CFG_EXTRA: &[(&str, &[&str])] = &[
     (
         "target_os",
         &[
-            "switch", "aix", "ohos", "hurd", "rtems", "visionos", "nuttx", "cygwin",
+            "switch", "aix", "ohos", "hurd", "rtems", "visionos", "nuttx", "cygwin", "qurt", "qnx",
         ],
     ),
     (
         "target_env",
-        &["illumos", "wasi", "aix", "ohos", "nto71_iosock", "nto80"],
+        &["illumos", "wasi", "aix", "ohos", "nto71_iosock"],
     ),
     (
         "target_arch",
@@ -48,25 +59,62 @@ const CHECK_CFG_EXTRA: &[(&str, &[&str])] = &[
     ),
 ];
 
+/// Musl architectures that define `_REDIR_TIME64` (i.e. those that transitioned
+/// from 32-bit to 64-bit `time_t` and need `__*_time64` symbol redirects).
+const MUSL_REDIR_TIME64_ARCHES: &[&str] = &["arm", "mips", "powerpc", "x86"];
+
+/// Read from env, print more debug output via `cargo:warning` if set.
+static VERBOSE_BUILD: AtomicBool = AtomicBool::new(false);
+
+/// Print info via warnings if `LIBC_BUILD_VERBOSE` is set.
+macro_rules! info {
+    ($($tt:tt)+) => {
+        if VERBOSE_BUILD.load(Relaxed) {
+            println!("cargo:warning=info: {}", format_args!($($tt)*));
+        }
+    }
+}
+
 fn main() {
     // Avoid unnecessary re-building.
     println!("cargo:rerun-if-changed=build.rs");
 
+    println!("cargo:rerun-if-env-changed=LIBC_BUILD_VERBOSE");
+    if env_flag("LIBC_BUILD_VERBOSE") {
+        VERBOSE_BUILD.store(true, Relaxed);
+    }
+
     let (rustc_minor_ver, _is_nightly) = rustc_minor_nightly();
-    let libc_ci = env::var("LIBC_CI").is_ok();
+    let libc_ci = env_flag("LIBC_CI");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let target_ptr_width = env::var("CARGO_CFG_TARGET_POINTER_WIDTH").unwrap_or_default();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let target_abi = env::var("CARGO_CFG_TARGET_ABI").unwrap_or_default();
+
+    // FIXME(msrv): Once the MSRV is 1.78, use `cfg(target_abi = "pauthtest")`
+    // directly instead of translating it to `libc_pauthtest`. `target_abi`
+    // cannot be used directly in cfg expressions on the current MSRV.
+    if target_abi == "pauthtest" {
+        set_cfg("libc_pauthtest");
+    }
+
+    // FIXME: this can be removed in 1-2 releases
+    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_FREEBSD_VERSION");
+    if env::var("RUST_LIBC_UNSTABLE_FREEBSD_VERSION").is_ok() {
+        println!(
+            "cargo:warning=RUST_LIBC_UNSTABLE_FREEBSD_VERSION has been removed; set \
+            the cfg libc_unstable_freebsd_version via RUSTFLAGS instead"
+        );
+    }
 
     // The ABI of libc used by std is backward compatible with FreeBSD 12.
     // The ABI of libc from crates.io is backward compatible with FreeBSD 12.
     //
     // On CI, we detect the actual FreeBSD version and match its ABI exactly,
     // running tests to ensure that the ABI is correct.
-    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_FREEBSD_VERSION");
     // Allow overriding the default version for testing
-    let which_freebsd = if let Ok(version) = env::var("RUST_LIBC_UNSTABLE_FREEBSD_VERSION") {
+    let which_freebsd = if let Ok(version) = env::var("CARGO_CFG_LIBC_UNSTABLE_FREEBSD_VERSION") {
         let vers = version.parse().unwrap();
         println!("cargo:warning=setting FreeBSD version to {vers}");
         vers
@@ -98,54 +146,76 @@ fn main() {
         _ => (),
     }
 
-    let musl_v1_2_3 = env::var("RUST_LIBC_UNSTABLE_MUSL_V1_2_3").is_ok();
-    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_MUSL_V1_2_3");
-    // loongarch64 and ohos have already updated
-    if musl_v1_2_3 || target_arch == "loongarch64" || target_env == "ohos" {
-        // FIXME(musl): enable time64 api as well
-        set_cfg("musl_v1_2_3");
+    let mut musl_v1_2_3 = env_flag("CARGO_CFG_LIBC_UNSTABLE_MUSL_V1_2_3");
+
+    // OpenHarmony uses a fork of the musl libc
+    let musl = target_env == "musl" || target_env == "ohos";
+
+    // loongarch64, hexagon, ohos and pauthtest only exist with recent musl
+    if target_arch == "loongarch64"
+        || target_arch == "hexagon"
+        || target_env == "ohos"
+        || target_abi == "pauthtest"
+    {
+        musl_v1_2_3 = true;
     }
-    let linux_time_bits64 = env::var("RUST_LIBC_UNSTABLE_LINUX_TIME_BITS64").is_ok();
-    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_LINUX_TIME_BITS64");
-    if linux_time_bits64 {
+
+    if musl && musl_v1_2_3 {
+        set_cfg("musl_v1_2_3");
+        if target_ptr_width == "32" {
+            set_cfg("musl32_time64");
+            set_cfg("linux_time_bits64");
+        }
+        if MUSL_REDIR_TIME64_ARCHES.contains(&target_arch.as_str()) {
+            set_cfg("musl_redir_time64");
+        }
+    }
+
+    let uclibc_use_time64 = env_flag("CARGO_CFG_LIBC_UNSTABLE_UCLIBC_TIME64");
+    if target_env == "uclibc" && uclibc_use_time64 {
         set_cfg("linux_time_bits64");
     }
-    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS");
-    println!("cargo:rerun-if-env-changed=RUST_LIBC_UNSTABLE_GNU_TIME_BITS");
+
     if target_env == "gnu"
-        && target_os == "linux"
+        && matches!(target_os.as_str(), "linux" | "windows")
         && target_ptr_width == "32"
         && target_arch != "riscv32"
         && target_arch != "x86_64"
     {
-        let defaultbits = "32".to_string();
-        let (timebits, filebits) = match (
-            env::var("RUST_LIBC_UNSTABLE_GNU_TIME_BITS"),
-            env::var("RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS"),
-        ) {
-            (Ok(_), Ok(_)) => panic!("Do not set both RUST_LIBC_UNSTABLE_GNU_TIME_BITS and RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS"),
-            (Err(_), Err(_)) => (defaultbits.clone(), defaultbits.clone()),
-            (Ok(tb), Err(_)) if tb == "64" => (tb.clone(), tb.clone()),
-            (Ok(tb), Err(_)) if tb == "32" => (tb, defaultbits.clone()),
-            (Ok(_), Err(_)) => panic!("Invalid value for RUST_LIBC_UNSTABLE_GNU_TIME_BITS, must be 32 or 64"),
-            (Err(_), Ok(fb)) if fb == "32" || fb == "64" => (defaultbits.clone(), fb),
-            (Err(_), Ok(_)) => panic!("Invalid value for RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS, must be 32 or 64"),
+        let defaultbits = "32";
+
+        let mut tb_env = env::var("CARGO_CFG_LIBC_UNSTABLE_GNU_TIME_BITS");
+
+        // FIXME: remove these fallbacks in a few releases
+        if let Ok(old_tb_env) = env::var("RUST_LIBC_UNSTABLE_GNU_TIME_BITS") {
+            println!(
+                "cargo:warning=RUST_LIBC_UNSTABLE_GNU_TIME_BITS will be removed; \
+                set `--cfg=libc_unstable_gnu_time_bits=\"...\"` via RUSTFLAGS instead"
+            );
+            tb_env = tb_env.or(Ok(old_tb_env));
+        }
+        if env::var("RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS").is_ok()
+            || env::var("CARGO_CFG_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS").is_ok()
+        {
+            println!(
+                "cargo:warning=glibc file offset can no longer be set independently of \
+                `gnu_time_bits`"
+            );
+        }
+
+        let timebits = match tb_env.as_deref() {
+            Err(_) => defaultbits,
+            Ok(tb) if tb == "64" => tb,
+            Ok(tb) if tb == "32" => tb,
+            Ok(_) => {
+                panic!("Invalid value for libc_unstable_gnu_time_bits. Must be 32, 64, or unset.")
+            }
         };
-        let valid_bits = ["32", "64"];
-        assert!(
-            valid_bits.contains(&filebits.as_str()) && valid_bits.contains(&timebits.as_str()),
-            "Invalid value for RUST_LIBC_UNSTABLE_GNU_TIME_BITS or RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS, must be 32, 64 or unset"
-        );
-        assert!(
-            !(filebits == "32" && timebits == "64"),
-            "RUST_LIBC_UNSTABLE_GNU_FILE_OFFSET_BITS must be 64 or unset if RUST_LIBC_UNSTABLE_GNU_TIME_BITS is 64"
-        );
+
         if timebits == "64" {
             set_cfg("linux_time_bits64");
-            set_cfg("gnu_time_bits64");
-        }
-        if filebits == "64" {
             set_cfg("gnu_file_offset_bits64");
+            set_cfg("gnu_time_bits64");
         }
     }
 
@@ -240,6 +310,8 @@ fn rustc_minor_nightly() -> (u32, bool) {
     });
     let minor = otry!(otry!(minor).parse().ok());
 
+    info!("detected rust 1.{minor}, nightly={nightly}");
+
     (minor, nightly)
 }
 
@@ -307,4 +379,15 @@ fn set_cfg(cfg: &str) {
         "trying to set cfg {cfg}, but it is not in ALLOWED_CFGS",
     );
     println!("cargo:rustc-cfg={cfg}");
+    info!("setting config `{cfg}`");
+}
+
+/// Return true if the env is set to a value other than `0`.
+fn env_flag(key: &str) -> bool {
+    match env::var(key) {
+        Ok(x) if x == "0" => false,
+        Err(VarError::NotPresent) => false,
+        Err(VarError::NotUnicode(_)) => panic!("non-unicode var for `{key}`"),
+        Ok(_) => true,
+    }
 }

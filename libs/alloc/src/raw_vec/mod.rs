@@ -5,8 +5,8 @@
 // run the tests. See the comment there for an explanation why this is the case.
 
 use core::marker::{Destruct, PhantomData};
-use core::mem::{ManuallyDrop, MaybeUninit, SizedTypeProperties};
-use core::ptr::{self, Alignment, NonNull, Unique};
+use core::mem::{Alignment, ManuallyDrop, MaybeUninit, SizedTypeProperties};
+use core::ptr::{self, NonNull, Unique};
 use core::{cmp, hint};
 
 #[cfg(not(no_global_oom_handling))]
@@ -15,6 +15,8 @@ use crate::alloc::{Allocator, Global, Layout};
 use crate::boxed::Box;
 use crate::collections::TryReserveError;
 use crate::collections::TryReserveErrorKind::*;
+
+use crate::crucible::alloc::TypedAllocator;
 
 #[cfg(test)]
 mod tests;
@@ -71,7 +73,7 @@ const unsafe fn new_cap<T>(cap: usize) -> Cap {
 /// `Box<[T]>`, since `capacity()` won't yield the length.
 #[allow(missing_debug_implementations)]
 pub(crate) struct RawVec<T, A: Allocator = Global> {
-    inner: RawVecInner<crucible::TypedAllocator<T>>,
+    inner: RawVecInner<TypedAllocator<T>>,
     orig_alloc: A,
     _marker: PhantomData<T>,
 }
@@ -124,7 +126,7 @@ impl<T> RawVec<T, Global> {
     #[must_use]
     #[inline]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
-        let alloc = crucible::TypedAllocator::new();
+        let alloc = TypedAllocator::new();
         Self {
             inner: RawVecInner::with_capacity_in(capacity, alloc, T::LAYOUT),
             orig_alloc: Global,
@@ -137,7 +139,7 @@ impl<T> RawVec<T, Global> {
     #[must_use]
     #[inline]
     pub(crate) fn with_capacity_zeroed(capacity: usize) -> Self {
-        let alloc = crucible::TypedAllocator::new();
+        let alloc = TypedAllocator::new();
         Self {
             inner: RawVecInner::with_capacity_zeroed_in(capacity, alloc, T::LAYOUT),
             orig_alloc: Global,
@@ -175,13 +177,13 @@ const fn min_non_zero_cap(size: usize) -> usize {
 
 #[rustc_const_unstable(feature = "const_heap", issue = "79597")]
 #[rustfmt::skip] // FIXME(fee1-dead): temporary measure before rustfmt is bumped
-impl<T, A: Allocator> RawVec<T, A> {
+const impl<T, A: [const] Allocator + [const] Destruct> RawVec<T, A> {
     /// Like `with_capacity`, but parameterized over the choice of
     /// allocator for the returned `RawVec`.
     #[cfg(not(no_global_oom_handling))]
     #[inline]
     pub(crate) fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        let inner_alloc = crucible::TypedAllocator::new();
+        let inner_alloc = TypedAllocator::new();
         Self {
             inner: RawVecInner::with_capacity_in(capacity, inner_alloc, T::LAYOUT),
             orig_alloc: alloc,
@@ -210,7 +212,7 @@ impl<T, A: Allocator> RawVec<T, A> {
         // Check assumption made in `current_memory`
         const { assert!(T::LAYOUT.size() % T::LAYOUT.align() == 0) };
         // Rustc complains about const-stability if we call `new()` here.
-        let inner_alloc = crucible::TypedAllocator::NEW;
+        let inner_alloc = TypedAllocator::NEW;
         Self {
             inner: RawVecInner::new_in(inner_alloc, Alignment::of::<T>()),
             orig_alloc: alloc,
@@ -222,7 +224,7 @@ impl<T, A: Allocator> RawVec<T, A> {
     /// allocator for the returned `RawVec`.
     #[inline]
     pub(crate) fn try_with_capacity_in(capacity: usize, alloc: A) -> Result<Self, TryReserveError> {
-        let inner_alloc = crucible::TypedAllocator::new();
+        let inner_alloc = TypedAllocator::new();
         match RawVecInner::try_with_capacity_in(capacity, inner_alloc, T::LAYOUT) {
             Ok(inner) => Ok(Self { inner, orig_alloc: alloc, _marker: PhantomData }),
             Err(e) => Err(e),
@@ -234,7 +236,7 @@ impl<T, A: Allocator> RawVec<T, A> {
     #[cfg(not(no_global_oom_handling))]
     #[inline]
     pub(crate) fn with_capacity_zeroed_in(capacity: usize, alloc: A) -> Self {
-        let inner_alloc = crucible::TypedAllocator::new();
+        let inner_alloc = TypedAllocator::new();
         Self {
             inner: RawVecInner::with_capacity_zeroed_in(capacity, inner_alloc, T::LAYOUT),
             orig_alloc: alloc,
@@ -263,7 +265,7 @@ impl<T, A: Allocator> RawVec<T, A> {
 
         let me = ManuallyDrop::new(self);
         unsafe {
-            let slice = ptr::slice_from_raw_parts_mut(me.ptr() as *mut MaybeUninit<T>, len);
+            let slice = me.ptr().cast::<MaybeUninit<T>>().cast_slice(len);
             Box::from_raw_in(slice, ptr::read(&me.orig_alloc))
         }
     }
@@ -284,7 +286,7 @@ impl<T, A: Allocator> RawVec<T, A> {
         unsafe {
             let ptr = ptr.cast();
             let capacity = new_cap::<T>(capacity);
-            let inner_alloc = crucible::TypedAllocator::NEW;
+            let inner_alloc = TypedAllocator::NEW;
             Self {
                 inner: RawVecInner::from_raw_parts_in(ptr, capacity, inner_alloc),
                 orig_alloc: alloc,
@@ -305,7 +307,7 @@ impl<T, A: Allocator> RawVec<T, A> {
         unsafe {
             let ptr = ptr.cast();
             let capacity = new_cap::<T>(capacity);
-            let inner_alloc = crucible::TypedAllocator::new();
+            let inner_alloc = TypedAllocator::new();
             Self {
                 inner: RawVecInner::from_nonnull_in(ptr, capacity, inner_alloc),
                 orig_alloc: alloc,
@@ -443,7 +445,8 @@ impl<T, A: Allocator> RawVec<T, A> {
     }
 }
 
-unsafe impl<#[may_dangle] T, A: Allocator> Drop for RawVec<T, A> {
+#[rustc_const_unstable(feature = "const_heap", issue = "79597")]
+const unsafe impl<#[may_dangle] T, A: [const] Allocator + [const] Destruct> Drop for RawVec<T, A> {
     /// Frees the memory owned by the `RawVec` *without* trying to drop its contents.
     fn drop(&mut self) {
         // SAFETY: We are in a Drop impl, self.inner will not be used again.
@@ -585,18 +588,14 @@ const impl<A: [const] Allocator + [const] Destruct> RawVecInner<A> {
             self.alloc.allocate(new_layout)
         };
 
-        // FIXME(const-hack): switch back to `map_err`
-        match memory {
-            Ok(memory) => Ok(memory),
-            Err(_) => Err(AllocError { layout: new_layout, non_exhaustive: () }.into()),
-        }
+        memory.map_err(const |_| AllocError { layout: new_layout, non_exhaustive: () }.into())
     }
 }
 
 impl<A: Allocator> RawVecInner<A> {
     #[inline]
     const fn new_in(alloc: A, align: Alignment) -> Self {
-        let ptr = Unique::from_non_null(NonNull::without_provenance(align.as_nonzero()));
+        let ptr = Unique::from_non_null(NonNull::without_provenance(align.as_nonzero_usize()));
         // `cap: 0` means "unallocated". zero-sized types are ignored.
         Self { ptr, cap: ZERO_CAP, alloc }
     }
@@ -887,7 +886,10 @@ impl<A: Allocator> RawVecInner<A> {
         }
         Ok(())
     }
+}
 
+#[rustc_const_unstable(feature = "const_heap", issue = "79597")]
+const impl<A: [const] Allocator> RawVecInner<A> {
     /// # Safety
     ///
     /// This function deallocates the owned allocation, but does not update `ptr` or `cap` to
@@ -924,9 +926,5 @@ const fn layout_array(cap: usize, elem_layout: Layout) -> Result<Layout, TryRese
     // which lets us use the much-simpler `repeat_packed`.
     debug_assert!(elem_layout.size() == elem_layout.pad_to_align().size());
 
-    // FIXME(const-hack) return to using `map` and `map_err` once `const_closures` is implemented
-    match elem_layout.repeat_packed(cap) {
-        Ok(layout) => Ok(layout),
-        Err(_) => Err(CapacityOverflow.into()),
-    }
+    elem_layout.repeat_packed(cap).map_err(const |_| CapacityOverflow.into())
 }

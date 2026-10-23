@@ -84,7 +84,7 @@ use crate::vec::Vec;
 ///
 /// // We are certain that our string doesn't have 0 bytes in the middle,
 /// // so we can .expect()
-/// let c_to_print = CString::new("Hello, world!").expect("CString::new failed");
+/// let c_to_print = CString::new("Hello, world!").expect("we provided a string without NUL bytes, so CString::new should not fail");
 /// unsafe {
 ///     my_printer(c_to_print.as_ptr());
 /// }
@@ -242,7 +242,7 @@ impl CString {
     ///
     /// extern "C" { fn puts(s: *const c_char); }
     ///
-    /// let to_print = CString::new("Hello!").expect("CString::new failed");
+    /// let to_print = CString::new("Hello!").expect("we provided a string without NUL bytes, so CString::new should not fail");
     /// unsafe {
     ///     puts(to_print.as_ptr());
     /// }
@@ -466,12 +466,12 @@ impl CString {
     /// use std::ffi::CString;
     ///
     /// let valid_utf8 = vec![b'f', b'o', b'o'];
-    /// let cstring = CString::new(valid_utf8).expect("CString::new failed");
-    /// assert_eq!(cstring.into_string().expect("into_string() call failed"), "foo");
+    /// let cstring = CString::new(valid_utf8).expect("we provided bytes that do not have a NUL byte, so CString::new should not fail");
+    /// assert_eq!(cstring.into_string().expect("we provided bytes that are valid UTF-8, so `into_string` should not fail"), "foo");
     ///
     /// let invalid_utf8 = vec![b'f', 0xff, b'o', b'o'];
-    /// let cstring = CString::new(invalid_utf8).expect("CString::new failed");
-    /// let err = cstring.into_string().err().expect("into_string().err() failed");
+    /// let cstring = CString::new(invalid_utf8).expect("we provided bytes that do not have a NUL byte, so CString::new should not fail");
+    /// let err = cstring.into_string().expect_err("we provided bytes that are invalid UTF-8, so `into_string` should fail");
     /// assert_eq!(err.utf8_error().valid_up_to(), 1);
     /// ```
     #[stable(feature = "cstring_into", since = "1.7.0")]
@@ -577,7 +577,7 @@ impl CString {
     /// let c_string = CString::from(c"foo");
     /// let cstr = c_string.as_c_str();
     /// assert_eq!(cstr,
-    ///            CStr::from_bytes_with_nul(b"foo\0").expect("CStr::from_bytes_with_nul failed"));
+    ///            CStr::from_bytes_with_nul(b"foo\0").expect("we provided bytes that has one NUL byte exactly at the end, so CStr::from_bytes_with_nul should not fail"));
     /// ```
     #[inline]
     #[must_use]
@@ -660,7 +660,7 @@ impl CString {
     /// use std::ffi::CString;
     /// assert_eq!(
     ///     CString::from_vec_with_nul(b"abc\0".to_vec())
-    ///         .expect("CString::from_vec_with_nul failed"),
+    ///         .expect("we provided bytes that has one NUL byte exactly at the end, so CString::from_vec_with_nul should not fail"),
     ///     c"abc".to_owned()
     /// );
     /// ```
@@ -1077,9 +1077,17 @@ impl ToOwned for CStr {
     }
 
     fn clone_into(&self, target: &mut CString) {
-        let mut b = mem::take(&mut target.inner).into_vec();
-        self.to_bytes_with_nul().clone_into(&mut b);
-        target.inner = b.into_boxed_slice();
+        let src = self.to_bytes_with_nul();
+        // If the lengths match, we can reuse the existing allocation without any overhead.
+        if target.inner.len() == src.len() {
+            target.inner.copy_from_slice(src);
+        } else {
+            // Reuse the existing allocation's capacity by converting to a Vec.
+            // We temporarily replace `target` with a valid dummy to remain panic-safe.
+            let mut b = mem::replace(&mut target.inner, Box::new([0])).into_vec();
+            self.to_bytes_with_nul().clone_into(&mut b);
+            target.inner = b.into_boxed_slice();
+        }
     }
 }
 
@@ -1163,7 +1171,7 @@ impl CStr {
     /// [str]: prim@str "str"
     /// [Borrowed]: Cow::Borrowed
     /// [Owned]: Cow::Owned
-    /// [U+FFFD]: core::char::REPLACEMENT_CHARACTER "std::char::REPLACEMENT_CHARACTER"
+    /// [U+FFFD]: char::REPLACEMENT_CHARACTER
     ///
     /// # Examples
     ///

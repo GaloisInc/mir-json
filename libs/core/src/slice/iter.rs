@@ -5,13 +5,11 @@ mod macros;
 
 use super::{from_raw_parts, from_raw_parts_mut};
 use crate::hint::assert_unchecked;
-use crate::iter::{
-    FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce, UncheckedIterator,
-};
+use crate::iter::{FusedIterator, TrustedLen, TrustedRandomAccess, TrustedRandomAccessNoCoerce};
 use crate::marker::PhantomData;
 use crate::mem::{self, SizedTypeProperties};
 use crate::num::NonZero;
-use crate::ptr::NonNull;
+use crate::ptr::{NonNull, without_provenance, without_provenance_mut};
 use crate::{cmp, fmt};
 
 #[stable(feature = "boxed_slice_into_iter", since = "1.80.0")]
@@ -393,7 +391,7 @@ impl<'a, T: 'a, P: FnMut(&T) -> bool> Split<'a, T, P> {
     /// ```
     #[unstable(feature = "split_as_slice", issue = "96137")]
     pub fn as_slice(&self) -> &'a [T] {
-        if self.finished { &[] } else { &self.v }
+        if self.finished { &[] } else { self.v }
     }
 }
 
@@ -3017,6 +3015,20 @@ where
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         if self.slice.is_empty() { (0, Some(0)) } else { (1, Some(self.slice.len())) }
+    }
+
+    #[inline]
+    fn count(mut self) -> usize {
+        let Some((mut previous, rest)) = self.slice.split_first() else {
+            return 0;
+        };
+
+        let mut count = 1;
+        for current in rest {
+            count += usize::from(!(self.predicate)(previous, current));
+            previous = current;
+        }
+        count
     }
 
     #[inline]

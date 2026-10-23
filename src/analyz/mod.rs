@@ -2,13 +2,12 @@
 
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_middle::ty::{self, TyCtxt, List};
+use rustc_middle::ty::{self, TyCtxt, List, RegisteredTools};
 use rustc_middle::mir::{self, Body};
-use rustc_middle::mir::mono::MonoItem;
+use rustc_middle::mono::MonoItem;
 use rustc_session;
 use rustc_session::Session;
 use rustc_session::config::{OutputType, OutFileName};
-use rustc_session::lint::RegisteredTools;
 use rustc_span::{DUMMY_SP, Ident, Span};
 use rustc_span::symbol::Symbol;
 use rustc_abi::{self, ExternAbi};
@@ -249,6 +248,12 @@ fn vtable_descriptor_for_cast<'tcx>(
             // vtable descriptor cast.
             if unequal_fields_count == 1 { vtable } else { None }
         },
+
+        // Look through pattern types.  We ignore the pattern parts for these.
+        (ty::TyKind::Pat(old_inner_ty, _), ty::TyKind::Pat(new_inner_ty, _)) => {
+            vtable_descriptor_for_cast(mir, kind, old_inner_ty, new_inner_ty)
+        },
+
         _ => None,
     }
 }
@@ -282,10 +287,21 @@ fn closure_fn_ptr_callee_for_cast<'tcx>(
 impl<'tcx> ToJson<'tcx> for mir::Rvalue<'tcx> {
     fn to_json(&self, mir: &mut MirState<'_, 'tcx>) -> serde_json::Value {
         match self {
-            &mir::Rvalue::Use(ref op) => {
+            &mir::Rvalue::Use(ref op, _) => {
                 json!({
                     "kind": "Use",
                     "usevar": op.to_json(mir)
+                })
+            }
+            &mir::Rvalue::Reborrow(target_ty, _, ref place) => {
+                // Coerce the value at `place` to `target_ty`.  As of 2026-08-24, `CoerceShared`
+                // can drop fields (maybe only ZST fields?) and can convert between structs of
+                // different reprs (including transparent <-> non-transparent) during the coercion,
+                // so we can't rely on the source and target types having the same Crucible repr.
+                json!({
+                    "kind": "Reborrow",
+                    "place": place.to_json(mir),
+                    "target_ty": target_ty.to_json(mir),
                 })
             }
             &mir::Rvalue::Repeat(ref op, s) => {
@@ -539,10 +555,6 @@ impl<'tcx> ToJson<'tcx> for mir::Statement<'tcx> {
             &mir::StatementKind::StorageDead(l) => {
                 json!({"kind": "StorageDead", "sdvar": local_json(mir, l)})
             }
-            &mir::StatementKind::Retag { .. } => {
-                // TODO
-                json!({"kind": "Retag"})
-            }
             &mir::StatementKind::PlaceMention(ref pl) => {
                 json!({
                     "kind": "PlaceMention",
@@ -648,10 +660,10 @@ impl<'tcx> ToJson<'tcx> for mir::Terminator<'tcx> {
                 ref target,
                 unwind: _,
                 replace: _,
-                // it seems like drop and async_fut are only used by the
-                // experimental async_drop feature, so we ignore them for now
+                // `drop` is "Cleanup to be done if the coroutine is dropped at this suspend point
+                // (for async drop)."  crux-mir doesn't support the experimental async_drop
+                // feature, so we ignore this field for now.
                 drop: _,
-                async_fut: _,
             } => {
                 let ty = location.ty(mir.mir.unwrap(), mir.tcx).ty;
                 json!({
@@ -813,7 +825,7 @@ fn emit_trait<'tcx>(
     // this extra method in `ty_json::adjust_method_index`.
     if let Some(tref) = trait_ref {
         let dyn_ty = tref.self_ty();
-        let drop_inst = ty::Instance::resolve_drop_in_place(tcx, dyn_ty);
+        let drop_inst = ty::Instance::resolve_drop_glue(tcx, dyn_ty);
         let drop_def_id = drop_inst.def.def_id();
         let drop_args = drop_inst.args;
         let drop_sig = tcx.instantiate_and_normalize_erasing_regions(
@@ -933,7 +945,9 @@ referring static rather than in their own right.
 fn emit_static(ms: &mut MirState, out: &mut impl JsonOutput, def_id: DefId) -> io::Result<()> {
     let tcx = ms.tcx;
     let name = def_id_str(tcx, def_id);
-    let ty = tcx.type_of(def_id).instantiate_identity();
+    // `static` items are required to be non-generic, so the binder returned by `type_of` doesn't
+    // actually bind anything.
+    let ty = tcx.type_of(def_id).no_bound_vars().unwrap();
     let is_mut = tcx.is_mutable_static(def_id);
 
     let j = render_static_body(ms, def_id, ty, name, is_mut);
@@ -956,7 +970,7 @@ fn has_test_attr(tcx: TyCtxt, def_id: DefId) -> bool {
 /// Process the initial/root instances in the current crate.  This adds entries to `ms.used`, and
 /// may also call `out.add_root` if this is a top-level crate.
 fn init_instances(ms: &mut MirState, out: &mut impl JsonOutput) -> io::Result<()> {
-    let is_top_level = ms.tcx.sess.psess.config.iter()
+    let is_top_level = ms.tcx.sess.config.iter()
         .any(|&(key, _)| key.as_str() == "crux_top_level");
 
     if is_top_level {
@@ -1045,6 +1059,7 @@ fn emit_instance<'tcx>(
     inst: FnInst<'tcx>,
 ) -> io::Result<()> {
     let tcx = ms.tcx;
+    inst.assert_invariants(tcx);
 
     let name = inst_id_str(tcx, inst);
 
@@ -1096,6 +1111,8 @@ fn emit_instance<'tcx>(
                         args: ty_inst.args,
                     }
                 },
+                // `LlvmIntrinsic`s never have fallback bodies, so always return `Ok(())`.
+                ty::InstanceKind::LlvmIntrinsic(..) => return Ok(()),
                 _ => ty_inst,
             }
         },
@@ -1108,7 +1125,7 @@ fn emit_instance<'tcx>(
     let mir: Body = ty_inst.instantiate_mir_and_normalize_erasing_regions(
         tcx,
         ty::TypingEnv::fully_monomorphized(),
-        ty::EarlyBinder::bind(tcx.instance_mir(ty_inst.def).clone()),
+        ty::EarlyBinder::bind(tcx, tcx.instance_mir(ty_inst.def).clone()),
     );
     let mir = tcx.arena.alloc(mir);
     emit_fn(ms, out, &name, Some(ty_inst), mir)?;
@@ -1164,7 +1181,7 @@ fn build_vtable_items<'tcx>(
     // it manually. We adjust `InstanceKind::Virtual` indices to account for
     // this extra method in `ty_json::adjust_method_index`.
     let concrete_ty = trait_ref.self_ty();
-    let drop_inst = ty::Instance::resolve_drop_in_place(tcx, concrete_ty);
+    let drop_inst = ty::Instance::resolve_drop_glue(tcx, concrete_ty);
     let drop_def_id = drop_inst.def.def_id();
     let drop_args = drop_inst.args;
     parts.push(json!({
@@ -1293,14 +1310,14 @@ fn inst_abi<'tcx>(
             let ty = tcx.type_of(def_id).skip_binder();
             match *ty.kind() {
                 ty::TyKind::FnDef(_, _) =>
-                    ty.fn_sig(tcx).skip_binder().abi,
+                    ty.fn_sig(tcx).skip_binder().abi(),
                 ty::TyKind::Closure(_, _) |
                 ty::TyKind::CoroutineClosure(_, _) => ExternAbi::RustCall,
                 _ => ExternAbi::Rust,
             }
         },
-        ty::InstanceKind::ClosureOnceShim { .. } => ExternAbi::RustCall,
-        ty::InstanceKind::FnPtrShim(..) => ExternAbi::RustCall,
+        ty::InstanceKind::Shim(ty::ShimKind::ClosureOnce { .. }) => ExternAbi::RustCall,
+        ty::InstanceKind::Shim(ty::ShimKind::FnPtr(..)) => ExternAbi::RustCall,
         _ => ExternAbi::Rust,
     }
 }
@@ -1541,30 +1558,31 @@ pub fn register_crux_tool(
         providers: &mut rustc_middle::util::Providers,
     ) {
         // Ideally, we would just call the function underlying the default
-        // implementation of `registered_tools` directly within the custom
-        // implementation of `registered_tools` below. Unfortunately, the rustc
+        // implementation of `registered_attr_tools` directly within the custom
+        // implementation of `registered_attr_tools` below. Unfortunately, the rustc
         // API doesn't export the default implementation as part of the public
-        // API. Moreover, `registered_tools` has a `fn` type (i.e., a function
+        // API. Moreover, `registered_attr_tools` has a `fn` type (i.e., a function
         // pointer type). This means that we can't close over any local
         // variables in its definition, since a closure can't be coerced to a
         // function pointer.
         //
         // We work around both issues by digging into the `providers` (which
-        // contains the default implementation of `registered_tools`), storing
+        // contains the default implementation of `registered_attr_tools`), storing
         // the default implementation in a `static` (to permit referencing the
         // `static` from within the custom implementation without closing over
         // any local variables), and then calling the default implementation
         // from within the custom one. It's clunky, but it works.
-        static DEFAULT_REGISTERED_TOOLS: OnceLock<for<'tcx> fn(TyCtxt<'tcx>, ()) -> RegisteredTools> =
-            OnceLock::new();
-        let _ = DEFAULT_REGISTERED_TOOLS.set(providers.queries.registered_tools);
+        static DEFAULT_REGISTERED_ATTR_TOOLS:
+            OnceLock<for<'tcx> fn(TyCtxt<'tcx>, ()) -> RegisteredTools> = OnceLock::new();
+        let _ = DEFAULT_REGISTERED_ATTR_TOOLS.set(providers.queries.registered_attr_tools);
 
-        providers.queries.registered_tools = |tcx, ()| {
+        providers.queries.registered_attr_tools = |tcx, ()| {
             // Use the default implementation to retrieve the normal set of
             // registered tools and then insert `crux` into that set.
-            let mut registered_tools = (DEFAULT_REGISTERED_TOOLS.get().unwrap())(tcx, ());
-            registered_tools.insert(Ident::from_str_and_span("crux", DUMMY_SP));
-            registered_tools
+            let mut registered_attr_tools =
+                (DEFAULT_REGISTERED_ATTR_TOOLS.get().unwrap())(tcx, ());
+            registered_attr_tools.insert(Ident::from_str_and_span("crux", DUMMY_SP));
+            registered_attr_tools
         };
     }
 

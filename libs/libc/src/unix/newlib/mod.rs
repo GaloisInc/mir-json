@@ -64,21 +64,6 @@ cfg_if! {
     }
 }
 
-cfg_if! {
-    if #[cfg(not(target_os = "horizon"))] {
-        s! {
-            pub struct hostent {
-                pub h_name: *mut c_char,
-                pub h_aliases: *mut *mut c_char,
-                pub h_addrtype: c_int,
-                pub h_length: c_int,
-                pub h_addr_list: *mut *mut c_char,
-                pub h_addr: *mut c_char,
-            }
-        }
-    }
-}
-
 s! {
     // The order of the `ai_addr` field in this struct is crucial
     // for converting between the Rust and C types.
@@ -108,19 +93,8 @@ s! {
         pub imr_interface: in_addr,
     }
 
-    pub struct linger {
-        pub l_onoff: c_int,
-        pub l_linger: c_int,
-    }
-
     pub struct in_addr {
         pub s_addr: crate::in_addr_t,
-    }
-
-    pub struct pollfd {
-        pub fd: c_int,
-        pub events: c_int,
-        pub revents: c_int,
     }
 
     pub struct lconv {
@@ -541,9 +515,17 @@ pub const F_DUPFD_CLOEXEC: c_int = 14;
 pub const O_RDONLY: c_int = 0;
 pub const O_WRONLY: c_int = 1;
 pub const O_RDWR: c_int = 2;
-pub const O_APPEND: c_int = 8;
-pub const O_CREAT: c_int = 512;
-pub const O_TRUNC: c_int = 1024;
+cfg_if! {
+    if #[cfg(espidf_picolibc)] {
+        pub const O_APPEND: c_int = 1024;
+        pub const O_CREAT: c_int = 64;
+        pub const O_TRUNC: c_int = 512;
+    } else {
+        pub const O_APPEND: c_int = 8;
+        pub const O_CREAT: c_int = 512;
+        pub const O_TRUNC: c_int = 1024;
+    }
+}
 pub const O_EXCL: c_int = 2048;
 pub const O_SYNC: c_int = 8192;
 pub const O_NONBLOCK: c_int = 16384;
@@ -628,7 +610,7 @@ pub const SO_SETFIB: c_int = 0x1014;
 pub const SO_USER_COOKIE: c_int = 0x1015;
 pub const SO_PROTOCOL: c_int = 0x1016;
 pub const SO_PROTOTYPE: c_int = SO_PROTOCOL;
-pub const SO_VENDOR: c_int = 0x80000000;
+pub const SO_VENDOR: c_int = u32_cast_int(0x80000000);
 pub const SO_DEBUG: c_int = 0x01;
 pub const SO_ACCEPTCONN: c_int = 0x0002;
 pub const SO_REUSEADDR: c_int = 0x0004;
@@ -834,30 +816,28 @@ pub const PRIO_PGRP: c_int = 1;
 pub const PRIO_USER: c_int = 2;
 
 f! {
-    pub fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
+    pub unsafe fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
         let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         (*set).fds_bits[fd / bits] &= !(1 << (fd % bits));
         return;
     }
 
-    pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
+    pub unsafe fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
         let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         return ((*set).fds_bits[fd / bits] & (1 << (fd % bits))) != 0;
     }
 
-    pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
+    pub unsafe fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
         let bits = size_of_val(&(*set).fds_bits[0]) * 8;
         let fd = fd as usize;
         (*set).fds_bits[fd / bits] |= 1 << (fd % bits);
         return;
     }
 
-    pub fn FD_ZERO(set: *mut fd_set) -> () {
-        for slot in (*set).fds_bits.iter_mut() {
-            *slot = 0;
-        }
+    pub unsafe fn FD_ZERO(set: *mut fd_set) -> () {
+        (*set).fds_bits.fill(0);
     }
 }
 
