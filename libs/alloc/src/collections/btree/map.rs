@@ -684,13 +684,11 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     /// ```
     /// # #![feature(allocator_api)]
     /// # #![feature(btreemap_alloc)]
+    ///
     /// use std::collections::BTreeMap;
     /// use std::alloc::Global;
     ///
-    /// let mut map = BTreeMap::new_in(Global);
-    ///
-    /// // entries can now be inserted into the empty map
-    /// map.insert(1, "a");
+    /// let map: BTreeMap<i32, i32> = BTreeMap::new_in(Global);
     /// ```
     #[unstable(feature = "btreemap_alloc", issue = "32838")]
     #[must_use]
@@ -1061,7 +1059,7 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     /// a mutable reference to the value in the entry.
     ///
     /// If the map already had this key present, nothing is updated, and
-    /// an error containing the occupied entry and the value is returned.
+    /// an error containing the occupied entry, key, and the value is returned.
     ///
     /// # Examples
     ///
@@ -1076,6 +1074,7 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     /// let err = map.try_insert(37, "b").unwrap_err();
     /// assert_eq!(err.entry.key(), &37);
     /// assert_eq!(err.entry.get(), &"a");
+    /// assert_eq!(err.key, 37);
     /// assert_eq!(err.value, "b");
     /// ```
     #[unstable(feature = "map_try_insert", issue = "82766")]
@@ -1083,10 +1082,30 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
     where
         K: Ord,
     {
-        match self.entry(key) {
-            Occupied(entry) => Err(OccupiedError { entry, value }),
-            Vacant(entry) => Ok(entry.insert(value)),
-        }
+        let (map, dormant_map) = DormantMutRef::new(self);
+        let handle = match map.root {
+            Some(ref mut root) => match root.borrow_mut().search_tree(&key) {
+                Found(handle) => {
+                    let entry = OccupiedEntry {
+                        handle,
+                        dormant_map,
+                        alloc: (*map.alloc).clone(),
+                        _marker: PhantomData,
+                    };
+                    return Err(OccupiedError { entry, key, value });
+                }
+                GoDown(handle) => Some(handle),
+            },
+            None => None,
+        };
+        let entry = VacantEntry {
+            key,
+            handle,
+            dormant_map,
+            alloc: (*map.alloc).clone(),
+            _marker: PhantomData,
+        };
+        Ok(entry.insert(value))
     }
 
     /// Removes a key from the map, returning the value at the key if the key
@@ -1219,26 +1238,8 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
         K: Ord,
         A: Clone,
     {
-        // Do we have to append anything at all?
-        if other.is_empty() {
-            return;
-        }
-
-        // We can just swap `self` and `other` if `self` is empty.
-        if self.is_empty() {
-            mem::swap(self, other);
-            return;
-        }
-
-        let self_iter = mem::replace(self, Self::new_in((*self.alloc).clone())).into_iter();
-        let other_iter = mem::replace(other, Self::new_in((*self.alloc).clone())).into_iter();
-        let root = self.root.get_or_insert_with(|| Root::new((*self.alloc).clone()));
-        root.append_from_sorted_iters(
-            self_iter,
-            other_iter,
-            &mut self.length,
-            (*self.alloc).clone(),
-        )
+        let other = mem::replace(other, Self::new_in((*self.alloc).clone()));
+        self.merge(other, |_key, _self_val, other_val| other_val);
     }
 
     /// Moves all elements from `other` into `self`, leaving `other` empty.
@@ -1571,7 +1572,7 @@ impl<K, V, A: Allocator + Clone> BTreeMap<K, V, A> {
 
         let right_root = left_root.split_off(key, (*self.alloc).clone());
 
-        let (new_left_len, right_len) = Root::calc_split_length(total_num, &left_root, &right_root);
+        let (new_left_len, right_len) = Root::calc_split_length(total_num, left_root, &right_root);
         self.length = new_left_len;
 
         BTreeMap {
@@ -2120,7 +2121,9 @@ impl<K, V> Default for Values<'_, K, V> {
     }
 }
 
-/// An iterator produced by calling `extract_if` on BTreeMap.
+/// This `struct` is created by the [`extract_if`] method on [`BTreeMap`].
+///
+/// [`extract_if`]: BTreeMap::extract_if
 #[stable(feature = "btree_extract_if", since = "1.91.0")]
 #[must_use = "iterators are lazy and do nothing unless consumed; \
     use `retain` or `extract_if().for_each(drop)` to remove and discard elements"]
@@ -2205,8 +2208,8 @@ impl<'a, K, V, R> ExtractIfInner<'a, K, V, R> {
             // On creation, we navigated directly to the left bound, so we need only check the
             // right bound here to decide whether to stop.
             match self.range.end_bound() {
-                Bound::Included(ref end) if (*k).le(end) => (),
-                Bound::Excluded(ref end) if (*k).lt(end) => (),
+                Bound::Included(end) if (*k).le(end) => (),
+                Bound::Excluded(end) if (*k).lt(end) => (),
                 Bound::Unbounded => (),
                 _ => return None,
             }
@@ -2591,7 +2594,8 @@ impl<K: Hash, V: Hash, A: Allocator + Clone> Hash for BTreeMap<K, V, A> {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
-impl<K, V> Default for BTreeMap<K, V> {
+#[rustc_const_unstable(feature = "const_default", issue = "143894")]
+const impl<K, V> Default for BTreeMap<K, V> {
     /// Creates an empty `BTreeMap`.
     fn default() -> BTreeMap<K, V> {
         BTreeMap::new()

@@ -128,12 +128,35 @@ impl<K: Eq + Hash, V, S, A: Allocator> HashMap<K, V, S, A> {
             Some(idx) => RustcEntry::Occupied(RustcOccupiedEntry {
                 items: &mut self.items,
                 idx,
-                k: Some(k),
             }),
             None => RustcEntry::Vacant(RustcVacantEntry {
                 items: &mut self.items,
                 k,
             }),
+        }
+    }
+
+    pub fn rustc_try_insert(
+        &mut self,
+        key: K,
+        value: V,
+    ) -> Result<&mut V, RustcOccupiedError<'_, K, V, A>> {
+        match self.items.iter().position(|&(ref k2, _)| k2 == &key) {
+            Some(idx) => Err(RustcOccupiedError {
+                entry: RustcOccupiedEntry {
+                    items: &mut self.items,
+                    idx,
+                },
+                key,
+                value,
+            }),
+            None => {
+                let e = RustcVacantEntry {
+                    items: &mut self.items,
+                    k: key,
+                };
+                Ok(e.insert(value))
+            },
         }
     }
 
@@ -480,7 +503,6 @@ pub enum RustcEntry<'a, K: 'a, V: 'a, A: Allocator = Global> {
 pub struct RustcOccupiedEntry<'a, K, V, A: Allocator = Global> {
     items: &'a mut Vec<(K, V), A>,
     idx: usize,
-    k: Option<K>,
 }
 
 pub struct RustcVacantEntry<'a, K, V, A: Allocator = Global> {
@@ -516,14 +538,6 @@ impl<'a, K, V, A: Allocator> RustcOccupiedEntry<'a, K, V, A> {
     pub fn remove(self) -> V {
         self.remove_entry().1
     }
-
-    pub fn replace_entry(self, v: V) -> (K, V) {
-        mem::replace(&mut self.items[self.idx], (self.k.unwrap(), v))
-    }
-
-    pub fn replace_key(self) -> K {
-        mem::replace(&mut self.items[self.idx].0, self.k.unwrap())
-    }
 }
 
 impl<'a, K, V, A: Allocator> RustcVacantEntry<'a, K, V, A> {
@@ -546,7 +560,13 @@ impl<'a, K, V, A: Allocator> RustcVacantEntry<'a, K, V, A> {
         RustcOccupiedEntry {
             items: self.items,
             idx,
-            k: None,
         }
     }
+}
+
+#[non_exhaustive]
+pub struct RustcOccupiedError<'a, K, V, A: Allocator = Global> {
+    pub entry: RustcOccupiedEntry<'a, K, V, A>,
+    pub key: K,
+    pub value: V,
 }

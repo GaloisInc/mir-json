@@ -1,4 +1,3 @@
-#![feature(allocator_api)]
 #![feature(allow_internal_unstable)]
 #![feature(core_intrinsics)]
 #![feature(crucible_intrinsics)]
@@ -19,7 +18,7 @@ pub mod symbolic;
 
 // These modules expose Crucible primitives for use within our custom version of `libstd`.  They
 // aren't meant to be used from normal symbolic tests.
-#[doc(hidden)] pub mod alloc;
+#[doc(hidden)] pub use alloc::crucible::alloc;
 #[doc(hidden)] pub use core::crucible::any;
 #[doc(hidden)] pub mod array;
 #[doc(hidden)] pub use core::crucible::ptr;

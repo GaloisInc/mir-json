@@ -5,7 +5,7 @@
 
 /// The MIR JSON format
 type MIR = {
-  version: 13,
+  version: 14,
   fns: Fn[],
   adts: Adt[],
   statics: Static[],
@@ -38,12 +38,13 @@ type Fn = {
 
 /// Calling convention for this function.
 type Abi =
-    { kind: "Rust" | "RustCall" | "RustCold" | "RustPreserveNone"
+    { kind: "Rust" | "RustCall" | "RustCold" | "RustPreserveNone" | "RustTail"
           | "RustInvalid" | "Unadjusted" | "Custom"
           | "PtxKernel" | "Msp430Interrupt" | "X86Interrupt" | "GpuKernel"
           | "EfiApi" | "AvrInterrupt" | "AvrNonBlockingInterrupt"
           | "CmseNonSecureCall" | "CmseNonSecureEntry"
-          | "RiscvInterruptM" | "RiscvInterruptS" }
+          | "RiscvInterruptM" | "RiscvInterruptS"
+          | "Swift" }
   | { kind: "C" | "Cdecl" | "Stdcall" | "Fastcall" | "Vectorcall" | "Thiscall"
           | "Aapcs" | "Win64" | "SysV64" | "System",
       unwind: boolean }
@@ -254,7 +255,7 @@ type Intrinsic = {
 }
 
 type Instance =
-   { kind: "Item" | "Intrinsic" | "VTableShim" | "ReifyShim", def_id: DefId, args: Ty[] }
+   { kind: "Item" | "Intrinsic" | "LlvmIntrinsic" | "VTableShim" | "ReifyShim", def_id: DefId, args: Ty[] }
  | { kind: "FnPtrShim", ty: Ty, def_id: DefId, args: Ty[] }
  | { kind: "Virtual", trait_id: DefId, index: number, item_id: DefId }
  | { kind: "ClosureOnceShim", call_once: DefId, args: Ty[] }
@@ -320,6 +321,7 @@ type PlaceElem =
 
 type Rvalue =
     { kind: "Use", usevar: Operand }
+  | { kind: "Reborrow", place: Lvalue, target_ty: Ty }
   | { kind: "Repeat", op: Operand, len: number }
   | { kind: "Ref", borrowkind: BorrowKind, refvar: Lvalue, region: string }
   | { kind: "AddressOf", mutbl: Mutability, place: Lvalue }
@@ -385,6 +387,7 @@ type CastKind =
             | "PtrToPtr"
             | "FnPtrToPtr"
             | "Transmute"
+            | "BoxDerefTransmute"
             | "Subtype" }
     | { kind: "PointerCoercion",
         origin: CoercionSource,
@@ -415,7 +418,6 @@ type Statement =
   | { kind: "Nop", pos: string }
   | { kind: "ConstEvalCounter", pos: string }
   | { kind: "FakeRead", pos: string }
-  | { kind: "Retag", pos: string }
   | { kind: "PlaceMention", lvalue: Lvalue, pos: string }
   | { kind: "AscribeUserType", pos: string }
   | { kind: "Coverage", pos: string }
