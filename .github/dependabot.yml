@@ -4,6 +4,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    exclude-paths:
+      # Ignore Cargo.lock files in the patched standard libraries, as we don't
+      # use cargo to build these.
+      - "libs"
     ignore:
       # Only propose minor or patch updates to cargo dependencies, as these are
       # much more likely to be backwards-compatible than major updates.
