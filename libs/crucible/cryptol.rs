@@ -83,7 +83,7 @@ macro_rules! cryptol {
             $crate::cryptol::override_(
                 $name::< $($N),* >,
                 $path,
-                &format!($cryptol_name),
+                &$crate::_alloc::format!($cryptol_name),
             );
             $name::< $($N),* >($($arg_name),*)
         }
