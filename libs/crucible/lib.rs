@@ -16,6 +16,10 @@ pub mod method_spec;
 pub mod sym_bytes;
 pub mod symbolic;
 
+// This re-exports the `alloc` crate so that macros (e.g., `crucible_assert!`
+// and `cryptol!`) can reference things from it even with `no_std` enabled.
+#[doc(hidden)] pub extern crate alloc as _alloc;
+
 // These modules expose Crucible primitives for use within our custom version of `libstd`.  They
 // aren't meant to be used from normal symbolic tests.
 #[doc(hidden)] pub use alloc::crucible::alloc;
@@ -53,7 +57,7 @@ macro_rules! crucible_assert {
             $crate::crucible_assert_impl(
                 false,
                 // Can't use `let` here because `format_args` takes the address of temporaries.
-                &format!("{}", $crate::concretize(format_args!($fmt, $($args)*))),
+                &$crate::_alloc::format!("{}", $crate::concretize(format_args!($fmt, $($args)*))),
                 file!(),
                 line!(),
                 column!(),
