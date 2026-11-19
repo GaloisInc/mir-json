@@ -269,6 +269,13 @@ into the main commit for that patch, and then the *Update* line can be removed.
   ones. Also, we add calls to crucible intrinsics for mutex lock and unlock for
   concurrent crucible support.
 
+* Avoid unsupported transmute when comparing slices (last applied: November 19, 2026)
+
+  Comparing the contents of slices requires transmuting `ControlFlow<bool>` (an
+  enum that is structurally similar to `Result`) to a `u8` value, which
+  `crucible-mir` does not support. We replace this transmutation with a slower
+  (but easier-to-simulate) `match` expression.
+
 # Notes
 
 This section contains more detailed notes about why certain patches are written
