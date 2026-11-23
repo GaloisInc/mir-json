@@ -43,13 +43,19 @@ const impl<T: [const] Ord> Ord for [T] {
 
 #[inline]
 const fn as_underlying(x: ControlFlow<bool>) -> u8 {
-    // SAFETY: This will only compile if `bool` and `ControlFlow<bool>` have the same
-    // size (which isn't guaranteed but this is libcore). Because they have the same
-    // size, it's a niched implementation, which in one byte means there can't be
-    // any uninitialized memory. The callers then only check for `0` or `1` from this,
-    // which must necessarily match the `Break` variant, and we're fine no matter
-    // what ends up getting picked as the value representing `Continue(())`.
-    unsafe { crate::mem::transmute(x) }
+    // This is a simplified version of the following code:
+    //
+    //   unsafe { crate::mem::transmute(x) };
+    //
+    // Based on how Rust's niche-filling optimizations currently work, the
+    // values `Break(false)` and `Break(true)` will transmute to `0` and `1`,
+    // respectively, and `Continue(())` will transmute to `2`. (See also the
+    // comments in the `lt` implementation in `[T]`'s `PartialOrd` impl below,
+    // which supports the claim that `Continue(())` should map to `2`.)
+    match x {
+        ControlFlow::Continue(()) => 2,
+        ControlFlow::Break(b) => b as u8,
+    }
 }
 
 /// Implements comparison of slices [lexicographically](Ord#lexicographical-comparison).
